@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="facebook_clone">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>facebook_clone</title>
+  <link rel="manifest" href="manifest.json">
+
+  <link rel="preload" href="main.dart.js" as="script">
+
+  <!-- Cropper.js for image_cropper_for_web -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script>
+    // Pre-create _flutter as Proxy to intercept loader initialization and force HTML renderer
+    // Covers three API surfaces: didCreateEngineInitializer, loadEntrypoint, and legacy load()
+    window._flutter = new Proxy({}, {
+      set: function(target, prop, value) {
+        if (prop === 'loader' && value) {
+          // Hook 1: didCreateEngineInitializer callback (Flutter 3.x primary path)
+          var origDidCreate = value.didCreateEngineInitializer;
+          value.didCreateEngineInitializer = function(engineInitializer) {
+            var origInit = engineInitializer.initializeEngine;
+            engineInitializer.initializeEngine = function(opts) {
+              opts = opts || {};
+              opts.renderer = 'html';
+              return origInit.call(engineInitializer, opts);
+            };
+            if (origDidCreate) return origDidCreate.call(this, engineInitializer);
+          };
+
+          // Hook 2: loadEntrypoint (Flutter 3.x fallback path)
+          if (value.loadEntrypoint) {
+            var origLoadEntrypoint = value.loadEntrypoint;
+            value.loadEntrypoint = function(opts) {
+              opts = opts || {};
+              var origOnLoaded = opts.onEntrypointLoaded;
+              opts.onEntrypointLoaded = async function(engineInitializer) {
+                var origInit = engineInitializer.initializeEngine;
+                engineInitializer.initializeEngine = async function(engineOpts) {
+                  engineOpts = engineOpts || {};
+                  engineOpts.renderer = 'html';
+                  return origInit.call(engineInitializer, engineOpts);
+                };
+                if (origOnLoaded) return origOnLoaded(engineInitializer);
+                var appRunner = await engineInitializer.initializeEngine({renderer: 'html'});
+                await appRunner.runApp();
+              };
+              return origLoadEntrypoint.call(this, opts);
+            };
+          } else if (value.load) {
+            // Hook 3: legacy load() (older Flutter versions)
+            var origLoad = value.load;
+            value.load = function(opts) {
+              opts = opts || {};
+              opts.config = opts.config || {};
+              opts.config.renderer = 'html';
+              return origLoad.call(this, opts);
+            };
+          }
+        }
+        target[prop] = value;
+        return true;
+      }
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+{
+  "simple_comment": {
+    "id": 200,
+    "content": "Great post!",
+    "user_id": 2,
+    "post_id": 100,
+    "like_count": 3,
+    "reply_count": 1,
+    "is_liked": false,
+    "created_at": "2024-03-10T09:00:00.000Z",
+    "author": {
+      "id": 2,
+      "username": "friend",
+      "email": "friend@example.com",
+      "display_name": "Best Friend"
+    }
+  },
+  "reply_comment": {
+    "id": 201,
+    "content": "Thanks!",
+    "user_id": 1,
+    "post_id": 100,
+    "parent_id": 200,
+    "reply_to_user_id": 2,
+    "like_count": 0,
+    "reply_count": 0,
+    "is_liked": false,
+    "created_at": "2024-03-10T09:05:00.000Z",
+    "author": {
+      "id": 1,
+      "username": "testuser",
+      "email": "test@example.com",
+      "display_name": "Test User"
+    },
+    "reply_to_user": {
+      "id": 2,
+      "username": "friend",
+      "display_name": "Best Friend"
+    }
+  },
+  "with_nested_replies": {
+    "id": 202,
+    "content": "Root comment",
+    "user_id": 1,
+    "post_id": 100,
+    "like_count": 5,
+    "reply_count": 2,
+    "is_liked": true,
+    "created_at": "2024-03-10T10:00:00.000Z",
+    "author": {
+      "id": 1,
+      "username": "testuser",
+      "display_name": "Test User"
+    },
+    "replies": [
+      {
+        "id": 203,
+        "content": "Reply 1",
+        "user_id": 2,
+        "post_id": 100,
+        "parent_id": 202,
+        "reply_to_user_id": 1,
+        "like_count": 1,
+        "reply_count": 0,
+        "is_liked": false,
+        "created_at": "2024-03-10T10:05:00.000Z",
+        "author": {
+          "id": 2,
+          "username": "friend",
+          "display_name": "Best Friend"
+        }
+      },
+      {
+        "id": 204,
+        "content": "Reply 2",
+        "user_id": 3,
+        "post_id": 100,
+        "parent_id": 202,
+        "reply_to_user_id": 1,
+        "like_count": 0,
+        "reply_count": 0,
+        "is_liked": false,
+        "created_at": "2024-03-10T10:10:00.000Z",
+        "author": {
+          "id": 3,
+          "username": "another",
+          "display_name": "Another User"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "text_only": {
+    "id": 100,
+    "content": "Hello Flutter!",
+    "user_id": 1,
+    "visibility": "public",
+    "like_count": 5,
+    "comment_count": 3,
+    "view_count": 120,
+    "is_liked": false,
+    "created_at": "2024-03-10T08:00:00.000Z",
+    "updated_at": "2024-03-10T08:00:00.000Z",
+    "topics": ["flutter", "dart"],
+    "author": {
+      "id": 1,
+      "username": "testuser",
+      "email": "test@example.com",
+      "display_name": "Test User"
+    }
+  },
+  "with_single_image": {
+    "id": 101,
+    "content": "Check this out",
+    "image_url": "https://example.com/img1.jpg",
+    "user_id": 1,
+    "visibility": "public",
+    "like_count": 10,
+    "comment_count": 2,
+    "view_count": 50,
+    "is_liked": true,
+    "created_at": "2024-03-11T09:00:00.000Z",
+    "topics": [],
+    "images": ["https://example.com/img1.jpg"]
+  },
+  "with_multiple_images": {
+    "id": 102,
+    "content": "Gallery post",
+    "user_id": 1,
+    "visibility": "public",
+    "like_count": 0,
+    "comment_count": 0,
+    "view_count": 0,
+    "is_liked": false,
+    "created_at": "2024-03-12T10:00:00.000Z",
+    "images": [
+      "https://example.com/a.jpg",
+      "https://example.com/b.jpg",
+      "https://example.com/c.jpg",
+      "https://example.com/d.jpg"
+    ]
+  },
+  "with_9_images": {
+    "id": 103,
+    "content": "Nine grid test",
+    "user_id": 1,
+    "visibility": "friends",
+    "like_count": 7,
+    "comment_count": 1,
+    "view_count": 30,
+    "is_liked": false,
+    "created_at": "2024-03-13T11:00:00.000Z",
+    "images": [
+      "https://example.com/1.jpg", "https://example.com/2.jpg", "https://example.com/3.jpg",
+      "https://example.com/4.jpg", "https://example.com/5.jpg", "https://example.com/6.jpg",
+      "https://example.com/7.jpg", "https://example.com/8.jpg", "https://example.com/9.jpg"
+    ]
+  },
+  "minimal_post": {
+    "id": 104,
+    "user_id": 2,
+    "content": "Minimal",
+    "visibility": "public"
+  },
+  "with_user_field": {
+    "id": 105,
+    "content": "Using user field",
+    "user_id": 1,
+    "user": {
+      "id": 1,
+      "username": "testuser",
+      "email": "test@example.com",
+      "display_name": "Test User"
+    },
+    "like_count": 0,
+    "comment_count": 0,
+    "view_count": 0
+  }
+}
