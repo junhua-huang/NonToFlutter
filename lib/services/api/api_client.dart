@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'request_manager.dart';
 
 class ApiResponse<T> {
@@ -24,9 +25,24 @@ class ApiClient {
   /// 请求管理器：去重 + 限并发，可全局配置
   static final RequestManager requestManager = RequestManager(maxConcurrent: 4);
 
+  /// 防止并发刷新 token
+  static bool _isRefreshing = false;
+
   late final Dio _dio = _createDio();
 
+  /// 专用于刷新 token 的 Dio（无拦截器，避免无限循环）
+  static final Dio _refreshDio = _createRefreshDio();
+
   Dio get dio => _dio;
+
+  static Dio _createRefreshDio() {
+    return Dio(BaseOptions(
+      baseUrl: AppConfig.baseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+      headers: {'Content-Type': 'application/json'},
+    ));
+  }
 
   static Dio _createDio() {
     final dio = Dio(BaseOptions(
@@ -47,9 +63,38 @@ class ApiClient {
         }
         return handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
-          token = null;
+          // 跳过刷新端点自身，避免无限循环
+          if (error.requestOptions.path == '/auth/refresh') {
+            _handleRefreshFailed();
+            return handler.next(error);
+          }
+
+          if (!_isRefreshing) {
+            _isRefreshing = true;
+            try {
+              final newToken = await _doRefreshToken();
+              if (newToken != null) {
+                token = newToken;
+                // 重试当前请求
+                final opts = error.requestOptions;
+                opts.headers['Authorization'] = 'Bearer $newToken';
+                try {
+                  final response = await dio.fetch(opts);
+                  return handler.resolve(response);
+                } catch (retryErr) {
+                  return handler.next(retryErr as DioException);
+                }
+              }
+            } finally {
+              _isRefreshing = false;
+            }
+          }
+          // 刷新失败，清理 token
+          if (token != null) {
+            _handleRefreshFailed();
+          }
         }
         return handler.next(error);
       },
@@ -69,6 +114,51 @@ class ApiClient {
       // Disconnect WS when token is cleared
       WebSocketService().disconnect();
     }
+  }
+
+  /// 调用 /auth/refresh 获取新 token，使用专用 Dio 避免触发 401 拦截器
+  static Future<String?> _doRefreshToken() async {
+    try {
+      if (token == null) return null;
+      _refreshDio.options.headers['Authorization'] = 'Bearer $token';
+      final resp = await _refreshDio.post('/auth/refresh');
+      if (resp.statusCode == 200 && resp.data != null) {
+        final data = resp.data as Map<String, dynamic>;
+        final newToken = data['access_token'] as String?;
+        if (newToken != null && newToken.isNotEmpty) {
+          debugPrint('[ApiClient] token refreshed');
+          // 持久化新 token
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('access_token', newToken);
+          } catch (_) {}
+          return newToken;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ApiClient] _doRefreshToken failed: $e');
+    }
+    return null;
+  }
+
+  /// 刷新失败后的统一清理：置空 token + 清除持久化 + 断开 WS
+  static void _handleRefreshFailed() {
+    final oldToken = token;
+    token = null;
+    debugPrint('[ApiClient] token cleared (refresh failed)');
+    WebSocketService().disconnect();
+    // 异步清除 SharedPreferences 中的过期 token
+    () async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (prefs.getString('access_token') == oldToken) {
+          await prefs.remove('access_token');
+          await prefs.remove('current_user_id');
+          await prefs.remove('current_user_json');
+          debugPrint('[ApiClient] cleared expired token from prefs');
+        }
+      } catch (_) {}
+    }();
   }
 
   Future<ApiResponse<T>> get<T>(String path, {Map<String, dynamic>? params}) async {
