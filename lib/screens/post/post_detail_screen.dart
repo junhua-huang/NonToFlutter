@@ -7,6 +7,8 @@ import 'package:facebook_clone/screens/search/search_results_screen.dart';
 import 'package:facebook_clone/services/api/post_service.dart';
 import 'package:facebook_clone/services/api/report_service.dart';
 import 'package:facebook_clone/services/api/search_service.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/post_interaction_notifier.dart';
 import 'package:facebook_clone/utils/date_utils.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
@@ -66,12 +68,22 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
   Future<void> _loadData() async {
     try {
-      final postResp = await PostService().getPost(widget.postId);
-      if (postResp.success && postResp.data != null) {
-        final data = postResp.data as Map<String, dynamic>;
-        final postJson = data['post'] ?? data;
+      // 走缓存层：L1→L2→L3，后续浏览同一帖子即时展示
+      final result = await DataLayer().query(
+        CacheKeys.postDetail(widget.postId),
+        () async {
+          final resp = await PostService().getPost(widget.postId);
+          if (resp.success && resp.data != null) {
+            final data = resp.data as Map<String, dynamic>;
+            return data['post'] ?? data;
+          }
+          return null;
+        },
+      );
+      if (result.data != null) {
+        final postJson = result.data as Map<String, dynamic>;
         setState(() {
-          _post = Post.fromJson(postJson as Map<String, dynamic>);
+          _post = Post.fromJson(postJson);
           _hasFreshData = true;
         });
         // 记录浏览

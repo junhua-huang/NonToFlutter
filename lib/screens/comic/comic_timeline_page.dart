@@ -2,7 +2,10 @@ import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/comic_event.dart';
 import 'package:facebook_clone/screens/comic/comic_detail_page.dart';
+import 'package:facebook_clone/services/api/api_client.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/comic_service.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/widgets/empty_state_widget.dart';
 import 'package:flutter/material.dart';
 
@@ -57,13 +60,24 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
     });
 
     try {
-      final resp = await _service.getEvents(
-        city: _currentCity,
-        page: 1,
-        size: 10,
+      // 走缓存层（page=1），后续刷新即时展示
+      final result = await DataLayer().query(
+        CacheKeys.comicEvents(),
+        () async {
+          final params = <String, dynamic>{'page': '1', 'size': '10'};
+          if (_currentCity.isNotEmpty && _currentCity != '全部') {
+            params['city'] = _currentCity;
+          }
+          final resp = await ApiClient().get<Map<String, dynamic>>(
+            '/comic/events',
+            params: params,
+          );
+          if (resp.success && resp.data != null) return resp.data;
+          return null;
+        },
       );
-      if (resp.success && resp.data != null && mounted) {
-        final page = resp.data!;
+      if (result.data != null && mounted) {
+        final page = ComicEventsPage.fromJson(result.data as Map<String, dynamic>);
         setState(() {
           _events = page.records;
           _hasMore = page.page < page.pages;

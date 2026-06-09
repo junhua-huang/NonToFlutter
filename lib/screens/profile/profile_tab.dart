@@ -16,6 +16,7 @@ import 'package:facebook_clone/screens/profile/edit_profile_screen.dart';
 import 'package:facebook_clone/services/api/friend_service.dart';
 import 'package:facebook_clone/services/api/post_service.dart';
 import 'package:facebook_clone/services/api/upload_service.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/post_interaction_notifier.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
@@ -110,24 +111,23 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
       hasError = true;
     }
 
-    // 喜欢数量 —— 优先读 AppWarmup 缓存，避免与预热重复请求
+    // 喜欢数量 —— 走缓存层，未命中时通过 fetcher 回源
     try {
-      final cacheKey = 'user:${auth.user!.id}:liked:1';
+      final cacheKey = CacheKeys.userLiked(auth.user!.id);
       final likeResult = await DataLayer()
-          .query(cacheKey, () async => null)
-          .timeout(const Duration(seconds: 2));
+          .query(cacheKey, () async {
+            final resp = await PostService()
+                .getUserLikedPosts(auth.user!.id)
+                .timeout(const Duration(seconds: 20));
+            if (resp.success && resp.data != null) {
+              final data = resp.data as Map<String, dynamic>;
+              return data['posts'] as List? ?? [];
+            }
+            return null;
+          })
+          .timeout(const Duration(seconds: 25));
       if (likeResult.data is List) {
         _likeCount = (likeResult.data as List).length;
-      } else {
-        // 缓存未命中，回退网络
-        final likeResp = await PostService()
-            .getUserLikedPosts(auth.user!.id)
-            .timeout(const Duration(seconds: 20));
-        if (likeResp.success && likeResp.data != null) {
-          final data = likeResp.data as Map<String, dynamic>;
-          final list = data['posts'] as List? ?? [];
-          _likeCount = list.length;
-        }
       }
     } catch (e) {
       debugPrint('ProfileTab loadLikes error: $e');
@@ -149,10 +149,19 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     final auth = ref.read(authProvider);
     if (auth.user == null) return;
     try {
-      final cacheKey = 'user:${auth.user!.id}:liked:1';
+      final cacheKey = CacheKeys.userLiked(auth.user!.id);
       final likeResult = await DataLayer()
-          .query(cacheKey, () async => null)
-          .timeout(const Duration(seconds: 2));
+          .query(cacheKey, () async {
+            final resp = await PostService()
+                .getUserLikedPosts(auth.user!.id)
+                .timeout(const Duration(seconds: 20));
+            if (resp.success && resp.data != null) {
+              final data = resp.data as Map<String, dynamic>;
+              return data['posts'] as List? ?? [];
+            }
+            return null;
+          })
+          .timeout(const Duration(seconds: 25));
       if (!mounted) return;
       if (likeResult.data is List) {
         final list = likeResult.data as List;
@@ -164,26 +173,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
         });
         return;
       }
-      // 缓存未命中，回退网络
-      final resp = await PostService()
-          .getUserLikedPosts(auth.user!.id)
-          .timeout(const Duration(seconds: 20));
-      if (!mounted) return;
-      if (resp.success && resp.data != null) {
-        final data = resp.data as Map<String, dynamic>;
-        final list = data['posts'] as List? ?? [];
-        setState(() {
-          _likedPosts = list
-              .map((e) => Post.fromJson(e as Map<String, dynamic>))
-              .toList();
-          _likesLoading = false;
-        });
-      } else {
-        setState(() {
-          _likesLoading = false;
-          _likesError = resp.message ?? '加载失败';
-        });
-      }
+      setState(() { _likesLoading = false; });
     } catch (e) {
       debugPrint('ProfileTab loadLikedPosts error: $e');
       if (mounted) {
@@ -204,7 +194,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
       // L1 → L2 → 网络 三层读取
       final result = await DataLayer()
           .query(
-            "user:$userId:posts",
+            CacheKeys.userPosts(userId),
             () async {
               final resp = await PostService()
                   .getUserPosts(auth.user!.id)
@@ -1058,7 +1048,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     final userId = ref.read(authProvider).user?.id.toString();
     if (userId == null || _userPosts.isEmpty) return;
     final data = _userPosts.map((p) => p.toJson()).toList();
-    DataLayer().write("user:$userId:posts", data);
+    DataLayer().write(CacheKeys.userPosts(userId), data);
   }
 
   void _onPostLikeEvent(PostLikeEvent event) {

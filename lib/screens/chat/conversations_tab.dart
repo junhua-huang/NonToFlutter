@@ -211,35 +211,40 @@ class _ConversationsTabState extends State<ConversationsTab> {
         _error = null;
       });
 
-      final response = await _chatService.getConversations();
+      // 走缓存层：L1→L2→L3，与 ConversationsNotifier 共享同一缓存 key
+      final result = await DataLayer().query(
+        CacheKeys.convFullList,
+        () async => _chatService.getConversations(),
+      );
 
-      if (response.success && response.data != null) {
-        final data = response.data is String
-            ? jsonDecode(response.data as String)
-            : response.data;
+      if (result.data != null) {
+        final data = result.data is String
+            ? jsonDecode(result.data as String)
+            : result.data;
 
         final List<dynamic> conversationList;
         if (data is Map<String, dynamic>) {
-          conversationList = data['conversations'] ?? [];
+          conversationList = data['data']?['conversations'] ?? data['conversations'] ?? [];
         } else if (data is List) {
           conversationList = data;
         } else {
           conversationList = [];
         }
 
-        final conversations = conversationList.map((item) {
-          final map = item as Map<String, dynamic>;
-          return Conversation.fromJson(map);
-        }).toList();
+        final conversations = conversationList
+            .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
+            .toList();
         setState(() {
           _conversations = conversations;
           _isLoading = false;
         });
-        // Save to local DB
-        await DataLayer().persistConversations(conversations);
+        // 持久化到 SQLite
+        if (conversations.isNotEmpty) {
+          DataLayer().persistConversations(conversations);
+        }
       } else {
         setState(() {
-          _error = response.message ?? '加载失败';
+          _error = '加载失败';
           _isLoading = false;
         });
       }

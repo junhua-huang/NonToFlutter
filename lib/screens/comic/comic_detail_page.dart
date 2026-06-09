@@ -4,7 +4,10 @@ import 'package:facebook_clone/models/comic_event.dart';
 import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/screens/comic/comic_upload_page.dart';
 import 'package:facebook_clone/screens/post/image_viewer_screen.dart';
+import 'package:facebook_clone/services/api/api_client.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/comic_service.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/widgets/comment_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,21 +39,24 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
       _error = null;
     });
     try {
-      final resp = await _service.getEventDetail(widget.eventId);
-      if (resp.success && resp.data != null) {
-        if (mounted) {
-          setState(() {
-            _event = resp.data;
-            _isLoading = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _error = resp.message ?? '加载失败';
-            _isLoading = false;
-          });
-        }
+      // 走缓存层，再次进入同一漫展即时展示
+      final result = await DataLayer().query(
+        CacheKeys.comicDetail(widget.eventId),
+        () async {
+          final resp = await ApiClient().get<Map<String, dynamic>>(
+            '/comic/events/${widget.eventId}',
+          );
+          if (resp.success && resp.data != null) return resp.data;
+          return null;
+        },
+      );
+      if (result.data != null && mounted) {
+        setState(() {
+          _event = ComicEvent.fromDetailJson(result.data as Map<String, dynamic>);
+          _isLoading = false;
+        });
+      } else if (mounted) {
+        setState(() { _error = '加载失败'; _isLoading = false; });
       }
     } catch (e) {
       if (mounted) {
