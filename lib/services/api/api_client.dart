@@ -65,25 +65,30 @@ class ApiClient {
       },
       onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
+          debugPrint('[ApiClient] 401 caught on ${error.requestOptions.path}, isRefreshing=$_isRefreshing');
           // 跳过刷新端点自身，避免无限循环
           if (error.requestOptions.path == '/auth/refresh') {
+            debugPrint('[ApiClient] 401 on /auth/refresh itself — giving up');
             _handleRefreshFailed();
             return handler.next(error);
           }
 
           if (!_isRefreshing) {
+            debugPrint('[ApiClient] starting token refresh...');
             _isRefreshing = true;
             try {
               final newToken = await _doRefreshToken();
               if (newToken != null) {
+                debugPrint('[ApiClient] refresh OK, retrying original request');
                 token = newToken;
                 final opts = error.requestOptions;
                 opts.headers['Authorization'] = 'Bearer $newToken';
                 try {
                   final response = await dio.fetch(opts);
+                  debugPrint('[ApiClient] retry succeeded');
                   return handler.resolve(response);
                 } catch (retryErr) {
-                  // 确保 handler.next 一定被调用，避免请求挂起
+                  debugPrint('[ApiClient] retry also failed: $retryErr');
                   if (retryErr is DioException) {
                     return handler.next(retryErr);
                   }
@@ -94,11 +99,14 @@ class ApiClient {
               }
             } finally {
               _isRefreshing = false;
+              debugPrint('[ApiClient] refresh attempt finished, isRefreshing=false');
             }
             // 刷新失败，清理 token
             if (token != null) {
               _handleRefreshFailed();
             }
+          } else {
+            debugPrint('[ApiClient] refresh already in progress, skipping duplicate');
           }
         }
         return handler.next(error);
@@ -123,36 +131,54 @@ class ApiClient {
 
   /// 调用 /auth/refresh 获取新 token，使用专用 Dio 避免触发 401 拦截器
   static Future<String?> _doRefreshToken() async {
+    final t0 = DateTime.now();
     try {
-      if (token == null) return null;
+      if (token == null) {
+        debugPrint('[ApiClient] _doRefreshToken: token is null, abort');
+        return null;
+      }
+      debugPrint('[ApiClient] _doRefreshToken: step1 setting auth header...');
       _refreshDio.options.headers['Authorization'] = 'Bearer $token';
+      debugPrint('[ApiClient] _doRefreshToken: step2 calling POST /auth/refresh...');
       final resp = await _refreshDio
           .post('/auth/refresh')
           .timeout(const Duration(seconds: 8));
+      final elapsed = DateTime.now().difference(t0).inMilliseconds;
+      debugPrint('[ApiClient] _doRefreshToken: step3 got response status=${resp.statusCode} in ${elapsed}ms');
       if (resp.statusCode == 200 && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
         final newToken = data['access_token'] as String?;
+        debugPrint('[ApiClient] _doRefreshToken: step4 newToken=${newToken != null ? "yes(${newToken.length}chars)" : "no"}');
         if (newToken != null && newToken.isNotEmpty) {
-          debugPrint('[ApiClient] token refreshed');
           // 持久化新 token
           try {
+            debugPrint('[ApiClient] _doRefreshToken: step5 persisting to SharedPreferences...');
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('access_token', newToken);
-          } catch (_) {}
+            debugPrint('[ApiClient] _doRefreshToken: step6 persisted OK');
+          } catch (e) {
+            debugPrint('[ApiClient] _doRefreshToken: step6 persist failed: $e');
+          }
+          debugPrint('[ApiClient] token refreshed (total ${DateTime.now().difference(t0).inMilliseconds}ms)');
           return newToken;
         }
+        debugPrint('[ApiClient] _doRefreshToken: newToken was empty/null in response body');
+      } else {
+        debugPrint('[ApiClient] _doRefreshToken: non-200 status=${resp.statusCode}');
       }
     } catch (e) {
-      debugPrint('[ApiClient] _doRefreshToken failed: $e');
+      final elapsed = DateTime.now().difference(t0).inMilliseconds;
+      debugPrint('[ApiClient] _doRefreshToken failed after ${elapsed}ms: $e');
     }
     return null;
   }
 
   /// 刷新失败后的统一清理：置空 token + 清除持久化 + 断开 WS
   static void _handleRefreshFailed() {
+    debugPrint('[ApiClient] _handleRefreshFailed: clearing token (was=${token != null ? "set" : "null"})');
     final oldToken = token;
     token = null;
-    debugPrint('[ApiClient] token cleared (refresh failed)');
+    debugPrint('[ApiClient] _handleRefreshFailed: disconnecting WS...');
     WebSocketService().disconnect();
     // 异步清除 SharedPreferences 中的过期 token
     () async {
@@ -162,9 +188,13 @@ class ApiClient {
           await prefs.remove('access_token');
           await prefs.remove('current_user_id');
           await prefs.remove('current_user_json');
-          debugPrint('[ApiClient] cleared expired token from prefs');
+          debugPrint('[ApiClient] _handleRefreshFailed: cleared expired token from prefs');
+        } else {
+          debugPrint('[ApiClient] _handleRefreshFailed: prefs token already different, skip');
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[ApiClient] _handleRefreshFailed: prefs cleanup error: $e');
+      }
     }();
   }
 
