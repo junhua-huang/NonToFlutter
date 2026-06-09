@@ -151,8 +151,9 @@ class DataLayer {
   }
 
   // ── Offline Queue ──
-  // TODO: ReliableWebSocket outbox 已内置离线消息持久化+自动重发能力。
-  // 此 DataLayer 级离线队列与 ReliableWebSocket 的 outbox 功能重叠，后续可清理。
+  // NOTE: 此队列处理 DataLayer 级离线写入（缓存刷新），与 ReliableWebSocket 的
+  // outbox（消息可靠发送）职责不同，两者不重叠。离线队列在 WS 重连后通过
+  // flushOfflineQueue() 由 WebSocketService._onConnectionStateChange 触发。
 
   /// Write to offline queue when network is unavailable.
   Future<void> writeToQueue(String cacheKey, dynamic data,

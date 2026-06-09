@@ -11,11 +11,14 @@ class Message {
   bool isRead;
   final DateTime? createdAt;
   final String? requestId;
+  /// 可靠 WebSocket 发件箱返回的客户端消息 ID，用于匹配服务端回显
+  String? clientMsgId;
 
   Message({
     required this.id, required this.conversationId, required this.senderId,
     this.content, this.messageType = MessageType.text, this.mediaUrl,
     this.relatedId, this.isRead = false, this.createdAt, this.requestId,
+    this.clientMsgId,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) => Message(
@@ -73,6 +76,7 @@ class Message {
     bool? isRead,
     DateTime? createdAt,
     String? requestId,
+    String? clientMsgId,
   }) =>
       Message(
         id: id ?? this.id,
@@ -85,6 +89,7 @@ class Message {
         isRead: isRead ?? this.isRead,
         createdAt: createdAt ?? this.createdAt,
         requestId: requestId ?? this.requestId,
+        clientMsgId: clientMsgId ?? this.clientMsgId,
       );
 }
 

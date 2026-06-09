@@ -78,19 +78,36 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         LocalDbService().insertConversations(conversations);
         return;
       }
-      // 缓存空：等 1.5s 让 AppWarmup 写入，再读一次
-      await Future.delayed(const Duration(milliseconds: 1500));
-      final retryResult = await DataLayer()
-          .query('conv:full:list', () async => null)
-          .timeout(const Duration(seconds: 2));
-      if (retryResult.data is List && (retryResult.data as List).isNotEmpty) {
-        final conversations = (retryResult.data as List<dynamic>)
-            .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
-            .toList();
-        state = state.copyWith(conversations: conversations, isLoading: false);
-        LocalDbService().insertConversations(conversations);
-        return;
+
+      // 缓存空：等待 AppWarmup 写入事件（最多 3s），用 Completer 代替硬编码 sleep
+      final warmupDone = Completer<void>();
+      StreamSubscription<String>? sub;
+      sub = DataLayer().changeStream.listen((key) {
+        if (key == 'conv:full:list' && !warmupDone.isCompleted) {
+          warmupDone.complete();
+        }
+      });
+
+      try {
+        await warmupDone.future.timeout(const Duration(seconds: 3));
+        // AppWarmup 已写入，重新读缓存
+        final retryResult = await DataLayer()
+            .query('conv:full:list', () async => null)
+            .timeout(const Duration(seconds: 2));
+        if (retryResult.data is List && (retryResult.data as List).isNotEmpty) {
+          final conversations = (retryResult.data as List<dynamic>)
+              .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
+              .toList();
+          state = state.copyWith(conversations: conversations, isLoading: false);
+          LocalDbService().insertConversations(conversations);
+          return;
+        }
+      } on TimeoutException {
+        // warmup 超时，触发网络加载
+      } finally {
+        sub.cancel();
       }
+
       // 仍未命中，触发网络加载
       unawaited(loadConversations());
     } catch (_) {
@@ -108,13 +125,13 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   }
 
   void _onWsMessage(Map<String, dynamic> data) {
-    final type = data['type'] as String?;
-    if (type == 'new_message') {
+    final event = data['event'] as String?;
+    if (event == 'new_message') {
       final convId = data['conversation_id'] as int?;
       if (convId != null) {
         _handleIncrementalNewMessage(data);
       }
-    } else if (type == 'batch_messages') {
+    } else if (event == 'batch_messages') {
       final convId = data['conversation_id'] as int?;
       final messages = data['messages'] as List<dynamic>?;
       if (convId != null && messages != null) {
@@ -659,6 +676,15 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _ws.sendMessage(conversationId, content,
         messageType: messageType, mediaUrl: mediaUrl)
       .then((clientMsgId) {
+        if (clientMsgId.isNotEmpty && mounted) {
+          // 回填 clientMsgId 到乐观消息，用于后续服务端回显匹配
+          final idx = state.messages.indexWhere((m) => m.id == optimisticMsg.id);
+          if (idx >= 0) {
+            final updated = List<Message>.from(state.messages);
+            updated[idx] = updated[idx].copyWith(clientMsgId: clientMsgId);
+            state = state.copyWith(messages: updated);
+          }
+        }
         debugPrint('[Chat] WS send queued: requestId=$requestId, clientMsgId=$clientMsgId');
       })
       .catchError((e) {
@@ -708,17 +734,16 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       if (uploadResp.success) {
         final url = _extractUrl(uploadResp.data);
         if (url != null) {
-          if (_ws.isConnected) {
-            _ws.sendMessage(conversationId, url,
-                messageType: 'image', mediaUrl: url);
-            SoundService().playSendSound();
-          } else {
-            await _chatService.sendMessage(conversationId, url,
-                messageType: 'image',
-                mediaUrl: url,
-                requestId: requestId);
-            if (mounted) state = state.copyWith(isSending: false);
-          }
+          _ws.sendMessage(conversationId, url,
+              messageType: 'image', mediaUrl: url);
+          SoundService().playSendSound();
+          // 超时保护：8s 后重置 isSending
+          Future.delayed(const Duration(seconds: 8), () {
+            if (mounted && state.isSending) {
+              debugPrint('[Chat] sendImage isSending timeout reset');
+              state = state.copyWith(isSending: false);
+            }
+          });
         }
       } else {
         // 上传失败，移除乐观消息
@@ -789,11 +814,17 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   }
 
   void _handleNewMessage(Message message) {
-    // 替换乐观消息：通过 requestId 或（同发送者 + 同内容）匹配
+    // 替换乐观消息：优先 requestId → 次选 clientMsgId → 兜底（同发送者 + 同内容）
     final filtered = state.messages.where((m) {
+      // 1) requestId 完全匹配
       if (m.requestId != null && m.requestId == message.requestId) {
         return false;
       }
+      // 2) clientMsgId 匹配（可靠 WS 发件箱回显）
+      if (m.clientMsgId != null && m.clientMsgId == message.clientMsgId) {
+        return false;
+      }
+      // 3) 乐观消息模糊匹配：ID 时间戳 + 同发送者 + 同内容
       if (m.id > 1000000000000 &&
           m.senderId == message.senderId &&
           m.content == message.content) {

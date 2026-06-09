@@ -13,8 +13,6 @@ class ChatService {
       _api.getDeduped('/chat/conversations/$convId/messages', params: {'page': page, 'per_page': perPage});
 
   /// 批量获取多个会话的最新消息（最多 50 个会话）。
-  
-
   Future<ApiResponse> getBatchMessages(List<int> convIds, {int perPage = 30}){
     String convIdsStr = convIds.join(',');
 

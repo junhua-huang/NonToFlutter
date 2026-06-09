@@ -42,11 +42,11 @@ class WebSocketService {
   Future<void> connect() async {
     final token = ApiClient.token;
     if (token == null || token.isEmpty) {
-      print('[WS] ❗ no token, skip connect');
+      debugPrint('[WS] ❗ no token, skip connect');
       return;
     }
     if (_isConnected) {
-      print('[WS] ⚠️ already connected, skip');
+      debugPrint('[WS] ⚠️ already connected, skip');
       return;
     }
 
@@ -59,7 +59,7 @@ class WebSocketService {
     // 后端协议：连接不带 token，认证通过 auth 消息完成（reliable_websocket 自动处理）
     final uri = '$wsUrl/ws';
 
-    print('[WS] 🔌 connecting to $uri (token=${token.substring(0, 12)}...)');
+    debugPrint('[WS] 🔌 connecting to $uri (token=${token.substring(0, 12)}...)');
 
     _client = ReliableWebSocketClient(
       url: uri,
@@ -67,11 +67,11 @@ class WebSocketService {
       onMessage: _onMessage,
       onConnectionStateChange: _onConnectionStateChange,
       onError: (message, clientMsgId) {
-        print('[WS] server error: $message (clientMsgId=$clientMsgId)');
+        debugPrint('[WS] server error: $message (clientMsgId=$clientMsgId)');
         _errorController.add(message);
       },
       onAuthFailed: (error) {
-        print('[WS] ❗ auth failed/expired: $error');
+        debugPrint('[WS] ❗ auth failed/expired: $error');
         if (_isConnected) {
           _isConnected = false;
           _connectionController.add(false);
@@ -83,24 +83,24 @@ class WebSocketService {
 
     try {
       await _client!.connect();
-      print('[WS] ✅ client.connect() completed');
+      debugPrint('[WS] ✅ client.connect() completed');
     } catch (e, stack) {
-      print('[WS] ❌ connect threw: $e');
-      print(stack);
+      debugPrint('[WS] ❌ connect threw: $e');
+      debugPrint(stack.toString());
     }
   }
 
   void _onConnectionStateChange(ConnectionState state) {
-    print('[WS] state → ${state.name}');
+    debugPrint('[WS] state → ${state.name}');
     final connected = state == ConnectionState.authenticated;
     if (_isConnected != connected) {
       _isConnected = connected;
       _connectionController.add(connected);
       if (connected) {
-        print('[WS] ✅ 已连接（认证成功）');
+        debugPrint('[WS] ✅ 已连接（认证成功）');
         DataLayer().flushOfflineQueue();
       } else {
-        print('[WS] ❌ 已断开');
+        debugPrint('[WS] ❌ 已断开');
       }
     }
   }
@@ -154,7 +154,7 @@ class WebSocketService {
 
   /// 断开连接（通常在注销时调用）
   Future<void> disconnect() async {
-    print('[WS] disconnecting');
+    debugPrint('[WS] disconnecting');
     await _client?.disconnect();
     _isConnected = false;
   }

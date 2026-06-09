@@ -73,7 +73,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _checkCookieConsentAndNavigate() async {
     try {
-      // Wait for animation to complete (1800ms), not a hardcoded 2200ms
+      // Wait for animation to complete (3000ms)
       await _animationDone;
 
       if (!mounted) return;

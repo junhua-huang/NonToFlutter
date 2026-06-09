@@ -205,26 +205,28 @@ class RequestManager {
     while (_running < maxConcurrent && _waitQueue.isNotEmpty) {
       final queued = _waitQueue.removeAt(0);
 
-      // 如果该 key 已经有新的在途请求（先到的队列项），跳过
-      // 这种情况极少发生（cancel + 新请求的竞态）
+      // 如果该 key 已经有在途请求，把队列项链到已有的 completer 上
       if (_inFlight.containsKey(queued.key)) {
-        if (!queued.completer.isCompleted) {
-          // 附加到已有的 in-flight 请求上
-          final existing = _inFlight[queued.key]!;
-          existing.completer.future.then(
-            (v) { if (!queued.completer.isCompleted) queued.completer.complete(v); },
-            onError: (e) { if (!queued.completer.isCompleted) queued.completer.completeError(e); },
-          );
-        }
+        _chainToInFlight(queued.key, queued.completer);
         continue;
       }
 
-      // 将此排队项的 completer 链路到 _run 的 completer（使用 dynamic）
+      // 执行排队请求
       _run<dynamic>(queued.key, queued.task as Future<dynamic> Function()).then(
         (v) { if (!queued.completer.isCompleted) queued.completer.complete(v); },
         onError: (e) { if (!queued.completer.isCompleted) queued.completer.completeError(e); },
       );
     }
+  }
+
+  /// 将等待中的 completer 链到已有 in-flight 请求的结果上
+  void _chainToInFlight(String key, Completer<dynamic> waiter) {
+    final existing = _inFlight[key];
+    if (existing == null || waiter.isCompleted) return;
+    existing.completer.future.then(
+      (v) { if (!waiter.isCompleted) waiter.complete(v); },
+      onError: (e) { if (!waiter.isCompleted) waiter.completeError(e); },
+    );
   }
 
   bool _isFresh(_Entry entry) {
