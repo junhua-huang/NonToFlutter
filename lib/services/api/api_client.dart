@@ -77,23 +77,28 @@ class ApiClient {
               final newToken = await _doRefreshToken();
               if (newToken != null) {
                 token = newToken;
-                // 重试当前请求
                 final opts = error.requestOptions;
                 opts.headers['Authorization'] = 'Bearer $newToken';
                 try {
                   final response = await dio.fetch(opts);
                   return handler.resolve(response);
                 } catch (retryErr) {
-                  return handler.next(retryErr as DioException);
+                  // 确保 handler.next 一定被调用，避免请求挂起
+                  if (retryErr is DioException) {
+                    return handler.next(retryErr);
+                  }
+                  return handler.next(
+                    DioException(requestOptions: opts, error: retryErr),
+                  );
                 }
               }
             } finally {
               _isRefreshing = false;
             }
-          }
-          // 刷新失败，清理 token
-          if (token != null) {
-            _handleRefreshFailed();
+            // 刷新失败，清理 token
+            if (token != null) {
+              _handleRefreshFailed();
+            }
           }
         }
         return handler.next(error);
@@ -121,7 +126,9 @@ class ApiClient {
     try {
       if (token == null) return null;
       _refreshDio.options.headers['Authorization'] = 'Bearer $token';
-      final resp = await _refreshDio.post('/auth/refresh');
+      final resp = await _refreshDio
+          .post('/auth/refresh')
+          .timeout(const Duration(seconds: 8));
       if (resp.statusCode == 200 && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
         final newToken = data['access_token'] as String?;
