@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:facebook_clone/models/conversation.dart';
+import 'package:facebook_clone/models/message.dart';
 import 'package:facebook_clone/services/database/app_database.dart';
+import 'package:facebook_clone/services/local_db_service.dart';
 
 /// Source of cached data returned from [DataLayer.query].
 enum CacheSource { memory, local, remote }
@@ -216,6 +219,51 @@ class DataLayer {
     _db = null;
     _changeController.add('__auth:logout');
   }
+
+  // ── 持久化层委托（统一入口，屏蔽 LocalDbService 直接调用） ──
+
+  /// 插入单条消息到 SQLite
+  Future<void> persistMessage(Message msg) => LocalDbService().insertMessage(msg);
+
+  /// 批量插入消息到 SQLite
+  Future<void> persistMessages(List<Message> msgs) => LocalDbService().insertMessages(msgs);
+
+  /// 从 SQLite 读取消息（不走 L1/L2 缓存，仅持久层）
+  Future<List<Message>> loadMessagesFromDb(int convId, {int limit = 50, int offset = 0}) =>
+      LocalDbService().getMessages(convId, limit: limit, offset: offset);
+
+  /// 从 SQLite 删除消息
+  Future<void> deletePersistedMessage(int msgId) => LocalDbService().deleteMessage(msgId);
+
+  /// 更新消息已读状态
+  Future<void> markMessageRead(int msgId, bool read) =>
+      LocalDbService().updateMessageReadStatus(msgId, read);
+
+  /// 插入/更新会话列表到 SQLite
+  Future<void> persistConversations(List<Conversation> convs) =>
+      LocalDbService().insertConversations(convs);
+
+  /// 从 SQLite 读取会话列表
+  Future<List<Conversation>> loadConversationsFromDb() =>
+      LocalDbService().getConversations();
+
+  /// 更新会话最后一条消息
+  Future<void> updateConvLastMessage(int convId, String content, DateTime time,
+          {int unreadIncrement = 0}) =>
+      LocalDbService().updateConversationLastMessage(convId, content, time,
+          unreadIncrement: unreadIncrement);
+
+  /// 清理旧消息（保留最近 N 条或 N 天内）
+  Future<int> pruneMessages(int convId, {int maxCount = 500, int maxDays = 30}) =>
+      LocalDbService().pruneMessages(convId, maxCount: maxCount, maxDays: maxDays);
+
+  /// 初始化数据库并绑定到 DataLayer
+  Future<void> initDb(String userId) async {
+    await LocalDbService().init(userId);
+  }
+
+  /// 关闭/删除当前数据库
+  Future<void> closeDb() => LocalDbService().deleteCurrentDb();
 
   // ── Internal ──
   void _addL1(String key, dynamic data) {

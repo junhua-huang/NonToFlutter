@@ -6,6 +6,7 @@ import 'package:facebook_clone/services/api/notification_service.dart';
 import 'package:facebook_clone/services/api/post_service.dart';
 import 'package:facebook_clone/services/api/recommendation_service.dart';
 import 'package:facebook_clone/services/api/topic_service.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/data_layer.dart';
 
 /// 应用全量数据预热 — 拿到 token 后立即执行
@@ -56,6 +57,12 @@ class AppWarmup {
             .timeout(const Duration(seconds: 20));
         return _extractList(resp, 'posts');
       },
+      CacheKeys.convFullList: () async {
+        final resp = await ApiClient()
+            .get('/chat/sessions')
+            .timeout(const Duration(seconds: 8));
+        return _extractList(resp, 'conversations', fallbackKey: 'sessions');
+      },
     };
   }
 
@@ -79,11 +86,11 @@ class AppWarmup {
     var staggerMs = 0;
     for (final entry in _fetchers(userIdStr).entries) {
       _networkRefresh(layer, entry.key, entry.value, staggerMs);
-      staggerMs += 200; // 每个间隔 200ms，6 个共需 1s
+      staggerMs += 200; // 每个间隔 200ms，7 个共需 1.4s
     }
 
-    // ── 会话列表 + 消息 ──
-    _warmupConversations(layer, userIdStr);
+    // ── 会话消息批量预取（依赖 Phase 2 的 convFullList 已缓存）───
+    _prefetchConversationMessages(layer, staggerMs + 300);
   }
 
   static void _networkRefresh(
@@ -102,52 +109,44 @@ class AppWarmup {
     }();
   }
 
-  static void _warmupConversations(DataLayer layer, String userIdStr) {
+  /// 自缓存 convFullList 读取会话 ID，批量拉取最近消息写入 L1（msg warmup）.
+  static void _prefetchConversationMessages(DataLayer layer, int delayMs) {
     () async {
       try {
-        final convResult = await layer.query(
-          'conv:full:list',
-          () async {
-            // 预热不走 RequestManager，直接用 raw get（火后不理，不占并发槽）
-            final resp = await ApiClient()
-                .get('/chat/sessions')
-                .timeout(const Duration(seconds: 8));
-            return _extractList(
-                resp, 'conversations', fallbackKey: 'sessions');
-          },
-        ).timeout(const Duration(seconds: 10));
+        if (delayMs > 0) await Future.delayed(Duration(milliseconds: delayMs));
 
-        if (convResult.data is List && (convResult.data as List).isNotEmpty) {
-          final convList = convResult.data as List<dynamic>;
-          final convIds = convList
-              .take(50)
-              .map((c) => (c as Map<String, dynamic>)['id'])
-              .whereType<int>()
-              .toList();
+        final convResult = await layer
+            .query(CacheKeys.convFullList, () async => null)
+            .timeout(const Duration(seconds: 4));
+        if (convResult.data is! List || (convResult.data as List).isEmpty) return;
 
-          if (convIds.isNotEmpty) {
-            final resp = await ApiClient()
-                .get('/chat/messages/batch', params: {
-                  'conv_ids': convIds.join(','),
-                  'per_page': 30,
-                })
-                .timeout(const Duration(seconds: 8));
-            if (resp.success && resp.data != null) {
-              final data = resp.data is String
-                  ? (() { try { return jsonDecode(resp.data); } catch (_) { return {}; } })()
-                  : resp.data;
-              final conversations = data['data']?['conversations'] ??
-                  data['conversations'] ??
-                  <dynamic>[];
-              for (final c in (conversations as List<dynamic>)) {
-                if (c is! Map<String, dynamic>) continue;
-                final convId = c['conversation_id'] ?? c['id'];
-                final messages = c['messages'];
-                if (convId != null && messages is List && messages.isNotEmpty) {
-                  layer.write('msg:$convId:1', messages);
-                }
-              }
-            }
+        final convIds = (convResult.data as List<dynamic>)
+            .take(50)
+            .map((c) => (c as Map<String, dynamic>)['id'])
+            .whereType<int>()
+            .toList();
+        if (convIds.isEmpty) return;
+
+        final resp = await ApiClient()
+            .get('/chat/messages/batch', params: {
+              'conv_ids': convIds.join(','),
+              'per_page': 30,
+            })
+            .timeout(const Duration(seconds: 8));
+        if (!resp.success || resp.data == null) return;
+
+        final data = resp.data is String
+            ? (() { try { return jsonDecode(resp.data); } catch (_) { return {}; } })()
+            : resp.data;
+        final conversations = data['data']?['conversations'] ??
+            data['conversations'] ??
+            <dynamic>[];
+        for (final c in (conversations as List<dynamic>)) {
+          if (c is! Map<String, dynamic>) continue;
+          final convId = c['conversation_id'] ?? c['id'];
+          final messages = c['messages'];
+          if (convId != null && messages is List && messages.isNotEmpty) {
+            layer.write(CacheKeys.msgWarmup(convId), messages);
           }
         }
       } catch (_) {}

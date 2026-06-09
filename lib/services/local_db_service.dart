@@ -8,6 +8,7 @@ import 'package:facebook_clone/models/message.dart';
 import 'package:facebook_clone/models/user.dart' as app_user;
 import 'package:facebook_clone/services/api/chat_service.dart';
 import 'package:facebook_clone/services/database/app_database.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/data_layer.dart';
 
 /// 本地数据库服务 - 存储聊天记录（按用户账号隔离）
@@ -257,7 +258,7 @@ class LocalDbService {
       final localMessages = await getMessages(convId, limit: perPage);
       if (localMessages.isNotEmpty) {
         final localJson = localMessages.map((m) => m.toJson()).toList();
-        await DataLayer().write('msg:$userId:$convId:recent', localJson);
+        await DataLayer().write(CacheKeys.msgRecentByUser(convId, userId), localJson);
       }
     }
 
@@ -325,7 +326,7 @@ class LocalDbService {
     }
 
     // 通知 UI 预加载完成
-    DataLayer().invalidate('conv:*:list');
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   /// 合并服务端消息 + 本地消息，写入 SQLite + DataLayer 缓存
@@ -337,7 +338,7 @@ class LocalDbService {
     required List localMessages,
     required List<Map<String, dynamic>> serverJsonList,
   }) async {
-    final cacheKey = 'msg:$userId:$convId:recent';
+    final cacheKey = CacheKeys.msgRecentByUser(convId, userId);
 
     final serverMessages = serverJsonList
         .map((e) => Message.fromJson(e))

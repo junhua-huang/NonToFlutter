@@ -6,7 +6,7 @@ import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/screens/auth/login_screen.dart';
 import 'package:facebook_clone/screens/home/home_screen.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/local_db_service.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,7 +113,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         // 预热前必须设置 token，否则网络请求全部 403
         ApiClient.setToken(token);
         // DB 初始化 + 预热由 AuthNotifier._initDbAndCache() 统一触发，闪屏不重复做
-        LocalDbService().init(userId).catchError((_) {});
+        DataLayer().initDb(userId).catchError((_) {});
 
         if (mounted) _doNavigate(true);
       } else {

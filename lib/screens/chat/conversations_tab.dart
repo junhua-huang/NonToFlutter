@@ -6,8 +6,8 @@ import 'package:facebook_clone/models/conversation.dart';
 import 'package:facebook_clone/models/message.dart';
 import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
 import 'package:facebook_clone/services/api/chat_service.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/local_db_service.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:facebook_clone/utils/date_utils.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
@@ -76,9 +76,9 @@ class _ConversationsTabState extends State<ConversationsTab> {
       _conversations = conversations;
       _isLoading = false;
     });
-    LocalDbService().insertConversations(conversations);
-    // Write to DataLayer so messages_tab can pick up via query("conv:*:list")
-    DataLayer().write("conv:full:list", sessions);
+    DataLayer().persistConversations(conversations);
+    // Write to DataLayer so messages_tab can pick up via query(CacheKeys.convPattern)
+    DataLayer().write(CacheKeys.convFullList, sessions);
   }
 
   void _handleIncrementalNewMessage(Map<String, dynamic> data) {
@@ -127,11 +127,11 @@ class _ConversationsTabState extends State<ConversationsTab> {
       }
     });
     // Update local DB
-    LocalDbService().updateConversationLastMessage(
+    DataLayer().updateConvLastMessage(
       convId, preview, lastMsg.createdAt!, unreadIncrement: 1,
     );
     // Invalidate DataLayer cache for conversation lists
-    DataLayer().invalidate("conv:*:list");
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   String _formatPreview(String content, String msgType) {
@@ -151,7 +151,7 @@ class _ConversationsTabState extends State<ConversationsTab> {
         .map((e) => Message.fromJson(e as Map<String, dynamic>))
         .toList();
     // 批量插入本地 DB
-    LocalDbService().insertMessages(msgs);
+    DataLayer().persistMessages(msgs);
 
     // 如果有匹配的会话，更新最后一条消息
     final lastMsg = msgs.last;
@@ -171,7 +171,7 @@ class _ConversationsTabState extends State<ConversationsTab> {
         );
         _conversations.insert(0, updated);
       });
-      LocalDbService().updateConversationLastMessage(
+      DataLayer().updateConvLastMessage(
         conversationId, preview, lastMsg.createdAt!,
         unreadIncrement: msgs.length,
       );
@@ -179,11 +179,11 @@ class _ConversationsTabState extends State<ConversationsTab> {
       // conversation not in current list, trigger full reload
       _loadConversations();
     }
-    DataLayer().invalidate("conv:*:list");
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   Future<void> _loadLocalConversations() async {
-    final localConvs = await LocalDbService().getConversations();
+    final localConvs = await DataLayer().loadConversationsFromDb();
     if (localConvs.isNotEmpty && mounted) {
       setState(() {
         _conversations = localConvs;
@@ -236,7 +236,7 @@ class _ConversationsTabState extends State<ConversationsTab> {
           _isLoading = false;
         });
         // Save to local DB
-        await LocalDbService().insertConversations(conversations);
+        await DataLayer().persistConversations(conversations);
       } else {
         setState(() {
           _error = response.message ?? '加载失败';
@@ -254,7 +254,7 @@ class _ConversationsTabState extends State<ConversationsTab> {
   Future<void> _onRefresh() async {
     // P0-1: WS online → reload from local DB; WS offline → HTTP
     if (_wsService.isConnected) {
-      final localConvs = await LocalDbService().getConversations();
+      final localConvs = await DataLayer().loadConversationsFromDb();
       if (localConvs.isNotEmpty && mounted) {
         setState(() { _conversations = localConvs; });
       }

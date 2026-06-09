@@ -6,8 +6,8 @@ import 'package:facebook_clone/models/conversation.dart';
 import 'package:facebook_clone/models/message.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/api/chat_service.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/local_db_service.dart';
 import 'package:facebook_clone/services/sound_service.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:flutter/foundation.dart';
@@ -57,7 +57,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     _dataSub = DataLayer().changeStream.listen((key) {
       if (key == '__auth:logout') {
         _reset();
-      } else if (key == 'conv:full:list') {
+      } else if (key == CacheKeys.convFullList) {
         _loadData();
       }
     });
@@ -68,14 +68,14 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     if (state.conversations.isNotEmpty) return;
     try {
       final result = await DataLayer()
-          .query('conv:full:list', () async => null)
+          .query(CacheKeys.convFullList, () async => null)
           .timeout(const Duration(seconds: 2));
       if (result.data is List && (result.data as List).isNotEmpty) {
         final conversations = (result.data as List<dynamic>)
             .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
             .toList();
         state = state.copyWith(conversations: conversations, isLoading: false);
-        LocalDbService().insertConversations(conversations);
+        DataLayer().persistConversations(conversations);
         return;
       }
 
@@ -83,7 +83,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       final warmupDone = Completer<void>();
       StreamSubscription<String>? sub;
       sub = DataLayer().changeStream.listen((key) {
-        if (key == 'conv:full:list' && !warmupDone.isCompleted) {
+        if (key == CacheKeys.convFullList && !warmupDone.isCompleted) {
           warmupDone.complete();
         }
       });
@@ -92,14 +92,14 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         await warmupDone.future.timeout(const Duration(seconds: 3));
         // AppWarmup 已写入，重新读缓存
         final retryResult = await DataLayer()
-            .query('conv:full:list', () async => null)
+            .query(CacheKeys.convFullList, () async => null)
             .timeout(const Duration(seconds: 2));
         if (retryResult.data is List && (retryResult.data as List).isNotEmpty) {
           final conversations = (retryResult.data as List<dynamic>)
               .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
               .toList();
           state = state.copyWith(conversations: conversations, isLoading: false);
-          LocalDbService().insertConversations(conversations);
+          DataLayer().persistConversations(conversations);
           return;
         }
       } on TimeoutException {
@@ -119,9 +119,9 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   void _onSessionList(List<Map<String, dynamic>> sessions) {
     final conversations = sessions.map((e) => Conversation.fromJson(e)).toList();
     state = state.copyWith(conversations: conversations, isLoading: false);
-    LocalDbService().insertConversations(conversations);
-    DataLayer().write("conv:full:list", sessions);
-    DataLayer().invalidate("conv:*:list");
+    DataLayer().persistConversations(conversations);
+    DataLayer().write(CacheKeys.convFullList, sessions);
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   void _onWsMessage(Map<String, dynamic> data) {
@@ -192,15 +192,15 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       return;
     }
     state = state.copyWith(conversations: updated);
-    LocalDbService().updateConversationLastMessage(
+    DataLayer().updateConvLastMessage(
       convId, preview, lastMsg.createdAt!, unreadIncrement: 1,
     );
-    DataLayer().invalidate("conv:*:list");
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   void _handleBatchMessages(int conversationId, List<dynamic> messages) {
     final msgs = messages.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
-    LocalDbService().insertMessages(msgs);
+    DataLayer().persistMessages(msgs);
 
     final lastMsg = msgs.last;
     final preview = _formatPreview(lastMsg.content ?? '', lastMsg.messageType.name);
@@ -220,13 +220,13 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         ..removeAt(existingIdx)
         ..insert(0, updatedConv);
       state = state.copyWith(conversations: updated);
-      LocalDbService().updateConversationLastMessage(
+      DataLayer().updateConvLastMessage(
         conversationId, preview, lastMsg.createdAt!, unreadIncrement: msgs.length,
       );
     } else {
       loadConversations();
     }
-    DataLayer().invalidate("conv:*:list");
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   String _formatPreview(String content, String msgType) {
@@ -263,8 +263,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
             .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
             .toList();
         state = state.copyWith(conversations: conversations, isLoading: false);
-        await LocalDbService().insertConversations(conversations);
-        DataLayer().write('conv:full:list', conversationList);
+        await DataLayer().persistConversations(conversations);
+        DataLayer().write(CacheKeys.convFullList, conversationList);
       } else {
         state = state.copyWith(
           error: response.message ?? '加载失败',
@@ -278,7 +278,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
 
   Future<void> refresh() async {
     if (_ws.isConnected) {
-      final localConvs = await LocalDbService().getConversations();
+      final localConvs = await DataLayer().loadConversationsFromDb();
       if (localConvs.isNotEmpty) {
         state = state.copyWith(conversations: localConvs);
       }
@@ -394,13 +394,13 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     debugPrint('[Messages] _loadMessages START conv=$conversationId');
 
     // Dump: 检查所有可能的缓存 key 在 DataLayer 中的状态
-    final cacheKey = 'msg:$conversationId:recent';
-    final altKey1 = 'msg:$conversationId:1';
+    final cacheKey = CacheKeys.msgRecent(conversationId);
+    final altKey1 = CacheKeys.msgWarmup(conversationId);
     String altKey2 = '';
     try {
       final prefs = await SharedPreferences.getInstance();
       final uid = prefs.getString('current_user_id') ?? '?';
-      altKey2 = 'msg:$uid:$conversationId:recent';
+      altKey2 = CacheKeys.msgRecentByUser(conversationId, uid);
     } catch (_) {}
 
     // 逐个 key 尝试 DataLayer 读取（不触发网络）
@@ -415,7 +415,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     // Step 1: 优先从 warmup 缓存加载（msg:$convId:1, 预热时写入）
     // 因为通过 dump 已知 warmup 是否有数据，优先用缓存而不是等待 SQLite
     try {
-      final warmupKey = 'msg:$conversationId:1';
+      final warmupKey = CacheKeys.msgWarmup(conversationId);
       final warmupSnapshot = await DataLayer().query(warmupKey, () async => null,
           forceRefresh: false);
       if (warmupSnapshot.data is List &&
@@ -434,7 +434,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     // Step 2: SQLite 持久层（已有 warmup 数据时也写入持久层，容错降级）
     try {
       final localMessages =
-          await LocalDbService().getMessages(conversationId, limit: 50);
+          await DataLayer().loadMessagesFromDb(conversationId, limit: 50);
       debugPrint('[Messages] Step2 SQLite: ${localMessages.length} msgs');
       if (localMessages.isNotEmpty) {
         // SQLite 有数据但 warmup 没命中 → 用 SQLite
@@ -453,7 +453,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
               .where((m) => !localIds.contains(m.id))
               .toList();
           if (toInsert.isNotEmpty) {
-            await LocalDbService().insertMessages(toInsert);
+            await DataLayer().persistMessages(toInsert);
             debugPrint('[Messages] Step2 → wrote ${toInsert.length} new msgs to SQLite');
           }
         }
@@ -468,8 +468,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     // 已有数据时静默更新，无数据时强制网络
     try {
       final cacheKey = state.messages.isNotEmpty
-          ? 'msg:$conversationId:recent'
-          : 'msg:$conversationId:recent';
+          ? CacheKeys.msgRecent(conversationId)
+          : CacheKeys.msgRecent(conversationId);
 
       final result = await DataLayer().query(cacheKey, () async {
         debugPrint('[Messages] Step3 HTTP fetch conv=$conversationId');
@@ -491,7 +491,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         if (result.source.name != 'memory' ||
             messages.length != state.messages.length) {
           state = state.copyWith(messages: messages, isLoading: false);
-          await LocalDbService().insertMessages(messages);
+          await DataLayer().persistMessages(messages);
           debugPrint('[Messages] Step3 → updated: ${messages.length} msgs (source=${result.source.name})');
         }
       } else if (state.messages.isEmpty) {
@@ -550,7 +550,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         allMsgs.sort((a, b) =>
             (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
         state = state.copyWith(messages: allMsgs);
-        await LocalDbService().insertMessages(newMsgs);
+        await DataLayer().persistMessages(newMsgs);
         _syncL1();
       }
 
@@ -569,7 +569,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     state = state.copyWith(isLoading: true);
 
     // Step 1: 从本地 SQLite 获取更早的消息
-    final localMsgs = await LocalDbService().getMessages(
+    final localMsgs = await DataLayer().loadMessagesFromDb(
       conversationId,
       limit: 50,
       offset: state.messages.length,
@@ -621,7 +621,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             hasMore: hasMoreFlag || msgList.length >= 50,
             isLoading: false,
           );
-          await LocalDbService().insertMessages(newMsgs);
+          await DataLayer().persistMessages(newMsgs);
           _syncL1();
         } else {
           state = state.copyWith(page: state.page + 1, isLoading: false);
@@ -670,7 +670,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       messages: [...state.messages, optimisticMsg],
       isSending: true,
     );
-    LocalDbService().insertMessage(optimisticMsg);
+    DataLayer().persistMessage(optimisticMsg);
     _syncL1();
 
     _ws.sendMessage(conversationId, content,
@@ -723,7 +723,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       messages: [...state.messages, optimisticMsg],
       isSending: true,
     );
-    LocalDbService().insertMessage(optimisticMsg);
+    DataLayer().persistMessage(optimisticMsg);
 
     try {
       final uploadResp = await ApiClient().uploadBytes(
@@ -761,7 +761,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       messages: state.messages.where((m) => m.id != optimisticId).toList(),
       isSending: false,
     );
-    LocalDbService().deleteMessage(optimisticId);
+    DataLayer().deletePersistedMessage(optimisticId);
   }
 
   String? _extractUrl(dynamic data) {
@@ -836,7 +836,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     filtered.sort((a, b) =>
         (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
     state = state.copyWith(messages: filtered, isSending: false);
-    LocalDbService().insertMessage(message);
+    DataLayer().persistMessage(message);
   }
 
   /// 对方标记已读：将本方所有未读消息标记为已读
@@ -844,7 +844,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     if (_currentUserId == null) return;
     final updated = state.messages.map((m) {
       if (m.senderId == _currentUserId && !m.isRead) {
-        LocalDbService().updateMessageReadStatus(m.id, true);
+        DataLayer().markMessageRead(m.id, true);
         return m.copyWith(isRead: true);
       }
       return m;
@@ -890,7 +890,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   /// 将当前消息列表同步写入 DataLayer L1
   void _syncL1() {
     final l1Data = state.messages.map((m) => m.toJson()).toList();
-    DataLayer().write('msg:$conversationId:recent', l1Data);
+    DataLayer().write(CacheKeys.msgRecent(conversationId), l1Data);
   }
 
   @override
@@ -902,7 +902,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _wsErrorSub?.cancel();
     _typingTimer?.cancel();
     // 清理旧消息（保留最近 500 条或 30 天内）
-    LocalDbService()
+    DataLayer()
         .pruneMessages(conversationId, maxCount: 500, maxDays: 30);
     super.dispose();
   }

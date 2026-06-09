@@ -6,7 +6,6 @@ import 'package:facebook_clone/providers/auth_state.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/api/auth_service.dart';
 import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/local_db_service.dart';
 import 'package:facebook_clone/services/app_warmup.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:flutter/material.dart';
@@ -79,7 +78,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     // Unawaited — runs in background, failures are silent
     () async {
       try {
-        await LocalDbService().init(userIdStr);
+        await DataLayer().initDb(userIdStr);
         DataLayer().write('user:$userIdStr:profile', userJson);
         AppWarmup.warmup(userIdStr);
       } catch (_) {}
@@ -158,7 +157,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (user != null) {
           state = state.copyWith(user: user, clearError: true);
           await _saveUserToPrefs(user);
-          await LocalDbService().init(user.id.toString());
+          await DataLayer().initDb(user.id.toString());
           DataLayer().write('user:${user.id}:profile', user.toJson());
           return true;
         }
@@ -185,7 +184,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         ApiClient.setToken(token);
         if (user != null) {
           await _saveUserToPrefs(user);
-          await LocalDbService().init(user.id.toString());
+          await DataLayer().initDb(user.id.toString());
           DataLayer().write('user:${user.id}:profile', user.toJson());
         }
         return true;
@@ -201,7 +200,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     ApiClient.setToken(null);
     await WebSocketService().disconnect();
     DataLayer().clearAll();
-    await LocalDbService().deleteCurrentDb();
+    await DataLayer().closeDb();
     await _prefs.remove('access_token');
     await _prefs.remove('current_user_id');
     await _prefs.remove('current_user_json');
@@ -244,7 +243,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
 
         await _saveUserToPrefs(state.user!);
-        await LocalDbService().init(state.user!.id.toString());
+        await DataLayer().initDb(state.user!.id.toString());
         DataLayer()
             .write('user:${state.user!.id}:profile', state.user!.toJson());
 
@@ -301,7 +300,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
 
         await _saveUserToPrefs(state.user!);
-        await LocalDbService().init(state.user!.id.toString());
+        await DataLayer().initDb(state.user!.id.toString());
         DataLayer()
             .write('user:${state.user!.id}:profile', state.user!.toJson());
 
@@ -350,7 +349,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     ApiClient.setToken(null);
     await WebSocketService().disconnect();
     DataLayer().clearAll();
-    await LocalDbService().deleteCurrentDb();
+    await DataLayer().closeDb();
     await _prefs.remove('access_token');
     await _prefs.remove('current_user_id');
     await _prefs.remove('current_user_json');
