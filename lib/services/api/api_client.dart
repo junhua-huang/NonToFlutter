@@ -64,52 +64,62 @@ class ApiClient {
         return handler.next(options);
       },
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
-          debugPrint('[ApiClient] 401 caught on ${error.requestOptions.path}, isRefreshing=$_isRefreshing');
-          // 跳过刷新端点自身，避免无限循环
-          if (error.requestOptions.path == '/auth/refresh') {
-            debugPrint('[ApiClient] 401 on /auth/refresh itself — giving up');
-            _handleRefreshFailed();
-            return handler.next(error);
-          }
-
-          if (!_isRefreshing) {
-            debugPrint('[ApiClient] starting token refresh...');
-            _isRefreshing = true;
-            try {
-              final newToken = await _doRefreshToken();
-              if (newToken != null) {
-                debugPrint('[ApiClient] refresh OK, retrying original request');
-                token = newToken;
-                final opts = error.requestOptions;
-                opts.headers['Authorization'] = 'Bearer $newToken';
-                try {
-                  final response = await dio.fetch(opts);
-                  debugPrint('[ApiClient] retry succeeded');
-                  return handler.resolve(response);
-                } catch (retryErr) {
-                  debugPrint('[ApiClient] retry also failed: $retryErr');
-                  if (retryErr is DioException) {
-                    return handler.next(retryErr);
-                  }
-                  return handler.next(
-                    DioException(requestOptions: opts, error: retryErr),
-                  );
-                }
-              }
-            } finally {
-              _isRefreshing = false;
-              debugPrint('[ApiClient] refresh attempt finished, isRefreshing=false');
-            }
-            // 刷新失败，清理 token
-            if (token != null) {
+        try {
+          if (error.response?.statusCode == 401) {
+            debugPrint('[ApiClient] 401 caught on ${error.requestOptions.path}, isRefreshing=$_isRefreshing');
+            // 跳过刷新端点自身，避免无限循环
+            if (error.requestOptions.path == '/auth/refresh') {
+              debugPrint('[ApiClient] 401 on /auth/refresh itself — giving up');
               _handleRefreshFailed();
+              return handler.next(error);
             }
-          } else {
-            debugPrint('[ApiClient] refresh already in progress, skipping duplicate');
+
+            if (!_isRefreshing) {
+              debugPrint('[ApiClient] starting token refresh...');
+              _isRefreshing = true;
+              try {
+                final newToken = await _doRefreshToken();
+                if (newToken != null) {
+                  debugPrint('[ApiClient] refresh OK, retrying original request');
+                  token = newToken;
+                  final opts = error.requestOptions;
+                  opts.headers['Authorization'] = 'Bearer $newToken';
+                  try {
+                    final response = await dio.fetch(opts);
+                    debugPrint('[ApiClient] retry succeeded');
+                    return handler.resolve(response);
+                  } catch (retryErr) {
+                    debugPrint('[ApiClient] retry also failed: $retryErr');
+                    if (retryErr is DioException) {
+                      return handler.next(retryErr);
+                    }
+                    return handler.next(
+                      DioException(requestOptions: opts, error: retryErr),
+                    );
+                  }
+                }
+              } finally {
+                _isRefreshing = false;
+                debugPrint('[ApiClient] refresh attempt finished, isRefreshing=false');
+              }
+              // 刷新失败，清理 token
+              if (token != null) {
+                _handleRefreshFailed();
+              }
+            } else {
+              debugPrint('[ApiClient] refresh already in progress, skipping duplicate');
+            }
           }
+          return handler.next(error);
+        } catch (unexpected) {
+          debugPrint('[ApiClient] FATAL: onError interceptor threw: $unexpected');
+          // 兜底：保证 handler 一定被调用，避免请求永久挂起
+          return handler.next(DioException(
+            requestOptions: error.requestOptions,
+            error: unexpected,
+            type: DioExceptionType.unknown,
+          ));
         }
-        return handler.next(error);
       },
     ));
     return dio;
