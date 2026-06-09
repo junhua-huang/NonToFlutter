@@ -1,27 +1,33 @@
 import 'package:facebook_clone/config/app_theme.dart';
+import 'package:facebook_clone/data/emoji_data.dart';
+import 'package:facebook_clone/models/comment.dart';
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
-import 'package:facebook_clone/services/api/comment_service.dart';
-import 'package:facebook_clone/services/comic_service.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
+import 'package:facebook_clone/providers/comment_notifier.dart';
+import 'package:facebook_clone/providers/comment_state.dart';
+import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
+import 'package:facebook_clone/utils/date_utils.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
-/// 公共评论区组件 — 帖子/漫展通用
+/// Public comment section — unified for posts and comic events.
 ///
-/// 使用方式：
+/// Pure UI layer. All state is managed by [CommentNotifier] via Riverpod.
+///
+/// Usage:
 /// ```dart
 /// CommentSection(
-///   targetType: 'post',    // 或 'comic'
-///   targetId: postId,      // 帖子ID或漫展eventId
+///   targetType: 'post',
+///   targetId: postId,
 ///   scrollController: _scrollController,
 /// )
 /// ```
-class CommentSection extends StatefulWidget {
-  final String targetType; // 'post' 或 'comic'
+class CommentSection extends ConsumerStatefulWidget {
+  final String targetType; // 'post' | 'comic'
   final int targetId;
   final ScrollController? scrollController;
-  final String? heroTag;
   final void Function(int commentCount)? onCommentCountChanged;
 
   const CommentSection({
@@ -29,39 +35,29 @@ class CommentSection extends StatefulWidget {
     required this.targetType,
     required this.targetId,
     this.scrollController,
-    this.heroTag,
     this.onCommentCountChanged,
   });
 
   @override
-  State<CommentSection> createState() => _CommentSectionState();
+  ConsumerState<CommentSection> createState() => _CommentSectionState();
 }
 
-class _CommentSectionState extends State<CommentSection> {
+class _CommentSectionState extends ConsumerState<CommentSection> {
   final _commentController = TextEditingController();
   final _commentFocusNode = FocusNode();
   final _inputScrollController = ScrollController();
 
-  List<Map<String, dynamic>> _comments = [];
-  bool _isLoading = true;
-  bool _isSending = false;
-  bool _hasMore = true;
-  int _page = 1;
-  final Set<int> _expandedReplies = {};
-  final Set<int> _likingSet = {};
-  final Set<int> _pendingRepliesLoads = {};
+  late final CommentSectionKey _sectionKey;
 
-  String? _replyingToId;
-  String? _replyingToName;
-  int? _replyingToUserId;
-
-  CommentService get _commentService => CommentService();
-  ComicService get _comicService => ComicService();
+  bool _initialCountReported = false;
 
   @override
   void initState() {
     super.initState();
-    _loadComments();
+    _sectionKey = CommentSectionKey(
+      targetType: widget.targetType,
+      targetId: widget.targetId,
+    );
   }
 
   @override
@@ -72,369 +68,182 @@ class _CommentSectionState extends State<CommentSection> {
     super.dispose();
   }
 
-  Future<void> _loadComments() async {
-    if (!mounted) return;
-    try {
-      if (widget.targetType == 'comic') {
-        final resp = await _comicService.getEventComments(widget.targetId, page: _page);
-        if (resp.success && resp.data != null && mounted) {
-          final data = resp.data as Map<String, dynamic>;
-          final list = (data['comments'] as List?) ?? [];
-          final total = data['total'] ?? 0;
-          setState(() {
-            _comments = list.cast<Map<String, dynamic>>();
-            _hasMore = _comments.length < total;
-            _isLoading = false;
-          });
-          widget.onCommentCountChanged?.call(total);
-        }
-      } else {
-        final resp = await _commentService.getComments(widget.targetId, page: _page);
-        if (resp.success && resp.data != null && mounted) {
-          final data = resp.data as Map<String, dynamic>;
-          final list = (data['comments'] as List?) ?? [];
-          final total = data['total'] ?? 0;
-          setState(() {
-            _comments = list.cast<Map<String, dynamic>>();
-            _hasMore = _comments.length < total;
-            _isLoading = false;
-          });
-          widget.onCommentCountChanged?.call(total);
-        }
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (!_hasMore || _isLoading) return;
-    _page++;
-    await _loadComments();
-  }
-
-  Future<void> _submitComment() async {
-    final content = _commentController.text.trim();
-    if (content.isEmpty || _isSending) return;
-
-    setState(() => _isSending = true);
-    try {
-      if (widget.targetType == 'comic') {
-        final resp = await _comicService.postEventComment(
-          widget.targetId,
-          content: content,
-          parentId: _replyingToId != null ? int.tryParse(_replyingToId!) : null,
-          replyToUserId: _replyingToUserId,
-        );
-        if (resp.success && resp.data != null && mounted) {
-          final comment = resp.data!['comment'] as Map<String, dynamic>?;
-          if (comment != null) {
-            if (_replyingToId != null) {
-              // 找到父评论并添加回复
-              for (int i = 0; i < _comments.length; i++) {
-                if (_comments[i]['id'].toString() == _replyingToId) {
-                  final replies = List<Map<String, dynamic>>.from(_comments[i]['replies'] ?? []);
-                  replies.add(comment);
-                  _comments[i]['replies'] = replies;
-                  _comments[i]['reply_count'] = (_comments[i]['reply_count'] ?? 0) + 1;
-                  break;
-                }
-              }
-            } else {
-              _comments.insert(0, comment);
-            }
-            setState(() {});
-          }
-        }
-      } else {
-        final resp = await _commentService.createComment(
-          widget.targetId,
-          content,
-          parentId: _replyingToId != null ? int.tryParse(_replyingToId!) : null,
-        );
-        if (resp.success && resp.data != null && mounted) {
-          final comment = resp.data!['comment'] as Map<String, dynamic>?;
-          if (comment != null) {
-            if (_replyingToId != null) {
-              for (int i = 0; i < _comments.length; i++) {
-                if (_comments[i]['id'].toString() == _replyingToId) {
-                  final replies = List<Map<String, dynamic>>.from(_comments[i]['replies'] ?? []);
-                  replies.add(comment);
-                  _comments[i]['replies'] = replies;
-                  _comments[i]['reply_count'] = (_comments[i]['reply_count'] ?? 0) + 1;
-                  break;
-                }
-              }
-            } else {
-              _comments.insert(0, comment);
-            }
-            setState(() {});
-          }
-        }
-      }
-      _commentController.clear();
-      _cancelReply();
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
-  }
-
-  void _startReply(Map<String, dynamic> comment) {
-    setState(() {
-      _replyingToId = comment['id'].toString();
-      _replyingToName = (comment['user']?['display_name'] ?? comment['user']?['username'] ?? '用户').toString();
-      _replyingToUserId = comment['user_id'] as int?;
-    });
-    _commentFocusNode.requestFocus();
-  }
-
-  void _cancelReply() {
-    setState(() {
-      _replyingToId = null;
-      _replyingToName = null;
-      _replyingToUserId = null;
-    });
-  }
-
-  Future<void> _toggleLike(Map<String, dynamic> comment) async {
-    final cid = comment['id'] as int;
-    if (_likingSet.contains(cid)) return;
-    _likingSet.add(cid);
-
-    final wasLiked = comment['is_liked'] == true;
-    // Optimistic update
-    setState(() {
-      comment['is_liked'] = !wasLiked;
-      comment['like_count'] = (comment['like_count'] ?? 0) + (wasLiked ? -1 : 1);
-    });
-
-    try {
-      if (widget.targetType == 'comic') {
-        await _comicService.likeComment(cid);
-      } else {
-        if (!wasLiked) {
-          await _commentService.likeComment(cid);
-        } else {
-          await _commentService.unlikeComment(cid);
-        }
-      }
-    } catch (_) {
-      // Revert
-      if (mounted) {
-        setState(() {
-          comment['is_liked'] = wasLiked;
-          comment['like_count'] = (comment['like_count'] ?? 0) + (wasLiked ? 1 : -1);
-        });
-      }
-    } finally {
-      _likingSet.remove(cid);
-    }
-  }
-
-  Future<void> _loadMoreReplies(int parentId) async {
-    _pendingRepliesLoads.add(parentId);
-    try {
-      if (widget.targetType == 'comic') {
-        final resp = await _comicService.getCommentReplies(parentId);
-        if (resp.success && resp.data != null && mounted) {
-          if (!_expandedReplies.contains(parentId)) return;
-          final replies = (resp.data!['replies'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-          for (int i = 0; i < _comments.length; i++) {
-            if (_comments[i]['id'] == parentId) {
-              _comments[i]['replies'] = replies;
-              setState(() {});
-              break;
-            }
-          }
-        }
-      } else {
-        final resp = await _commentService.getReplies(parentId);
-        if (resp.success && resp.data != null && mounted) {
-          if (!_expandedReplies.contains(parentId)) return;
-          final replies = (resp.data!['replies'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-          for (int i = 0; i < _comments.length; i++) {
-            if (_comments[i]['id'] == parentId) {
-              _comments[i]['replies'] = replies;
-              setState(() {});
-              break;
-            }
-          }
-        }
-      }
-    } catch (_) {} finally {
-      _pendingRepliesLoads.remove(parentId);
-    }
-  }
-
-  void _toggleExpandReplies(int commentId) {
-    if (_expandedReplies.contains(commentId)) {
-      setState(() {
-        _expandedReplies.remove(commentId);
-        // 收起时清空回复数据，防止残留
-        for (int i = 0; i < _comments.length; i++) {
-          if (_comments[i]['id'] == commentId) {
-            _comments[i]['replies'] = <Map<String, dynamic>>[];
-            break;
-          }
-        }
-      });
-    } else {
-      setState(() => _expandedReplies.add(commentId));
-      _loadMoreReplies(commentId);
-    }
-  }
-
-  Future<void> _deleteComment(Map<String, dynamic> comment) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除评论'),
-        content: const Text('确定要删除这条评论吗？'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除', style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    try {
-      if (widget.targetType == 'comic') {
-        await _comicService.deleteComment(comment['id'] as int);
-      } else {
-        await _commentService.deleteComment(comment['id'] as int);
-      }
-      setState(() {
-        _comments.removeWhere((c) => c['id'] == comment['id']);
-      });
-      widget.onCommentCountChanged?.call(_comments.length);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('删除失败'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
+  CommentNotifier get _notifier => ref.read(commentProvider(_sectionKey).notifier);
+  CommentState get _state => ref.watch(commentProvider(_sectionKey));
 
   @override
   Widget build(BuildContext context) {
-    final hasSheetScroll = widget.scrollController != null;
+    final state = _state;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-    if (hasSheetScroll) {
-      // Sheet mode: input pinned at bottom, list scrolls internally
-      return Column(
-        children: [
-          if (_isLoading)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
-          else if (_comments.isEmpty)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[300]),
-                    const SizedBox(height: 12),
-                    Text('还没有评论，来说两句吧',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-                  ],
-                ),
-              ),
-            )
-          else
-            Expanded(child: _buildCommentList()),
-          _buildCommentInput(),
-        ],
+    // Report comment count once loaded
+    if (!state.isLoading && !_initialCountReported) {
+      _initialCountReported = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onCommentCountChanged?.call(state.comments.length);
+      });
+    }
+
+    // Error banner
+    if (state.error != null && state.comments.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 40, color: colors.error),
+              const SizedBox(height: 12),
+              Text(state.error!, style: TextStyle(color: colors.error)),
+            ],
+          ),
+        ),
       );
     }
 
-    // Inline mode (original behavior)
+    final hasSheetScroll = widget.scrollController != null;
+
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        if (_isLoading)
-          const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
-        else if (_comments.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 48),
-            child: Center(
-              child: Column(
-                children: [
-                  Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[300]),
-                  const SizedBox(height: 12),
-                  Text('还没有评论，来说两句吧',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-                ],
-              ),
-            ),
-          )
-        else
-          _buildCommentList(),
-        _buildCommentInput(),
+        Expanded(
+          child: state.isLoading && state.comments.isEmpty
+              ? const _CommentSkeleton()
+              : state.comments.isEmpty
+                  ? _buildEmptyState(colors)
+                  : _buildCommentList(colors, hasSheetScroll),
+        ),
+        _buildCommentInput(colors, state),
       ],
     );
   }
 
-  Widget _buildCommentList() {
-    final hasSheetScroll = widget.scrollController != null;
+  // ═══════════════════════════════════════════════════════════
+  //  Empty State
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildEmptyState(ColorScheme colors) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.chat_bubble_outline_rounded, size: 48, color: colors.outlineVariant),
+          const SizedBox(height: 12),
+          Text(
+            '还没有评论，来说两句吧',
+            style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  Comment List
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildCommentList(ColorScheme colors, bool hasSheetScroll) {
+    final state = _state;
     return ListView.builder(
       controller: widget.scrollController,
       shrinkWrap: !hasSheetScroll,
       physics: hasSheetScroll ? null : const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 8),
-      itemCount: _comments.length + 1, // +1 for "load more"
+      itemCount: state.comments.length + 1,
       itemBuilder: (_, index) {
-        if (index >= _comments.length) {
-          if (!_hasMore) return const SizedBox(height: 16);
-          return Center(
-            child: TextButton(
-              onPressed: _loadMore,
-              child: const Text('加载更多', style: TextStyle(fontSize: 13)),
-            ),
+        if (index >= state.comments.length) {
+          if (!state.hasMore) return const SizedBox(height: 16);
+          return _AutoLoadMore(
+            isLoading: state.isLoading,
+            onVisible: () {
+              if (!state.isLoading && state.hasMore) {
+                _notifier.loadMore();
+              }
+            },
           );
         }
-        final c = _comments[index];
-        final auth = context.read<AuthProvider>();
-        final isOwner = c['user_id'] == auth.user?.id;
-        final isExpanded = _expandedReplies.contains(c['id'] as int);
-        final replies = (c['replies'] as List?) ?? [];
-        final replyCount = c['reply_count'] ?? 0;
+
+        final comment = state.comments[index];
+        final isExpanded = state.expandedReplies.contains(comment.id);
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildCommentItem(c, isOwner: isOwner),
-              // Replies
-              if (replies.isNotEmpty && isExpanded) ...[
-                Padding(
-                  padding: const EdgeInsets.only(left: 48),
-                  child: Column(
-                    children: replies.map<Widget>((r) => _buildCommentItem(r, isOwner: r['user_id'] == auth.user?.id)).toList(),
-                  ),
+              _CommentItem(
+                comment: comment,
+                targetType: widget.targetType,
+                isOwner: false, // handled inside
+                onReply: () => _notifier.startReply(
+                  comment.id.toString(),
+                  comment.user?.displayName ?? comment.user?.username ?? '用户',
+                  comment.userId,
                 ),
-              ] else if (isExpanded && replyCount == 0)
-                const SizedBox.shrink(),
-              // Toggle expand
-              if (replyCount > 0) ...[
+                onLike: () => _notifier.toggleLike(comment.id),
+                onDelete: () => _confirmDelete(comment),
+                isLiking: state.likingIds.contains(comment.id),
+              ),
+              // Reply list
+              if (comment.replyCount > 0) ...[
+                if (comment.replies.isNotEmpty && isExpanded)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 48),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                      child: Column(
+                        children: [
+                          ...comment.replies.map((r) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: _CommentItem(
+                              comment: r,
+                              targetType: widget.targetType,
+                              isOwner: false,
+                              onReply: () => _notifier.startReply(
+                                r.id.toString(),
+                                r.user?.displayName ?? r.user?.username ?? '用户',
+                                r.userId,
+                              ),
+                              onLike: () => _notifier.toggleLike(r.id),
+                              onDelete: () => _confirmDelete(r),
+                              isLiking: state.likingIds.contains(r.id),
+                            ),
+                          )),
+                          // 自动加载更多回复
+                          if (comment.repliesHasMore)
+                            _AutoLoadMore(
+                              isLoading: state.loadingRepliesIds.contains(comment.id),
+                              key: ValueKey('reply_more_${comment.id}'),
+                              onVisible: () {
+                                _notifier.loadMoreReplies(comment.id);
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Toggle reply expand
                 Padding(
-                  padding: const EdgeInsets.only(left: 48),
+                  padding: const EdgeInsets.only(left: 48, top: 2),
                   child: GestureDetector(
-                    onTap: () => _toggleExpandReplies(c['id'] as int),
+                    onTap: () => _notifier.toggleExpandReplies(comment.id),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Text(
-                        isExpanded ? '收起回复' : '查看 $replyCount 条回复',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                        isExpanded ? '收起回复' : '查看 ${comment.replyCount} 条回复',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: colors.primary,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ],
-              const Divider(height: 1, thickness: 0.5),
+              const Divider(height: 1, thickness: 0.3, indent: 0),
             ],
           ),
         );
@@ -442,181 +251,636 @@ class _CommentSectionState extends State<CommentSection> {
     );
   }
 
-  Widget _buildCommentItem(Map<String, dynamic> comment, {bool isOwner = false}) {
-    final user = comment['user'] as Map<String, dynamic>?;
-    final avatar = user?['avatar'] as String?;
-    final displayName = user?['display_name'] ?? user?['username'] ?? '用户';
-    final username = user?['username'] ?? '';
-    final content = comment['content'] ?? '';
-    final likeCount = comment['like_count'] ?? 0;
-    final isLiked = comment['is_liked'] == true;
-    final replyToUser = comment['reply_to_user'] as Map<String, dynamic>?;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ImageUtils.buildAvatar(user != null ? User.fromJson(user) : null, radius: 16),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RichText(
-                text: TextSpan(
-                  style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                  children: [
-                    TextSpan(text: '$displayName ', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    if (replyToUser != null) ...[
-                      WidgetSpan(
-                        child: Icon(Icons.reply, size: 12, color: AppColors.textSecondary),
-                      ),
-                      TextSpan(
-                        text: ' ${replyToUser['display_name'] ?? replyToUser['username']}',
-                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                    TextSpan(text: '  $content'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    _formatTimeAgo(comment['created_at']),
-                    style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
-                  ),
-                  const SizedBox(width: 16),
-                  GestureDetector(
-                    onTap: () => _startReply(comment),
-                    child: const Text('回复', style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
-                  ),
-                  if (isOwner) ...[
-                    const SizedBox(width: 16),
-                    GestureDetector(
-                      onTap: () => _deleteComment(comment),
-                      child: const Text('删除', style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => _toggleLike(comment),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isLiked ? Icons.favorite : Icons.favorite_border,
-                          size: 13,
-                          color: isLiked ? Colors.red : AppColors.textTertiary,
-                        ),
-                        if (likeCount > 0) ...[
-                          const SizedBox(width: 2),
-                          Text('$likeCount', style: TextStyle(fontSize: 11, color: AppColors.textTertiary)),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+  Future<void> _confirmDelete(Comment comment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: const Text('删除评论'),
+        content: const Text('确定要删除这条评论吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
           ),
-        ),
-      ],
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
-  }
-
-  String _formatTimeAgo(dynamic time) {
-    if (time == null) return '';
-    try {
-      final dt = DateTime.tryParse(time.toString());
-      if (dt == null) return '';
-      final diff = DateTime.now().difference(dt);
-      if (diff.inSeconds < 60) return '刚刚';
-      if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
-      if (diff.inHours < 24) return '${diff.inHours}小时前';
-      if (diff.inDays < 7) return '${diff.inDays}天前';
-      return '${dt.month}月${dt.day}日';
-    } catch (_) {
-      return '';
+    if (confirmed == true && mounted) {
+      final ok = await _notifier.deleteComment(comment.id);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('删除失败'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
-  Widget _buildCommentInput() {
+  // ═══════════════════════════════════════════════════════════
+  //  Comment Input
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildCommentInput(ColorScheme colors, CommentState state) {
     return Container(
       padding: EdgeInsets.only(
-        left: 16, right: 8, top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
+        left: 12,
+        right: 6,
+        top: 8,
+        bottom: 8 + MediaQuery.of(context).viewInsets.bottom,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.borderLight)),
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (_replyingToName != null) ...[
+          // Reply chip
+          if (state.replyingToName != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
-                color: AppColors.backgroundSecondary,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                color: colors.secondaryContainer,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: [
-                  Text('回复 $_replyingToName',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  Icon(Icons.reply_rounded, size: 14, color: colors.onSecondaryContainer),
+                  const SizedBox(width: 6),
+                  Text(
+                    '回复 ${state.replyingToName}',
+                    style: TextStyle(fontSize: 13, color: colors.onSecondaryContainer),
+                  ),
                   const Spacer(),
-                  GestureDetector(
-                    onTap: _cancelReply,
-                    child: Icon(Icons.close, size: 16, color: AppColors.textSecondary),
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(Icons.close, size: 16, color: colors.onSecondaryContainer),
+                      onPressed: _notifier.cancelReply,
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
+          // Input row
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.borderLight),
-                  ),
-                  child: TextField(
-                    controller: _commentController,
-                    focusNode: _commentFocusNode,
-                    maxLines: 4,
-                    minLines: 1,
-                    style: const TextStyle(fontSize: 14),
-                    decoration: const InputDecoration(
-                      hintText: '写评论...',
-                      hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              // Emoji button
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton(
+                  onPressed: () => _showEmojiPicker(context, colors),
+                  icon: Icon(Icons.emoji_emotions_outlined, color: colors.onSurfaceVariant),
+                  style: IconButton.styleFrom(
+                    backgroundColor: colors.surfaceContainerLow,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
                     ),
-                    onSubmitted: (_) => _submitComment(),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _isSending ? null : _submitComment,
-                child: Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: _isSending ? AppColors.primary.withOpacity(0.5) : AppColors.primary,
-                    shape: BoxShape.circle,
+              const SizedBox(width: 6),
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  focusNode: _commentFocusNode,
+                  maxLines: 4,
+                  minLines: 1,
+                  style: TextStyle(fontSize: 14, color: colors.onSurface),
+                  decoration: InputDecoration(
+                    hintText: '写评论...',
+                    hintStyle: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+                    filled: true,
+                    fillColor: colors.surfaceContainerLow,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
-                  child: _isSending
-                    ? const Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.send, color: Colors.white, size: 18),
+                  onSubmitted: (value) => _submitWithText(value),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton(
+                  onPressed: state.isSending ? null : () => _submitWithText(_commentController.text),
+                  icon: state.isSending
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
+                        )
+                      : Icon(Icons.send_rounded, color: colors.primary),
+                  style: IconButton.styleFrom(
+                    backgroundColor: colors.primaryContainer.withValues(alpha: 0.3),
+                  ),
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _submitWithText(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    _commentController.clear();
+    _commentFocusNode.unfocus();
+    final error = await _notifier.submitComment(trimmed);
+    if (error != null && mounted) {
+      // 发送失败，将内容恢复到输入框
+      _commentController.text = trimmed;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  Emoji Picker
+  // ═══════════════════════════════════════════════════════════
+
+  static const List<List<String>> _emojiCategories = [
+    EmojiData.faces,
+    EmojiData.hearts,
+    EmojiData.gestures,
+    EmojiData.nature,
+    EmojiData.food,
+    EmojiData.objects,
+  ];
+
+  static const List<String> _emojiCategoryNames = [
+    '基础表情', '爱心与装饰', '手势与人物', '动物与自然', '食物与出行', '物品与符号',
+  ];
+
+  void _insertEmoji(String emoji) {
+    final text = _commentController.text;
+    final selection = _commentController.selection;
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    final newText = text.replaceRange(start, end, emoji);
+    _commentController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: start + emoji.length),
+    );
+    _commentFocusNode.requestFocus();
+  }
+
+  void _showEmojiPicker(BuildContext context, ColorScheme colors) {
+    final currentIndexNotifier = ValueNotifier<int>(0);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.4,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Category tabs
+              SizedBox(
+                height: 40,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: _emojiCategories.length,
+                  itemBuilder: (_, i) => ValueListenableBuilder<int>(
+                    valueListenable: currentIndexNotifier,
+                    builder: (_, tabIndex, __) {
+                      final isActive = tabIndex == i;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => currentIndexNotifier.value = i,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isActive ? colors.primaryContainer : Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _emojiCategoryNames[i],
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                                color: isActive ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Divider
+              Divider(height: 1, thickness: 0.3, color: colors.outlineVariant),
+              // Emoji grid
+              Expanded(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: currentIndexNotifier,
+                  builder: (_, tabIndex, __) {
+                    final emojis = _emojiCategories[tabIndex];
+                    return GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 6,
+                        childAspectRatio: 1.1,
+                      ),
+                      itemCount: emojis.length,
+                      itemBuilder: (_, i) => Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            _insertEmoji(emojis[i]);
+                            Navigator.pop(ctx);
+                          },
+                          child: Center(
+                            child: Text(
+                              emojis[i],
+                              style: const TextStyle(fontSize: 28),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  _CommentItem — individual comment widget (top-level or reply)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _CommentItem extends ConsumerWidget {
+  final Comment comment;
+  final String targetType;
+  final bool isOwner;
+  final VoidCallback onReply;
+  final VoidCallback onLike;
+  final VoidCallback onDelete;
+  final bool isLiking;
+
+  const _CommentItem({
+    required this.comment,
+    required this.targetType,
+    required this.isOwner,
+    required this.onReply,
+    required this.onLike,
+    required this.onDelete,
+    required this.isLiking,
+  });
+
+  void _navigateToProfile(BuildContext context, User? user) {
+    if (user == null) return;
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => UserProfileScreen(user: user),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final user = comment.user;
+    final displayName = user?.displayName ?? user?.username ?? '用户';
+    final isOwnerCheck = user?.id == ref.watch(authProvider).user?.id;
+    final double touchSize = 44; // M3 minimum touch target
+
+    // 整条评论可点击触发回复
+    return GestureDetector(
+      onTap: onReply,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Avatar — 可点击进入个人主页
+            GestureDetector(
+              onTap: () => _navigateToProfile(context, user),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: ImageUtils.buildAvatar(user, radius: 16),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Body
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 名字行：用户名 @被回复人
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _navigateToProfile(context, user),
+                        child: Text(
+                          displayName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                      ),
+                      if (comment.replyToUser != null)
+                        GestureDetector(
+                          onTap: () => _navigateToProfile(context, comment.replyToUser),
+                          child: Text(
+                            '@${comment.replyToUser!.displayName ?? comment.replyToUser!.username}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: colors.primary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  // 内容行
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      comment.content,
+                      style: TextStyle(fontSize: 13, color: colors.onSurface),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // 时间 + 操作按钮行
+                  Row(
+                    children: [
+                      Text(
+                        AppDateUtils.formatTimeAgo(comment.createdAt),
+                        style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+                      ),
+                      const SizedBox(width: 12),
+                      // Reply button
+                      SizedBox(
+                        width: touchSize,
+                        height: touchSize,
+                        child: TextButton(
+                          onPressed: onReply,
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(40, 40),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            '回复',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Delete (owner only)
+                      if (isOwnerCheck) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: touchSize,
+                          height: touchSize,
+                          child: TextButton(
+                            onPressed: onDelete,
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(40, 40),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              '删除',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: colors.error,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
+                      // Like button
+                      SizedBox(
+                        width: touchSize,
+                        height: touchSize,
+                        child: TextButton(
+                          onPressed: isLiking ? null : onLike,
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(40, 40),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                comment.isLiked ? Icons.favorite : Icons.favorite_border,
+                                size: 14,
+                                color: comment.isLiked ? AppColors.likeRed : colors.onSurfaceVariant,
+                              ),
+                              if (comment.likeCount > 0) ...[
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${comment.likeCount}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: comment.isLiked ? AppColors.likeRed : colors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  _AutoLoadMore — 自动触发加载更多（VisibilityDetector 驱动）
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _AutoLoadMore extends StatefulWidget {
+  final bool isLoading;
+  final VoidCallback onVisible;
+
+  const _AutoLoadMore({
+    super.key,
+    required this.isLoading,
+    required this.onVisible,
+  });
+
+  @override
+  State<_AutoLoadMore> createState() => _AutoLoadMoreState();
+}
+
+class _AutoLoadMoreState extends State<_AutoLoadMore> {
+  bool _hasTriggered = false;
+  bool _wasLoading = false;
+
+  @override
+  void didUpdateWidget(covariant _AutoLoadMore oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 加载完成后重置触发标记，以便下一批数据也能自动加载
+    if (_wasLoading && !widget.isLoading) {
+      _hasTriggered = false;
+    }
+    _wasLoading = widget.isLoading;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _wasLoading = widget.isLoading;
+    return VisibilityDetector(
+      key: widget.key ?? const Key('auto_load_more'),
+      onVisibilityChanged: (info) {
+        if (!_hasTriggered && info.visibleFraction > 0.5) {
+          _hasTriggered = true;
+          widget.onVisible();
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: widget.isLoading
+                ? const CircularProgressIndicator(strokeWidth: 2)
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  _CommentSkeleton — loading placeholder
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _CommentSkeleton extends StatelessWidget {
+  const _CommentSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      itemCount: 4,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleContainer(radius: 16, color: colors.surfaceContainerHighest),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 12,
+                    width: 120,
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 12,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 10,
+                    width: 80,
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CircleContainer extends StatelessWidget {
+  final double radius;
+  final Color color;
+  const CircleContainer({super.key, required this.radius, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
       ),
     );
   }

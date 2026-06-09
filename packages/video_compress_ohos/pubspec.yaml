@@ -1,0 +1,23 @@
+name: video_compress_ohos
+description: 跨端视频压缩插件，鸿蒙端使用 AVTranscoder，iOS/Android 端封装 video_compress。
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  video_compress: ^3.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      ohos:
+        pluginClass: VideoCompressOhosPlugin

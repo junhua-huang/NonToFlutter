@@ -1,0 +1,16 @@
+name: image_cropper_plus
+description: 纯 Dart 跨端图片裁剪组件（nonto），基于 Flutter 自绘引擎，无需原生代码，支持鸿蒙/iOS/Android。
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

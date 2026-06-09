@@ -4,11 +4,19 @@ import 'package:facebook_clone/models/user.dart';
 import 'package:flutter/material.dart';
 
 class ImageUtils {
+  /// 安全拼接完整 URL，避免双斜杠
+  static String resolveUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    if (url.startsWith('http')) return url;
+    final base = AppConfig.baseUrl.replaceFirst('/api', '');
+    final cleanBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final cleanUrl = url.startsWith('/') ? url : '/$url';
+    return '$cleanBase$cleanUrl';
+  }
+
   static Widget buildAvatar(User? user, {double radius = 20}) {
     if (user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty) {
-      final url = user.avatarUrl!.startsWith('http')
-          ? user.avatarUrl!
-          : '${AppConfig.baseUrl.replaceFirst('/api', '')}${user.avatarUrl!}';
+      final url = resolveUrl(user.avatarUrl);
       return CircleAvatar(
         radius: radius,
         backgroundImage: CachedNetworkImageProvider(url),
@@ -27,9 +35,7 @@ class ImageUtils {
 
   static Widget buildPostImage(String? imageUrl, {BoxFit fit = BoxFit.cover, double? width, double? height}) {
     if (imageUrl == null || imageUrl.isEmpty) return const SizedBox.shrink();
-    final url = imageUrl.startsWith('http')
-        ? imageUrl
-        : '${AppConfig.baseUrl.replaceFirst('/api', '')}$imageUrl';
+    final url = resolveUrl(imageUrl);
     return CachedNetworkImage(
       imageUrl: url,
       fit: fit,
@@ -45,9 +51,7 @@ class ImageUtils {
 
   static Widget buildCoverPhoto(String? url) {
     if (url == null || url.isEmpty) return Container(color: Colors.grey[300]);
-    final fullUrl = url.startsWith('http')
-        ? url
-        : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
+    final fullUrl = resolveUrl(url);
     return CachedNetworkImage(
       imageUrl: fullUrl, fit: BoxFit.cover, width: double.infinity, height: 200,
       placeholder: (_, __) => Container(color: Colors.grey[300], height: 200),

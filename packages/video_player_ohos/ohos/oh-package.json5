@@ -1,0 +1,7 @@
+{
+  "name": "video_player_ohos",
+  "version": "1.0.0",
+  "description": "nonto cross-platform video player plugin for HarmonyOS",
+  "main": "ets/index.ets",
+  "dependencies": {}
+}

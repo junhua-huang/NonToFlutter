@@ -18,6 +18,7 @@ class PostService {
     String? imagePath,
     List<String>? imageUrls,
     String? videoPath,
+    String? thumbnailUrl,
     List<int>? visibleUserIds,
   }) async {
     ApiResponse resp;
@@ -50,6 +51,7 @@ class PostService {
       if (imageUrls != null && imageUrls.isNotEmpty)
         'image_urls': jsonEncode(imageUrls),
       if (videoPath != null && videoPath.isNotEmpty) 'video_url': videoPath,
+      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) 'thumbnail_url': thumbnailUrl,
       if (visibleUserIds != null && visibleUserIds.isNotEmpty)
         'visible_user_ids': visibleUserIds.join(','),
     });
@@ -59,14 +61,14 @@ class PostService {
   }
 
   Future<ApiResponse> getFeed({int page = 1, int perPage = 20}) {
-    return _api.get('/posts/', params: {'page': page, 'per_page': perPage});
+    return _api.getDeduped('/posts/', params: {'page': page, 'per_page': perPage});
   }
 
   Future<ApiResponse> getUserPosts(int userId, {int page = 1, int perPage = 20}) {
-    return _api.get('/posts/user/$userId', params: {'page': page, 'per_page': perPage});
+    return _api.getDeduped('/posts/user/$userId', params: {'page': page, 'per_page': perPage});
   }
 
-  Future<ApiResponse> getPost(int postId) => _api.get('/posts/$postId');
+  Future<ApiResponse> getPost(int postId) => _api.getDeduped('/posts/$postId');
 
   Future<ApiResponse> updatePost(int postId, Map<String, dynamic> data) =>
       _api.put('/posts/$postId', data: data);
@@ -77,12 +79,12 @@ class PostService {
 
   Future<ApiResponse> unlikePost(int postId) => _api.delete('/posts/$postId/like');
 
-  Future<ApiResponse> getLikes(int postId) => _api.get('/posts/$postId/likes');
+  Future<ApiResponse> getLikes(int postId) => _api.getDeduped('/posts/$postId/likes');
 
   Future<ApiResponse> getUserLikedPosts(int userId, {int page = 1, int perPage = 20}) =>
-      _api.get('/posts/user/$userId/liked', params: {'page': page, 'per_page': perPage});
+      _api.getDeduped('/posts/user/$userId/liked', params: {'page': page, 'per_page': perPage});
 
   Future<ApiResponse> recordView(int postId) => _api.post('/posts/$postId/view');
 
-  Future<ApiResponse> getPostStats(int postId) => _api.get('/posts/$postId/stats');
+  Future<ApiResponse> getPostStats(int postId) => _api.getDeduped('/posts/$postId/stats');
 }

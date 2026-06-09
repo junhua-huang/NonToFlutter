@@ -1,6 +1,7 @@
+import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
 import 'package:facebook_clone/screens/search/search_results_screen.dart';
 import 'package:facebook_clone/services/api/block_service.dart';
@@ -11,9 +12,11 @@ import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:facebook_clone/widgets/enhanced_media_viewer.dart';
 import 'package:facebook_clone/widgets/media_viewer.dart';
 import 'package:facebook_clone/widgets/rich_text_content.dart';
-import 'package:facebook_clone/widgets/video_player_widget.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_social_video/flutter_social_video.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:video_player/video_player.dart';
 
 /// 统一帖子卡片组件 — 首页 Feed、他人主页、我的主页共用
 class PostCard extends StatelessWidget {
@@ -49,9 +52,9 @@ class PostCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('浏览量: ${stats['views'] ?? 0}'),
-                Text('点赞数: ${stats['likes'] ?? post.likeCount}'),
-                Text('评论数: ${stats['comments'] ?? post.commentCount}'),
+                Text('浏览量 ${stats['views'] ?? 0}'),
+                Text('点赞数 ${stats['likes'] ?? post.likeCount}'),
+                Text('评论数 ${stats['comments'] ?? post.commentCount}'),
               ],
             ),
             actions: [
@@ -135,7 +138,7 @@ class PostCard extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('屏蔽用户'),
-        content: Text('确定要屏蔽 @${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。'),
+        content: Text('确定要屏蔽@${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -155,7 +158,7 @@ class PostCard extends StatelessWidget {
       if (!context.mounted) return;
       if (resp.success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已屏蔽 @${post.user?.username ?? '该用户'}'), duration: const Duration(seconds: 2)),
+          SnackBar(content: Text('已屏蔽@${post.user?.username ?? '该用户'}'), duration: const Duration(seconds: 2)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -282,7 +285,7 @@ class PostCard extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.more_horiz, size: 18, color: AppColors.textSecondary),
                   onPressed: () {
-                    final currentUserId = context.read<AuthProvider>().user?.id;
+                    final currentUserId = ProviderScope.containerOf(context).read(authProvider).user?.id;
                     final isOwnPost = currentUserId != null && post.userId == currentUserId;
                     showModalBottomSheet(
                       context: context,
@@ -382,15 +385,26 @@ class PostCard extends StatelessWidget {
               }(),
             ),
           // --- Video ---
-          if (post.hasVideo)
+          if (post.hasVideo && post.videoUrl != null)
             Padding(
               padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
-              child: VideoPlayerWidget(
-                videoUrl: post.videoUrl,
-                thumbnailUrl: (post.images != null && post.images!.isNotEmpty) ? post.images![0] : null,
-                height: 200,
-                width: double.infinity,
-              ),
+              child: kIsWeb
+                  ? _WebVideoPlayer(
+                      videoUrl: post.videoUrl!,
+                      coverUrl: post.thumbnailUrl
+                          ?? (post.images != null && post.images!.isNotEmpty
+                              ? post.images![0]
+                              : null),
+                    )
+                  : InlineVideoPlayer(
+                      videoUrl: post.videoUrl!,
+                      coverUrl: post.thumbnailUrl
+                          ?? (post.images != null && post.images!.isNotEmpty
+                              ? post.images![0]
+                              : null),
+                      playerPool: videoPlayerPool,
+                      pauseWhenHidden: true,
+                    ),
             ),
           // --- Actions ---
           Padding(
@@ -484,4 +498,95 @@ List<PostMediaItem> _buildMediaItems(Post post, List<String> allImages, List<Pos
     }
   }
   return items;
+}
+
+/// Web 端视频播放器 — media_kit 不支持 Web，改用 video_player（浏览器原生 <video>）
+class _WebVideoPlayer extends StatefulWidget {
+  final String videoUrl;
+  final String? coverUrl;
+  const _WebVideoPlayer({required this.videoUrl, this.coverUrl});
+
+  @override
+  State<_WebVideoPlayer> createState() => _WebVideoPlayerState();
+}
+
+class _WebVideoPlayerState extends State<_WebVideoPlayer> {
+  late final VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    _controller.initialize().then((_) {
+      if (mounted) setState(() => _initialized = true);
+    }).catchError((e) {
+      debugPrint('Web video init error: $e');
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    if (!_initialized) return;
+    setState(() {
+      _isPlaying = !_isPlaying;
+      _isPlaying ? _controller.play() : _controller.pause();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = widget.coverUrl;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: _initialized ? _controller.value.aspectRatio : 16 / 9,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (_initialized) VideoPlayer(_controller),
+            if (!_initialized && cover != null)
+              Positioned.fill(
+                child: Image.network(cover, fit: BoxFit.cover),
+              ),
+            if (!_initialized && cover == null)
+              const ColoredBox(color: Color(0xFF1A1A1A)),
+            // Play/Pause overlay
+            GestureDetector(
+              onTap: _togglePlay,
+              child: Container(
+                color: Colors.transparent,
+                child: Center(
+                  child: AnimatedOpacity(
+                    opacity: _isPlaying ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        color: Color(0x80000000),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

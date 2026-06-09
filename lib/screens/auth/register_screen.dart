@@ -1,18 +1,18 @@
 import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/screens/home/home_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class RegisterScreen extends StatefulWidget {
+class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -42,8 +42,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SnackBar(content: Text('两次密码不一致'), backgroundColor: Colors.red));
       return;
     }
-    final auth = context.read<AuthProvider>();
-    final ok = await auth.register(
+    final authNotifier = ref.read(authProvider.notifier);
+    final ok = await authNotifier.register(
       username: _usernameController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -53,9 +53,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
-    } else if (auth.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(auth.error!), backgroundColor: Colors.red));
+    } else {
+      final error = ref.read(authProvider).error;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -141,16 +144,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              Consumer<AuthProvider>(
-                builder: (_, auth, __) => ElevatedButton(
-                  onPressed: auth.isLoading ? null : _register,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _privacyAccepted ? AppColors.primary : AppColors.primary.withValues(alpha: 0.4),
-                  ),
-                  child: auth.isLoading
-                      ? const SizedBox(height: 20, width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('注册', style: TextStyle(fontSize: 16))),
+              Builder(
+                builder: (_) {
+                  final authState = ref.watch(authProvider);
+                  return ElevatedButton(
+                    onPressed: authState.isLoading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _privacyAccepted ? AppColors.primary : AppColors.primary.withValues(alpha: 0.4),
+                    ),
+                    child: authState.isLoading
+                        ? const SizedBox(height: 20, width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('注册', style: TextStyle(fontSize: 16)));
+                },
               ),
             ]),
           ),

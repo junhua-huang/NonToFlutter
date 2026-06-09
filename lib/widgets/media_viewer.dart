@@ -6,7 +6,7 @@ import 'package:facebook_clone/widgets/enhanced_media_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
-import 'package:video_player/video_player.dart';
+import 'package:video_player_ohos/video_player_ohos.dart';
 /// 将相对 URL 解析为完整的网络 URL
 String resolveUrl(String? url) {
   if (url == null || url.isEmpty) return '';
@@ -482,7 +482,7 @@ class _VideoPlayerScreen extends StatefulWidget {
 }
 
 class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
-  VideoPlayerController? _controller;
+  NontoVideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
   bool _showControls = true;
@@ -496,7 +496,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
 
   void _initVideo() {
     try {
-      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      _controller = NontoVideoPlayerController.network(widget.videoUrl);
+      _controller!.addListener(_onPlayerUpdate);
       _controller!.initialize().then((_) {
         if (mounted) {
           setState(() {
@@ -504,7 +505,6 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
             _hasError = false;
           });
           _controller!.play();
-          _controller!.setLooping(true);
         }
       }).catchError((error) {
         if (mounted) {
@@ -514,7 +514,6 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
           });
         }
       });
-      _controller!.addListener(_onPlayerUpdate);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -578,8 +577,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
                   if (_isInitialized)
                     Center(
                       child: AspectRatio(
-                        aspectRatio: _controller!.value.aspectRatio,
-                        child: VideoPlayer(_controller!),
+                        aspectRatio: _controller!.aspectRatio,
+                        child: NontoVideoPlayer(controller: _controller!),
                       ),
                     )
                   else
@@ -622,11 +621,11 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
                     GestureDetector(
                       onTap: () {
                         setState(() {
-                          _controller!.value.isPlaying ? _controller!.pause() : _controller!.play();
+                          _controller!.isPlaying ? _controller!.pause() : _controller!.play();
                         });
                       },
                       child: AnimatedOpacity(
-                        opacity: _controller!.value.isPlaying ? 0.0 : 1.0,
+                        opacity: _controller!.isPlaying ? 0.0 : 1.0,
                         duration: const Duration(milliseconds: 200),
                         child: Container(
                           width: 64,
@@ -649,31 +648,14 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Progress bar
-                          GestureDetector(
-                            onTapDown: (details) {
-                              final RenderBox box = context.findRenderObject() as RenderBox;
-                              final double position = details.localPosition.dx / box.size.width;
-                              final Duration duration = _controller!.value.duration;
-                              _controller!.seekTo(Duration(milliseconds: (position * duration.inMilliseconds).round()));
-                            },
-                            child: VideoProgressIndicator(
-                              _controller!,
-                              allowScrubbing: true,
-                              colors: const VideoProgressColors(
-                                playedColor: AppColors.primary,
-                                bufferedColor: Colors.white38,
-                                backgroundColor: Colors.white24,
-                              ),
-                              padding: const EdgeInsets.only(top: 8),
-                            ),
-                          ),
+                          // Progress bar（自定义，替代 video_player 的 VideoProgressIndicator）
+                          _buildProgressBar(),
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                '${_formatDuration(_controller!.value.position)} / ${_formatDuration(_controller!.value.duration)}',
+                                '${_formatDuration(_controller!.position)} / ${_formatDuration(_controller!.duration)}',
                                 style: const TextStyle(color: Colors.white70, fontSize: 12),
                               ),
                               Row(
@@ -682,11 +664,11 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
                                   GestureDetector(
                                     onTap: () {
                                       setState(() {
-                                        _controller!.value.isPlaying ? _controller!.pause() : _controller!.play();
+                                        _controller!.isPlaying ? _controller!.pause() : _controller!.play();
                                       });
                                     },
                                     child: Icon(
-                                      _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                                      _controller!.isPlaying ? Icons.pause : Icons.play_arrow,
                                       color: Colors.white70,
                                       size: 22,
                                     ),
@@ -704,6 +686,44 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    final ctrl = _controller;
+    if (ctrl == null || ctrl.duration.inMilliseconds == 0) {
+      return const SizedBox(height: 20);
+    }
+    final progress = ctrl.position.inMilliseconds / ctrl.duration.inMilliseconds;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) {
+            final ratio = details.localPosition.dx / constraints.maxWidth;
+            final pos = Duration(milliseconds: (ratio * ctrl.duration.inMilliseconds).round());
+            ctrl.seekTo(pos);
+          },
+          onHorizontalDragUpdate: (details) {
+            final ratio = (details.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
+            final pos = Duration(milliseconds: (ratio * ctrl.duration.inMilliseconds).round());
+            ctrl.seekTo(pos);
+          },
+          child: Container(
+            height: 20,
+            padding: const EdgeInsets.only(top: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.white24,
+                valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                minHeight: 4,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

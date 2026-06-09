@@ -97,5 +97,6 @@ class CacheKeys {
   static String trendingPosts() => 'trending_posts';
   static String suggestedUsers() => 'suggested_users';
   static String friends() => 'friends';
+  static String currentUser() => 'current_user';
   static String searchResults(String query) => 'search_${query.hashCode}';
 }

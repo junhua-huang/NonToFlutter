@@ -1,0 +1,7 @@
+{
+  "name": "video_compress_ohos",
+  "version": "1.0.0",
+  "description": "nonto video compression plugin for HarmonyOS (AVTranscoder)",
+  "main": "ets/index.ets",
+  "dependencies": {}
+}

@@ -218,7 +218,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: color.withOpacity(0.12),
+              backgroundColor: color.withValues(alpha: 0.12),
               child: Text(
                 '#',
                 style: TextStyle(

@@ -1,0 +1,1 @@
+export { VideoThumbnailOhosPlugin } from './plugin/VideoThumbnailOhosPlugin';

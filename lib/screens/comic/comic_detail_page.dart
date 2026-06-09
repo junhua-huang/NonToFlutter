@@ -1,13 +1,13 @@
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/comic_event.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/screens/comic/comic_upload_page.dart';
 import 'package:facebook_clone/screens/post/image_viewer_screen.dart';
 import 'package:facebook_clone/services/comic_service.dart';
 import 'package:facebook_clone/widgets/comment_section.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ComicDetailPage extends StatefulWidget {
   final int eventId;
@@ -493,7 +493,6 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
           CommentSection(
             targetType: 'comic',
             targetId: event.id,
-            heroTag: 'comic_${event.id}',
           ),
 
           const SizedBox(height: 24),

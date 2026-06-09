@@ -1,13 +1,9 @@
-import 'dart:async';
-
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
-import 'package:facebook_clone/services/api/chat_service.dart';
-import 'package:facebook_clone/services/api/notification_service.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
+import 'package:facebook_clone/providers/core_providers.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../comic/comic_my_events_page.dart';
 import '../comic/comic_timeline_page.dart';
@@ -21,27 +17,16 @@ import '../search/search_tab.dart';
 import '../topics/my_topics_screen.dart';
 import 'home/feed_tab.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   final int? initialTab;
-
-  /// Global notifier for bottom bar + tab AppBar visibility.
-  /// Tabs listen to this via ValueListenableBuilder to animate their AppBars.
-  /// Tab scroll-notifications toggle this value.
-  static final ValueNotifier<bool> barVisible = ValueNotifier(true);
 
   const HomeScreen({super.key, this.initialTab});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
-  int _unreadNotifications = 0;
-  int _unreadMessages = 0;
-  StreamSubscription? _notifSubscription;
-  StreamSubscription? _msgSubscription;
-
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final List<Widget> _tabs = const [
     FeedTab(),
     SearchTab(),
@@ -53,102 +38,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     if (widget.initialTab != null) {
-      _currentIndex = widget.initialTab!;
+      ref.read(currentTabIndexProvider.notifier).state = widget.initialTab!;
     }
-    TabActivationNotifier.currentTab.value = _currentIndex;
-    // Defer WebSocket & API to post-frame so first paint is not blocked
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _connectWebSocket();
-      _fetchInitialCounts();
-    });
-  }
-
-  void _connectWebSocket() {
-    WebSocketService().connect();
-    // 实时通知事件：直接提取 unread_count
-    _notifSubscription = WebSocketService().notificationStream.listen((data) {
-      final type = data['type'] as String?;
-      if (type == 'new_notification' || type == 'notifications_read') {
-        final count = _extractInt(data, 'unread_count');
-        if (mounted) setState(() => _unreadNotifications = count);
-      }
-    });
-    // 实时消息事件：直接提取 unread_count
-    _msgSubscription = WebSocketService().messageStream.listen((data) {
-      final type = data['type'] as String?;
-      if (type == 'new_message' || type == 'conversation_read') {
-        final count = _extractInt(data, 'unread_count');
-        if (mounted) setState(() => _unreadMessages = count);
-      }
-    });
-  }
-
-  int _extractInt(Map<String, dynamic> data, String key) {
-    final val = data[key];
-    if (val is int) return val;
-    if (val is double) return val.toInt();
-    if (val is String) return int.tryParse(val) ?? 0;
-    return 0;
-  }
-
-  Future<void> _fetchInitialCounts() async {
-    // Parallelize both API calls to reduce blocking time
-    await Future.wait([
-      _fetchNotifCount(),
-      _fetchMsgCount(),
-    ], eagerError: true);
-  }
-
-  Future<void> _fetchNotifCount() async {
-    try {
-      final notifResp = await NotificationService().getUnreadCount();
-      if (notifResp.success && notifResp.data != null) {
-        final data = notifResp.data;
-        int count = 0;
-        if (data is Map) {
-          count = data['count'] ?? data['unread_count'] ?? 0;
-        } else if (data is int) {
-          count = data;
-        }
-        if (mounted) setState(() => _unreadNotifications = count);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _fetchMsgCount() async {
-    try {
-      final msgResp = await ChatService().getUnreadCount();
-      if (msgResp.success && msgResp.data != null) {
-        final data = msgResp.data;
-        int count = 0;
-        if (data is Map) {
-          count = data['count'] ?? data['unread_count'] ?? 0;
-        } else if (data is int) {
-          count = data;
-        }
-        if (mounted) setState(() => _unreadMessages = count);
-      }
-    } catch (_) {}
-  }
-
-  @override
-  void dispose() {
-    _notifSubscription?.cancel();
-    _msgSubscription?.cancel();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final authState = ref.watch(authProvider);
+    final barVisible = ref.watch(barVisibleProvider);
+    final totalBadge = (ref.watch(unreadNotificationsCountProvider) + ref.watch(unreadMessagesCountProvider)).toInt();
+    final currentIndex = ref.watch(currentTabIndexProvider);
 
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: currentIndex,
         children: _tabs,
       ),
-      drawer: _buildDrawer(context, auth),
-      floatingActionButton: _currentIndex == 0
+      drawer: _buildDrawer(context),
+      floatingActionButton: currentIndex == 0
           ? FloatingActionButton(
               onPressed: () async {
                 final result = await Navigator.push(
@@ -163,37 +70,22 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Icon(Icons.edit, color: Colors.white, size: 26),
             )
           : null,
-      bottomNavigationBar: ValueListenableBuilder<bool>(
-        valueListenable: HomeScreen.barVisible,
-        builder: (_, visible, child) {
-          return AnimatedSlide(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            offset: visible ? Offset.zero : const Offset(0, 1),
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 250),
-              opacity: visible ? 1.0 : 0.0,
-              child: child,
-            ),
-          );
-        },
-        child: Theme(
+      bottomNavigationBar: AnimatedSlide(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        offset: barVisible ? Offset.zero : const Offset(0, 1),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 250),
+          opacity: barVisible ? 1.0 : 0.0,
+          child: Theme(
           data: Theme.of(context).copyWith(
             splashColor: Colors.transparent,
             highlightColor: Colors.transparent,
           ),
           child: BottomNavigationBar(
-          currentIndex: _currentIndex,
+          currentIndex: currentIndex,
           onTap: (i) {
-            setState(() => _currentIndex = i);
-            TabActivationNotifier.currentTab.value = i;
-            // Clear badge when visiting messages tab
-            if (i == 2) {
-              setState(() {
-                _unreadNotifications = 0;
-                _unreadMessages = 0;
-              });
-            }
+            ref.read(currentTabIndexProvider.notifier).state = i;
           },
           type: BottomNavigationBarType.fixed,
           showSelectedLabels: true,
@@ -204,12 +96,12 @@ class _HomeScreenState extends State<HomeScreen> {
             BottomNavigationBarItem(
               icon: _NavScaleIcon(
                 icon: Icons.home_outlined,
-                isSelected: _currentIndex == 0,
+                isSelected: currentIndex == 0,
                 size: 26,
               ),
               activeIcon: _NavScaleIcon(
                 icon: Icons.home,
-                isSelected: _currentIndex == 0,
+                isSelected: currentIndex == 0,
                 size: 26,
               ),
               label: '',
@@ -217,12 +109,12 @@ class _HomeScreenState extends State<HomeScreen> {
             BottomNavigationBarItem(
               icon: _NavScaleIcon(
                 icon: Icons.search,
-                isSelected: _currentIndex == 1,
+                isSelected: currentIndex == 1,
                 size: 26,
               ),
               activeIcon: _NavScaleIcon(
                 icon: Icons.search,
-                isSelected: _currentIndex == 1,
+                isSelected: currentIndex == 1,
                 size: 26,
               ),
               label: '',
@@ -231,12 +123,12 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: _buildBadgeIcon(
                 icon: Icons.notifications_none_outlined,
                 activeIcon: Icons.notifications,
-                count: _unreadNotifications + _unreadMessages,
+                count: totalBadge,
               ),
               activeIcon: _buildBadgeIcon(
                 icon: Icons.notifications,
                 activeIcon: Icons.notifications,
-                count: _unreadNotifications + _unreadMessages,
+                count: totalBadge,
                 isActive: true,
               ),
               label: '',
@@ -244,12 +136,12 @@ class _HomeScreenState extends State<HomeScreen> {
             BottomNavigationBarItem(
               icon: _NavScaleIcon(
                 icon: Icons.person_outline,
-                isSelected: _currentIndex == 3,
+                isSelected: currentIndex == 3,
                 size: 26,
               ),
               activeIcon: _NavScaleIcon(
                 icon: Icons.person,
-                isSelected: _currentIndex == 3,
+                isSelected: currentIndex == 3,
                 size: 26,
               ),
               label: '',
@@ -258,11 +150,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ),
-  );
+  ),
+);
   }
 
-  Widget _buildDrawer(BuildContext context, AuthProvider auth) {
-    final user = auth.user;
+  Widget _buildDrawer(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final user = authState.user;
     return Drawer(
       backgroundColor: AppColors.background,
       child: SafeArea(
@@ -388,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: const Text('退出登录', style: TextStyle(fontSize: 15, color: AppColors.likeRed)),
               onTap: () {
                 Navigator.pop(context);
-                auth.logout();
+                ref.read(authProvider.notifier).logout();
                 Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
               },
             ),
@@ -436,15 +330,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildAvatar(AuthProvider auth) {
-    final url = auth.user?.avatarUrl;
+  Widget _buildAvatar() {
+    final authState = ref.watch(authProvider);
+    final url = authState.user?.avatarUrl;
     if (url != null && url.isNotEmpty) {
       final fullUrl = url.startsWith('http') ? url : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
       return Image.network(fullUrl, fit: BoxFit.cover,
         errorBuilder: (ctx, err, st) => CircleAvatar(
           radius: 16,
           backgroundColor: AppColors.primary,
-          child: Text(auth.user?.initials ?? '?',
+          child: Text(authState.user?.initials ?? '?',
             style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
         ),
       );
@@ -452,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return CircleAvatar(
       radius: 16,
       backgroundColor: AppColors.primary,
-      child: Text(auth.user?.initials ?? '?',
+      child: Text(authState.user?.initials ?? '?',
         style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }

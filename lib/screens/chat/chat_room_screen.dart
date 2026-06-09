@@ -1,177 +1,84 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:facebook_clone/config/app_theme.dart';
+import 'package:facebook_clone/data/emoji_data.dart';
 import 'package:facebook_clone/models/conversation.dart';
 import 'package:facebook_clone/models/message.dart';
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
+import 'package:facebook_clone/providers/chat_notifiers.dart';
 import 'package:facebook_clone/services/api/chat_service.dart';
-import 'package:facebook_clone/services/local_db_service.dart';
-import 'package:facebook_clone/services/sound_service.dart';
+import 'package:facebook_clone/screens/messages/messages_tab.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:facebook_clone/utils/date_utils.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:facebook_clone/widgets/empty_state_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
-/// Twitter/X DM 风格聊天室页面（支持 WebSocket 实时消息 + 表情包）
-class ChatRoomScreen extends StatefulWidget {
+/// Twitter/X DM 风格聊天室页面（基于 Provider 驱动消息状态）
+class ChatRoomScreen extends ConsumerStatefulWidget {
   final Conversation conversation;
 
   const ChatRoomScreen({super.key, required this.conversation});
 
   @override
-  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
+  ConsumerState<ChatRoomScreen> createState() => _ChatRoomScreenState();
 }
 
-class _ChatRoomScreenState extends State<ChatRoomScreen> {
-  final ChatService _chatService = ChatService();
-  final WebSocketService _wsService = WebSocketService();
-  final RefreshController _refreshController = RefreshController(initialRefresh: true);
+class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
+  final RefreshController _refreshController =
+      RefreshController(initialRefresh: false);
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
   final FocusNode _messageFocusNode = FocusNode();
 
-  final List<Message> _messages = [];
-  int _page = 1;
-  bool _hasMore = true;
-  bool _isLoading = false;
-  bool _isSending = false;
-  String? _error;
   bool _showEmojiPicker = false;
-  bool _otherUserTyping = false;
-  Timer? _typingTimer;
-  StreamSubscription? _msgSubscription;
-  StreamSubscription? _typingSubscription;
+  StreamSubscription? _errorSub;
 
   @override
   void initState() {
     super.initState();
-    _loadLocalMessages();
-    _setupWebSocket();
-    _chatService.markRead(widget.conversation.id);
-  }
+    MessagesTab.currentChatRoomConvId = widget.conversation.id.toString();
 
-  Future<void> _loadLocalMessages() async {
-    final localMsgs = await LocalDbService().getMessages(widget.conversation.id, limit: 50);
-    if (localMsgs.isNotEmpty && mounted) {
-      setState(() {
-        _messages.clear();
-        _messages.addAll(localMsgs);
-      });
-    }
-    // Then load from server
-    await _loadMessages();
-  }
+    // 初始化 Provider（传入当前用户 ID 并启动加载）
+    final auth = ref.read(authProvider);
+    final currentUserId = auth.user?.id ?? 0;
+    ref
+        .read(messagesProvider(widget.conversation.id).notifier)
+        .init(currentUserId);
 
-  void _setupWebSocket() {
-    // Ensure connected
-    _wsService.connect();
-    // Join room
-    _wsService.joinConversation(widget.conversation.id);
-
-    // Listen for new messages (backend sends: receive_message)
-    _msgSubscription = _wsService.messageStream.listen((data) {
-      final msgConvId = data['conversation_id'];
-      if (msgConvId == widget.conversation.id) {
-        final msg = Message.fromJson(data);
-        // Check if this is a message we already have (optimistic duplicate check)
-        final alreadyExists = _messages.any((m) =>
-          m.id == msg.id ||
-          (m.senderId == msg.senderId && m.content == msg.content &&
-           ((m.createdAt ?? DateTime.now()).difference(msg.createdAt ?? DateTime.now()).inSeconds.abs() < 5))
+    // WS 错误 → SnackBar
+    _errorSub = WebSocketService().errorStream.listen((error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('发送失败: $error'),
+              duration: const Duration(seconds: 3)),
         );
-        if (!alreadyExists) {
-          // Save to local DB
-          LocalDbService().insertMessage(msg);
-          setState(() {
-            // Remove any pending optimistic message from same sender with same content
-            _messages.removeWhere((m) =>
-              m.id.toString().length < 10 && // Optimistic IDs are timestamps (long strings)
-              m.senderId == msg.senderId && m.content == msg.content
-            );
-            _messages.add(msg);
-          });
-          _scrollToBottom();
-        }
       }
     });
 
-    // Listen for typing indicators
-    _typingSubscription = _wsService.typingStream.listen((data) {
-      final convId = data['conversation_id'];
-      final type = data['type'] ?? 'typing';
-      if (convId == widget.conversation.id) {
-        setState(() => _otherUserTyping = type == 'typing');
-      }
-    });
+    // HTTP markRead 降级（WS 未连接时）
+    if (!WebSocketService().isConnected) {
+      ChatService().markRead(widget.conversation.id);
+    }
   }
 
   @override
   void dispose() {
-    _wsService.leaveConversation(widget.conversation.id);
-    _msgSubscription?.cancel();
-    _typingSubscription?.cancel();
+    MessagesTab.currentChatRoomConvId = null;
+    _errorSub?.cancel();
     _refreshController.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _messageFocusNode.dispose();
-    _typingTimer?.cancel();
     super.dispose();
-  }
-
-  Future<void> _loadMessages() async {
-    if (_isLoading) return;
-    _isLoading = true;
-    try {
-      final resp = await _chatService.getMessages(widget.conversation.id, page: _page);
-      if (resp.success && resp.data != null) {
-        final data = resp.data;
-        List<dynamic> msgList = [];
-        if (data is Map) {
-          msgList = data['messages'] ?? [];
-          _hasMore = data['has_more'] == true;
-        } else if (data is List) {
-          msgList = data;
-        }
-        final messages = msgList
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
-        // Newest first from API, but we want newest at bottom
-        messages.sort((a, b) => (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
-
-        setState(() {
-          if (_page == 1) {
-            _messages.clear();
-            _messages.addAll(messages);
-          } else {
-            _messages.insertAll(0, messages.reversed);
-          }
-          _page++;
-        });
-        // Save to local DB
-        await LocalDbService().insertMessages(messages);
-      } else {
-        setState(() => _hasMore = false);
-      }
-    } catch (e) {
-      debugPrint('Load messages error: $e');
-      if (mounted) setState(() => _error = '加载失败，请下拉重试');
-    } finally {
-      _isLoading = false;
-      _refreshController.loadComplete();
-      _refreshController.refreshCompleted();
-      if (_page <= 2 && _messages.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-      }
-    }
   }
 
   void _scrollToBottom() {
@@ -184,63 +91,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
-  void _sendMessage() async {
+  void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
+    HapticFeedback.lightImpact();
 
-    final auth = context.read<AuthProvider>();
-    final currentUserId = auth.user?.id;
-    if (currentUserId == null) return;
-
-    // Optimistic message
-    final optimisticMsg = Message(
-      id: DateTime.now().millisecondsSinceEpoch,
-      conversationId: widget.conversation.id,
-      senderId: currentUserId,
-      content: text,
-      messageType: MessageType.text,
-      createdAt: DateTime.now(),
-    );
-
-    setState(() {
-      _messages.add(optimisticMsg);
-      _isSending = true;
-    });
+    ref
+        .read(messagesProvider(widget.conversation.id).notifier)
+        .sendMessage(text);
     _messageController.clear();
     _scrollToBottom();
-
-    // Save to local DB first
-    await LocalDbService().insertMessage(optimisticMsg);
-
-    // Send via WebSocket if connected, otherwise fallback to HTTP
-    if (_wsService.isConnected) {
-      _wsService.sendMessage(widget.conversation.id, text);
-      SoundService().playSendSound();
-      setState(() => _isSending = false);
-    } else {
-      // HTTP fallback
-      try {
-        final resp = await _chatService.sendMessage(widget.conversation.id, text);
-        if (!resp.success && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('发送失败'), duration: Duration(seconds: 2)),
-          );
-        }
-      } catch (e) {
-        debugPrint('Send message error: $e');
-      } finally {
-        if (mounted) setState(() => _isSending = false);
-      }
-    }
   }
 
   void _onTextChanged(String text) {
-    if (_wsService.isConnected) {
-      _wsService.sendTyping(widget.conversation.id);
-      _typingTimer?.cancel();
-      _typingTimer = Timer(const Duration(seconds: 2), () {
-        _wsService.sendStopTyping(widget.conversation.id);
-      });
+    if (WebSocketService().isConnected) {
+      ref
+          .read(messagesProvider(widget.conversation.id).notifier)
+          .sendTyping();
     }
   }
 
@@ -254,55 +121,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       );
       if (picked != null) {
         final bytes = await picked.readAsBytes();
-        await _sendImageMessage(bytes, picked.name);
+        ref
+            .read(messagesProvider(widget.conversation.id).notifier)
+            .sendImageMessage(bytes, picked.name);
+        _scrollToBottom();
       }
     } catch (e) {
       debugPrint('Pick image error: $e');
     }
-  }
-
-  Future<void> _sendImageMessage(Uint8List bytes, String fileName) async {
-    final auth = context.read<AuthProvider>();
-    final currentUserId = auth.user?.id;
-    if (currentUserId == null) return;
-
-    setState(() => _isSending = true);
-    try {
-      final uploadResp = await ApiClient().uploadBytes(
-        '/upload/chat/image',
-        bytes,
-        fileName,
-      );
-      if (uploadResp.success) {
-        final url = _extractUrl(uploadResp.data);
-        if (url != null) {
-          if (_wsService.isConnected) {
-            _wsService.sendMessage(
-              widget.conversation.id,
-              url,
-              messageType: 'image',
-            );
-            SoundService().playSendSound();
-          } else {
-            await _chatService.sendMessage(widget.conversation.id, url, messageType: 'image');
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Send image error: $e');
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
-  }
-
-  String? _extractUrl(dynamic data) {
-    if (data == null) return null;
-    if (data is Map) {
-      return data['url']?.toString()
-          ?? data['image_url']?.toString()
-          ?? data['media_url']?.toString();
-    }
-    return data.toString();
   }
 
   void _toggleEmojiPicker() {
@@ -329,9 +155,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final auth = ref.watch(authProvider);
     final currentUserId = auth.user?.id;
+    final msgState = ref.watch(messagesProvider(widget.conversation.id));
     final otherUser = widget.conversation.otherUser;
+
+    // 新消息到达时自动滚动到底部
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (msgState.messages.isNotEmpty) _scrollToBottom();
+    });
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -348,16 +180,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           children: [
             Text(
               otherUser?.displayName ?? '聊天',
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+              style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700),
             ),
             Text(
-              _otherUserTyping
+              msgState.otherUserTyping
                   ? '正在输入...'
                   : '@${otherUser?.username ?? ''}',
               style: TextStyle(
-                color: _otherUserTyping ? AppColors.primary : AppColors.textSecondary,
+                color: msgState.otherUserTyping
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
                 fontSize: 13,
-                fontStyle: _otherUserTyping ? FontStyle.italic : FontStyle.normal,
+                fontStyle: msgState.otherUserTyping
+                    ? FontStyle.italic
+                    : FontStyle.normal,
               ),
             ),
           ],
@@ -365,7 +204,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         centerTitle: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.info_outline, color: AppColors.textPrimary, size: 22),
+            icon: const Icon(Icons.info_outline,
+                color: AppColors.textPrimary, size: 22),
             onPressed: () {
               showDialog(
                 context: context,
@@ -375,8 +215,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('对方: ${widget.conversation.otherUser?.displayName ?? '未知用户'}'),
-                      Text('用户名: @${widget.conversation.otherUser?.username ?? ''}'),
+                      Text(
+                          '对方: ${widget.conversation.otherUser?.displayName ?? '未知用户'}'),
+                      Text(
+                          '用户名: @${widget.conversation.otherUser?.username ?? ''}'),
                       const SizedBox(height: 12),
                       const Text('聊天设置:'),
                       SwitchListTile(
@@ -409,21 +251,56 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       ),
       body: Column(
         children: [
+          // WebSocket 断开提示
+          if (!msgState.wsConnected)
+            SafeArea(
+              bottom: false,
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                color: const Color(0xFFF39C12),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '正在重新连接...',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Messages
           Expanded(
-            child: _error != null
+            child: msgState.error != null
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: AppColors.textSecondary),
+                        const Icon(Icons.error_outline,
+                            size: 48, color: AppColors.textSecondary),
                         const SizedBox(height: 12),
-                        Text(_error!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+                        Text(msgState.error!,
+                            style: const TextStyle(
+                                color: AppColors.textSecondary, fontSize: 15)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () {
-                            setState(() { _error = null; _page = 1; _hasMore = true; });
-                            _loadMessages();
+                            ref
+                                .read(messagesProvider(widget.conversation.id)
+                                    .notifier)
+                                .syncIncremental();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
@@ -434,39 +311,91 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       ],
                     ),
                   )
-                : _messages.isEmpty && !_isLoading
-                ? _buildEmpty(otherUser)
-                : SmartRefresher(
-                    controller: _refreshController,
-                    enablePullDown: true,
-                    enablePullUp: _hasMore,
-                    onRefresh: () async {
-                      setState(() { _page = 1; _hasMore = true; });
-                      await _loadMessages();
-                    },
-                    onLoading: _loadMessages,
-                    header: const WaterDropHeader(
-                      complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-                      waterDropColor: AppColors.primary,
-                    ),
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      itemCount: _messages.length,
-                      itemBuilder: (_, i) {
-                        final msg = _messages[i];
-                        final isMe = msg.senderId == currentUserId;
-                        return _MessageBubble(
-                          message: msg,
-                          isMe: isMe,
-                          otherUser: otherUser,
-                        );
-                      },
-                    ),
-                  ),
+                : msgState.messages.isEmpty && msgState.isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary),
+                      )
+                    : msgState.messages.isEmpty && !msgState.isLoading
+                    ? _buildEmpty(otherUser)
+                    : SmartRefresher(
+                        controller: _refreshController,
+                        enablePullDown: true,
+                        enablePullUp: msgState.hasMore,
+                        onRefresh: () async {
+                          await ref
+                              .read(messagesProvider(widget.conversation.id)
+                                  .notifier)
+                              .syncIncremental();
+                          _refreshController.refreshCompleted();
+                          _refreshController.loadComplete();
+                        },
+                        onLoading: () async {
+                          await ref
+                              .read(messagesProvider(widget.conversation.id)
+                                  .notifier)
+                              .loadMore();
+                          _refreshController.loadComplete();
+                        },
+                        header: const WaterDropHeader(
+                          complete: Text('刷新成功',
+                              style: TextStyle(color: AppColors.primary)),
+                          waterDropColor: AppColors.primary,
+                        ),
+                        footer: CustomFooter(
+                          builder: (context, mode) {
+                            if (mode == LoadStatus.loading) {
+                              return const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Text('加载更多...',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 13)),
+                              );
+                            }
+                            if (mode == LoadStatus.failed) {
+                              return const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Text('加载失败，点击重试',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        color: AppColors.likeRed,
+                                        fontSize: 13)),
+                              );
+                            }
+                            if (mode == LoadStatus.noMore) {
+                              return const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Text('没有更多了',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 13)),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          itemCount: msgState.messages.length,
+                          itemBuilder: (_, i) {
+                            final msg = msgState.messages[i];
+                            final isMe = msg.senderId == currentUserId;
+                            return _MessageBubble(
+                              message: msg,
+                              isMe: isMe,
+                              otherUser: otherUser,
+                            );
+                          },
+                        ),
+                      ),
           ),
           // Input bar
-          _buildInputBar(),
+          _buildInputBar(msgState.isSending),
           // Emoji picker
           if (_showEmojiPicker) _buildEmojiPicker(),
         ],
@@ -482,10 +411,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ImageUtils.buildAvatar(otherUser, radius: 40),
           const SizedBox(height: 12),
           Text(otherUser?.displayName ?? '',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text('@${otherUser?.username ?? ''}',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 14)),
           const SizedBox(height: 16),
           const EmptyStateWidget(
             icon: Icons.chat_bubble_outline,
@@ -498,7 +431,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
-  Widget _buildInputBar() {
+  Widget _buildInputBar(bool isSending) {
     return Container(
       padding: EdgeInsets.only(
         left: 8,
@@ -516,7 +449,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           // Emoji button
           IconButton(
             icon: Icon(
-              _showEmojiPicker ? Icons.keyboard : Icons.emoji_emotions_outlined,
+              _showEmojiPicker
+                  ? Icons.keyboard
+                  : Icons.emoji_emotions_outlined,
               color: AppColors.primary,
               size: 24,
             ),
@@ -524,7 +459,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
           // Image button
           IconButton(
-            icon: const Icon(Icons.image_outlined, color: AppColors.primary, size: 24),
+            icon: const Icon(Icons.image_outlined,
+                color: AppColors.primary, size: 24),
             onPressed: _pickImage,
           ),
           Expanded(
@@ -542,28 +478,32 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _sendMessage(),
                 onChanged: _onTextChanged,
-                style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+                style: const TextStyle(
+                    fontSize: 15, color: AppColors.textPrimary),
                 decoration: const InputDecoration(
                   hintText: '开始新消息',
                   hintStyle: TextStyle(color: AppColors.textSecondary),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 4),
-          _isSending
+          isSending
               ? const Padding(
                   padding: EdgeInsets.all(8),
                   child: SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                        color: AppColors.primary, strokeWidth: 2),
                   ),
                 )
               : IconButton(
-                  icon: const Icon(Icons.send, color: AppColors.primary, size: 24),
+                  icon: const Icon(Icons.send,
+                      color: AppColors.primary, size: 24),
                   onPressed: _sendMessage,
                 ),
         ],
@@ -572,33 +512,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Widget _buildEmojiPicker() {
-    // Common emoji categories
-    final emojis = [
-      // Smileys
-      '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
-      '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙',
-      '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔',
-      '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥',
-      // Reactions
-      '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
-      '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '👍', '👎',
-      '👏', '🙌', '🤝', '✊', '🤛', '🤜', '🤞', '✌️', '🤟', '🤘',
-      // Animals
-      '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯',
-      '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆',
-      // Food
-      '🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐',
-      '🍈', '🍒', '🍑', '🍍', '🥝', '🍅', '🥑', '🍆', '🥔', '🥕',
-      // Activities
-      '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱',
-      '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '⛳', '🏹', '🎣', '🤿',
-      // Objects
-      '💻', '🖥️', '🖨️', '⌨️', '🖱️', '🖲️', '💽', '💾', '💿', '📀',
-      '📱', '📲', '☎️', '📞', '📟', '📠', '🔋', '🔌', '💡', '🔦',
-      // Symbols
-      '🔥', '✨', '🎉', '🎊', '🎁', '🎈', '🌟', '⭐', '💫', '💥',
-      '💢', '💦', '💨', '🕳️', '💣', '💬', '👁️\u200d🗨️', '🗨️', '🗯️', '💭',
-    ];
+    final emojis = EmojiData.categories.expand((c) => c.value).toList();
 
     return Container(
       height: 280,
@@ -619,7 +533,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 10,
                 childAspectRatio: 1.2,
@@ -650,7 +565,8 @@ class _MessageBubble extends StatelessWidget {
   final bool isMe;
   final User? otherUser;
 
-  const _MessageBubble({required this.message, required this.isMe, this.otherUser});
+  const _MessageBubble(
+      {required this.message, required this.isMe, this.otherUser});
 
   @override
   Widget build(BuildContext context) {
@@ -660,7 +576,8 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMe) ...[
@@ -669,17 +586,23 @@ class _MessageBubble extends StatelessWidget {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isMe ? AppColors.primary : AppColors.borderLight,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
-                      bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
-                      bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
+                      bottomLeft: isMe
+                          ? const Radius.circular(18)
+                          : const Radius.circular(4),
+                      bottomRight: isMe
+                          ? const Radius.circular(4)
+                          : const Radius.circular(18),
                     ),
                   ),
                   child: Column(
@@ -691,14 +614,16 @@ class _MessageBubble extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 15,
                             height: 1.4,
-                            color: isMe ? Colors.white : AppColors.textPrimary,
+                            color:
+                                isMe ? Colors.white : AppColors.textPrimary,
                           ),
                         )
                       else if (message.messageType == MessageType.image)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: CachedNetworkImage(
-                            imageUrl: message.mediaUrl ?? message.content ?? '',
+                            imageUrl:
+                                message.mediaUrl ?? message.content ?? '',
                             width: 200,
                             height: 200,
                             fit: BoxFit.cover,
@@ -707,14 +632,16 @@ class _MessageBubble extends StatelessWidget {
                               height: 200,
                               color: Colors.grey[300],
                               child: const Center(
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
                             ),
                             errorWidget: (ctx, url, err) => Container(
                               width: 200,
                               height: 100,
                               color: Colors.grey[300],
-                              child: const Icon(Icons.broken_image, color: Colors.grey),
+                              child: const Icon(Icons.broken_image,
+                                  color: Colors.grey),
                             ),
                           ),
                         )
@@ -723,12 +650,18 @@ class _MessageBubble extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              message.messageType == MessageType.video ? Icons.videocam
-                                  : message.messageType == MessageType.file ? Icons.insert_drive_file
-                                  : message.messageType == MessageType.post ? Icons.article
-                                  : Icons.comment,
+                              message.messageType == MessageType.video
+                                  ? Icons.videocam
+                                  : message.messageType == MessageType.file
+                                      ? Icons.insert_drive_file
+                                      : message.messageType ==
+                                              MessageType.post
+                                          ? Icons.article
+                                          : Icons.comment,
                               size: 16,
-                              color: isMe ? Colors.white70 : AppColors.textSecondary,
+                              color: isMe
+                                  ? Colors.white70
+                                  : AppColors.textSecondary,
                             ),
                             const SizedBox(width: 6),
                             Flexible(
@@ -738,7 +671,9 @@ class _MessageBubble extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: isMe ? Colors.white : AppColors.textPrimary,
+                                  color: isMe
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
                                 ),
                               ),
                             ),
@@ -752,7 +687,8 @@ class _MessageBubble extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Text(time,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 11)),
                 ),
               ],
             ),

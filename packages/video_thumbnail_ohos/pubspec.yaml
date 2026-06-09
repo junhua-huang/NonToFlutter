@@ -1,0 +1,23 @@
+name: video_thumbnail_ohos
+description: 跨端视频缩略图提取插件，鸿蒙端使用 AVImageGenerator，iOS/Android 端封装 video_thumbnail。
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  video_thumbnail: ^0.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      ohos:
+        pluginClass: VideoThumbnailOhosPlugin

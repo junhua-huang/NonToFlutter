@@ -1,14 +1,13 @@
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
-import 'package:facebook_clone/providers/theme_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
+import 'package:facebook_clone/providers/auth_state.dart';
 import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/screens/auth/login_screen.dart';
 import 'package:facebook_clone/services/api/auth_service.dart';
 import 'package:facebook_clone/services/api/notification_service.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ═══════════════════════════════════════════════════════════════
 // 共享 UI 构建方法
 // ═══════════════════════════════════════════════════════════════
@@ -39,39 +38,32 @@ Widget _buildSettingsSection(String title, List<Widget> children) {
     ],
   );
 }
-
 Widget _buildSettingsDivider() {
   return const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.borderLight);
 }
-
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
-
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
-
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // 通知设置
   bool _pushNotifications = false;
   bool _messageAlerts = false;
   bool _soundEnabled = false;
   bool _isNotifSettingsLoaded = false;
-
   // 通用设置
   double _fontSize = 1.0; // 1.0 = 100%
-
   // 账号注销加载状态
   bool _isDeleting = false;
-
+  // 深色模式（本地状态，未来可升级为持久化Riverpod Provider）
+  bool _isDark = false;
   final AuthService _authService = AuthService();
-
   @override
   void initState() {
     super.initState();
     _loadNotificationSettings();
   }
-
   Future<void> _loadNotificationSettings() async {
     try {
       final resp = await NotificationService().getSettings();
@@ -91,7 +83,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) setState(() => _isNotifSettingsLoaded = true);
     }
   }
-
   Future<void> _updateNotificationSetting(String key, bool value) async {
     if (!_isNotifSettingsLoaded) return;
     try {
@@ -100,12 +91,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       debugPrint('Failed to update notification setting $key: $e');
     }
   }
-
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final authProvider = context.watch<AuthProvider>();
-
+    final authState = ref.watch(authProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -149,12 +137,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               iconColor: Colors.red,
               titleColor: Colors.red,
               trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.red),
-              onTap: () => _showAccountDeletionDialog(context, authProvider),
+              onTap: () => _showAccountDeletionDialog(context, authState),
             ),
           ]),
-
           const SizedBox(height: 24),
-
           // 通知设置
           _buildSettingsSection('通知设置', [
             _buildSwitchTile(
@@ -187,16 +173,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ]),
-
           const SizedBox(height: 24),
-
           // 通用
           _buildSettingsSection('通用', [
             _buildSwitchTile(
               title: '深色模式',
-              icon: themeProvider.isDark ? Icons.dark_mode : Icons.light_mode,
-              value: themeProvider.isDark,
-              onChanged: (v) => themeProvider.toggleTheme(),
+              icon: _isDark ? Icons.dark_mode : Icons.light_mode,
+              value: _isDark,
+              onChanged: (v) => setState(() => _isDark = v),
             ),
             _buildSettingsDivider(),
             _buildListTile(
@@ -223,9 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (v) => setState(() => _fontSize = v),
             ),
           ]),
-
           const SizedBox(height: 24),
-
           // 关于
           _buildSettingsSection('关于', [
             _buildListTile(
@@ -259,14 +241,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => Navigator.pushNamed(context, AppRoutes.openSource),
             ),
           ]),
-
           const SizedBox(height: 32),
-
           // 退出登录
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: ElevatedButton.icon(
-              onPressed: () => _showLogoutConfirmation(context, authProvider),
+              onPressed: () => _showLogoutConfirmation(context, authState),
               icon: const Icon(Icons.logout, size: 20),
               label: const Text(
                 '退出登录',
@@ -281,15 +261,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 24),
         ],
       ),
     );
   }
-
   // ─── UI helpers ───
-
   Widget _buildListTile({
     required String title,
     required IconData icon,
@@ -313,7 +290,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       minLeadingWidth: 32,
     );
   }
-
   Widget _buildSwitchTile({
     required String title,
     required IconData icon,
@@ -334,7 +310,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       minLeadingWidth: 32,
     );
   }
-
   Widget _buildSliderTile({
     required String title,
     required IconData icon,
@@ -371,13 +346,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
-
   // 修改密码对话框
   Future<void> _showChangePasswordDialog(BuildContext context) async {
     final oldPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
-
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -422,7 +395,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               if (newPasswordController.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('新密码至少需要6位')),
+                  const SnackBar(content: Text('新密码至少需要6个字符')),
                 );
                 return;
               }
@@ -432,12 +405,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
                 return;
               }
-
               final result = await _authService.changePassword(
                 currentPassword: oldPasswordController.text,
                 newPassword: newPasswordController.text,
               );
-
               if (result.success) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -459,14 +430,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
   // 隐私设置
   void _showPrivacySettings(BuildContext context) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const _PrivacySettingsPage()));
   }
-
   // 账号注销确认 (GDPR "被遗忘权" 流程)
-  void _showAccountDeletionDialog(BuildContext context, AuthProvider authProvider) {
+  void _showAccountDeletionDialog(BuildContext context, AuthState authState) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -502,7 +471,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           setDialogState(() => _isDeleting = true);
                           final result = await _authService.deleteAccount();
                           if (result.success) {
-                            await authProvider.logout();
+                            await ref.read(authProvider.notifier).logout();
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -540,7 +509,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       },
     );
   }
-
   // 语言设置
   void _showLanguageDialog(BuildContext context) {
     showDialog(
@@ -557,9 +525,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
   // 退出登录确认
-  void _showLogoutConfirmation(BuildContext context, AuthProvider authProvider) {
+  void _showLogoutConfirmation(BuildContext context, AuthState authState) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -572,7 +539,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              await authProvider.logout();
+              await ref.read(authProvider.notifier).logout();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
@@ -588,35 +555,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-
 // ═══════════════════════════════════════════════════════════════
 // 隐私设置子页面
 // ═══════════════════════════════════════════════════════════════
 class _PrivacySettingsPage extends StatefulWidget {
   const _PrivacySettingsPage();
-
   @override
   State<_PrivacySettingsPage> createState() => _PrivacySettingsPageState();
 }
-
 class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
   final AuthService _authService = AuthService();
   bool _isLoading = true;
   bool _isSaving = false;
-
   // 设置项
   String _profileVisibility = 'public';
   String _postDefaultVisibility = 'public';
   bool _showEmail = false;
   bool _allowSearch = true;
   String _allowFriendRequests = 'everyone';
-
   @override
   void initState() {
     super.initState();
     _loadSettings();
   }
-
   Future<void> _loadSettings() async {
     try {
       final resp = await _authService.getPrivacy();
@@ -634,7 +595,6 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   Future<void> _saveSettings() async {
     setState(() => _isSaving = true);
     try {
@@ -664,7 +624,6 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -764,7 +723,6 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
             ),
     );
   }
-
   // ─── Picker dialog ───
   void _showPicker({
     required String title,
@@ -836,7 +794,6 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       ),
     );
   }
-
   // ─── Labels ───
   String _profileVisibilityLabel(String v) {
     switch (v) {
@@ -845,9 +802,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       default: return '所有人';
     }
   }
-
   String _postVisibilityLabel(String v) => v == 'friends_only' ? '仅好友' : '公开';
-
   String _friendRequestLabel(String v) {
     switch (v) {
       case 'friends_of_friends': return '好友的好友';
@@ -855,7 +810,6 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       default: return '所有人';
     }
   }
-
   // ─── Shared widgets ───
   Widget _buildOptionTile({
     required String title,
@@ -873,7 +827,6 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       minLeadingWidth: 32,
     );
   }
-
   Widget _buildSwitchTileFull({
     required String title,
     required String subtitle,
@@ -897,7 +850,6 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     );
   }
 }
-
 class _Option {
   final String value;
   final String label;

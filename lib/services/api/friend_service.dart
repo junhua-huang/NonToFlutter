@@ -14,15 +14,15 @@ class FriendService {
       _api.post('/friends/request/$requestId/reject');
   Future<ApiResponse> cancelRequest(int requestId) =>
       _api.delete('/friends/request/$requestId');
-  Future<ApiResponse> getFriends() => _api.get('/friends/');
-  Future<ApiResponse> getPendingRequests() => _api.get('/friends/requests/pending');
-  Future<ApiResponse> getSentRequests() => _api.get('/friends/requests/sent');
-  Future<ApiResponse> getReceivedRequests() => _api.get('/friends/requests/received');
+  Future<ApiResponse> getFriends() => _api.getDeduped('/friends/');
+  Future<ApiResponse> getPendingRequests() => _api.getDeduped('/friends/requests/pending');
+  Future<ApiResponse> getSentRequests() => _api.getDeduped('/friends/requests/sent');
+  Future<ApiResponse> getReceivedRequests() => _api.getDeduped('/friends/requests/received');
   Future<ApiResponse> deleteFriend(int userId) => _api.delete('/friends/$userId');
-  Future<ApiResponse> checkStatus(int userId) => _api.get('/friends/status/$userId');
-  Future<ApiResponse> getFriendCount(int userId) => _api.get('/friends/count/$userId');
+  Future<ApiResponse> checkStatus(int userId) => _api.getDeduped('/friends/status/$userId');
+  Future<ApiResponse> getFriendCount(int userId) => _api.getDeduped('/friends/count/$userId');
   Future<ApiResponse> getFriendRecommendations({int limit = 10}) =>
-      _api.get('/friends/recommendations', params: {'limit': limit});
+      _api.getDeduped('/friends/recommendations', params: {'limit': limit});
 
   /// Follow a user (alias for sendFriendRequest)
   Future<ApiResponse> followUser(int userId) => sendRequest(userId);

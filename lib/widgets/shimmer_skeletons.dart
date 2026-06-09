@@ -1,79 +1,84 @@
-import 'package:facebook_clone/config/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
-/// Feed/post list skeleton shimmer (avatar + lines + media placeholder)
+/// Resolve shimmer colors based on theme brightness
+class _ShimmerColors {
+  final Color base;
+  final Color highlight;
+
+  const _ShimmerColors(this.base, this.highlight);
+
+  factory _ShimmerColors.of(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return _ShimmerColors(
+      dark ? const Color(0xFF2A2D31) : const Color(0xFFE8ECEE),
+      dark ? const Color(0xFF3A3E43) : const Color(0xFFF9FAFB),
+    );
+  }
+}
+
+/// Feed/post list skeleton shimmer
 class FeedSkeleton extends StatelessWidget {
   const FeedSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final c = _ShimmerColors.of(context);
     return Shimmer.fromColors(
-      baseColor: Colors.grey[200]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: c.base,
+      highlightColor: c.highlight,
+      period: const Duration(milliseconds: 1200),
       child: ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
         shrinkWrap: true,
         itemCount: 4,
-        itemBuilder: (_, index) => Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          margin: const EdgeInsets.only(bottom: 1),
-          color: AppColors.background,
+        itemBuilder: (_, __) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const CircleAvatar(radius: 20, backgroundColor: Colors.white),
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCCCCCC),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(width: 100, height: 13, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                        _Box(width: 100, height: 14),
                         const SizedBox(height: 6),
-                        Container(width: 80, height: 11, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                        _Box(width: 70, height: 12),
                       ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              Container(width: double.infinity, height: 13, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+              _Box(height: 14, width: double.infinity),
               const SizedBox(height: 6),
-              Container(width: 200, height: 13, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
-              const SizedBox(height: 14),
-              // Media placeholder (50% chance)
-              if (index % 2 == 0)
-                Container(
-                  width: double.infinity,
-                  height: 200,
-                  margin: const EdgeInsets.only(top: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              const SizedBox(height: 12),
-              // Action buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(width: 60, height: 24, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
-                      const SizedBox(width: 20),
-                      Container(width: 60, height: 24, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
-                      const SizedBox(width: 20),
-                      Container(width: 60, height: 24, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
-                    ],
-                  ),
-                  Container(width: 40, height: 24, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
-                ],
+              _Box(height: 14, width: 260),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: const _Box(height: 200, width: double.infinity),
               ),
               const SizedBox(height: 12),
-              const Divider(height: 1),
+              Row(
+                children: const [
+                  _Box(width: 60, height: 12),
+                  Spacer(),
+                  _Box(width: 60, height: 12),
+                  Spacer(),
+                  _Box(width: 60, height: 12),
+                ],
+              ),
+              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -82,43 +87,44 @@ class FeedSkeleton extends StatelessWidget {
   }
 }
 
-/// Conversation list skeleton shimmer
+/// Conversation list skeleton
 class ConversationSkeleton extends StatelessWidget {
   const ConversationSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final c = _ShimmerColors.of(context);
     return Shimmer.fromColors(
-      baseColor: Colors.grey[200]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: c.base,
+      highlightColor: c.highlight,
+      period: const Duration(milliseconds: 1200),
       child: ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
         shrinkWrap: true,
         itemCount: 6,
-        itemBuilder: (_, index) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemBuilder: (_, __) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              const CircleAvatar(radius: 24, backgroundColor: Colors.white),
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCCCCC),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(width: 120, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
-                        const Spacer(),
-                        Container(width: 50, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
-                      ],
-                    ),
+                    const _Box(width: 140, height: 15),
                     const SizedBox(height: 6),
-                    Container(width: double.infinity, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
-                    const SizedBox(height: 4),
-                    Container(width: 180, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    const _Box(width: 220, height: 13),
                   ],
                 ),
               ),
+              const _Box(width: 50, height: 12),
             ],
           ),
         ),
@@ -127,41 +133,41 @@ class ConversationSkeleton extends StatelessWidget {
   }
 }
 
-/// Notification list skeleton shimmer
+/// Notification skeleton
 class NotificationSkeleton extends StatelessWidget {
   const NotificationSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final c = _ShimmerColors.of(context);
     return Shimmer.fromColors(
-      baseColor: Colors.grey[200]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: c.base,
+      highlightColor: c.highlight,
+      period: const Duration(milliseconds: 1200),
       child: ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
         shrinkWrap: true,
-        itemCount: 6,
-        itemBuilder: (_, index) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: 5,
+        itemBuilder: (_, __) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const CircleAvatar(radius: 18, backgroundColor: Colors.white),
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCCCCC),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(width: 160, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
-                        const Spacer(),
-                        Container(width: 40, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Container(width: double.infinity, height: 11, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
-                    const SizedBox(height: 6),
-                    Container(width: 100, height: 10, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    const _Box(width: 200, height: 14),
+                    const SizedBox(height: 8),
+                    const _Box(height: 50, width: double.infinity),
                   ],
                 ),
               ),
@@ -173,36 +179,61 @@ class NotificationSkeleton extends StatelessWidget {
   }
 }
 
-/// Friend list skeleton shimmer
+class _Box extends StatelessWidget {
+  final double width;
+  final double height;
+  const _Box({this.width = double.infinity, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFCCCCCC),
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+  }
+}
+
+/// User/friend list skeleton (avatar + 2 lines)
 class FriendSkeleton extends StatelessWidget {
   const FriendSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final c = _ShimmerColors.of(context);
     return Shimmer.fromColors(
-      baseColor: Colors.grey[200]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: c.base,
+      highlightColor: c.highlight,
+      period: const Duration(milliseconds: 1200),
       child: ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
         shrinkWrap: true,
         itemCount: 8,
-        itemBuilder: (_, index) => Container(
+        itemBuilder: (_, __) => Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              const CircleAvatar(radius: 22, backgroundColor: Colors.white),
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCCCCC),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(width: 120, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    const _Box(width: 120, height: 15),
                     const SizedBox(height: 6),
-                    Container(width: 80, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    const _Box(width: 180, height: 13),
                   ],
                 ),
               ),
-              Container(width: 80, height: 32, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
             ],
           ),
         ),

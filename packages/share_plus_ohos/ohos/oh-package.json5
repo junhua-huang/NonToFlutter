@@ -1,0 +1,7 @@
+{
+  "name": "share_plus_ohos",
+  "version": "1.0.0",
+  "description": "nonto share plugin for HarmonyOS (system share Ability)",
+  "main": "ets/index.ets",
+  "dependencies": {}
+}

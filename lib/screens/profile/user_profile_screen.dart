@@ -3,7 +3,7 @@ import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/conversation.dart';
 import 'package:facebook_clone/models/post.dart';
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
 import 'package:facebook_clone/screens/post/post_detail_screen.dart';
 import 'package:facebook_clone/services/api/block_service.dart';
@@ -17,16 +17,16 @@ import 'package:facebook_clone/widgets/error_state_widget.dart';
 import 'package:facebook_clone/widgets/media_viewer.dart';
 import 'package:facebook_clone/widgets/post_card.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
 /// 查看其他用户的个人资料页（Facebook 风格）
-class UserProfileScreen extends StatefulWidget {
+class UserProfileScreen extends ConsumerStatefulWidget {
   final User user;
   const UserProfileScreen({super.key, required this.user});
 
   @override
-  State<UserProfileScreen> createState() => _UserProfileScreenState();
+  ConsumerState<UserProfileScreen> createState() => _UserProfileScreenState();
 }
 
 /// 好友关系状态
@@ -37,8 +37,8 @@ enum _FriendStatus {
   friends,
 }
 
-class _UserProfileScreenState extends State<UserProfileScreen>
-    with SingleTickerProviderStateMixin {
+class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
+    with TickerProviderStateMixin {
   User? _user;
   int _friendCount = 0;
   final List<Post> _userPosts = [];
@@ -105,7 +105,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   /// Check friendship status with this user
   Future<void> _checkFriendStatus() async {
-    final currentUserId = context.read<AuthProvider>().user?.id;
+    final currentUserId = ref.read(authProvider).user?.id;
     try {
       final resp = await FriendService().checkStatus(_user!.id);
       if (resp.success && resp.data != null) {

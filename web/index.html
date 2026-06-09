@@ -18,18 +18,22 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="nonto - 南图，发现世界的动态">
 
-  <!-- iOS meta tags & icons -->
+  <!-- PWA -->
+  <meta name="theme-color" content="#1DA1F2">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="facebook_clone">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="nonto">
+
+  <!-- iOS icons -->
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>facebook_clone</title>
+  <title>nonto</title>
   <link rel="manifest" href="manifest.json">
 
   <link rel="preload" href="main.dart.js" as="script">
@@ -37,68 +41,265 @@
   <!-- Cropper.js for image_cropper_for_web -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Device class (set by JS below) ── */
+    /* .device-mobile  | .device-tablet | .device-desktop */
+
+    /* ── Loading Overlay ── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      width: 100dvw;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      transition: opacity 0.4s ease;
+      background: #ffffff;
+    }
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* ── Dark mode ── */
+    @media (prefers-color-scheme: dark) {
+      #loading-overlay { background: #0f1419; }
+      .loading-text { color: #8b98a5 !important; }
+      .progress-bar { background: #2f3336 !important; }
+      .brand-name { color: #e7e9ea !important; }
+    }
+
+    /* ── Brand ── */
+    .brand-name {
+      font-size: 28px;
+      font-weight: 800;
+      color: #1DA1F2;
+      letter-spacing: -0.5px;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeIn 0.5s ease 0.15s forwards;
+    }
+
+    /* ── Loading animation ── */
+    .loading-spinner {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #1DA1F2;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(0.6); opacity: 0.4; }
+      50% { transform: scale(1); opacity: 1; }
+    }
+
+    .loading-text {
+      color: #536471;
+      font-size: 13px;
+      margin-top: 20px;
+      letter-spacing: 0.2px;
+      opacity: 0;
+      animation: fadeIn 0.4s ease 0.3s forwards;
+    }
+
+    /* ── Progress bar ── */
+    .progress-bar {
+      width: min(180px, 45vw);
+      max-width: 200px;
+      height: 3px;
+      margin-top: 16px;
+      background: #eff3f4;
+      border-radius: 2px;
+      overflow: hidden;
+      opacity: 0;
+      animation: fadeIn 0.4s ease 0.5s forwards;
+    }
+    .progress-fill {
+      width: 100%;
+      height: 100%;
+      background: #1DA1F2;
+      border-radius: 2px;
+      animation: progress 2s ease-in-out infinite;
+    }
+    @keyframes progress {
+      0% { transform: translateX(-100%); }
+      50% { transform: translateX(20%); }
+      100% { transform: translateX(100%); }
+    }
+
+    /* ── Fade-in ── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Tablet (600px–1023px) ── */
+    @media (min-width: 600px) {
+      .brand-name {
+        font-size: 34px;
+        letter-spacing: -0.8px;
+        margin-bottom: 28px;
+        animation-duration: 0.6s;
+      }
+      .loading-spinner {
+        width: 42px;
+        height: 42px;
+        animation-duration: 1.2s;
+      }
+      .loading-text {
+        font-size: 14px;
+        margin-top: 24px;
+      }
+      .progress-bar {
+        max-width: 240px;
+        width: 220px;
+        height: 3px;
+        margin-top: 20px;
+      }
+    }
+
+    /* ── Desktop (1024px+) ── */
+    @media (min-width: 1024px) {
+      .brand-name {
+        font-size: 40px;
+        letter-spacing: -1px;
+        margin-bottom: 36px;
+        animation-duration: 0.7s;
+        animation-delay: 0.1s;
+      }
+      .loading-spinner {
+        width: 52px;
+        height: 52px;
+        animation-duration: 1.4s;
+      }
+      .loading-text {
+        font-size: 15px;
+        letter-spacing: 0.4px;
+        margin-top: 28px;
+      }
+      .progress-bar {
+        max-width: 300px;
+        width: 280px;
+        height: 4px;
+        margin-top: 24px;
+      }
+    }
+
+    /* ── Large desktop (1440px+) ── */
+    @media (min-width: 1440px) {
+      .brand-name {
+        font-size: 48px;
+        margin-bottom: 40px;
+      }
+      .loading-spinner {
+        width: 60px;
+        height: 60px;
+      }
+      .loading-text { font-size: 16px; }
+    }
+
+    /* ── Touch device hint (mobile) ── */
+    @media (pointer: coarse) {
+      .loading-text { font-size: 14px; }
+    }
+
+    /* ── Accessibility: reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      .loading-spinner { animation: none; opacity: 0.8; }
+      .progress-fill { animation: none; transform: translateX(-50%); }
+      .brand-name, .loading-text, .progress-bar { animation: none; opacity: 1; }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="loading-overlay">
+    <div class="brand-name">nonto</div>
+    <div class="loading-spinner"></div>
+    <div class="loading-text">正在加载，请稍候...</div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
-  <script>
-    // Pre-create _flutter as Proxy to intercept loader initialization and force HTML renderer
-    // Covers three API surfaces: didCreateEngineInitializer, loadEntrypoint, and legacy load()
-    window._flutter = new Proxy({}, {
-      set: function(target, prop, value) {
-        if (prop === 'loader' && value) {
-          // Hook 1: didCreateEngineInitializer callback (Flutter 3.x primary path)
-          var origDidCreate = value.didCreateEngineInitializer;
-          value.didCreateEngineInitializer = function(engineInitializer) {
-            var origInit = engineInitializer.initializeEngine;
-            engineInitializer.initializeEngine = function(opts) {
-              opts = opts || {};
-              opts.renderer = 'html';
-              return origInit.call(engineInitializer, opts);
-            };
-            if (origDidCreate) return origDidCreate.call(this, engineInitializer);
-          };
+<script>
+    // ── Device type detection ──
+    (function() {
+      var w = window.innerWidth;
+      var isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      var deviceClass = w >= 1024 ? 'device-desktop'
+                      : w >= 600  ? 'device-tablet'
+                      : 'device-mobile';
+      document.documentElement.classList.add(deviceClass);
+      if (isTouch) document.documentElement.classList.add('device-touch');
+      // Update Flutter engine renderer hint based on device
+      window.__nontoDevice = deviceClass.replace('device-', '');
+    })();
 
-          // Hook 2: loadEntrypoint (Flutter 3.x fallback path)
-          if (value.loadEntrypoint) {
-            var origLoadEntrypoint = value.loadEntrypoint;
-            value.loadEntrypoint = function(opts) {
-              opts = opts || {};
-              var origOnLoaded = opts.onEntrypointLoaded;
-              opts.onEntrypointLoaded = async function(engineInitializer) {
-                var origInit = engineInitializer.initializeEngine;
-                engineInitializer.initializeEngine = async function(engineOpts) {
-                  engineOpts = engineOpts || {};
-                  engineOpts.renderer = 'html';
-                  return origInit.call(engineInitializer, engineOpts);
-                };
-                if (origOnLoaded) return origOnLoaded(engineInitializer);
-                var appRunner = await engineInitializer.initializeEngine({renderer: 'html'});
-                await appRunner.runApp();
-              };
-              return origLoadEntrypoint.call(this, opts);
-            };
-          } else if (value.load) {
-            // Hook 3: legacy load() (older Flutter versions)
-            var origLoad = value.load;
-            value.load = function(opts) {
-              opts = opts || {};
-              opts.config = opts.config || {};
-              opts.config.renderer = 'html';
-              return origLoad.call(this, opts);
-            };
-          }
-        }
-        target[prop] = value;
-        return true;
+    var _loadingHidden = false;
+    function hideLoading() {
+      if (_loadingHidden) return;
+      _loadingHidden = true;
+      var overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        overlay.classList.add('hidden');
+        setTimeout(function() { overlay.remove(); }, 500);
       }
-    });
+    }
+
+    function showLoadingError() {
+      var overlay = document.getElementById('loading-overlay');
+      if (!overlay || _loadingHidden) return;
+      var text = overlay.querySelector('.loading-text');
+      if (text) {
+        text.textContent = '加载失败，请刷新页面重试';
+        text.style.color = '#e0245e';
+      }
+      var bar = overlay.querySelector('.progress-bar');
+      if (bar) {
+        bar.style.display = 'none';
+      }
+      var dot = overlay.querySelector('.loading-spinner');
+      if (dot) {
+        dot.style.animation = 'none';
+        dot.style.opacity = '0.6';
+      }
+    }
+
+    // 等待 flutter_bootstrap.js 完成，挂载标准加载流程
+    var _waitCount = 0;
+    var _initTimer = setInterval(function() {
+      _waitCount++;
+      if (window._flutter && _flutter.loader) {
+        clearInterval(_initTimer);
+        // Desktop → canvaskit (better quality), Mobile/Tablet → html (better performance)
+        var renderer = (window.__nontoDevice === 'desktop') ? 'canvaskit' : 'html';
+        _flutter.loader.loadEntrypoint({
+          renderer: renderer
+        }).then(function(engineInitializer) {
+          return engineInitializer.initializeEngine();
+        }).then(function(appRunner) {
+          return appRunner.runApp();
+        }).then(function() {
+          hideLoading();
+        }).catch(function(e) {
+          console.error('[nonto Web] engine failed:', e);
+          showLoadingError();
+          setTimeout(hideLoading, 5000);
+        });
+      } else if (_waitCount > 100) {
+        // 10s 后仍未出现 _flutter.loader → 可能是编译产物坏了
+        clearInterval(_initTimer);
+        console.error('[nonto Web] _flutter.loader never appeared');
+        showLoadingError();
+        setTimeout(hideLoading, 5000);
+      }
+    }, 100);
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

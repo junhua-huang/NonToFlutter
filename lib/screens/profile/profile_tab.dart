@@ -1,19 +1,22 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/post.dart';
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/screens/friends/friends_screen.dart';
-import 'package:facebook_clone/screens/home/home_screen.dart';
+import 'package:facebook_clone/providers/core_providers.dart';
 import 'package:facebook_clone/screens/post/post_detail_screen.dart';
 import 'package:facebook_clone/screens/profile/edit_profile_screen.dart';
 import 'package:facebook_clone/services/api/friend_service.dart';
 import 'package:facebook_clone/services/api/post_service.dart';
 import 'package:facebook_clone/services/api/upload_service.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/post_interaction_notifier.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:facebook_clone/utils/date_utils.dart';
@@ -22,29 +25,32 @@ import 'package:facebook_clone/widgets/error_state_widget.dart';
 import 'package:facebook_clone/widgets/media_viewer.dart';
 import 'package:facebook_clone/widgets/post_card.dart';
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
+import 'package:image_cropper_plus/image_cropper_plus.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
 /// Twitter/X 风格个人资料页（头像半覆盖背景、可编辑、照片墙Tab）
-class ProfileTab extends StatefulWidget {
+class ProfileTab extends ConsumerStatefulWidget {
   const ProfileTab({super.key});
   @override
-  State<ProfileTab> createState() => _ProfileTabState();
+  ConsumerState<ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateMixin {
+class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStateMixin {
   int _friendCount = 0;
   int _likeCount = 0;
   bool _isLoadingStats = true;
   final List<Post> _userPosts = [];
   bool _isLoadingPosts = false;
   String? _error;
+  bool _likesLoading = true;
+  List<Post> _likedPosts = [];
+  String? _likesError;
   final RefreshController _postsRefreshController = RefreshController(initialRefresh: false);
   final RefreshController _likesRefreshController = RefreshController(initialRefresh: false);
   final RefreshController _photosRefreshController = RefreshController(initialRefresh: false);
-  bool _activated = false;
 
   late final TabController _tabController;
   final ImagePicker _picker = ImagePicker();
@@ -59,109 +65,184 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
   Uint8List? _localAvatarBytes;
   Uint8List? _localCoverBytes;
 
-  StreamSubscription<bool>? _connectionSub;
-
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    TabActivationNotifier.currentTab.addListener(_onTabActivated);
     PostInteractionNotifier().onLikeChanged.listen(_onPostLikeEvent);
     PostInteractionNotifier().onViewChanged.listen(_onPostViewEvent);
-    // 监听 WebSocket 连接状态变化，实时更新在线指示器
-    _connectionSub = WebSocketService().connectionStream.listen((_) {
-      if (mounted) setState(() {});
-    });
-    if (TabActivationNotifier.currentTab.value == 3) {
-      _activate();
-    }
+    _loadStats();
   }
 
   @override
   void dispose() {
-    TabActivationNotifier.currentTab.removeListener(_onTabActivated);
     _tabController.dispose();
     _postsRefreshController.dispose();
     _likesRefreshController.dispose();
     _photosRefreshController.dispose();
-    _connectionSub?.cancel();
     super.dispose();
   }
 
-  void _onTabActivated() {
-    if (!_activated && TabActivationNotifier.currentTab.value == 3) {
-      _activate();
-    }
-  }
 
-  void _activate() {
-    _activated = true;
-    _loadStats();
-  }
 
   Future<void> _loadStats() async {
+    final auth = ref.read(authProvider);
+    if (auth.user == null) return;
+
+    bool hasError = false;
+
+    // 好友数量 —— 独立容错
     try {
-      final auth = context.read<AuthProvider>();
-      if (auth.user == null) return;
-
-      final results = await Future.wait([
-        FriendService().getFriends(),
-        PostService().getUserLikedPosts(auth.user!.id),
-      ]);
-
-      // Friends
-      final friendResp = results[0];
+      final friendResp = await FriendService()
+          .getFriends()
+          .timeout(const Duration(seconds: 20));
       if (friendResp.success && friendResp.data != null) {
         final data = friendResp.data;
         if (data is Map) {
-          _friendCount = data['total'] ?? (data['friends'] as List?)?.length ?? 0;
+          _friendCount =
+              data['total'] ?? (data['friends'] as List?)?.length ?? 0;
         } else if (data is List) {
           _friendCount = data.length;
         }
       }
+    } catch (e) {
+      debugPrint('ProfileTab loadFriends error: $e');
+      hasError = true;
+    }
 
-      // Likes count
-      final likeResp = results[1];
-      if (likeResp.success && likeResp.data != null) {
-        final data = likeResp.data as Map<String, dynamic>;
-        final list = data['posts'] as List? ?? [];
-        _likeCount = list.length;
+    // 喜欢数量 —— 优先读 AppWarmup 缓存，避免与预热重复请求
+    try {
+      final cacheKey = 'user:${auth.user!.id}:liked:1';
+      final likeResult = await DataLayer()
+          .query(cacheKey, () async => null)
+          .timeout(const Duration(seconds: 2));
+      if (likeResult.data is List) {
+        _likeCount = (likeResult.data as List).length;
+      } else {
+        // 缓存未命中，回退网络
+        final likeResp = await PostService()
+            .getUserLikedPosts(auth.user!.id)
+            .timeout(const Duration(seconds: 20));
+        if (likeResp.success && likeResp.data != null) {
+          final data = likeResp.data as Map<String, dynamic>;
+          final list = data['posts'] as List? ?? [];
+          _likeCount = list.length;
+        }
       }
     } catch (e) {
-      debugPrint('ProfileTab loadStats error: $e');
-      if (mounted) setState(() => _error = '加载失败，请下拉重试');
-    } finally {
-      setState(() => _isLoadingStats = false);
-      _loadUserPosts();
+      debugPrint('ProfileTab loadLikes error: $e');
+      hasError = true;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoadingStats = false;
+        if (hasError) _error = '加载失败，请下拉重试';
+      });
+    }
+
+    _loadLikedPosts();
+    _loadUserPosts();
+  }
+
+  Future<void> _loadLikedPosts() async {
+    final auth = ref.read(authProvider);
+    if (auth.user == null) return;
+    try {
+      final cacheKey = 'user:${auth.user!.id}:liked:1';
+      final likeResult = await DataLayer()
+          .query(cacheKey, () async => null)
+          .timeout(const Duration(seconds: 2));
+      if (!mounted) return;
+      if (likeResult.data is List) {
+        final list = likeResult.data as List;
+        setState(() {
+          _likedPosts = list
+              .map((e) => Post.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _likesLoading = false;
+        });
+        return;
+      }
+      // 缓存未命中，回退网络
+      final resp = await PostService()
+          .getUserLikedPosts(auth.user!.id)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      if (resp.success && resp.data != null) {
+        final data = resp.data as Map<String, dynamic>;
+        final list = data['posts'] as List? ?? [];
+        setState(() {
+          _likedPosts = list
+              .map((e) => Post.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _likesLoading = false;
+        });
+      } else {
+        setState(() {
+          _likesLoading = false;
+          _likesError = resp.message ?? '加载失败';
+        });
+      }
+    } catch (e) {
+      debugPrint('ProfileTab loadLikedPosts error: $e');
+      if (mounted) {
+        setState(() {
+          _likesLoading = false;
+          _likesError = '加载失败，请下拉重试';
+        });
+      }
     }
   }
 
   Future<void> _loadUserPosts() async {
-    final auth = context.read<AuthProvider>();
+    final auth = ref.read(authProvider);
     if (auth.user == null) return;
-    setState(() => _isLoadingPosts = true);
+    setState(() { _isLoadingPosts = true; _error = null; });
     try {
-      final resp = await PostService().getUserPosts(auth.user!.id);
-      if (resp.success && resp.data != null) {
-        final data = resp.data as Map<String, dynamic>;
-        final list = data['posts'] as List? ?? [];
+      final userId = auth.user!.id.toString();
+      // L1 → L2 → 网络 三层读取
+      final result = await DataLayer()
+          .query(
+            "user:$userId:posts",
+            () async {
+              final resp = await PostService()
+                  .getUserPosts(auth.user!.id)
+                  .timeout(const Duration(seconds: 20));
+              if (resp.success && resp.data != null) {
+                final data = resp.data as Map<String, dynamic>;
+                return data['posts'] as List? ?? [];
+              }
+              return null;
+            },
+          )
+          .timeout(const Duration(seconds: 25));
+      if (result.data is List && mounted) {
+        final list = result.data as List<dynamic>;
         setState(() {
           _userPosts.clear();
           _userPosts.addAll(
             list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList(),
           );
+          _isLoadingPosts = false;
         });
+      } else if (mounted) {
+        setState(() { _isLoadingPosts = false; _error = '加载失败，请下拉重试'; });
       }
     } catch (e) {
       debugPrint('Load user posts error: $e');
-    } finally {
-      setState(() => _isLoadingPosts = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingPosts = false;
+          _error = '加载失败，请下拉重试';
+        });
+      }
     }
   }
 
   Future<void> _onRefresh(RefreshController controller) async {
     await Future.wait([
-      context.read<AuthProvider>().loadSavedSession(),
+      // session already loaded,
       _loadStats(),
     ]);
     controller.refreshCompleted();
@@ -172,7 +253,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
     if (_isUploadingAvatar) return; // 防止重复触发
 
     try {
-      final auth = context.read<AuthProvider>();
+      final auth = ref.read(authProvider);
       if (auth.user == null) return;
 
       // 1. 选择图片（web 不支持 imageQuality 参数）
@@ -195,27 +276,23 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
         _localAvatarBytes = avatarBytes;
       });
 
-      // 3. 尝试剪裁（失败则用原图）；剪裁后刷新预览
+      // 3. 尝试剪裁（1:1，失败则用原图）；剪裁后刷新预览
       String? finalPath = picked.path;
+      // 预读图片数据（showModalBottomSheet builder 是非 async 的）
+      final imageBytes = await XFile(picked.path).readAsBytes();
+      if (!mounted) return;
+
       try {
-        final CroppedFile? cropped = await ImageCropper().cropImage(
-          sourcePath: picked.path,
-          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-          uiSettings: [
-            AndroidUiSettings(
-              toolbarTitle: '剪裁头像',
-              toolbarColor: Colors.black,
-              toolbarWidgetColor: Colors.white,
-              lockAspectRatio: true,
-            ),
-            IOSUiSettings(title: '剪裁头像'),
-            WebUiSettings(context: context),
-          ],
+        final croppedBytes = await showModalBottomSheet<Uint8List>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => CropPage(
+            imageBytes: imageBytes,
+            config: const CropConfig(aspectRatio: 1.0),
+          ),
         );
-        if (cropped != null && cropped.path.isNotEmpty) {
-          finalPath = cropped.path;
-          // 刷新预览为剪裁后的图片
-          final croppedBytes = await XFile(finalPath!).readAsBytes();
+        if (croppedBytes != null) {
+          finalPath = await _saveCroppedToTemp(croppedBytes);
           if (mounted) {
             setState(() {
               _localAvatarPreview = finalPath;
@@ -239,7 +316,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
         if (newAvatarUrl != null) {
           final user = auth.user;
           if (user != null) {
-            auth.updateUser(user.copyWith(avatarUrl: newAvatarUrl));
+            ref.read(authProvider.notifier).updateUser(user.copyWith(avatarUrl: newAvatarUrl));
           }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -277,7 +354,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
     if (_isUploadingCover) return; // 防止重复触发
 
     try {
-      final auth = context.read<AuthProvider>();
+      final auth = ref.read(authProvider);
       if (auth.user == null) return;
 
       // 1. 选择图片
@@ -301,25 +378,21 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
 
       // 3. 尝试剪裁（16:9，失败则用原图）；剪裁后刷新预览
       String? finalPath = picked.path;
+      // 预读图片数据（showModalBottomSheet builder 是非 async 的）
+      final coverImageBytes = await XFile(picked.path).readAsBytes();
+      if (!mounted) return;
+
       try {
-        final CroppedFile? cropped = await ImageCropper().cropImage(
-          sourcePath: picked.path,
-          aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
-          uiSettings: [
-            AndroidUiSettings(
-              toolbarTitle: '剪裁背景图',
-              toolbarColor: Colors.black,
-              toolbarWidgetColor: Colors.white,
-              lockAspectRatio: true,
-            ),
-            IOSUiSettings(title: '剪裁背景图'),
-            WebUiSettings(context: context),
-          ],
+        final croppedBytes = await showModalBottomSheet<Uint8List>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => CropPage(
+            imageBytes: coverImageBytes,
+            config: const CropConfig(aspectRatio: 16 / 9),
+          ),
         );
-        if (cropped != null && cropped.path.isNotEmpty) {
-          finalPath = cropped.path;
-          // 刷新预览为剪裁后的图片
-          final croppedBytes = await XFile(finalPath!).readAsBytes();
+        if (croppedBytes != null) {
+          finalPath = await _saveCroppedToTemp(croppedBytes);
           if (mounted) {
             setState(() {
               _localCoverPreview = finalPath;
@@ -343,7 +416,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
         if (newCoverUrl != null) {
           final user = auth.user;
           if (user != null) {
-            auth.updateUser(user.copyWith(coverPhotoUrl: newCoverUrl));
+            ref.read(authProvider.notifier).updateUser(user.copyWith(coverPhotoUrl: newCoverUrl));
           }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -376,9 +449,17 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
     }
   }
 
+  /// 将裁剪后的字节数组保存为临时文件，返回文件路径
+  Future<String> _saveCroppedToTemp(Uint8List bytes) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.png');
+    await file.writeAsBytes(bytes);
+    return file.path;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final auth = ref.watch(authProvider);
     final user = auth.user;
 
     if (user == null) {
@@ -391,10 +472,11 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
       onNotification: (notif) {
         if (notif.dragDetails != null) {
           final delta = notif.scrollDelta ?? 0;
-          if (delta > 5 && HomeScreen.barVisible.value) {
-            HomeScreen.barVisible.value = false;
-          } else if (delta < -5 && !HomeScreen.barVisible.value) {
-            HomeScreen.barVisible.value = true;
+          final barVisible = ref.read(barVisibleProvider);
+          if (delta > 5 && barVisible) {
+            ref.read(barVisibleProvider.notifier).state = false;
+          } else if (delta < -5 && !barVisible) {
+            ref.read(barVisibleProvider.notifier).state = true;
           }
         }
         return false;
@@ -562,12 +644,15 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
                           ),
                         )
                       : _error != null
-                          ? ErrorStateWidget(
-                              message: _error!,
-                              onRetry: () {
+                          ? GestureDetector(
+                              onTap: () {
                                 setState(() { _error = null; _isLoadingStats = true; });
                                 _loadStats();
                               },
+                              child: const Text(
+                                '加载失败，点击重试',
+                                style: TextStyle(fontSize: 13, color: AppColors.likeRed),
+                              ),
                             )
                           : Row(
                               children: [
@@ -670,17 +755,18 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
     if (!hasCover) {
       return const SizedBox(height: 180);
     }
-    final url = user.coverPhotoUrl!.startsWith('http')
-        ? user.coverPhotoUrl!
-        : '${AppConfig.baseUrl.replaceFirst('/api', '')}${user.coverPhotoUrl!}';
+    final url = ImageUtils.resolveUrl(user.coverPhotoUrl);
     return Stack(
       children: [
-        Image.network(
-          url,
+        CachedNetworkImage(
+          imageUrl: url,
           height: 180,
           width: double.infinity,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(height: 180, color: const Color(0xFF2A2A2A)),
+          placeholder: (_, __) => Container(height: 180, color: const Color(0xFF2A2A2A)),
+          errorWidget: (_, __, ___) => Container(height: 180, color: const Color(0xFF2A2A2A)),
+          fadeInDuration: const Duration(milliseconds: 300),
+          fadeInCurve: Curves.easeInOut,
         ),
         if (_isUploadingCover)
           Container(
@@ -729,7 +815,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
   /// 点击查看头像/背景大图
   void _viewFullImage(String? url) {
     if (url == null || url.isEmpty) return;
-    final resolved = url.startsWith('http') ? url : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
+    final resolved = ImageUtils.resolveUrl(url);
     ImageViewerScreen.show(context, [resolved]);
   }
 
@@ -756,11 +842,20 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
   }
 
   Widget _buildPostsContent() {
-    if (_isLoadingPosts) {
+    if (_isLoadingPosts && _userPosts.isEmpty) {
       return ListView(children: const [
         SizedBox(height: 200),
         Center(child: CircularProgressIndicator(color: AppColors.primary)),
       ]);
+    }
+    if (_error != null && _userPosts.isEmpty) {
+      return ErrorStateWidget(
+        message: _error!,
+        onRetry: () {
+          setState(() { _error = null; _isLoadingPosts = true; });
+          _loadUserPosts();
+        },
+      );
     }
     if (_userPosts.isEmpty) {
       return ListView(children: [
@@ -794,66 +889,55 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
       controller: _likesRefreshController,
       enablePullDown: true,
       enablePullUp: false,
-      onRefresh: () => _onRefresh(_likesRefreshController),
+      onRefresh: () async {
+        await _loadLikedPosts();
+        _likesRefreshController.refreshCompleted();
+      },
       header: const WaterDropHeader(
         complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
         waterDropColor: AppColors.primary,
       ),
-      child: FutureBuilder<dynamic>(
-        future: PostService().getUserLikedPosts(context.read<AuthProvider>().user!.id),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return ListView(children: const [
-              SizedBox(height: 200),
-              Center(child: CircularProgressIndicator(color: AppColors.primary)),
-            ]);
-          }
-          if (!snapshot.hasData || snapshot.data == null) {
-            return ListView(children: [
-              const SizedBox(height: 120),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.favorite_border, size: 48, color: Colors.grey[300]),
-                  const SizedBox(height: 12),
-                  const Text('暂无喜欢的帖子', style: TextStyle(color: AppColors.textSecondary)),
-                ],
-              ),
-            ]);
-          }
-          final resp = snapshot.data as dynamic;
-          if (resp.success && resp.data != null) {
-            final data = resp.data as Map<String, dynamic>;
-            final list = data['posts'] as List? ?? [];
-            if (list.isEmpty) {
-              return ListView(children: [
-                const SizedBox(height: 120),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.favorite_border, size: 48, color: Colors.grey[300]),
-                    const SizedBox(height: 12),
-                    const Text('还没有喜欢的帖子', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
-                  ],
-                ),
-              ]);
-            }
-            final posts = list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-            return ListView.builder(
-              padding: const EdgeInsets.only(top: 8),
-              itemCount: posts.length,
-              itemBuilder: (context, index) => PostCard(
-                post: posts[index],
-                onLike: () => _togglePostLike(posts[index]),
-                onTap: () => _openPostDetail(posts[index]),
-              ),
-            );
-          }
-          return ListView(children: const [
-            SizedBox(height: 120),
-            Center(child: Text('加载失败', style: TextStyle(color: AppColors.textSecondary))),
-          ]);
+      child: _buildLikesContent(),
+    );
+  }
+
+  Widget _buildLikesContent() {
+    if (_likesLoading) {
+      return ListView(children: const [
+        SizedBox(height: 200),
+        Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      ]);
+    }
+    if (_likesError != null) {
+      return ErrorStateWidget(
+        message: _likesError!,
+        onRetry: () {
+          setState(() { _likesLoading = true; _likesError = null; });
+          _loadLikedPosts();
         },
+      );
+    }
+    if (_likedPosts.isEmpty) {
+      return ListView(children: [
+        const SizedBox(height: 120),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.favorite_border, size: 48, color: Colors.grey[300]),
+            const SizedBox(height: 12),
+            const Text('还没有喜欢的帖子',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+          ],
+        ),
+      ]);
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 8),
+      itemCount: _likedPosts.length,
+      itemBuilder: (context, index) => PostCard(
+        post: _likedPosts[index],
+        onLike: () => _togglePostLike(_likedPosts[index]),
+        onTap: () => _openPostDetail(_likedPosts[index]),
       ),
     );
   }
@@ -905,7 +989,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
           return GestureDetector(
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => PostDetailScreen(postId: post.id)),
+              MaterialPageRoute(builder: (_) => PostDetailScreen(postId: post.id, initialPost: post)),
             ),
             child: Container(
               color: Colors.grey[200],
@@ -927,7 +1011,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
   void _openPostDetail(Post post) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => PostDetailScreen(postId: post.id)),
+      MaterialPageRoute(builder: (_) => PostDetailScreen(postId: post.id, initialPost: post)),
     );
   }
 
@@ -939,6 +1023,8 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
     setState(() {
       _updatePostLike(post.id, !wasLiked, wasLiked ? originalCount - 1 : originalCount + 1);
     });
+    // L2 + L1 同步写入
+    _syncPostsToCache();
 
     try {
       if (wasLiked) {
@@ -953,6 +1039,7 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
       setState(() {
         _updatePostLike(post.id, wasLiked, originalCount);
       });
+      _syncPostsToCache();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
       );
@@ -964,6 +1051,14 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
     if (idx != -1) {
       _userPosts[idx] = _userPosts[idx].copyWith(isLiked: isLiked, likeCount: likeCount);
     }
+  }
+
+  /// 将当前用户帖子列表写入 DataLayer L2+L1
+  void _syncPostsToCache() {
+    final userId = ref.read(authProvider).user?.id.toString();
+    if (userId == null || _userPosts.isEmpty) return;
+    final data = _userPosts.map((p) => p.toJson()).toList();
+    DataLayer().write("user:$userId:posts", data);
   }
 
   void _onPostLikeEvent(PostLikeEvent event) {
@@ -987,5 +1082,6 @@ class _ProfileTabState extends State<ProfileTab> with SingleTickerProviderStateM
     setState(() {
       _userPosts.remove(post);
     });
+    _syncPostsToCache();
   }
 }

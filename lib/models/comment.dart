@@ -15,6 +15,8 @@ class Comment {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final List<Comment> replies;
+  final bool repliesHasMore; // 回复是否还有更多页
+  final int repliesPage; // 当前回复页码
 
   Comment({
     required this.id, required this.content, required this.userId,
@@ -22,6 +24,8 @@ class Comment {
     this.replyToUser, this.user, this.likeCount = 0, this.replyCount = 0,
     this.isLiked = false,
     this.createdAt, this.updatedAt, this.replies = const [],
+    this.repliesHasMore = false,
+    this.repliesPage = 1,
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) {
@@ -42,6 +46,8 @@ class Comment {
       updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at'].toString()) : null,
       replies: (json['replies'] as List<dynamic>?)
           ?.map((e) => Comment.fromJson(e)).toList() ?? [],
+      repliesHasMore: json['replies_has_more'] == true,
+      repliesPage: _p(json['replies_page'] ?? 1),
     );
   }
 
@@ -52,6 +58,7 @@ class Comment {
     int? parentId, int? replyToUserId, User? replyToUser, User? user,
     int? likeCount, int? replyCount, bool? isLiked,
     DateTime? createdAt, DateTime? updatedAt, List<Comment>? replies,
+    bool? repliesHasMore, int? repliesPage,
   }) => Comment(
     id: id ?? this.id,
     content: content ?? this.content,
@@ -67,6 +74,8 @@ class Comment {
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     replies: replies ?? this.replies,
+    repliesHasMore: repliesHasMore ?? this.repliesHasMore,
+    repliesPage: repliesPage ?? this.repliesPage,
   );
 
   Map<String, dynamic> toJson() => {

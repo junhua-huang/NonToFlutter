@@ -20,6 +20,6 @@ class BlockService {
 
   /// 获取屏蔽列表
   Future<ApiResponse> getBlockedUsers({int page = 1, int perPage = 20}) async {
-    return _api.get('/blocks', params: {'page': page, 'per_page': perPage});
+    return _api.getDeduped('/blocks', params: {'page': page, 'per_page': perPage});
   }
 }

@@ -6,6 +6,7 @@ class Post {
   final int id;
   final String? content;
   final String? videoUrl;
+  final String? thumbnailUrl;
   final String? postType;
   final int userId;
   final String? visibility;
@@ -24,6 +25,7 @@ class Post {
     required this.id,
     this.content,
     this.videoUrl,
+    this.thumbnailUrl,
     this.postType,
     required this.userId,
     this.visibility,
@@ -50,6 +52,7 @@ class Post {
       id: _parseInt(json['id']),
       content: json['content'],
       videoUrl: json['video_url'],
+      thumbnailUrl: json['thumbnail_url'] ?? json['cover_url'],
       postType: json['post_type'],
       userId: _parseInt(json['user_id']),
       visibility: json['visibility'],
@@ -78,7 +81,7 @@ class Post {
 
   Map<String, dynamic> toJson() => {
     'id': id, 'content': content,
-    'video_url': videoUrl, 'post_type': postType, 'user_id': userId,
+    'video_url': videoUrl, 'thumbnail_url': thumbnailUrl, 'post_type': postType, 'user_id': userId,
     'visibility': visibility, 'is_public': isPublic, 'author': user?.toJson(),
     'like_count': likeCount, 'comment_count': commentCount,
     'is_liked': isLiked, 'created_at': createdAt?.toIso8601String(),
@@ -88,10 +91,11 @@ class Post {
 
   Post copyWith({String? content, String? visibility, bool? isLiked,
     int? likeCount, int? commentCount, int? viewCount, List<String>? topics,
-    String? videoUrl, bool? isPublic, DateTime? updatedAt,
+    String? videoUrl, String? thumbnailUrl, bool? isPublic, DateTime? updatedAt,
     List<String>? images}) {
     return Post(id: id, content: content ?? this.content,
       videoUrl: videoUrl ?? this.videoUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       postType: postType,
       userId: userId, visibility: visibility ?? this.visibility,
       isPublic: isPublic ?? this.isPublic, user: user,

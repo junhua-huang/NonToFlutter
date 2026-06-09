@@ -111,5 +111,5 @@ class UploadService {
 
   /// 获取文件信息
   Future<ApiResponse> getFileInfo(String url) =>
-      _api.get('/upload/info', params: {'url': url});
+      _api.getDeduped('/upload/info', params: {'url': url});
 }

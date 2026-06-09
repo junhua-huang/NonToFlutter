@@ -4,7 +4,7 @@ import 'package:facebook_clone/models/comic_event.dart';
 import 'package:facebook_clone/models/post.dart';
 import 'package:facebook_clone/models/topic.dart';
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/screens/home/home_screen.dart';
+import 'package:facebook_clone/providers/core_providers.dart';
 import 'package:facebook_clone/screens/comic/comic_detail_page.dart';
 import 'package:facebook_clone/screens/post/post_detail_screen.dart';
 import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
@@ -12,8 +12,7 @@ import 'package:facebook_clone/screens/search/search_results_screen.dart';
 import 'package:facebook_clone/services/api/recommendation_service.dart';
 import 'package:facebook_clone/services/api/search_service.dart';
 import 'package:facebook_clone/services/api/topic_service.dart';
-import 'package:facebook_clone/services/cache_service.dart';
-import 'package:facebook_clone/services/comic_service.dart';
+import 'package:facebook_clone/providers/explore_notifier.dart';
 import 'package:facebook_clone/utils/date_utils.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:facebook_clone/widgets/add_friend_button.dart';
@@ -21,36 +20,30 @@ import 'package:facebook_clone/widgets/error_state_widget.dart';
 import 'package:facebook_clone/widgets/post_card.dart';
 import 'package:facebook_clone/widgets/search_suggestions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
 /// Twitter/X Explore 风格搜索页（带实时搜索建议）
-class SearchTab extends StatefulWidget {
+class SearchTab extends ConsumerStatefulWidget {
   const SearchTab({super.key});
   @override
-  State<SearchTab> createState() => _SearchTabState();
+  ConsumerState<SearchTab> createState() => _SearchTabState();
 }
 
-class _SearchTabState extends State<SearchTab>
+class _SearchTabState extends ConsumerState<SearchTab>
     with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   final RefreshController _refreshController = RefreshController();
 
   List<String> _searchHistory = [];
-  List<Topic> _trendingTopics = [];
-  List<Post> _trendingPosts = [];
-  List<User> _suggestedUsers = [];
-  List<ComicEvent> _recentComicEvents = [];
-  List<ComicEvent> _followedComicEvents = [];
   List<User> _userResults = [];
   List<Post> _postResults = [];
 
   bool _isSearching = false;
   bool _isLoading = false;
-  bool _isLoadingDefault = true;
   bool _showSuggestions = false;
   String? _error;
-  bool _activated = false;
 
   late final TabController _tabController;
 
@@ -60,15 +53,11 @@ class _SearchTabState extends State<SearchTab>
     _tabController = TabController(length: 3, vsync: this);
     _controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
-    TabActivationNotifier.currentTab.addListener(_onTabActivated);
-    if (TabActivationNotifier.currentTab.value == 1) {
-      _activate();
-    }
+    // Explorer data auto-loads via exploreProvider constructor — no _activate needed
   }
 
   @override
   void dispose() {
-    TabActivationNotifier.currentTab.removeListener(_onTabActivated);
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
@@ -78,7 +67,7 @@ class _SearchTabState extends State<SearchTab>
   }
 
   Future<void> _onRefresh() async {
-    await _loadDefault();
+    await ref.read(exploreProvider.notifier).loadDefault(forceRefresh: true);
     _refreshController.refreshCompleted();
   }
 
@@ -91,115 +80,6 @@ class _SearchTabState extends State<SearchTab>
 
   void _onFocusChanged() {
     setState(() {}); // rebuild to show/hide search history
-  }
-
-  void _onTabActivated() {
-    if (!_activated && TabActivationNotifier.currentTab.value == 1) {
-      _activate();
-    }
-  }
-
-  void _activate() {
-    _activated = true;
-    _loadDefault();
-  }
-
-  Future<void> _loadDefault() async {
-    // Try cache first
-    final cachedTopics = await CacheService().getList(CacheKeys.trendingTopics());
-    final cachedPosts = await CacheService().getList(CacheKeys.trendingPosts());
-    final cachedUsers = await CacheService().getList(CacheKeys.suggestedUsers());
-
-    if (cachedTopics != null) {
-      _trendingTopics = cachedTopics.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    if (cachedPosts != null) {
-      _trendingPosts = cachedPosts.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    if (cachedUsers != null) {
-      _suggestedUsers = cachedUsers.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
-    }
-
-    if (mounted && (cachedTopics != null || cachedPosts != null || cachedUsers != null)) {
-      setState(() => _isLoadingDefault = false);
-    }
-
-    try {
-      final results = await Future.wait([
-        SearchService().getHistory(),
-        TopicService().getTrending(limit: 8),
-        RecommendationService().getTrending(limit: 5),
-        RecommendationService().suggestUsers(limit: 5),
-        ComicService().getEvents(size: 4),
-        ComicService().getMyFollowed(size: 4),
-      ]);
-      // History
-      final histResp = results[0];
-      if (histResp.success && histResp.data != null) {
-        final data = histResp.data;
-        List items = [];
-        if (data is List) { items = data; }
-        else if (data is Map) { items = data['history'] ?? data['items'] ?? []; }
-        _searchHistory = items.map((e) {
-          if (e is Map) return e['query']?.toString() ?? e.toString();
-          return e.toString();
-        }).take(3).toList();
-      }
-      // Trending topics
-      final topicResp = results[1];
-      if (topicResp.success && topicResp.data != null) {
-        final data = topicResp.data;
-        List topicList = [];
-        if (data is List) {
-          topicList = data;
-        } else if (data is Map) {
-          topicList = data['topics'] ?? data['items'] ?? [];
-        }
-        _trendingTopics = topicList
-            .map((e) => Topic.fromJson(e as Map<String, dynamic>))
-            .toList();
-        await CacheService().set(CacheKeys.trendingTopics(), topicList, expireMinutes: 10);
-      }
-      // Trending posts
-      final postResp = results[2];
-      if (postResp.success && postResp.data != null) {
-        final data = postResp.data as Map<String, dynamic>;
-        final list = data['posts'] as List? ?? [];
-        _trendingPosts = list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-        await CacheService().set(CacheKeys.trendingPosts(), list, expireMinutes: 5);
-      }
-      // Suggested users
-      final userResp = results[3];
-      if (userResp.success && userResp.data != null) {
-        final data = userResp.data;
-        List userList = [];
-        if (data is List) {
-          userList = data;
-        } else if (data is Map) {
-          userList = data['users'] ?? data['items'] ?? [];
-        }
-        _suggestedUsers = userList
-            .map((e) => User.fromJson(e as Map<String, dynamic>))
-            .toList();
-        await CacheService().set(CacheKeys.suggestedUsers(), userList, expireMinutes: 10);
-      }
-      // Recent comic events
-      final comicResp = results[4];
-      if (comicResp.success && comicResp.data != null) {
-        final page = comicResp.data as ComicEventsPage;
-        _recentComicEvents = page.records;
-      }
-      // Followed comic events
-      final followedComicResp = results[5];
-      if (followedComicResp.success && followedComicResp.data != null) {
-        final page = followedComicResp.data as ComicEventsPage;
-        _followedComicEvents = page.records;
-      }
-    } catch (e) {
-      debugPrint('SearchTab loadDefault error: $e');
-    } finally {
-      setState(() => _isLoadingDefault = false);
-    }
   }
 
   Future<void> _doSearch(String query) async {
@@ -250,26 +130,26 @@ class _SearchTabState extends State<SearchTab>
   Widget build(BuildContext context) {
     return Column(
       children: [
-        ValueListenableBuilder<bool>(
-          valueListenable: HomeScreen.barVisible,
-          builder: (_, visible, child) {
+        // 仅 AppBar 动画依赖 barVisibleProvider，独立 Consumer
+        Consumer(
+          builder: (context, ref, _) {
+            final barVisible = ref.watch(barVisibleProvider);
             return AnimatedSlide(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              offset: visible ? Offset.zero : const Offset(0, -1),
+              offset: barVisible ? Offset.zero : const Offset(0, -1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                height: visible ? (kToolbarHeight + MediaQuery.of(context).padding.top) : 0,
-                child: visible ? child! : const SizedBox.shrink(),
-              ),
-            );
-          },
-          child: AppBar(
+                height: barVisible ? (kToolbarHeight + MediaQuery.of(context).padding.top) : 0,
+                child: barVisible ? AppBar(
             title: const Text('Explore', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
             backgroundColor: AppColors.background,
             elevation: 0,
             surfaceTintColor: Colors.transparent,
+            ) : const SizedBox.shrink(),
           ),
+        );
+          },
         ),
         // Search bar
         Padding(
@@ -332,7 +212,7 @@ class _SearchTabState extends State<SearchTab>
                       _postResults.clear();
                       _error = null;
                     });
-                    _loadDefault();
+                    ref.read(exploreProvider.notifier).loadDefault();
                   },
                   child: const Text('取消', style: TextStyle(color: AppColors.primary, fontSize: 14)),
                 ),
@@ -375,21 +255,24 @@ class _SearchTabState extends State<SearchTab>
               ],
             ),
           ),
-        // Content
-        Expanded(
-          child: NotificationListener<ScrollUpdateNotification>(
-            onNotification: (notif) {
-              if (notif.dragDetails != null) {
-                final delta = notif.scrollDelta ?? 0;
-                if (delta > 5 && HomeScreen.barVisible.value) {
-                  HomeScreen.barVisible.value = false;
-                } else if (delta < -5 && !HomeScreen.barVisible.value) {
-                  HomeScreen.barVisible.value = true;
-                }
-              }
-              return false;
-            },
-            child: SmartRefresher(
+        Consumer(
+          builder: (context, ref, _) {
+            final exploreState = ref.watch(exploreProvider);
+            return Expanded(
+              child: NotificationListener<ScrollUpdateNotification>(
+                onNotification: (notif) {
+                  if (notif.dragDetails != null) {
+                    final delta = notif.scrollDelta ?? 0;
+                    final barVisible = ref.read(barVisibleProvider);
+                    if (delta > 5 && barVisible) {
+                      ref.read(barVisibleProvider.notifier).state = false;
+                    } else if (delta < -5 && !barVisible) {
+                      ref.read(barVisibleProvider.notifier).state = true;
+                    }
+                  }
+                  return false;
+                },
+                child: SmartRefresher(
             controller: _refreshController,
             enablePullDown: true,
             enablePullUp: false,
@@ -398,7 +281,7 @@ class _SearchTabState extends State<SearchTab>
               complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
               waterDropColor: AppColors.primary,
             ),
-            child: _isLoadingDefault
+            child: exploreState.isLoading && exploreState.trendingTopics.isEmpty && exploreState.trendingPosts.isEmpty
                 ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : _showSuggestions
                     ? SearchSuggestions(
@@ -408,60 +291,62 @@ class _SearchTabState extends State<SearchTab>
                       )
                     : _isSearching
                         ? _buildSearchResults()
-                        : _buildDefaultView(),
+                        : _buildDefaultView(exploreState),
           ),
         ),
-      ),
+        );
+          },
+        ),
       ],
     );
   }
 
   // --- Default View ---
 
-  Widget _buildDefaultView() {
+  Widget _buildDefaultView(ExploreState s) {
     // Flatten all sections into indexed items for ListView.builder
     final List<_DefaultItem> items = [];
 
     // 1) Trending Topics (prominent, at top like Twitter/X)
-    if (_trendingTopics.isNotEmpty) {
+    if (s.trendingTopics.isNotEmpty) {
       items.add(_DefaultItem.header('热门话题'));
-      for (final topic in _trendingTopics.take(8)) {
+      for (final topic in s.trendingTopics.take(8)) {
         items.add(_DefaultItem.topic(topic));
       }
       items.add(_DefaultItem.divider());
     }
 
     // 2) Hot / Trending Posts
-    if (_trendingPosts.isNotEmpty) {
+    if (s.trendingPosts.isNotEmpty) {
       items.add(_DefaultItem.header('热门帖子'));
-      for (final post in _trendingPosts.take(5)) {
+      for (final post in s.trendingPosts.take(5)) {
         items.add(_DefaultItem.post(post));
       }
       items.add(_DefaultItem.divider());
     }
 
     // 3) Recent Comic Events
-    if (_recentComicEvents.isNotEmpty) {
+    if (s.recentComicEvents.isNotEmpty) {
       items.add(_DefaultItem.header('近期漫展'));
-      for (final event in _recentComicEvents.take(3)) {
+      for (final event in s.recentComicEvents.take(3)) {
         items.add(_DefaultItem.comicEvent(event));
       }
       items.add(_DefaultItem.divider());
     }
 
     // 5) Followed Comic Events
-    if (_followedComicEvents.isNotEmpty) {
+    if (s.followedComicEvents.isNotEmpty) {
       items.add(_DefaultItem.header('我关注的漫展'));
-      for (final event in _followedComicEvents.take(3)) {
+      for (final event in s.followedComicEvents.take(3)) {
         items.add(_DefaultItem.comicEvent(event));
       }
       items.add(_DefaultItem.divider());
     }
 
     // 6) Recommended Users
-    if (_suggestedUsers.isNotEmpty) {
+    if (s.suggestedUsers.isNotEmpty) {
       items.add(_DefaultItem.header('推荐好友'));
-      items.add(_DefaultItem.friendRow(_suggestedUsers.take(10).toList()));
+      items.add(_DefaultItem.friendRow(s.suggestedUsers.take(10).toList()));
       items.add(_DefaultItem.divider());
     }
 
@@ -516,7 +401,10 @@ class _SearchTabState extends State<SearchTab>
               ),
             );
           case _DefaultItemType.divider:
-            return const Divider(height: 32);
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1, color: AppColors.borderLight),
+            );
           case _DefaultItemType.historyItem:
             return _buildCompactHistoryItem(item.historyIndex!);
           case _DefaultItemType.postItem:
@@ -895,7 +783,7 @@ class _SearchTabState extends State<SearchTab>
             child: Text('用户', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
           ),
           ..._userResults.map((u) => _buildUserTile(u)),
-          const Divider(),
+          const Divider(height: 1, color: AppColors.borderLight),
         ],
         if (_postResults.isNotEmpty) ...[
           const Padding(
@@ -983,8 +871,8 @@ class _SearchTabState extends State<SearchTab>
               ],
             ),
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Divider(height: 24, color: AppColors.borderLight),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Divider(height: 1, color: AppColors.borderLight),
             ),
           ],
         ),

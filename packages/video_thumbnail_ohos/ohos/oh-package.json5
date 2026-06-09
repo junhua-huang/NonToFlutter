@@ -1,0 +1,7 @@
+{
+  "name": "video_thumbnail_ohos",
+  "version": "1.0.0",
+  "description": "nonto video thumbnail plugin for HarmonyOS (AVImageGenerator)",
+  "main": "ets/index.ets",
+  "dependencies": {}
+}

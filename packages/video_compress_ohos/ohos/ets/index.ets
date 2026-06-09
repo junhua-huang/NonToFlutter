@@ -1,0 +1,1 @@
+export { VideoCompressOhosPlugin } from './plugin/VideoCompressOhosPlugin';

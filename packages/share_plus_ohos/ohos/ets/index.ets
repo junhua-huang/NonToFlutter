@@ -1,0 +1,1 @@
+export { SharePlusOhosPlugin } from './plugin/SharePlusOhosPlugin';

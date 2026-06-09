@@ -1,256 +1,225 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/sound_service.dart';
-import 'package:flutter/material.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:reliable_websocket/reliable_websocket.dart';
 
-/// 全局 WebSocket 服务，管理原生 WebSocket 连接
+/// 全局 WebSocket 服务，内部使用 ReliableWebSocketClient
 /// 支持聊天消息、通知推送的实时功能
 class WebSocketService {
   static final WebSocketService _instance = WebSocketService._();
   factory WebSocketService() => _instance;
   WebSocketService._();
 
-  WebSocketChannel? _channel;
+  ReliableWebSocketClient? _client;
   bool _isConnected = false;
-  bool _isReconnecting = false;
-  int _connectionId = 0;
-  String? _currentToken;
-  Timer? _reconnectTimer;
-  Timer? _pingTimer;
-  int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 10;
-  static const Duration _reconnectDelay = Duration(seconds: 3);
-  static const Duration _pingInterval = Duration(seconds: 25);
 
   // 事件流控制器
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _notificationController = StreamController<Map<String, dynamic>>.broadcast();
   final _typingController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionController = StreamController<bool>.broadcast();
+  final _sessionListController = StreamController<List<Map<String, dynamic>>>.broadcast();
+  final _errorController = StreamController<String>.broadcast();
+  final _authExpiredController = StreamController<String>.broadcast();
 
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get notificationStream => _notificationController.stream;
   Stream<Map<String, dynamic>> get typingStream => _typingController.stream;
   Stream<bool> get connectionStream => _connectionController.stream;
+  Stream<List<Map<String, dynamic>>> get sessionListStream => _sessionListController.stream;
+  Stream<String> get errorStream => _errorController.stream;
+
+  /// 认证失效流（JWT 过期/被踢下线/认证失败），业务层监听后执行注销
+  Stream<String> get authExpiredStream => _authExpiredController.stream;
 
   bool get isConnected => _isConnected;
 
   /// 初始化连接（通常在登录成功后调用）
-  void connect() {
+  Future<void> connect() async {
     final token = ApiClient.token;
     if (token == null || token.isEmpty) {
-      debugPrint('WebSocket: no token, skip connect');
+      print('[WS] ❗ no token, skip connect');
       return;
     }
-    if (_isConnected && _currentToken == token) {
+    if (_isConnected) {
+      print('[WS] ⚠️ already connected, skip');
       return;
     }
 
-    _disconnectInternal();
-    _currentToken = token;
-    _reconnectAttempts = 0;
-    _doConnect();
-  }
+    // 断开旧连接
+    await _client?.disconnect();
 
-  void _doConnect() {
-    if (_currentToken == null) return;
-    _connectionId++;
-    final thisConnectionId = _connectionId;
+    final wsUrl = AppConfig.wsUrl
+        .replaceFirst('http://', 'ws://')
+        .replaceFirst('https://', 'wss://');
+    // 后端协议：连接不带 token，认证通过 auth 消息完成（reliable_websocket 自动处理）
+    final uri = '$wsUrl/ws';
 
-    final wsUrl =
-        AppConfig.wsUrl.replaceFirst('http://', 'ws://').replaceFirst('https://', 'wss://');
-    final uri = Uri.parse('$wsUrl/ws?token=$_currentToken');
+    print('[WS] 🔌 connecting to $uri (token=${token.substring(0, 12)}...)');
 
-    debugPrint('WebSocket: connecting to $uri (connId=$thisConnectionId)');
+    _client = ReliableWebSocketClient(
+      url: uri,
+      getToken: () async => ApiClient.token ?? '',
+      onMessage: _onMessage,
+      onConnectionStateChange: _onConnectionStateChange,
+      onError: (message, clientMsgId) {
+        print('[WS] server error: $message (clientMsgId=$clientMsgId)');
+        _errorController.add(message);
+      },
+      onAuthFailed: (error) {
+        print('[WS] ❗ auth failed/expired: $error');
+        if (_isConnected) {
+          _isConnected = false;
+          _connectionController.add(false);
+        }
+        // 通知业务层（AuthNotifier）执行注销
+        _authExpiredController.add(error ?? 'auth_failed');
+      },
+    );
 
     try {
-      _channel = WebSocketChannel.connect(uri);
-
-      _channel!.stream.listen(
-        _onMessage,
-        onError: (error) {
-          debugPrint('WebSocket: stream error connId=$thisConnectionId curId=$_connectionId: $error');
-          if (_connectionId != thisConnectionId) return;
-          _handleConnectionLoss();
-        },
-        onDone: () {
-          debugPrint('WebSocket: stream done connId=$thisConnectionId curId=$_connectionId');
-          if (_connectionId != thisConnectionId) return;
-          _handleConnectionLoss();
-        },
-        cancelOnError: false,
-      );
-
-      _channel!.ready.then((_) {
-        debugPrint('WebSocket: ready connId=$thisConnectionId curId=$_connectionId');
-        if (_connectionId != thisConnectionId) return;
-        debugPrint('WebSocket: connected successfully');
-        _isConnected = true;
-        _isReconnecting = false;
-        _reconnectAttempts = 0;
-        _connectionController.add(true);
-        _startPing();
-      }).catchError((e, stack) {
-        debugPrint('WebSocket: ready failed connId=$thisConnectionId curId=$_connectionId: $e');
-        debugPrint('WebSocket: stack trace: $stack');
-        if (_connectionId != thisConnectionId) return;
-        _handleConnectionLoss();
-      });
+      await _client!.connect();
+      print('[WS] ✅ client.connect() completed');
     } catch (e, stack) {
-      debugPrint('WebSocket: init error connId=$thisConnectionId: $e');
-      debugPrint('WebSocket: stack trace: $stack');
-      if (_connectionId != thisConnectionId) return;
-      _handleConnectionLoss();
+      print('[WS] ❌ connect threw: $e');
+      print(stack);
     }
   }
 
-  void _handleConnectionLoss() {
-    _isConnected = false;
-    _stopPing();
-    _connectionController.add(false);
-    _scheduleReconnect();
-  }
-
-  void _onMessage(dynamic data) {
-    try {
-      final Map<String, dynamic> msg;
-      if (data is String) {
-        msg = jsonDecode(data) as Map<String, dynamic>;
-      } else if (data is Map) {
-        msg = Map<String, dynamic>.from(data);
+  void _onConnectionStateChange(ConnectionState state) {
+    print('[WS] state → ${state.name}');
+    final connected = state == ConnectionState.authenticated;
+    if (_isConnected != connected) {
+      _isConnected = connected;
+      _connectionController.add(connected);
+      if (connected) {
+        print('[WS] ✅ 已连接（认证成功）');
+        DataLayer().flushOfflineQueue();
       } else {
-        return;
+        print('[WS] ❌ 已断开');
       }
-
-      final type = msg['type'] as String?;
-      debugPrint('WebSocket: received type=$type');
-
-      switch (type) {
-        case 'new_message':
-        case 'conversation_read':
-          _messageController.add(msg);
-          SoundService().playNotificationSound();
-          break;
-        case 'new_notification':
-        case 'notifications_read':
-          _notificationController.add(msg);
-          SoundService().playNotificationSound();
-          break;
-        case 'friend_online':
-          SoundService().playOnlineSound();
-          break;
-        case 'typing':
-        case 'stop_typing':
-          _typingController.add(msg);
-          break;
-        case 'connected':
-        case 'pong':
-          break;
-        default:
-          debugPrint('WebSocket: unhandled type=$type');
-      }
-    } catch (e) {
-      debugPrint('WebSocket: parse error $e');
     }
   }
 
-  void _startPing() {
-    _stopPing();
-    _pingTimer = Timer.periodic(_pingInterval, (_) {
-      if (_isConnected) {
-        try {
-          _channel?.sink.add(jsonEncode({'type': 'ping'}));
-        } catch (_) {}
-      }
-    });
-  }
+  /// 处理收到的推送消息（payload 来自 {type:'message', seq, payload:{event:...}} 的内层）
+  void _onMessage(Map<String, dynamic> payload, int seq) {
+    // 后端协议：payload 内用 event 字段标识事件类型
+    final event = payload['event'] as String?;
+    debugPrint('WebSocket: received event=$event seq=$seq');
 
-  void _stopPing() {
-    _pingTimer?.cancel();
-    _pingTimer = null;
-  }
+    switch (event) {
+      case 'new_message':
+        _messageController.add(payload);
+        SoundService().playNotificationSound();
+        break;
 
-  void _scheduleReconnect() {
-    if (_isReconnecting) return;
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
-      debugPrint('WebSocket: max reconnect attempts reached');
-      return;
+      case 'message_read':
+        // 对方标记消息已读（已读回执）
+        _messageController.add(payload);
+        break;
+
+      case 'conversation_read':
+        // 会话已读确认（含全局未读数）
+        _messageController.add(payload);
+        break;
+
+      case 'session_list':
+        // 认证成功后服务端自动推送会话列表
+        final sessions = payload['sessions'];
+        if (sessions is List) {
+          _sessionListController.add(
+            sessions.map((s) => Map<String, dynamic>.from(s as Map)).toList(),
+          );
+        }
+        break;
+
+      case 'new_notification':
+        _notificationController.add(payload);
+        SoundService().playNotificationSound();
+        break;
+
+      case 'typing':
+      case 'stop_typing':
+        _typingController.add(payload);
+        break;
+
+      default:
+        debugPrint('WebSocket: unhandled event=$event');
     }
-    _isReconnecting = true;
-    _reconnectAttempts++;
-    debugPrint(
-        'WebSocket: reconnect $_reconnectAttempts/$_maxReconnectAttempts in ${_reconnectDelay.inSeconds}s');
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(_reconnectDelay, () {
-      _isReconnecting = false;
-      if (!_isConnected) {
-        _doConnect();
-      }
-    });
-  }
-
-  void _disconnectInternal() {
-    _stopPing();
-    _reconnectTimer?.cancel();
-    _reconnectTimer = null;
-    _isReconnecting = false;
-    _connectionId++;
-    try {
-      _channel?.sink.close();
-    } catch (_) {}
-    _channel = null;
-    _isConnected = false;
-    _reconnectAttempts = 0;
   }
 
   /// 断开连接（通常在注销时调用）
-  void disconnect() {
-    _disconnectInternal();
-    _currentToken = null;
+  Future<void> disconnect() async {
+    print('[WS] disconnecting');
+    await _client?.disconnect();
+    _isConnected = false;
   }
 
-  /// 加入会话房间
+  /// 加入会话房间（fire-and-forget，不经过发件箱）
   void joinConversation(int conversationId) {
-    _send({'type': 'join', 'conversation_id': conversationId});
+    _sendRaw({'type': 'join', 'conversation_id': conversationId});
   }
 
-  /// 离开会话房间
+  /// 离开会话房间（fire-and-forget）
   void leaveConversation(int conversationId) {
-    _send({'type': 'leave', 'conversation_id': conversationId});
+    _sendRaw({'type': 'leave', 'conversation_id': conversationId});
   }
 
-  /// 通过 WebSocket 发送消息
-  void sendMessage(int conversationId, String content, {String messageType = 'text'}) {
-    _send({
-      'type': 'send_message',
+  /// 通过 WebSocket 发送聊天消息（经发件箱 + ACK 可靠发送）
+  Future<String> sendMessage(int conversationId, String content, {
+    String messageType = 'text',
+    String? mediaUrl,
+    int? relatedId,
+    String? receiverId,
+  }) {
+    final payload = <String, dynamic>{
       'conversation_id': conversationId,
       'content': content,
       'message_type': messageType,
+    };
+    if (mediaUrl != null) payload['media_url'] = mediaUrl;
+    if (relatedId != null) payload['related_id'] = relatedId;
+    if (receiverId != null) payload['receiver_id'] = int.parse(receiverId);
+    return _send(payload);
+  }
+
+  /// 发送"正在输入"状态（fire-and-forget）
+  void sendTyping(int conversationId) {
+    _sendRaw({'type': 'typing', 'conversation_id': conversationId});
+  }
+
+  /// 发送"停止输入"状态（fire-and-forget）
+  void sendStopTyping(int conversationId) {
+    _sendRaw({'type': 'stop_typing', 'conversation_id': conversationId});
+  }
+
+  /// 标记会话消息为已读（经发件箱可靠发送）
+  Future<String> markConversationRead(int conversationId) {
+    return _send({
+      'event': 'conversation_read',
+      'conversation_id': conversationId,
     });
   }
 
-  /// 发送"正在输入"状态
-  void sendTyping(int conversationId) {
-    _send({'type': 'typing', 'conversation_id': conversationId});
-  }
-
-  /// 发送"停止输入"状态
-  void sendStopTyping(int conversationId) {
-    _send({'type': 'stop_typing', 'conversation_id': conversationId});
-  }
-
-  /// 发送 JSON 数据到 WebSocket
-  void _send(Map<String, dynamic> data) {
-    if (!_isConnected || _channel == null) return;
+  /// 可靠发送（经发件箱，带 ACK）
+  Future<String> _send(Map<String, dynamic> payload) async {
+    if (!_isConnected || _client == null) return '';
     try {
-      _channel!.sink.add(jsonEncode(data));
+      return await _client!.send(payload);
     } catch (e) {
       debugPrint('WebSocket: send error $e');
+      return '';
     }
+  }
+
+  /// 原始帧发送（fire-and-forget，用于 join/leave/typing 等控制帧）
+  void _sendRaw(Map<String, dynamic> frame) {
+    if (!_isConnected || _client == null) return;
+    _client!.sendRaw(frame);
   }
 
   void dispose() {
@@ -259,5 +228,8 @@ class WebSocketService {
     _notificationController.close();
     _typingController.close();
     _connectionController.close();
+    _sessionListController.close();
+    _errorController.close();
+    _authExpiredController.close();
   }
 }

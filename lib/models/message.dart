@@ -8,13 +8,14 @@ class Message {
   final MessageType messageType;
   final String? mediaUrl;
   final int? relatedId;
-  final bool isRead;
+  bool isRead;
   final DateTime? createdAt;
+  final String? requestId;
 
   Message({
     required this.id, required this.conversationId, required this.senderId,
     this.content, this.messageType = MessageType.text, this.mediaUrl,
-    this.relatedId, this.isRead = false, this.createdAt,
+    this.relatedId, this.isRead = false, this.createdAt, this.requestId,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) => Message(
@@ -27,6 +28,7 @@ class Message {
     relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
     isRead: json['is_read'] ?? false,
     createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+    requestId: json['request_id']?.toString(),
   );
 
   static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
@@ -44,7 +46,46 @@ class Message {
     'content': content, 'message_type': messageType.name,
     'media_url': mediaUrl, 'related_id': relatedId,
     'is_read': isRead, 'created_at': createdAt?.toIso8601String(),
+    'request_id': requestId,
   };
+
+  Message copyWithId(int newId) => Message(
+    id: newId,
+    conversationId: conversationId,
+    senderId: senderId,
+    content: content,
+    messageType: messageType,
+    mediaUrl: mediaUrl,
+    relatedId: relatedId,
+    isRead: isRead,
+    createdAt: createdAt,
+    requestId: requestId,
+  );
+
+  Message copyWith({
+    int? id,
+    int? conversationId,
+    int? senderId,
+    String? content,
+    MessageType? messageType,
+    String? mediaUrl,
+    int? relatedId,
+    bool? isRead,
+    DateTime? createdAt,
+    String? requestId,
+  }) =>
+      Message(
+        id: id ?? this.id,
+        conversationId: conversationId ?? this.conversationId,
+        senderId: senderId ?? this.senderId,
+        content: content ?? this.content,
+        messageType: messageType ?? this.messageType,
+        mediaUrl: mediaUrl ?? this.mediaUrl,
+        relatedId: relatedId ?? this.relatedId,
+        isRead: isRead ?? this.isRead,
+        createdAt: createdAt ?? this.createdAt,
+        requestId: requestId ?? this.requestId,
+      );
 }
 
 class PaginatedMessages {

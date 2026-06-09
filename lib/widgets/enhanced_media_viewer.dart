@@ -2,7 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/services/api/post_service.dart';
 import 'package:facebook_clone/services/post_interaction_notifier.dart';
 import 'package:facebook_clone/utils/date_utils.dart';
@@ -11,7 +11,7 @@ import 'package:facebook_clone/widgets/rich_text_content.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Resolve relative URL to full URL
 String _resolveUrl(String? url) {
@@ -417,7 +417,7 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
   Future<void> _toggleLike(Post post) async {
     if (_isLikingPost) return;
 
-    final auth = context.read<AuthProvider>();
+    final auth = ProviderScope.containerOf(context).read(authProvider);
     if (!auth.isLoggedIn || auth.user == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

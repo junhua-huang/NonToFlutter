@@ -24,37 +24,53 @@ class MentionTopicPicker extends StatefulWidget {
   }
 
   /// Show a bottom sheet for picking a topic to hashtag
-  static void showTopics(BuildContext context, {required void Function(String topicName) onSelected}) {
-    _showPickerSheet(context, isTopic: true, onSelected: onSelected);
+  static void showTopics(BuildContext context, {
+    required void Function(String topicName) onSelected,
+    void Function(String searchText)? onCancel,
+  }) {
+    _showPickerSheet(context, isTopic: true, onSelected: onSelected, onCancel: onCancel);
   }
 
   static void _showPickerSheet(
     BuildContext context, {
     required bool isTopic,
     required void Function(String) onSelected,
+    void Function(String)? onCancel,
   }) {
-    showModalBottomSheet(
+    final searchController = TextEditingController();
+
+    showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (_, scrollController) => _PickerSheetContent(
-          isTopic: isTopic,
-          scrollController: scrollController,
-          onSelected: (value) {
-            Navigator.pop(ctx);
-            onSelected(value);
-          },
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (_, scrollController) => _PickerSheetContent(
+            isTopic: isTopic,
+            scrollController: scrollController,
+            searchController: searchController,
+            onSelected: (value) {
+              Navigator.pop(ctx, value);
+              onSelected(value);
+            },
+          ),
         ),
       ),
-    );
+    ).then((selectedValue) {
+      if (selectedValue == null && onCancel != null) {
+        // 弹窗被取消（没有选中结果），传递搜索框内容
+        onCancel(searchController.text);
+      }
+      searchController.dispose();
+    });
   }
 
   @override
@@ -380,11 +396,13 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
 class _PickerSheetContent extends StatefulWidget {
   final bool isTopic;
   final ScrollController scrollController;
+  final TextEditingController searchController;
   final void Function(String) onSelected;
 
   const _PickerSheetContent({
     required this.isTopic,
     required this.scrollController,
+    required this.searchController,
     required this.onSelected,
   });
 
@@ -393,7 +411,7 @@ class _PickerSheetContent extends StatefulWidget {
 }
 
 class _PickerSheetContentState extends State<_PickerSheetContent> {
-  final TextEditingController _searchController = TextEditingController();
+  late final TextEditingController _searchController;
   List<User> _users = [];
   List<Topic> _topics = [];
   bool _isLoading = false;
@@ -401,13 +419,15 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
   @override
   void initState() {
     super.initState();
+    _searchController = widget.searchController;
     _loadRecommendations();
     _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    // 由于 searchController 是从外部传入的，需要在 _showPickerSheet 中 dispose
     super.dispose();
   }
 

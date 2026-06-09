@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/conversation.dart';
+import 'package:facebook_clone/models/message.dart';
 import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
 import 'package:facebook_clone/services/api/chat_service.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/local_db_service.dart';
+import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:facebook_clone/utils/date_utils.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:facebook_clone/widgets/empty_state_widget.dart';
@@ -23,10 +27,17 @@ class ConversationsTab extends StatefulWidget {
 class _ConversationsTabState extends State<ConversationsTab> {
   final RefreshController _refreshController = RefreshController(initialRefresh: false);
   final ChatService _chatService = ChatService();
+  final WebSocketService _wsService = WebSocketService();
 
   List<Conversation> _conversations = [];
   bool _isLoading = true;
   String? _error;
+
+  StreamSubscription? _wsMsgSub;
+  StreamSubscription? _wsSessionSub;
+
+  // Dedup guard for _handleIncrementalNewMessage to prevent double-counting unreads
+  final Set<int> _processedMessageIds = {};
 
   // Use AppColors from app_theme.dart
 
@@ -34,6 +45,141 @@ class _ConversationsTabState extends State<ConversationsTab> {
   void initState() {
     super.initState();
     _loadLocalConversations();
+    _wsMsgSub = _wsService.messageStream.listen(_onWsMessage);
+    _wsSessionSub = _wsService.sessionListStream.listen(_onSessionList);
+  }
+
+  void _onWsMessage(Map<String, dynamic> data) {
+    final type = data['type'] as String?;
+    if (type == 'new_message') {
+      // Incrementally update: insert/update this conversation at top
+      final convId = data['conversation_id'];
+      if (convId != null && mounted) {
+        _handleIncrementalNewMessage(data);
+      }
+    } else if (type == 'batch_messages') {
+      // 离线批量消息：按会话批量处理
+      final convId = data['conversation_id'];
+      final messages = data['messages'] as List<dynamic>?;
+      if (convId != null && messages != null && mounted) {
+        _handleBatchMessages(convId as int, messages);
+      }
+    }
+  }
+
+  void _onSessionList(List<Map<String, dynamic>> sessions) {
+    if (!mounted) return;
+    final conversations = sessions
+        .map((e) => Conversation.fromJson(e))
+        .toList();
+    setState(() {
+      _conversations = conversations;
+      _isLoading = false;
+    });
+    LocalDbService().insertConversations(conversations);
+    // Write to DataLayer so messages_tab can pick up via query("conv:*:list")
+    DataLayer().write("conv:full:list", sessions);
+  }
+
+  void _handleIncrementalNewMessage(Map<String, dynamic> data) {
+    final msgId = data['id'] as int?;
+    // Dedup: skip if this message ID was already processed
+    if (msgId != null && _processedMessageIds.contains(msgId)) return;
+    if (msgId != null) _processedMessageIds.add(msgId);
+
+    final convId = data['conversation_id'] as int;
+    final content = data['content'] as String? ?? '';
+    final msgType = data['message_type'] as String? ?? 'text';
+    final preview = _formatPreview(content, msgType);
+
+    // Build a minimal Message for preview
+    final lastMsg = Message(
+      id: data['id'] ?? 0,
+      conversationId: convId,
+      senderId: data['sender_id'] ?? 0,
+      content: content,
+      messageType: MessageType.values.firstWhere(
+        (e) => e.name == msgType,
+        orElse: () => MessageType.text,
+      ),
+      createdAt: data['created_at'] != null
+          ? DateTime.tryParse(data['created_at'].toString())
+          : DateTime.now(),
+    );
+
+    setState(() {
+      final existingIdx = _conversations.indexWhere((c) => c.id == convId);
+      if (existingIdx >= 0) {
+        final conv = _conversations.removeAt(existingIdx);
+        final updated = Conversation(
+          id: conv.id,
+          user1Id: conv.user1Id,
+          user2Id: conv.user2Id,
+          otherUser: conv.otherUser,
+          lastMessage: lastMsg,
+          lastMessageAt: lastMsg.createdAt,
+          unreadCount: conv.unreadCount + 1,
+        );
+        _conversations.insert(0, updated);
+      } else {
+        // New conversation, do full reload
+        _loadConversations();
+      }
+    });
+    // Update local DB
+    LocalDbService().updateConversationLastMessage(
+      convId, preview, lastMsg.createdAt!, unreadIncrement: 1,
+    );
+    // Invalidate DataLayer cache for conversation lists
+    DataLayer().invalidate("conv:*:list");
+  }
+
+  String _formatPreview(String content, String msgType) {
+    switch (msgType) {
+      case 'image': return '🖼 图片';
+      case 'video': return '🎬 视频';
+      case 'file': return '📎 文件';
+      case 'post': return '📌 帖子';
+      case 'comment': return '💬 评论';
+      default:
+        return content.length > 30 ? '${content.substring(0, 30)}...' : content;
+    }
+  }
+
+  void _handleBatchMessages(int conversationId, List<dynamic> messages) {
+    final msgs = messages
+        .map((e) => Message.fromJson(e as Map<String, dynamic>))
+        .toList();
+    // 批量插入本地 DB
+    LocalDbService().insertMessages(msgs);
+
+    // 如果有匹配的会话，更新最后一条消息
+    final lastMsg = msgs.last;
+    final preview = _formatPreview(lastMsg.content ?? '', lastMsg.messageType.name);
+    final existingIdx = _conversations.indexWhere((c) => c.id == conversationId);
+    if (existingIdx >= 0) {
+      setState(() {
+        final conv = _conversations.removeAt(existingIdx);
+        final updated = Conversation(
+          id: conv.id,
+          user1Id: conv.user1Id,
+          user2Id: conv.user2Id,
+          otherUser: conv.otherUser,
+          lastMessage: lastMsg,
+          lastMessageAt: lastMsg.createdAt,
+          unreadCount: conv.unreadCount + msgs.length,
+        );
+        _conversations.insert(0, updated);
+      });
+      LocalDbService().updateConversationLastMessage(
+        conversationId, preview, lastMsg.createdAt!,
+        unreadIncrement: msgs.length,
+      );
+    } else {
+      // conversation not in current list, trigger full reload
+      _loadConversations();
+    }
+    DataLayer().invalidate("conv:*:list");
   }
 
   Future<void> _loadLocalConversations() async {
@@ -44,11 +190,16 @@ class _ConversationsTabState extends State<ConversationsTab> {
         _isLoading = false;
       });
     }
-    await _loadConversations();
+    // P0-1: HTTP only when WS not connected; WS sessionListStream handles online updates
+    if (!_wsService.isConnected) {
+      await _loadConversations();
+    }
   }
 
   @override
   void dispose() {
+    _wsMsgSub?.cancel();
+    _wsSessionSub?.cancel();
     _refreshController.dispose();
     super.dispose();
   }
@@ -76,8 +227,10 @@ class _ConversationsTabState extends State<ConversationsTab> {
           conversationList = [];
         }
 
-        final conversations =
-            conversationList.map((e) => Conversation.fromJson(e as Map<String, dynamic>)).toList();
+        final conversations = conversationList.map((item) {
+          final map = item as Map<String, dynamic>;
+          return Conversation.fromJson(map);
+        }).toList();
         setState(() {
           _conversations = conversations;
           _isLoading = false;
@@ -99,7 +252,15 @@ class _ConversationsTabState extends State<ConversationsTab> {
   }
 
   Future<void> _onRefresh() async {
-    await _loadConversations();
+    // P0-1: WS online → reload from local DB; WS offline → HTTP
+    if (_wsService.isConnected) {
+      final localConvs = await LocalDbService().getConversations();
+      if (localConvs.isNotEmpty && mounted) {
+        setState(() { _conversations = localConvs; });
+      }
+    } else {
+      await _loadConversations();
+    }
     _refreshController.refreshCompleted();
   }
 

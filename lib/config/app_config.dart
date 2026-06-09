@@ -1,4 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_social_video/flutter_social_video.dart';
+
+/// 全局视频播放器复用池，限制同时存活 3 个 Player
+final videoPlayerPool = PlayerPool(maxSize: 3);
 
 /// Tab 激活通知器：用于 IndexedStack 懒加载，各 Tab 监听此值来触发首次数据加载
 class TabActivationNotifier {

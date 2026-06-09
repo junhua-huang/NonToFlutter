@@ -35,6 +35,14 @@ class AppNotification {
 
   static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
 
+  Map<String, dynamic> toJson() => {
+    'id': id, 'user_id': userId, 'sender_id': senderId,
+    'sender': sender?.toJson(), 'notification_type': notificationType,
+    'title': title, 'content': content, 'related_id': relatedId,
+    'related_type': relatedType, 'is_read': isRead,
+    'created_at': createdAt?.toIso8601String(),
+  };
+
   NotificationType get parsedType {
     switch (notificationType) {
       case 'like': return NotificationType.like;

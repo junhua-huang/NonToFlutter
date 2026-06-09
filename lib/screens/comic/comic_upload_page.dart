@@ -153,7 +153,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
           final data = presignResp.data;
           final putUrl = data['presigned_url'] ?? data['put_url'] ?? data['url'];
           final finalUrl = data['public_url'] ?? data['file_url'] ?? data['url'];
-          await ApiClient().put(putUrl, data: await file.readAsBytes());
+          await ApiClient().dio.put(putUrl, data: await file.readAsBytes());
           urls.add(finalUrl);
         } else {
           if (mounted) _showSnack('图片 ${i + 1} 上传失败');

@@ -1,5 +1,5 @@
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/screens/auth/forgot_password_screen.dart';
 import 'package:facebook_clone/screens/auth/login_screen.dart';
@@ -20,7 +20,8 @@ import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
 import 'package:facebook_clone/screens/search/search_results_screen.dart';
 import 'package:facebook_clone/screens/splash/splash_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -115,8 +116,20 @@ class RouteGenerator {
   static Route<dynamic> _authGuard({required WidgetBuilder builder}) {
     return MaterialPageRoute(
       builder: (context) {
-        final auth = context.read<AuthProvider>();
-        if (auth.user == null) {
+        final auth = ProviderScope.containerOf(context).read(authProvider);
+        if (!auth.isLoggedIn) {
+          // 给用户一个提示，而不是静默跳转
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('请先登录'),
+                  duration: Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          });
           return const LoginScreen();
         }
         return builder(context);

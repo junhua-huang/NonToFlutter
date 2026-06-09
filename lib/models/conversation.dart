@@ -25,5 +25,15 @@ class Conversation {
     unreadCount: _p(json['unread_count']),
   );
 
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'user1_id': user1Id,
+    'user2_id': user2Id,
+    'last_message_at': lastMessageAt?.toIso8601String(),
+    'other_user': otherUser?.toJson(),
+    'last_message': lastMessage?.toJson(),
+    'unread_count': unreadCount,
+  };
+
   static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
 }

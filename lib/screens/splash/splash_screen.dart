@@ -1,65 +1,65 @@
 import 'dart:async';
 
 import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/screens/auth/login_screen.dart';
 import 'package:facebook_clone/screens/home/home_screen.dart';
+import 'package:facebook_clone/services/api/api_client.dart';
+import 'package:facebook_clone/services/local_db_service.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Splash screen with auto-login, permission requests, and X branding animation
-class SplashScreen extends StatefulWidget {
+/// Splash screen — follows the three-layer architecture:
+///   1. Read token from SharedPreferences (local, <10ms) → decide login/home
+///   2. If logged in → warmup DataLayer from SQLite L2 (50-100ms, no network)
+///   3. Navigate immediately, auth.validateSession() runs in background
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+class _SplashScreenState extends ConsumerState<SplashScreen>
+    with TickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _logoScaleAnimation;
   late final Animation<double> _logoFadeAnimation;
   late final Animation<double> _textFadeAnimation;
   late final Animation<double> _progressAnimation;
+  late final TickerFuture _animationDone;
   bool _showCookieConsent = false;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
 
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 3000),
       vsync: this,
     );
 
-    // Logo scales from 0.5 to 1.0 with bounce
     _logoScaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
       ),
     );
-
-    // Logo fades in
     _logoFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
       ),
     );
-
-    // Text fades in after logo
     _textFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.4, 0.7, curve: Curves.easeOut),
       ),
     );
-
-    // Progress bar
     _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -67,60 +67,77 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    _controller.forward();
-
-    // After animation completes, check cookie consent and navigate
+    _animationDone = _controller.forward();
     _checkCookieConsentAndNavigate();
   }
 
   Future<void> _checkCookieConsentAndNavigate() async {
-    // Wait for splash animation
-    await Future.delayed(const Duration(milliseconds: 2200));
+    try {
+      // Wait for animation to complete (1800ms), not a hardcoded 2200ms
+      await _animationDone;
 
-    // Initialize shared preferences
-    final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
 
-    // Check if cookie consent has been given
-    final hasConsent = prefs.getBool('cookie_consent') ?? false;
+      final prefs = await SharedPreferences.getInstance();
+      final hasConsent = prefs.getBool('cookie_consent') ?? false;
 
-    if (!hasConsent && mounted) {
-      setState(() {
-        _showCookieConsent = true;
-      });
-    } else {
-      // Proceed with normal navigation
-      _navigateAfterSplash();
+      if (!hasConsent && mounted) {
+        setState(() => _showCookieConsent = true);
+      } else {
+        _navigateAfterSplash();
+      }
+    } catch (e) {
+      debugPrint('SplashScreen error: $e');
+      if (mounted) _doNavigate(false);
     }
   }
 
+  /// Read token from SharedPreferences (<10ms).
+  /// If logged in → warmup SQLite cache → navigate to home.
+  /// If not → navigate to login.
+  /// Network profile validation runs in background via auth.validateSession().
   Future<void> _navigateAfterSplash() async {
-    // Request permissions while waiting (non-blocking)
-    _requestPermissions();
+    if (_navigated) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+      final userId = prefs.getString('current_user_id');
+      final isLoggedIn = token != null &&
+          token.isNotEmpty &&
+          userId != null &&
+          userId.isNotEmpty;
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    final auth = context.read<AuthProvider>();
+      if (isLoggedIn) {
+        // 预热前必须设置 token，否则网络请求全部 403
+        ApiClient.setToken(token);
+        // DB 初始化 + 预热由 AuthNotifier._initDbAndCache() 统一触发，闪屏不重复做
+        LocalDbService().init(userId).catchError((_) {});
 
-    // If auth is already resolved, navigate immediately
-    if (!auth.isLoading || auth.user != null) {
-      _doNavigate(auth.isLoggedIn);
-      return;
-    }
-
-    // AuthProvider is still loading — listen for completion instead of polling
-    void onAuthChanged() {
-      if (!auth.isLoading) {
-        auth.removeListener(onAuthChanged);
-        if (mounted) {
-          _doNavigate(auth.isLoggedIn);
-        }
+        if (mounted) _doNavigate(true);
+      } else {
+        if (mounted) _doNavigate(false);
       }
+    } catch (e) {
+      debugPrint('SplashScreen._navigateAfterSplash error: $e');
+      if (mounted) _doNavigate(false);
     }
-    auth.addListener(onAuthChanged);
   }
 
   void _doNavigate(bool isLoggedIn) {
-    if (!mounted) return;
+    if (!mounted || _navigated) return;
+    _navigated = true;
+
+    // Trigger auth initialization now (reads cached user from prefs)
+    // so HomeScreen sees auth state on first build.
+    if (isLoggedIn) {
+      ref.read(authProvider);
+      Future.microtask(() {
+        ref.read(authProvider.notifier).validateSession();
+      });
+    }
+
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 500),
@@ -134,23 +151,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  void _requestPermissions() async {
-    // Request permissions here (non-blocking)
-    // For web, we don't need to request permissions
-    // For mobile, you would add:
-    // - Camera permission
-    // - Photo library permission
-    // - Notifications permission
-    // Using permission_handler package
-    try {
-      // Notification permissions would go here on mobile
-      // Camera permissions for image/video upload
-      // Photo library permissions
-    } catch (e) {
-      debugPrint('Permission request error: $e');
-    }
-  }
-
   @override
   void dispose() {
     _controller.dispose();
@@ -159,7 +159,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Show cookie consent if needed
+    // Cookie consent dialog
     if (_showCookieConsent) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showCookieConsentDialog(context);
@@ -174,8 +174,6 @@ class _SplashScreenState extends State<SplashScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-
-              // Animated X Logo
               FadeTransition(
                 opacity: _logoFadeAnimation,
                 child: ScaleTransition(
@@ -201,10 +199,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // App name text
               FadeTransition(
                 opacity: _textFadeAnimation,
                 child: const Text(
@@ -217,9 +212,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
               ),
-
               const SizedBox(height: 6),
-
               FadeTransition(
                 opacity: _textFadeAnimation,
                 child: const Text(
@@ -230,10 +223,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
               ),
-
               const Spacer(flex: 3),
-
-              // Loading progress bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 80),
                 child: Column(
@@ -244,7 +234,8 @@ class _SplashScreenState extends State<SplashScreen>
                         return LinearProgressIndicator(
                           value: _progressAnimation.value,
                           backgroundColor: AppColors.borderLight,
-                          valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.primary),
                           borderRadius: BorderRadius.circular(4),
                           minHeight: 3,
                         );
@@ -281,7 +272,6 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Drag handle
               const SizedBox(height: 12),
               Center(
                 child: Container(
@@ -294,7 +284,6 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              // Cookie icon
               Container(
                 width: 48,
                 height: 48,
@@ -302,24 +291,31 @@ class _SplashScreenState extends State<SplashScreen>
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.cookie_outlined, size: 26, color: AppColors.primary),
+                child: const Icon(Icons.cookie_outlined,
+                    size: 26, color: AppColors.primary),
               ),
               const SizedBox(height: 16),
               const Text(
                 'Cookie 偏好设置',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.3),
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.3),
               ),
               const SizedBox(height: 8),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 32),
                 child: Text(
-                  '我们使用 Cookie 和类似技术来改善您的体验，包括记住您的偏好设置、保障账户安全和服务分析。继续使用本应用即表示您同意我们使用 Cookie。',
+                  '我们使用 Cookie 和类似技术来改善您的体验。继续使用即表示您同意。',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.6),
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      height: 1.6),
                 ),
               ),
               const SizedBox(height: 28),
-              // Buttons
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
@@ -332,21 +328,28 @@ class _SplashScreenState extends State<SplashScreen>
                         backgroundColor: AppColors.textPrimary,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: const Text('接受全部', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      child: const Text('接受全部',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
                     const SizedBox(height: 10),
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
                       style: TextButton.styleFrom(
                         minimumSize: const Size(double.infinity, 44),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22)),
                       ),
                       child: const Text(
                         '查看隐私政策',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary),
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary),
                       ),
                     ),
                   ],
@@ -361,24 +364,16 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
     if (result == false) {
-      // User chose "查看隐私政策" - navigate to privacy policy
-      if (!mounted) return;
-      // ignore: use_build_context_synchronously
       Navigator.pushNamed(context, AppRoutes.privacyPolicy);
-      // Show consent again after returning
       final prefs = await SharedPreferences.getInstance();
       final hasConsent = prefs.getBool('cookie_consent') ?? false;
-      if (!hasConsent) {
-        // ignore: use_build_context_synchronously
+      if (!hasConsent && mounted) {
         _showCookieConsentDialog(context);
       }
     } else {
-        // User accepted - save consent
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('cookie_consent', true);
-        if (mounted) {
-          _navigateAfterSplash();
-        }
-      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('cookie_consent', true);
+      if (mounted) _navigateAfterSplash();
+    }
   }
 }

@@ -2,9 +2,10 @@ import 'dart:typed_data';
 
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
+import 'package:facebook_clone/data/emoji_data.dart';
 import 'package:facebook_clone/models/post.dart';
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/screens/home/home/feed_tab.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/api/post_service.dart';
@@ -13,18 +14,20 @@ import 'package:facebook_clone/widgets/mention_topic_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
+import 'package:video_compress_ohos/video_compress_ohos.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:video_thumbnail_ohos/video_thumbnail_ohos.dart';
 
 /// 发帖页面 — 支持 1-9 张图片、压缩、上传进度、草稿恢复
-class CreatePostScreen extends StatefulWidget {
+class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({super.key});
 
   @override
-  State<CreatePostScreen> createState() => _CreatePostScreenState();
+  ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
 }
 
-class _CreatePostScreenState extends State<CreatePostScreen> {
+class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ImagePicker _picker = ImagePicker();
@@ -36,6 +39,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   // 视频支持（单视频，与图片互斥）
   XFile? _selectedVideo;
   Uint8List? _videoBytes;
+  Uint8List? _thumbnailBytes; // 视频首帧封面
 
   bool _isSubmitting = false;
   double _uploadProgress = 0.0;
@@ -143,11 +147,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Future<void> _pickImages() async {
     try {
       final picked = await _picker.pickMultiImage(
-        limit: _maxImages,
         maxWidth: 1920,
         imageQuality: 92,
       );
-      if (picked.isEmpty) return;
+      if (picked == null || picked.isEmpty) return;
 
       final bytesList = <Uint8List>[];
       for (final file in picked) {
@@ -174,10 +177,42 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     try {
       final picked = await _picker.pickVideo(source: ImageSource.gallery);
       if (picked != null) {
-        final bytes = await picked.readAsBytes();
+        // 压缩视频（Web 兜底跳过）
+        XFile videoFile = picked;
+        try {
+          if (!kIsWeb) {
+            final compressedPath = await compressVideo(
+              inputPath: picked.path,
+              quality: 'high',
+              deleteOrigin: false,
+            );
+            if (compressedPath != null && compressedPath.isNotEmpty) {
+              videoFile = XFile(compressedPath);
+              debugPrint('Video compressed: ${picked.path} → $compressedPath');
+            }
+          }
+        } catch (e) {
+          debugPrint('Video compression failed, using original: $e');
+        }
+
+        final bytes = await videoFile.readAsBytes();
+        // 提取首帧作为封面缩略图（320×320 JPEG 75%）
+        Uint8List? thumbnail;
+        try {
+          thumbnail = await extractThumbnail(
+            videoPath: videoFile.path,
+            maxWidth: 320,
+            maxHeight: 320,
+            quality: 75,
+            positionMs: 500, // 取 0.5s 帧，跳过黑屏片头
+          );
+        } catch (e) {
+          debugPrint('Thumbnail extraction failed: $e');
+        }
         setState(() {
-          _selectedVideo = picked;
+          _selectedVideo = videoFile;
           _videoBytes = bytes;
+          _thumbnailBytes = thumbnail;
           _selectedImages.clear();
           _imageBytesList.clear();
         });
@@ -200,6 +235,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _imageBytesList.clear();
       _selectedVideo = null;
       _videoBytes = null;
+      _thumbnailBytes = null;
     });
   }
 
@@ -210,7 +246,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       return;
     }
 
-    final auth = context.read<AuthProvider>();
+    final auth = ref.read(authProvider);
     final currentUser = auth.user;
     if (currentUser == null) {
       setState(() => _error = '请先登录');
@@ -271,7 +307,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         }
       }
 
-      // 2. 上传视频
+      // 2. 上传视频 + 缩略图
+      String? thumbnailUrl;
       if (_selectedVideo != null && _videoBytes != null) {
         setState(() => _uploadProgress = 0);
         final uploadResp = await ApiClient().uploadBytes(
@@ -296,6 +333,23 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         }
         videoUrl = _extractUrl(uploadResp.data);
         setState(() => _uploadedCount++);
+
+        // 上传视频封面缩略图
+        if (_thumbnailBytes != null && _thumbnailBytes!.isNotEmpty) {
+          try {
+            final thumbResp = await ApiClient().uploadBytes(
+              '/upload/post/image',
+              _thumbnailBytes!,
+              'thumb_${DateTime.now().millisecondsSinceEpoch}.jpg',
+            );
+            if (thumbResp.success) {
+              thumbnailUrl = _extractUrl(thumbResp.data);
+            }
+          } catch (e) {
+            debugPrint('Thumbnail upload failed: $e');
+            // 缩略图上传失败不阻塞发帖
+          }
+        }
       }
 
       // 3. 创建帖子
@@ -303,6 +357,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         content: content,
         imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
         videoPath: videoUrl,
+        thumbnailUrl: thumbnailUrl,
       );
 
       if (resp.success) {
@@ -323,6 +378,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               id: -DateTime.now().millisecondsSinceEpoch,
               content: content,
               videoUrl: videoUrl,
+              thumbnailUrl: thumbnailUrl,
               userId: currentUser.id,
               user: currentUser,
               likeCount: 0,
@@ -496,6 +552,65 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
+  // ========== 话题选择器 ==========
+
+  void _showTopicPicker() {
+    // 先取消焦点，让键盘收起
+    _focusNode.unfocus();
+    // 记录当前光标位置
+    final cursorPos = _controller.selection.baseOffset;
+    final textBefore = _controller.text;
+
+    MentionTopicPicker.showTopics(
+      context,
+      onSelected: (topicName) {
+        final text = _controller.text;
+        final pos = _controller.selection.baseOffset;
+        if (pos < 0) {
+          _controller.text = '$text#$topicName ';
+          _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+        } else {
+          _controller.text = '${text.substring(0, pos)}#$topicName ${text.substring(pos)}';
+          _controller.selection = TextSelection.collapsed(offset: pos + '#$topicName '.length);
+        }
+        _focusNode.requestFocus();
+      },
+      onCancel: (searchText) {
+        // 取消弹窗时，将输入框内容插入到帖子中
+        if (searchText.isNotEmpty) {
+          _controller.text = '${textBefore.substring(0, cursorPos < 0 ? textBefore.length : cursorPos)}#${searchText.trim()}${cursorPos < 0 ? '' : textBefore.substring(cursorPos)}';
+          _controller.selection = TextSelection.collapsed(
+            offset: (cursorPos < 0 ? textBefore.length : cursorPos) + '#${searchText.trim()}'.length,
+          );
+        }
+        _focusNode.requestFocus();
+      },
+    );
+  }
+
+  // ========== @用户选择器 ==========
+
+  void _showMentionPicker() {
+    _focusNode.unfocus();
+
+    MentionTopicPicker.showMentions(
+      context,
+      onSelected: (username) {
+        final text = _controller.text;
+        final pos = _controller.selection.baseOffset;
+        if (pos < 0) {
+          _controller.text = '$text@$username ';
+          _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+        } else {
+          _controller.text = '${text.substring(0, pos)}@$username ${text.substring(pos)}';
+          _controller.selection = TextSelection.collapsed(offset: pos + '@$username '.length);
+        }
+        _focusNode.requestFocus();
+      },
+    );
+    // @用户取消弹窗时不做任何插入
+  }
+
   // ========== 视频预览 ==========
 
   Widget _buildVideoPreview() {
@@ -543,7 +658,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final auth = ref.watch(authProvider);
     final user = auth.user;
     final hasContent = _controller.text.trim().isNotEmpty ||
         _selectedImages.isNotEmpty ||
@@ -673,10 +788,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               ),
             ),
           ),
-          MentionTopicPicker(
-            controller: _controller,
-            focusNode: _focusNode,
-          ),
           // Bottom toolbar — horizontally scrollable
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -702,29 +813,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   _ToolbarButton(
                     icon: Icons.alternate_email,
                     label: '@好友',
-                    onTap: () {
-                      final text = _controller.text;
-                      final pos = _controller.selection.baseOffset;
-                      if (pos < 0) return;
-                      _controller.text =
-                          '${text.substring(0, pos)}@${text.substring(pos)}';
-                      _controller.selection = TextSelection.collapsed(offset: pos + 1);
-                      _focusNode.requestFocus();
-                    },
+                    onTap: _showMentionPicker,
                   ),
                   const SizedBox(width: 4),
                   _ToolbarButton(
                     icon: Icons.tag,
                     label: '#话题',
-                    onTap: () {
-                      final text = _controller.text;
-                      final pos = _controller.selection.baseOffset;
-                      if (pos < 0) return;
-                      _controller.text =
-                          '${text.substring(0, pos)}#${text.substring(pos)}';
-                      _controller.selection = TextSelection.collapsed(offset: pos + 1);
-                      _focusNode.requestFocus();
-                    },
+                    onTap: _showTopicPicker,
                   ),
                   const SizedBox(width: 4),
                   _ToolbarButton(
@@ -827,26 +922,13 @@ class _EmojiPickerPanel extends StatelessWidget {
 
   const _EmojiPickerPanel({required this.onEmojiSelected});
 
-  static const _emojis = [
-    // Smileys & Emotion
-    '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊',
-    '😇', '🙂', '😉', '😌', '😍', '🥰', '😘', '😗',
-    '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭',
-    '🤔', '🤐', '😐', '😑', '😶', '😏', '😒', '🙄',
-    '😬', '🤥', '😪', '😴', '🤤', '😷', '🤒', '🤕',
-    '🤢', '🤮', '🥴', '😵', '🤯', '🥳', '😎', '🤓',
-    // Gestures & People
-    '👍', '👎', '👏', '🙌', '🤝', '💪', '✌️', '🤞',
-    '👋', '🤚', '🖐️', '✋', '👉', '👈', '👇', '🖖',
-    '🙏', '💅', '🤳', '🙆', '🙅', '💁', '🤷', '🙋',
-    // Hearts & Symbols
-    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍',
-    '💔', '💕', '💖', '💗', '💓', '💝', '💘', '💌',
-    '🔥', '⭐', '✨', '💯', '✅', '❌', '💫', '💥',
-    // Misc
-    '🎉', '🎊', '🎂', '🍰', '☕', '🍺', '🎵', '🎶',
-    '🌈', '☀️', '🌙', '⚡', '💧', '🌊', '🌸', '🌺',
-    '🐱', '🐶', '🐼', '🦊', '🐰', '🐨', '🐸', '🦄',
+  static const _emojis = <String>[
+    ...EmojiData.faces,
+    ...EmojiData.hearts,
+    ...EmojiData.gestures,
+    ...EmojiData.nature,
+    ...EmojiData.food,
+    ...EmojiData.objects,
   ];
 
   @override

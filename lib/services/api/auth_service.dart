@@ -16,7 +16,7 @@ class AuthService {
   }
 
   Future<ApiResponse> getProfile() {
-    return _api.get('/auth/profile');
+    return _api.getDeduped('/auth/profile');
   }
 
   Future<ApiResponse> refreshToken() {
@@ -38,7 +38,7 @@ class AuthService {
   }
 
   Future<ApiResponse> getUser(int userId) {
-    return _api.get('/auth/users/$userId');
+    return _api.getDeduped('/auth/users/$userId');
   }
 
   /// Permanently delete the authenticated user's account (GDPR "Right to be Forgotten").
@@ -63,7 +63,7 @@ class AuthService {
   }
 
   /// Get privacy settings
-  Future<ApiResponse> getPrivacy() => _api.get('/auth/privacy');
+  Future<ApiResponse> getPrivacy() => _api.getDeduped('/auth/privacy');
 
   /// Update privacy settings
   Future<ApiResponse> updatePrivacy(Map<String, dynamic> data) =>

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// App-wide page transition animations
@@ -7,23 +8,27 @@ class AppTransitions {
   /// Standard page push with slide + fade
   static PageRouteBuilder slide({
     required Widget page,
-    Duration duration = const Duration(milliseconds: 300),
-    Offset begin = const Offset(1.0, 0.0),
+    Duration duration = const Duration(milliseconds: 280),
+    Offset begin = const Offset(0.12, 0.0),
   }) {
     return PageRouteBuilder(
       transitionDuration: duration,
       reverseTransitionDuration: duration,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final tween = Tween(begin: begin, end: Offset.zero).chain(
-          CurveTween(curve: Curves.easeOutCubic),
-        );
-        return SlideTransition(
-          position: animation.drive(tween),
-          child: FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        // single AnimatedBuilder wrapping both transitions — one rebuild per tick
+        return AnimatedBuilder(
+          animation: curved,
+          builder: (context, _) {
+            return Transform.translate(
+              offset: Offset((1.0 - curved.value) * 48, 0),
+              child: Opacity(
+                opacity: curved.value,
+                child: child,
+              ),
+            );
+          },
         );
       },
     );
@@ -32,7 +37,7 @@ class AppTransitions {
   /// Bottom sheet style (slide up)
   static PageRouteBuilder bottomSheet({
     required Widget page,
-    Duration duration = const Duration(milliseconds: 350),
+    Duration duration = const Duration(milliseconds: 320),
   }) {
     return PageRouteBuilder(
       transitionDuration: duration,
@@ -40,21 +45,24 @@ class AppTransitions {
       opaque: true,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final tween = Tween(begin: const Offset(0.0, 1.0), end: Offset.zero).chain(
-          CurveTween(curve: Curves.easeOutCubic),
-        );
-        return SlideTransition(
-          position: animation.drive(tween),
-          child: child,
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        return AnimatedBuilder(
+          animation: curved,
+          builder: (context, _) {
+            return Transform.translate(
+              offset: Offset(0, (1.0 - curved.value) * 60),
+              child: child,
+            );
+          },
         );
       },
     );
   }
 
-  /// Fade in/out
+  /// Fade with slight scale (gentle pop-in)
   static PageRouteBuilder fade({
     required Widget page,
-    Duration duration = const Duration(milliseconds: 250),
+    Duration duration = const Duration(milliseconds: 200),
   }) {
     return PageRouteBuilder(
       transitionDuration: duration,
@@ -67,105 +75,54 @@ class AppTransitions {
     );
   }
 
-  /// Scale + fade (for modals / dialogs)
-  static PageRouteBuilder scale({
-    required Widget page,
-    Duration duration = const Duration(milliseconds: 250),
-  }) {
-    return PageRouteBuilder(
-      transitionDuration: duration,
-      reverseTransitionDuration: duration,
-      opaque: false,
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return ScaleTransition(
-          scale: Tween(begin: 0.85, end: 1.0).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-          ),
-          child: FadeTransition(opacity: animation, child: child),
-        );
-      },
-    );
-  }
+  static Future<T?> push<T>(BuildContext context, Widget page) =>
+      Navigator.push<T>(context, slide(page: page) as Route<T>);
 
-  /// Push a named route with standard slide transition
-  static Future<T?> push<T>(BuildContext context, Widget page) {
-    return Navigator.push<T>(context, slide(page: page) as Route<T>);
-  }
+  static Future<T?> pushBottom<T>(BuildContext context, Widget page) =>
+      Navigator.push<T>(context, bottomSheet(page: page) as Route<T>);
 
-  /// Push a bottom-sheet style route
-  static Future<T?> pushBottom<T>(BuildContext context, Widget page) {
-    return Navigator.push<T>(context, bottomSheet(page: page) as Route<T>);
-  }
-
-  /// Push a fade route
-  static Future<T?> pushFade<T>(BuildContext context, Widget page) {
-    return Navigator.push<T>(context, fade(page: page) as Route<T>);
-  }
+  static Future<T?> pushFade<T>(BuildContext context, Widget page) =>
+      Navigator.push<T>(context, fade(page: page) as Route<T>);
 }
 
-/// Utility widget for staggered list animation
-class StaggeredAnimation extends StatefulWidget {
+/// Lightweight staggered fade-in using ImplicitlyAnimatedWidget — no per-item AnimationController.
+class StaggeredWidget extends StatefulWidget {
   final Widget child;
   final int index;
-  final Duration delay;
+  final int delayMs;
 
-  const StaggeredAnimation({
+  const StaggeredWidget({
     super.key,
     required this.child,
     this.index = 0,
-    this.delay = const Duration(milliseconds: 50),
+    this.delayMs = 50,
   });
 
   @override
-  State<StaggeredAnimation> createState() => _StaggeredAnimationState();
+  State<StaggeredWidget> createState() => _StaggeredWidgetState();
 }
 
-class _StaggeredAnimationState extends State<StaggeredAnimation>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
+class _StaggeredWidgetState extends State<StaggeredWidget> {
+  bool _visible = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
-
-    // Stagger based on index
-    Future.delayed(Duration(milliseconds: widget.index * widget.delay.inMilliseconds), () {
-      if (mounted) _controller.forward();
+    Future.delayed(Duration(milliseconds: widget.index * widget.delayMs), () {
+      if (mounted) setState(() => _visible = true);
     });
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
+    return AnimatedOpacity(
+      opacity: _visible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+      child: AnimatedSlide(
+        offset: _visible ? Offset.zero : const Offset(0, 0.04),
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
         child: widget.child,
       ),
     );
@@ -203,8 +160,11 @@ class AnimatedCounter extends StatelessWidget {
 /// IntTween for animating integer values
 class IntTween extends Tween<int> {
   IntTween({super.begin, super.end});
-
   @override
   int lerp(double t) => (begin! + (end! - begin!) * t).round();
 }
+
+// Backward-compatible alias
+@Deprecated('Use StaggeredWidget instead')
+typedef StaggeredAnimation = StaggeredWidget;
 

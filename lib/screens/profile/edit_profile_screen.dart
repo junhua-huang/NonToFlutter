@@ -4,26 +4,27 @@ import 'package:cross_file/cross_file.dart';
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_provider.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/screens/profile/image_crop_screen.dart';
 import 'package:facebook_clone/services/api/auth_service.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/api/upload_service.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// 个人资料编辑页面（头像/背景/简介）
 ///
 /// 头像和背景图选择后本地暂存，点击"保存"按钮时统一上传。
-class EditProfileScreen extends StatefulWidget {
+class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
   @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
+  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
+class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _bioController;
   bool _isLoading = false;
@@ -42,7 +43,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final user = context.read<AuthProvider>().user;
+    final user = ref.read(authProvider).user;
     _bioController = TextEditingController(text: user?.bio ?? '');
   }
 
@@ -63,7 +64,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
-      final auth = context.read<AuthProvider>();
+      final auth = ref.read(authProvider);
       var user = auth.user;
 
       // 上传头像（如有本地暂存）
@@ -81,7 +82,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           final url = data['avatar_url'] ?? data['url'];
           if (url != null) {
             user = user.copyWith(avatarUrl: url);
-            auth.updateUser(user);
+            ref.read(authProvider.notifier).updateUser(user);
+            _writeUserToCache(user);
           }
         } else {
           throw Exception(resp.message ?? '头像上传失败');
@@ -103,26 +105,44 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           final url = data['cover_photo_url'] ?? data['url'];
           if (url != null) {
             user = user.copyWith(coverPhotoUrl: url);
-            auth.updateUser(user);
+            ref.read(authProvider.notifier).updateUser(user);
+            _writeUserToCache(user);
           }
         } else {
           throw Exception(resp.message ?? '背景图上传失败');
         }
       }
 
-      // 更新简介
-      final bioResp = await AuthService().updateProfile({
-        'bio': _bioController.text.trim(),
-      });
-      if (bioResp.success && mounted) {
-        final currentUser = auth.user;
-        if (currentUser != null) {
-          auth.updateUser(currentUser.copyWith(bio: _bioController.text.trim()));
+      // 更新简介 — 乐观写入 L2+L1 先于网络
+      final currentUser = auth.user;
+      if (currentUser != null) {
+        final originalBio = currentUser.bio;
+        final optimistic = currentUser.copyWith(bio: _bioController.text.trim());
+        ref.read(authProvider.notifier).updateUser(optimistic);
+        _writeUserToCache(optimistic); // L2 + L1 乐观写入
+        try {
+          final bioResp = await AuthService().updateProfile({
+            'bio': _bioController.text.trim(),
+          });
+          if (!mounted) return;
+          if (bioResp.success) {
+            Navigator.of(context).pop(true);
+          } else {
+            // 失败回滚
+            final rolled = optimistic.copyWith(bio: originalBio);
+            ref.read(authProvider.notifier).updateUser(rolled);
+            _writeUserToCache(rolled);
+            setState(() => _error = bioResp.message ?? '简介更新失败');
+            setState(() => _isLoading = false);
+          }
+        } catch (e) {
+          if (mounted) {
+            final rolled = optimistic.copyWith(bio: originalBio);
+            ref.read(authProvider.notifier).updateUser(rolled);
+            _writeUserToCache(rolled);
+            setState(() { _error = '保存失败: $e'; _isLoading = false; });
+          }
         }
-        Navigator.of(context).pop(true);
-      } else if (bioResp.message != null) {
-        setState(() => _error = bioResp.message);
-        setState(() => _isLoading = false);
       }
     } catch (e) {
       if (mounted) {
@@ -132,6 +152,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         });
       }
     }
+  }
+
+  /// 将用户数据写入 DataLayer L1，供 splash 预热和 profile_tab 首屏读取
+  void _writeUserToCache(User user) {
+    DataLayer().write('user:${user.id}:profile', user.toJson());
   }
 
   // ─── 修改头像（仅本地裁剪 + 暂存） ─────────────────────────
@@ -234,7 +259,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().user;
+    final user = ref.watch(authProvider).user;
 
     return Scaffold(
       backgroundColor: AppColors.background,

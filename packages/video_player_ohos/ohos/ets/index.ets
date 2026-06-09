@@ -1,0 +1,1 @@
+export { VideoPlayerOhosPlugin } from './plugin/VideoPlayerOhosPlugin';

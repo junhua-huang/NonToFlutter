@@ -35,27 +35,94 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   dio: ^5.9.2
+  logging: ^1.2.0
+  
+  # ── 存储（三端均已适配） ──
   shared_preferences: ^2.5.5
-  flutter_secure_storage: ^10.0.0
-  provider: ^6.1.5+1
-  image_picker: ^1.2.0   # Non-critical for first paint — used in profile/camera flows
-  image_cropper: ^8.0.2  # Non-critical for first paint — used in profile editing
+  shared_preferences_harmonyos: ^0.0.1       # 鸿蒙端实现
+  
+  # ── 状态管理（纯 Dart） ──
+  flutter_riverpod: ^2.6.1
+  
+  # ── 图片选择（三端均已适配） ──
+  image_picker: ^1.2.0
   cross_file: ^0.3.0
   cached_network_image: ^3.4.1
-  # socket_io_client removed — unused; web_socket_channel handles all WebSocket needs
-  photo_view: ^0.15.0  # Non-critical for first paint — only needed on image detail screen
+  visibility_detector: ^0.4.0+2
+  photo_view: ^0.15.0
   web_socket_channel: ^3.0.3
   shimmer: ^3.0.0
   pull_to_refresh_flutter3: ^2.0.2
   flutter_svg: ^2.2.4
   intl: ^0.20.2
-  video_player: ^2.9.3   # Non-critical for first paint — used in feed video playback
-  video_thumbnail: ^0.5.3  # Extract video first-frame thumbnails
-  sqflite: ^2.4.2
+  
+  # ── Web 端视频回退（HTML5 <video>，media_kit 不支持 Web） ──
+  video_player: ^2.9.3
+
+  # ── 数据库（三端均已适配） ──
+  drift: ^2.21.0
+  sqlite3_flutter_libs: ^0.5.0
+  
+  # ── 网络状态（三端均已适配） ──
+  connectivity_plus: ^7.1.1
+  connectivity_plus_harmonyos: ^0.0.1       # 鸿蒙端实现
+  
+  # ── 本地包 ──
+  reliable_websocket:
+    path: packages/reliable_websocket
+  
+  # ── 自建鸿蒙插件（跨端统一接口） ──
+  video_player_ohos:
+    path: packages/video_player_ohos
+  video_thumbnail_ohos:
+    path: packages/video_thumbnail_ohos
+  video_compress_ohos:
+    path: packages/video_compress_ohos
+  share_plus_ohos:
+    path: packages/share_plus_ohos
+  image_cropper_plus:
+    path: packages/image_cropper_plus
+
+dependency_overrides:
+  # ── 鸿蒙适配版（基于上游源码 + 鸿蒙端实现，iOS/Android 行为不变） ──
   path: ^1.9.1
-  share_plus: ^10.1.4
   google_fonts: ^6.2.1
-  audioplayers: ^6.1.0
+
+  # ── 版本冲突解决 ──
+  uuid: ^4.5.1
+  http: ^1.2.0
+  file: ^7.0.0
+  
+  path_provider:
+    git:
+      url: https://gitcode.com/openharmony-tpc/flutter_packages.git
+      path: packages/path_provider/path_provider
+      ref: master
+
+  image_picker:
+    git:
+      url: https://gitcode.com/openharmony-tpc/flutter_packages.git
+      path: packages/image_picker/image_picker
+      ref: master
+  
+  audioplayers:
+    git:
+      url: https://gitcode.com/openharmony-sig/flutter_audioplayers.git
+      path: packages/audioplayers
+  
+  sqlite3:
+    git:
+      url: https://atomgit.com/tech-ming/sqlite3-ohos.dart.git
+      path: sqlite3
+      ref: main
+  sqlite3_flutter_libs:
+    git:
+      url: https://atomgit.com/tech-ming/sqlite3-ohos.dart.git
+      path: sqlite3_flutter_libs
+      ref: main
+  
+  flutter_social_video:
+    path: D:/flutter_social_video
 
 dev_dependencies:
   flutter_test:
@@ -64,7 +131,7 @@ dev_dependencies:
     sdk: flutter
   mockito: ^5.4.0
   build_runner: ^2.4.0
-  sqflite_common_ffi: ^2.3.0
+  drift_dev: ^2.21.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
