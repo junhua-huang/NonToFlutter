@@ -35,7 +35,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
     if (!mounted) return;
     if (success) {
-      // 登录成功，跳转到首页
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
@@ -51,41 +50,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
             child: Form(
               key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 40),
-                  // Logo
-                  Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.circular(20),
+                  // Twitter-style: big centered logo
+                  Center(
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text('N',
+                          style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white)),
                     ),
-                    child: const Icon(Icons.facebook, size: 50, color: Colors.white),
                   ),
-                  const SizedBox(height: 16),
-                  Text('nonto', textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                  const SizedBox(height: 8),
-                  Text('连接你的朋友和世界', textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 40),
+
+                  // Title
+                  const Text(
+                    '登录 NonTo',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F1419),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
 
                   // Email
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: '邮箱', prefixIcon: Icon(Icons.email_outlined),
+                    style: const TextStyle(fontSize: 16, color: Color(0xFF0F1419)),
+                    decoration: InputDecoration(
+                      hintText: '邮箱',
+                      hintStyle: TextStyle(color: Color(0xFF536471)),
+                      filled: true,
+                      fillColor: const Color(0xFFEFF3F4),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                            color: AppColors.primary, width: 2),
+                      ),
                     ),
                     validator: (v) => v?.isEmpty ?? true ? '请输入邮箱' : null,
                   ),
@@ -95,78 +124,150 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
+                    style: const TextStyle(fontSize: 16, color: Color(0xFF0F1419)),
                     decoration: InputDecoration(
-                      labelText: '密码', prefixIcon: const Icon(Icons.lock_outline),
+                      hintText: '密码',
+                      hintStyle: const TextStyle(color: Color(0xFF536471)),
+                      filled: true,
+                      fillColor: const Color(0xFFEFF3F4),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                            color: AppColors.primary, width: 2),
+                      ),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: const Color(0xFF536471),
+                          size: 20,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscurePassword = !_obscurePassword),
                       ),
                     ),
-                    validator: (v) => (v?.isEmpty ?? true) ? '请输入密码' : null,
+                    validator: (v) =>
+                        (v?.isEmpty ?? true) ? '请输入密码' : null,
                   ),
                   const SizedBox(height: 8),
-                  Align(alignment: Alignment.centerRight,
-                    child: TextButton(onPressed: () {
-                      Navigator.pushNamed(context, '/forgot_password');
-                    },
-                      child: const Text('忘记密码？', style: TextStyle(fontSize: 13)))),
+
+                  // Forgot password
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/forgot_password'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('忘记密码？',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    ),
+                  ),
                   const SizedBox(height: 16),
 
-                  // Login Button
-                  Builder(
-                    builder: (_) {
-                      final authState = ref.watch(authProvider);
-                      return ElevatedButton(
-                        onPressed: authState.isLoading ? null : _login,
-                        child: authState.isLoading
-                            ? const SizedBox(height: 20, width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('登录', style: TextStyle(fontSize: 16)),
-                      );
-                    },
+                  // Login Button — full width, rounded, bold
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: authState.isLoading ? null : _login,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor:
+                            AppColors.primary.withValues(alpha: 0.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: authState.isLoading
+                          ? const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('登录',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w700)),
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
-                  // 隐私声明 (登录不需要勾选)
+                  // Terms
                   RichText(
                     textAlign: TextAlign.center,
                     text: TextSpan(
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF536471),
+                          height: 1.4),
                       children: [
                         const TextSpan(text: '登录即表示您同意我们的'),
                         WidgetSpan(
                           child: GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, AppRoutes.termsOfService),
+                            onTap: () => Navigator.pushNamed(
+                                context, AppRoutes.termsOfService),
                             child: const Text(
                               '《用户协议》',
-                              style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
                         const TextSpan(text: '和'),
                         WidgetSpan(
                           child: GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, AppRoutes.privacyPolicy),
+                            onTap: () => Navigator.pushNamed(
+                                context, AppRoutes.privacyPolicy),
                             child: const Text(
                               '《隐私政策》',
-                              style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 32),
 
-                  // Register Link
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Text('还没有账号？', style: TextStyle(color: Colors.grey[600])),
-                    TextButton(
-                      onPressed: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const RegisterScreen())),
-                      child: const Text('注册', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ]),
+                  // Register
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('还没有账号？',
+                          style: TextStyle(
+                              color: Color(0xFF536471), fontSize: 14)),
+                      TextButton(
+                        onPressed: () => Navigator.push(context,
+                            MaterialPageRoute(
+                                builder: (_) => const RegisterScreen())),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        ),
+                        child: const Text('注册',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

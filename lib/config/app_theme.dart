@@ -7,6 +7,8 @@ class AppColors {
   // 主色调
   static const Color primary = Color(0xFF1D9BF0);
 
+  static const Color primaryBlack = Color(0xFF0F1419);
+
   // 文本颜色
   static const Color textPrimary = Color(0xFF0F1419);
   static const Color textSecondary = Color(0xFF536471);

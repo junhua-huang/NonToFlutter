@@ -2,12 +2,14 @@ import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/providers/auth_state.dart';
+import 'package:facebook_clone/providers/theme_notifier.dart';
 import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/screens/auth/login_screen.dart';
 import 'package:facebook_clone/services/api/auth_service.dart';
 import 'package:facebook_clone/services/api/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // ═══════════════════════════════════════════════════════════════
 // 共享 UI 构建方法
 // ═══════════════════════════════════════════════════════════════
@@ -47,17 +49,17 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  static const _prefPush = 'pref_push_notifications';
+  static const _prefMessage = 'pref_message_alerts';
+  static const _prefSound = 'pref_sound_enabled';
+
   // 通知设置
   bool _pushNotifications = false;
   bool _messageAlerts = false;
   bool _soundEnabled = false;
   bool _isNotifSettingsLoaded = false;
-  // 通用设置
-  double _fontSize = 1.0; // 1.0 = 100%
   // 账号注销加载状态
   bool _isDeleting = false;
-  // 深色模式（本地状态，未来可升级为持久化Riverpod Provider）
-  bool _isDark = false;
   final AuthService _authService = AuthService();
   @override
   void initState() {
@@ -75,16 +77,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _soundEnabled = data['sound_enabled'] == true;
           _isNotifSettingsLoaded = true;
         });
+        _persistToPrefs();
       } else {
-        if (mounted) setState(() => _isNotifSettingsLoaded = true);
+        _loadFromPrefs();
       }
     } catch (e) {
       debugPrint('Failed to load notification settings: $e');
-      if (mounted) setState(() => _isNotifSettingsLoaded = true);
+      _loadFromPrefs();
     }
+  }
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _pushNotifications = prefs.getBool(_prefPush) ?? false;
+      _messageAlerts = prefs.getBool(_prefMessage) ?? false;
+      _soundEnabled = prefs.getBool(_prefSound) ?? false;
+      _isNotifSettingsLoaded = true;
+    });
+  }
+
+  Future<void> _persistToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefPush, _pushNotifications);
+    await prefs.setBool(_prefMessage, _messageAlerts);
+    await prefs.setBool(_prefSound, _soundEnabled);
   }
   Future<void> _updateNotificationSetting(String key, bool value) async {
     if (!_isNotifSettingsLoaded) return;
+    // 同时持久化到本地和 API
+    final prefs = await SharedPreferences.getInstance();
+    switch (key) {
+      case 'push_notifications': await prefs.setBool(_prefPush, value); break;
+      case 'message_alerts': await prefs.setBool(_prefMessage, value); break;
+      case 'sound_enabled': await prefs.setBool(_prefSound, value); break;
+    }
     try {
       await NotificationService().updateSettings({key: value});
     } catch (e) {
@@ -94,6 +121,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -178,33 +206,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _buildSettingsSection('通用', [
             _buildSwitchTile(
               title: '深色模式',
-              icon: _isDark ? Icons.dark_mode : Icons.light_mode,
-              value: _isDark,
-              onChanged: (v) => setState(() => _isDark = v),
-            ),
-            _buildSettingsDivider(),
-            _buildListTile(
-              title: '语言设置',
-              icon: Icons.language,
-              trailing: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('简体中文', style: TextStyle(color: AppColors.textSecondary)),
-                  SizedBox(width: 4),
-                  Icon(Icons.chevron_right, size: 20),
-                ],
-              ),
-              onTap: () => _showLanguageDialog(context),
-            ),
-            _buildSettingsDivider(),
-            _buildSliderTile(
-              title: '字体大小',
-              icon: Icons.format_size,
-              value: _fontSize,
-              min: 0.8,
-              max: 1.5,
-              divisions: 7,
-              onChanged: (v) => setState(() => _fontSize = v),
+              icon: isDark ? Icons.dark_mode : Icons.light_mode,
+              value: isDark,
+              onChanged: (_) => ref.read(themeProvider.notifier).toggleTheme(),
             ),
           ]),
           const SizedBox(height: 24),
@@ -310,42 +314,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       minLeadingWidth: 32,
     );
   }
-  Widget _buildSliderTile({
-    required String title,
-    required IconData icon,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Column(
-      children: [
-        ListTile(
-          leading: Icon(icon, color: AppColors.textPrimary),
-          title: Text(title, style: const TextStyle(fontSize: 16)),
-          trailing: Text(
-            '${(value * 100).round()}%',
-            style: const TextStyle(color: AppColors.textSecondary),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-          minLeadingWidth: 32,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-            activeColor: AppColors.primary,
-            inactiveColor: AppColors.borderLight,
-          ),
-        ),
-      ],
-    );
-  }
   // 修改密码对话框
   Future<void> _showChangePasswordDialog(BuildContext context) async {
     final oldPasswordController = TextEditingController();
@@ -354,7 +322,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('修改密码'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('修改密码',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -391,7 +361,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('取消'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () async {
               if (newPasswordController.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -443,11 +413,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
                   SizedBox(width: 8),
-                  Text('账号注销', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                  Text('账号注销', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600, fontSize: 17)),
                 ],
               ),
               content: _isDeleting
@@ -457,16 +428,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     )
                   : const Text(
                       '此操作将永久删除您的账号、所有帖子、评论和私信。此操作不可撤销。',
-                      style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
+                      style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
                     ),
               actions: _isDeleting
                   ? null
                   : [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('我再想想', style: TextStyle(color: Colors.grey)),
+                        child: const Text('我再想想',
+                            style: TextStyle(color: AppColors.textSecondary)),
                       ),
-                      ElevatedButton(
+                      TextButton(
                         onPressed: () async {
                           setDialogState(() => _isDeleting = true);
                           final result = await _authService.deleteAccount();
@@ -496,10 +468,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             }
                           }
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                        ),
+                        style: TextButton.styleFrom(foregroundColor: Colors.red),
                         child: const Text('确认注销'),
                       ),
                     ],
@@ -509,35 +478,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       },
     );
   }
-  // 语言设置
-  void _showLanguageDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('语言设置'),
-        content: const Text('语言设置功能正在开发中，当前仅支持简体中文。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
   // 退出登录确认
   void _showLogoutConfirmation(BuildContext context, AuthState authState) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('退出登录'),
-        content: const Text('确定要退出登录吗？'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('退出登录',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: const Text('确定要退出登录吗？',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('取消'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () async {
               await ref.read(authProvider.notifier).logout();
               if (context.mounted) {
@@ -548,6 +504,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
               }
             },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('确认退出'),
           ),
         ],

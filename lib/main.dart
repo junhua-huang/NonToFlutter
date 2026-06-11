@@ -5,6 +5,7 @@ import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/providers/theme_notifier.dart';
 import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/routes/route_generator.dart';
+import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/sound_service.dart';
 import 'package:facebook_clone/services/connectivity_service.dart';
 import 'package:facebook_clone/services/web_utils.dart'
@@ -101,6 +102,7 @@ class FacebookCloneApp extends ConsumerWidget {
 
           return MaterialApp(
             title: 'nonto',
+            navigatorKey: ApiClient.navigatorKey,
             debugShowCheckedModeBanner: false,
             builder: (context, child) {
               return Column(
@@ -193,6 +195,22 @@ class FacebookCloneApp extends ConsumerWidget {
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           ),
+          snackBarTheme: SnackBarThemeData(
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          dialogTheme: DialogThemeData(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            titleTextStyle: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
         ),
         darkTheme: ThemeData(
           platform: TargetPlatform.iOS,
@@ -268,6 +286,22 @@ class FacebookCloneApp extends ConsumerWidget {
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          ),
+          snackBarTheme: SnackBarThemeData(
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          dialogTheme: DialogThemeData(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            titleTextStyle: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
         ),
         themeMode: themeMode,

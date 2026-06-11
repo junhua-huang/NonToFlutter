@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:facebook_clone/models/user.dart';
 import 'package:facebook_clone/providers/auth_state.dart';
+import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/api/auth_service.dart';
 import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/app_warmup.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
+import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +32,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       debugPrint('[AuthNotifier] WS auth expired: $reason — clearing session');
       _clearSession();
     });
+    // 监听 HTTP 401 刷新失败事件（token 完全失效）
+    ApiClient.onTokenExpired = () {
+      debugPrint('[AuthNotifier] HTTP token refresh failed — logging out');
+      _clearSession();
+    };
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -47,6 +54,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
 
+      ApiClient.printToken('SharedPreferences (持久层恢复)', token);
       ApiClient.setToken(token);
 
       final userIdStr = _prefs.getString('current_user_id');
@@ -80,7 +88,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       try {
         await DataLayer().initDb(userIdStr);
         DataLayer().write('user:$userIdStr:profile', userJson);
-        AppWarmup.warmup(userIdStr);
       } catch (_) {}
     }();
   }
@@ -179,6 +186,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (token == null || token.isEmpty) return false;
 
         final user = _extractUser(data);
+        ApiClient.printToken('HTTP POST /auth/refresh (AuthNotifier 刷新)', token);
         state = state.copyWith(token: token, user: user, clearError: true);
         await _prefs.setString('access_token', token);
         ApiClient.setToken(token);
@@ -204,6 +212,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _prefs.remove('access_token');
     await _prefs.remove('current_user_id');
     await _prefs.remove('current_user_json');
+    // 跳转登录页
+    ApiClient.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (_) => false,
+    );
   }
 
   Future<void> _saveUserToPrefs(User user) async {
@@ -229,6 +242,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
 
         User? user = _extractUser(data);
+        ApiClient.printToken('HTTP POST /auth/login (网络登录)', token);
         state = state.copyWith(token: token, user: user, isLoading: true);
         await _prefs.setString('access_token', token);
         ApiClient.setToken(token);
@@ -247,8 +261,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         DataLayer()
             .write('user:${state.user!.id}:profile', state.user!.toJson());
 
-        // 预热会话数据（fire-and-forget，不阻塞 UI）
-        AppWarmup.warmup(state.user!.id.toString());
+        // 预热会话数据已在闪屏页通过 DataLayer.initDb 完成，此处不再触发网络
 
         state = state.copyWith(isLoading: false, clearError: true);
         return true;
@@ -304,8 +317,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         DataLayer()
             .write('user:${state.user!.id}:profile', state.user!.toJson());
 
-        // 预热会话数据（fire-and-forget，不阻塞 UI）
-        AppWarmup.warmup(state.user!.id.toString());
+        // 预热会话数据已在闪屏页通过 DataLayer.initDb 完成，此处不再触发网络
 
         state = state.copyWith(isLoading: false, clearError: true);
         return true;
@@ -323,12 +335,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final resp = await _authService.updateProfile(data);
       if (resp.success && state.user != null) {
+        // 清除旧头像缓存，确保更新后重新下载
+        final oldAvatarUrl = state.user!.avatarUrl;
+        if (oldAvatarUrl != null && oldAvatarUrl.isNotEmpty) {
+          final oldUrl = ImageUtils.resolveUrl(oldAvatarUrl);
+          await CachedNetworkImage.evictFromCache(oldUrl);
+        }
         final updated = state.user!.copyWith(
           displayName: data['display_name'] ?? data['first_name'],
           bio: data['bio'],
           avatarUrl: data['avatar_url'],
           coverPhotoUrl: data['cover_photo_url'],
         );
+        // 清除新头像缓存（确保新 URL 也刷新）
+        if (data['avatar_url'] != null && (data['avatar_url'] as String).isNotEmpty) {
+          final newUrl = ImageUtils.resolveUrl(
+            data['avatar_url'] is String ? data['avatar_url'] as String : data['avatar_url'].toString(),
+          );
+          await CachedNetworkImage.evictFromCache(newUrl);
+        }
         state = state.copyWith(user: updated);
         await _saveUserToPrefs(updated);
         return true;

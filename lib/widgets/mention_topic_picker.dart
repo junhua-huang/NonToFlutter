@@ -4,6 +4,8 @@ import 'package:facebook_clone/models/user.dart';
 import 'package:facebook_clone/services/api/friend_service.dart';
 import 'package:facebook_clone/services/api/search_service.dart';
 import 'package:facebook_clone/services/api/topic_service.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 /// 底部弹出的 @好友 / #话题 选择器
@@ -42,9 +44,9 @@ class MentionTopicPicker extends StatefulWidget {
     showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
@@ -442,13 +444,42 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
           setState(() => _topics = list.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList());
         }
       } else {
-        final resp = await FriendService().getFriendRecommendations(limit: 10);
-        if (resp.success && resp.data != null) {
-          final data = resp.data;
-          List userList = [];
-          if (data is List) { userList = data; }
-          else if (data is Map) { userList = data['users'] ?? data['items'] ?? []; }
-          setState(() => _users = userList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList());
+        // 优先读缓存中的好友列表
+        final cached = await DataLayer().query(CacheKeys.friendList, () async => null);
+        if (cached.data is List && (cached.data as List).isNotEmpty) {
+          final users = (cached.data as List)
+              .map((e) => User.fromJson(e as Map<String, dynamic>))
+              .toList();
+          setState(() => _users = users);
+        }
+        // 网络获取好友列表并缓存
+        try {
+          final resp = await FriendService().getFriends();
+          if (resp.success && resp.data != null) {
+            final data = resp.data;
+            List friendList = [];
+            if (data is Map) {
+              friendList = data['friends'] as List? ?? data['users'] as List? ?? data['data'] as List? ?? [];
+            } else if (data is List) {
+              friendList = data;
+            }
+            if (friendList.isNotEmpty) {
+              final users = friendList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
+              DataLayer().write(CacheKeys.friendList, friendList, ttlSeconds: 300);
+              setState(() => _users = users);
+            }
+          }
+        } catch (_) {}
+        // 好友列表空时，走推荐兜底
+        if (_users.isEmpty) {
+          final resp = await FriendService().getFriendRecommendations(limit: 10);
+          if (resp.success && resp.data != null) {
+            final data = resp.data;
+            List userList = [];
+            if (data is List) { userList = data; }
+            else if (data is Map) { userList = data['users'] ?? data['items'] ?? []; }
+            setState(() => _users = userList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList());
+          }
         }
       }
     } catch (e) {

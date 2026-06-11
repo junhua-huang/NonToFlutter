@@ -102,7 +102,7 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
           final conversation = Conversation(
             id: 0,
             user1Id: n.userId,
-            user2Id: n.senderId,
+            user2Id: n.senderId ?? 0,
             otherUser: n.sender!,
             unreadCount: 0,
             lastMessageAt: n.createdAt,
@@ -111,6 +111,8 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
             builder: (_) => ChatRoomScreen(conversation: conversation),
           ));
         }
+        break;
+      case app_notif.NotificationType.system:
         break;
     }
   }
@@ -164,6 +166,7 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
       case app_notif.NotificationType.friendRequest: return Icons.person_add;
       case app_notif.NotificationType.friendAccept: return Icons.people;
       case app_notif.NotificationType.message: return Icons.mail;
+      case app_notif.NotificationType.system: return Icons.info_outline;
     }
   }
 
@@ -176,6 +179,7 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
       case app_notif.NotificationType.friendAccept:
         return const Color(0xFF00BA7C);
       case app_notif.NotificationType.message: return AppColors.primary;
+      case app_notif.NotificationType.system: return AppColors.textSecondary;
     }
   }
 

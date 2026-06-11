@@ -15,10 +15,10 @@ class AppConfig {
   static const String appVersion = '1.0.0';
 
   // 后端 API 基础地址（局域网访问需用实际 IP，localhost 仅在 PC 端可用）
-  static const String baseUrl = 'http://192.168.1.5:5000/api';
+  static const String baseUrl = 'http://192.168.1.7:5000/api';
 
   // WebSocket 地址
-  static const String wsUrl = 'http://192.168.1.5:5000';
+  static const String wsUrl = 'http://192.168.1.7:5000';
 
   // 分页默认值
   static const int defaultPageSize = 20;

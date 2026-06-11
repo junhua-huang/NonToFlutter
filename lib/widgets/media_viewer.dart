@@ -415,7 +415,7 @@ class _VideoPlayerPlaceholderState extends State<VideoPlayerPlaceholder> {
         barrierColor: Colors.black,
         transitionDuration: const Duration(milliseconds: 300),
         reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, _, __) => _VideoPlayerScreen(videoUrl: video),
+        pageBuilder: (context, _, __) => _VideoPlayerScreen(videoUrl: video, coverUrl: resolveUrl(widget.thumbnailUrl)),
         transitionsBuilder: (context, animation, _, child) {
           return ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)), child: child);
         },
@@ -471,11 +471,12 @@ class _VideoPlayerPlaceholderState extends State<VideoPlayerPlaceholder> {
   }
 }
 
-/// 全屏视频播放器（带完整控件、错误处理）
+/// 全屏视频播放器（带完整控件、封面、错误处理）
 class _VideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
+  final String? coverUrl;
 
-  const _VideoPlayerScreen({required this.videoUrl});
+  const _VideoPlayerScreen({required this.videoUrl, this.coverUrl});
 
   @override
   State<_VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -542,6 +543,50 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
     return h > 0 ? '$h:$m:$s' : '$m:$s';
   }
 
+  /// 视频画面布局：根据屏幕尺寸和视频宽高比，自动计算最佳显示尺寸
+  Widget _buildVideoLayout() {
+    final ratio = _controller!.aspectRatio;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = constraints.maxWidth;
+        final maxH = constraints.maxHeight;
+
+        double videoW, videoH;
+        if (maxW / maxH > ratio) {
+          // 屏幕比视频更宽 → 以高度为准
+          videoH = maxH;
+          videoW = videoH * ratio;
+        } else {
+          // 屏幕比视频更高 → 以宽度为准
+          videoW = maxW;
+          videoH = videoW / ratio;
+        }
+
+        return Center(
+          child: SizedBox(
+            width: videoW,
+            height: videoH,
+            child: NontoVideoPlayer(controller: _controller!),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 加载中指示器
+  Widget _buildLoadingIndicator() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: Colors.white70),
+          SizedBox(height: 12),
+          Text('加载视频中...', style: TextStyle(color: Colors.white54, fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -573,25 +618,24 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Video
+                  // Video / Cover / Loading
                   if (_isInitialized)
-                    Center(
-                      child: AspectRatio(
-                        aspectRatio: _controller!.aspectRatio,
-                        child: NontoVideoPlayer(controller: _controller!),
+                    _buildVideoLayout()
+                  else if (widget.coverUrl != null && widget.coverUrl!.isNotEmpty)
+                    // Show cover while video initializes
+                    Positioned.fill(
+                      child: CachedNetworkImage(
+                        imageUrl: widget.coverUrl!,
+                        fit: BoxFit.contain,
+                        fadeInDuration: const Duration(milliseconds: 200),
+                        placeholder: (_, __) => const Center(
+                          child: CircularProgressIndicator(color: Colors.white70),
+                        ),
+                        errorWidget: (_, __, ___) => _buildLoadingIndicator(),
                       ),
                     )
                   else
-                    const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(color: Colors.white70),
-                          SizedBox(height: 12),
-                          Text('加载视频中...', style: TextStyle(color: Colors.white54, fontSize: 14)),
-                        ],
-                      ),
-                    ),
+                    _buildLoadingIndicator(),
 
                   // Close button
                   if (_showControls)

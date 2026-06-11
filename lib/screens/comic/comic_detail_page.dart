@@ -8,6 +8,7 @@ import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/comic_service.dart';
 import 'package:facebook_clone/services/data_layer.dart';
+import 'package:facebook_clone/utils/date_utils.dart';
 import 'package:facebook_clone/widgets/comment_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,34 +107,13 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
 
   String _formatTimeAgo() {
     if (_event?.createdAt == null) return '';
-    try {
-      final dt = DateTime.parse(_event!.createdAt!);
-      final now = DateTime.now();
-      final diff = now.difference(dt);
-      if (diff.inMinutes < 1) return '刚刚';
-      if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
-      if (diff.inHours < 24) return '${diff.inHours}小时前';
-      if (diff.inDays < 7) return '${diff.inDays}天前';
-      return '${dt.month}月${dt.day}日';
-    } catch (_) {
-      return '';
-    }
+    return AppDateUtils.formatTimeAgo(
+      AppDateUtils.parseBeijingTime(_event!.createdAt),
+    );
   }
 
   String _formatDateRange() {
-    final s = _event?.startDate;
-    final e = _event?.endDate;
-    try {
-      if (s != null) {
-        final sd = DateTime.parse(s);
-        if (e != null && e != s) {
-          final ed = DateTime.parse(e);
-          return '${sd.year}年${sd.month}月${sd.day}日 - ${ed.month}月${ed.day}日';
-        }
-        return '${sd.year}年${sd.month}月${sd.day}日';
-      }
-    } catch (_) {}
-    return '';
+    return AppDateUtils.formatDateRange(_event?.startDate, _event?.endDate);
   }
 
   Color _statusColor(int status) {

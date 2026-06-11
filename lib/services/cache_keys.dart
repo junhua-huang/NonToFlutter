@@ -36,6 +36,7 @@ class CacheKeys {
   // ── 通知 ──
   static const String notifList = 'notif:list:1';
   static const String notifPattern = 'notif:*';
+  static const String notifUnreadCount = 'notif:unread_count';
 
   // ── 发现 ──
   static const String exploreTopics = 'explore:trending_topics';
@@ -47,6 +48,10 @@ class CacheKeys {
 
   // ── 帖子详情 ──
   static String postDetail(dynamic postId) => 'post:$postId:detail';
+
+  // ── 好友 ──
+  /// 好友列表缓存，按最后联系时间排序
+  static const String friendList = 'friend:list';
 
   // ── 漫展 ──
   static String comicEvents() => 'comic:events';

@@ -105,10 +105,7 @@ dependency_overrides:
       path: packages/image_picker/image_picker
       ref: master
   
-  audioplayers:
-    git:
-      url: https://gitcode.com/openharmony-sig/flutter_audioplayers.git
-      path: packages/audioplayers
+  audioplayers: ^5.2.1
   
   sqlite3:
     git:
@@ -153,6 +150,7 @@ flutter:
 
   assets:
     - assets/sounds/
+    - assets/icons/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

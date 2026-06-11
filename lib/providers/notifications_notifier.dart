@@ -13,6 +13,7 @@ class NotificationsState {
   final bool hasMore;
   final bool isLoading;
   final bool isInitialLoading;
+  final int unreadCount;
   final String? error;
 
   const NotificationsState({
@@ -21,6 +22,7 @@ class NotificationsState {
     this.hasMore = true,
     this.isLoading = false,
     this.isInitialLoading = true,
+    this.unreadCount = 0,
     this.error,
   });
 
@@ -30,6 +32,7 @@ class NotificationsState {
     bool? hasMore,
     bool? isLoading,
     bool? isInitialLoading,
+    int? unreadCount,
     String? error,
     bool clearError = false,
   }) {
@@ -39,6 +42,7 @@ class NotificationsState {
       hasMore: hasMore ?? this.hasMore,
       isLoading: isLoading ?? this.isLoading,
       isInitialLoading: isInitialLoading ?? this.isInitialLoading,
+      unreadCount: unreadCount ?? this.unreadCount,
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -105,6 +109,10 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final cacheKey = 'notif:list:${state.page}';
+      // 缓存只存列表；翻页字段从原始响应提取
+      int? serverUnread;
+      bool? serverHasMore;
+
       final result = await DataLayer()
           .query(
             cacheKey,
@@ -115,6 +123,8 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
               if (resp.success && resp.data != null) {
                 final data =
                     resp.data is String ? jsonDecode(resp.data) : resp.data;
+                serverHasMore = data['has_more'] as bool?;
+                serverUnread = data['unread_count'] as int?;
                 final list = data['notifications'] as List<dynamic>? ?? [];
                 return list;
               }
@@ -131,11 +141,13 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
             .map((e) =>
                 AppNotification.fromJson(e as Map<String, dynamic>))
             .toList();
-        final hasMore = list.length >= 20;
+        final hasMore = serverHasMore ?? list.length >= 20;
+        final unreadCount = serverUnread ?? state.unreadCount;
         state = state.copyWith(
           notifications: refresh ? list : [...state.notifications, ...list],
           page: state.page + 1,
           hasMore: hasMore,
+          unreadCount: unreadCount,
           isLoading: false,
           isInitialLoading: false,
         );

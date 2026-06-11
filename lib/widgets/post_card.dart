@@ -12,6 +12,7 @@ import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:facebook_clone/widgets/enhanced_media_viewer.dart';
 import 'package:facebook_clone/widgets/media_viewer.dart';
 import 'package:facebook_clone/widgets/rich_text_content.dart';
+import 'package:facebook_clone/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_social_video/flutter_social_video.dart';
 import 'package:flutter/material.dart';
@@ -47,14 +48,21 @@ class PostCard extends StatelessWidget {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('帖子统计'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('帖子统计',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('浏览量 ${stats['views'] ?? 0}'),
-                Text('点赞数 ${stats['likes'] ?? post.likeCount}'),
-                Text('评论数 ${stats['comments'] ?? post.commentCount}'),
+                Text('浏览量 ${stats['views'] ?? 0}',
+                    style: const TextStyle(fontSize: 15)),
+                const SizedBox(height: 4),
+                Text('点赞数 ${stats['likes'] ?? post.likeCount}',
+                    style: const TextStyle(fontSize: 15)),
+                const SizedBox(height: 4),
+                Text('评论数 ${stats['comments'] ?? post.commentCount}',
+                    style: const TextStyle(fontSize: 15)),
               ],
             ),
             actions: [
@@ -87,30 +95,14 @@ class PostCard extends StatelessWidget {
   ];
 
   Future<void> _showReportDialog(BuildContext context, Post post) async {
-    final reason = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('选择举报原因', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            ),
-            const Divider(height: 1),
-            ..._reportReasons.map((r) => ListTile(
-                  title: Text(r.label),
-                  onTap: () => Navigator.pop(ctx, r.value),
-                )),
-            const Divider(height: 1),
-            ListTile(
-              title: const Text('取消', style: TextStyle(color: Colors.red)),
-              onTap: () => Navigator.pop(ctx),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+    final reason = await TwitterBottomSheet.show<String>(
+      context,
+      groupLabel: '选择举报原因',
+      options: _reportReasons.map((r) => TwitterSheetOption(
+        icon: Icons.flag_outlined,
+        label: r.label,
+        value: r.value,
+      )).toList(),
     );
     if (reason == null || !context.mounted) return;
     try {
@@ -137,8 +129,11 @@ class PostCard extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('屏蔽用户'),
-        content: Text('确定要屏蔽@${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('屏蔽用户',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Text('确定要屏蔽@${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。',
+            style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -177,8 +172,11 @@ class PostCard extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除帖子'),
-        content: const Text('确定要删除这条帖子吗？此操作不可撤销。'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('删除帖子',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: const Text('确定要删除这条帖子吗？此操作不可撤销。',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -284,44 +282,30 @@ class PostCard extends StatelessWidget {
                 // More button
                 IconButton(
                   icon: const Icon(Icons.more_horiz, size: 18, color: AppColors.textSecondary),
-                  onPressed: () {
+                  onPressed: () async {
                     final currentUserId = ProviderScope.containerOf(context).read(authProvider).user?.id;
                     final isOwnPost = currentUserId != null && post.userId == currentUserId;
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (ctx) => SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ListTile(
-                              leading: const Icon(Icons.report_outlined),
-                              title: const Text('举报帖子'),
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                _showReportDialog(context, post);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.block_outlined),
-                              title: const Text('屏蔽用户'),
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                _showBlockConfirmDialog(context, post);
-                              },
-                            ),
-                            if (isOwnPost)
-                              ListTile(
-                                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                                title: const Text('删除帖子', style: TextStyle(color: Colors.red)),
-                                onTap: () {
-                                  Navigator.pop(ctx);
-                                  _showDeleteConfirmDialog(context, post);
-                                },
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
+
+                    final options = <TwitterSheetOption<String>>[
+                      const TwitterSheetOption(icon: Icons.report_outlined, label: '举报帖子', value: 'report'),
+                      const TwitterSheetOption(icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+                      if (isOwnPost)
+                        const TwitterSheetOption(icon: Icons.delete_outline, label: '删除帖子', value: 'delete', isDestructive: true),
+                    ];
+
+                    final action = await TwitterBottomSheet.show<String>(context, options: options);
+                    if (action == null || !context.mounted) return;
+                    switch (action) {
+                      case 'report':
+                        _showReportDialog(context, post);
+                        break;
+                      case 'block':
+                        _showBlockConfirmDialog(context, post);
+                        break;
+                      case 'delete':
+                        _showDeleteConfirmDialog(context, post);
+                        break;
+                    }
                   },
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),

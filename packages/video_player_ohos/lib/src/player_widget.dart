@@ -8,11 +8,13 @@ import 'controller.dart';
 /// 根据平台选择渲染方式：
 /// - 鸿蒙：Texture（外接纹理）
 /// - iOS/Android：VideoPlayer widget
+///
+/// 注意：此 widget 仅输出原始视频渲染，不处理宽高比/缩放。
+/// 调用方需自行使用 AspectRatio、FittedBox 等控制布局。
 class NontoVideoPlayer extends StatelessWidget {
   final NontoVideoPlayerController controller;
-  final BoxFit? fit;
 
-  const NontoVideoPlayer({super.key, required this.controller, this.fit});
+  const NontoVideoPlayer({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -23,28 +25,18 @@ class NontoVideoPlayer extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        Widget videoWidget;
         if (Platform.operatingSystem == 'ohos') {
           final textureId = controller.textureId;
           if (textureId != null) {
-            videoWidget = Texture(textureId: textureId);
+            return Texture(textureId: textureId);
           } else {
             return const SizedBox.shrink();
           }
         } else {
           final vpc = controller.vpController;
           if (vpc == null) return const SizedBox.shrink();
-          videoWidget = vp.VideoPlayer(vpc);
+          return vp.VideoPlayer(vpc);
         }
-
-        final fitToUse = fit ?? BoxFit.contain;
-        return FittedBox(
-          fit: fitToUse,
-          child: AspectRatio(
-            aspectRatio: controller.aspectRatio,
-            child: videoWidget,
-          ),
-        );
       },
     );
   }

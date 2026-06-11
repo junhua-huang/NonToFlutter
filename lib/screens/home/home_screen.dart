@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
+import 'package:facebook_clone/models/user.dart';
 import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:facebook_clone/providers/core_providers.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
+import 'package:facebook_clone/services/data_layer.dart';
+import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../comic/comic_my_events_page.dart';
 import '../comic/comic_timeline_page.dart';
@@ -40,6 +47,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (widget.initialTab != null) {
       ref.read(currentTabIndexProvider.notifier).state = widget.initialTab!;
     }
+    _listenFriendOnline();
+  }
+
+  StreamSubscription? _friendOnlineSub;
+
+  void _listenFriendOnline() {
+    _friendOnlineSub = WebSocketService().friendOnlineStream.listen((payload) async {
+      final userId = payload['user_id'];
+      if (userId == null || !mounted) return;
+      String? name;
+      try {
+        final cached = await DataLayer().query(CacheKeys.friendList, () async => null);
+        if (cached.data is List) {
+          for (final item in cached.data as List) {
+            if (item is Map && item['id'] == userId) {
+              final user = User.fromJson(item as Map<String, dynamic>);
+              name = user.displayName ?? user.username;
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+      if (name != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.circle, color: Colors.green, size: 10),
+                const SizedBox(width: 8),
+                Text('$name 上线了'),
+              ],
+            ),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _friendOnlineSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -50,24 +101,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final currentIndex = ref.watch(currentTabIndexProvider);
 
     return Scaffold(
+      extendBody: true,
       body: IndexedStack(
         index: currentIndex,
         children: _tabs,
       ),
       drawer: _buildDrawer(context),
       floatingActionButton: currentIndex == 0
-          ? FloatingActionButton(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                );
-                if (result == true) {}
-              },
-              backgroundColor: AppColors.primary,
-              elevation: 4,
-              shape: const CircleBorder(),
-              child: const Icon(Icons.edit, color: Colors.white, size: 26),
+          ? AnimatedSlide(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              offset: barVisible ? Offset.zero : const Offset(0, 2),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 250),
+                opacity: barVisible ? 1.0 : 0.0,
+                child: FloatingActionButton(
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+                    );
+                    if (result == true) {}
+                  },
+                  backgroundColor: AppColors.primary,
+                  elevation: 4,
+                  shape: const CircleBorder(),
+                  child: const Icon(Icons.edit, color: Colors.white, size: 26),
+                ),
+              ),
             )
           : null,
       bottomNavigationBar: AnimatedSlide(
@@ -94,53 +155,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           unselectedFontSize: 0,
           items: [
             BottomNavigationBarItem(
-              icon: _NavScaleIcon(
-                icon: Icons.home_outlined,
+              icon: _NavIcon(
+                asset: 'assets/icons/未选中首页.svg',
                 isSelected: currentIndex == 0,
                 size: 26,
               ),
-              activeIcon: _NavScaleIcon(
-                icon: Icons.home,
+              activeIcon: _NavIcon(
+                asset: 'assets/icons/选中首页.svg',
                 isSelected: currentIndex == 0,
                 size: 26,
               ),
               label: '',
             ),
             BottomNavigationBarItem(
-              icon: _NavScaleIcon(
-                icon: Icons.search,
+              icon: _NavIcon(
+                asset: 'assets/icons/未选中搜索.svg',
                 isSelected: currentIndex == 1,
                 size: 26,
               ),
-              activeIcon: _NavScaleIcon(
-                icon: Icons.search,
+              activeIcon: _NavIcon(
+                asset: 'assets/icons/选中搜索.svg',
                 isSelected: currentIndex == 1,
                 size: 26,
               ),
               label: '',
             ),
             BottomNavigationBarItem(
-              icon: _buildBadgeIcon(
-                icon: Icons.notifications_none_outlined,
-                activeIcon: Icons.notifications,
-                count: totalBadge,
+              icon: _NavIcon(
+                asset: 'assets/icons/未选中消息.svg',
+                isSelected: currentIndex == 2,
+                size: 26,
               ),
-              activeIcon: _buildBadgeIcon(
-                icon: Icons.notifications,
-                activeIcon: Icons.notifications,
-                count: totalBadge,
-                isActive: true,
+              activeIcon: _NavIcon(
+                asset: 'assets/icons/选中消息.svg',
+                isSelected: currentIndex == 2,
+                size: 26,
               ),
               label: '',
             ),
             BottomNavigationBarItem(
-              icon: _NavScaleIcon(
-                icon: Icons.person_outline,
+              icon: _NavIcon(
+                asset: 'assets/icons/未选中个人.svg',
                 isSelected: currentIndex == 3,
                 size: 26,
               ),
-              activeIcon: _NavScaleIcon(
-                icon: Icons.person,
+              activeIcon: _NavIcon(
+                asset: 'assets/icons/选中个人.svg',
                 isSelected: currentIndex == 3,
                 size: 26,
               ),
@@ -354,66 +414,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 /// Navigation icon with scale animation when selected
-class _NavScaleIcon extends StatefulWidget {
-  final IconData icon;
+class _NavIcon extends StatelessWidget {
+  final String asset;
   final bool isSelected;
   final double size;
 
-  const _NavScaleIcon({
-    required this.icon,
+  const _NavIcon({
+    required this.asset,
     required this.isSelected,
     required this.size,
   });
 
   @override
-  State<_NavScaleIcon> createState() => _NavScaleIconState();
-}
-
-class _NavScaleIconState extends State<_NavScaleIcon> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    if (widget.isSelected) {
-      _controller.forward();
-    }
-  }
-
-  @override
-  void didUpdateWidget(_NavScaleIcon oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isSelected != oldWidget.isSelected) {
-      if (widget.isSelected) {
-        _controller.forward();
-      } else {
-        _controller.reverse();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scaleAnimation,
-      child: Icon(
-        widget.icon,
-        size: widget.size,
-        color: widget.isSelected ? AppColors.primary : AppColors.textSecondary,
+    return SvgPicture.asset(
+      asset,
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(
+        isSelected ? AppColors.primary : AppColors.textSecondary.withValues(alpha: 0.6),
+        BlendMode.srcIn,
       ),
     );
   }

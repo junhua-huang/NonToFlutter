@@ -16,6 +16,7 @@ import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:facebook_clone/widgets/error_state_widget.dart';
 import 'package:facebook_clone/widgets/media_viewer.dart';
 import 'package:facebook_clone/widgets/post_card.dart';
+import 'package:facebook_clone/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
@@ -296,8 +297,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('取消好友关系'),
-        content: Text('确定要取消与 ${_user!.displayName} 的好友关系吗？'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('取消好友关系',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Text('确定要取消与 ${_user!.displayName} 的好友关系吗？',
+            style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
           TextButton(
@@ -340,16 +344,34 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     '其他'
   ];
 
+  /// 统一更多选项菜单
+  Future<void> _showMoreOptions({bool includeUnfriend = false}) async {
+    final options = <TwitterSheetOption<String>>[
+      const TwitterSheetOption(icon: Icons.flag_outlined, label: '举报用户', value: 'report'),
+      const TwitterSheetOption(icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+      if (includeUnfriend)
+        const TwitterSheetOption(icon: Icons.person_remove_outlined, label: '取消关注', value: 'unfriend'),
+    ];
+    final action = await TwitterBottomSheet.show<String>(context, options: options);
+    switch (action) {
+      case 'report': _reportUser(); break;
+      case 'block': _blockUser(); break;
+      case 'unfriend': _unfriend(); break;
+    }
+  }
+
   Future<void> _reportUser() async {
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('举报用户'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('举报用户',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         children: [
           for (final r in reportReasons)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(ctx, r),
-              child: Text(r),
+              child: Text(r, style: const TextStyle(fontSize: 15)),
             ),
         ],
       ),
@@ -384,8 +406,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('屏蔽用户'),
-        content: Text('确定要屏蔽 ${_user!.displayName} 吗？屏蔽后你将无法看到对方的内容。'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('屏蔽用户',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Text('确定要屏蔽 ${_user!.displayName} 吗？屏蔽后你将无法看到对方的内容。',
+            style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
           TextButton(
@@ -468,19 +493,24 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         title: Text(user.displayName ?? user.username,
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         actions: [
-          PopupMenuButton<String>(
+          IconButton(
             icon: const Icon(Icons.more_horiz, color: AppColors.textPrimary),
-            onSelected: (value) {
-              if (value == 'report') {
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            onPressed: () async {
+              final action = await TwitterBottomSheet.show<String>(
+                context,
+                options: const [
+                  TwitterSheetOption(icon: Icons.flag_outlined, label: '举报用户', value: 'report'),
+                  TwitterSheetOption(icon: Icons.block_outlined, label: '屏蔽', value: 'block'),
+                ],
+              );
+              if (action == 'report') {
                 _reportUser();
-              } else if (value == 'block') {
+              } else if (action == 'block') {
                 _blockUser();
               }
             },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'report', child: Text('举报用户')),
-              const PopupMenuItem(value: 'block', child: Text('屏蔽')),
-            ],
           ),
         ],
         bottom: PreferredSize(
@@ -726,22 +756,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             ),
           ),
           const SizedBox(width: 8),
-          PopupMenuButton<String>(
+          IconButton(
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(maxWidth: 44),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
-            onSelected: (value) {
-              switch (value) {
-                case 'report': _reportUser(); break;
-                case 'block': _blockUser(); break;
-                case 'unfriend': _unfriend(); break;
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'report', child: Text('举报用户')),
-              PopupMenuItem(value: 'block', child: Text('屏蔽用户')),
-              PopupMenuItem(value: 'unfriend', child: Text('取消关注')),
-            ],
+            onPressed: () => _showMoreOptions(includeUnfriend: true),
           ),
         ]);
 
@@ -783,20 +802,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             ),
           ),
           const SizedBox(width: 8),
-          PopupMenuButton<String>(
+          IconButton(
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(maxWidth: 44),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
-            onSelected: (value) {
-              switch (value) {
-                case 'report': _reportUser(); break;
-                case 'block': _blockUser(); break;
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'report', child: Text('举报用户')),
-              PopupMenuItem(value: 'block', child: Text('屏蔽用户')),
-            ],
+            onPressed: () => _showMoreOptions(),
           ),
         ]);
 
@@ -834,20 +844,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             ),
           ),
           const SizedBox(width: 8),
-          PopupMenuButton<String>(
+          IconButton(
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(maxWidth: 44),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
-            onSelected: (value) {
-              switch (value) {
-                case 'report': _reportUser(); break;
-                case 'block': _blockUser(); break;
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'report', child: Text('举报用户')),
-              PopupMenuItem(value: 'block', child: Text('屏蔽用户')),
-            ],
+            onPressed: () => _showMoreOptions(),
           ),
         ]);
 
@@ -870,20 +871,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             ),
           ),
           const SizedBox(width: 8),
-          PopupMenuButton<String>(
+          IconButton(
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(maxWidth: 44),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
-            onSelected: (value) {
-              switch (value) {
-                case 'report': _reportUser(); break;
-                case 'block': _blockUser(); break;
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'report', child: Text('举报用户')),
-              PopupMenuItem(value: 'block', child: Text('屏蔽用户')),
-            ],
+            onPressed: () => _showMoreOptions(),
           ),
         ]);
     }

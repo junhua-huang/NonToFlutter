@@ -50,10 +50,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
     if (!mounted) return;
     if (ok) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      // 注册成功，返回登录页
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('注册成功，请登录'), backgroundColor: Colors.green),
       );
-    } else {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
       final error = ref.read(authProvider).error;
       if (error != null) {
         ScaffoldMessenger.of(context).showSnackBar(

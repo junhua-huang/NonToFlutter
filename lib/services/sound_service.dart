@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'sound_player_native.dart'
     if (dart.library.html) 'sound_player_web.dart';
@@ -35,6 +38,9 @@ class SoundService {
 
   /// 播放音效，带 500ms 防抖
   Future<void> _play(String assetPath, String key) async {
+    // 检查声音设置
+    if (!await _isSoundEnabled()) return;
+
     final now = DateTime.now().millisecondsSinceEpoch;
     final last = _lastPlayTime[key] ?? 0;
     if (now - last < _debounceMs) return;
@@ -44,6 +50,16 @@ class SoundService {
       await _player.playAsset(assetPath);
     } catch (e) {
       debugPrint('SoundService: failed to play $key — $e');
+    }
+  }
+
+  /// 检查用户是否启用了声音
+  Future<bool> _isSoundEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('pref_sound_enabled') ?? true; // 默认开启
+    } catch (_) {
+      return true;
     }
   }
 

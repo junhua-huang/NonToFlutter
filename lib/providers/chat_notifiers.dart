@@ -6,6 +6,7 @@ import 'package:facebook_clone/models/conversation.dart';
 import 'package:facebook_clone/models/message.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/api/chat_service.dart';
+import 'package:facebook_clone/services/api/notification_service.dart';
 import 'package:facebook_clone/services/cache_keys.dart';
 import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/sound_service.dart';
@@ -18,23 +19,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ConversationsState {
   final List<Conversation> conversations;
+  final int unreadCount;
   final bool isLoading;
   final String? error;
 
   const ConversationsState({
     this.conversations = const [],
+    this.unreadCount = 0,
     this.isLoading = true,
     this.error,
   });
 
   ConversationsState copyWith({
     List<Conversation>? conversations,
+    int? unreadCount,
     bool? isLoading,
     String? error,
     bool clearError = false,
   }) {
     return ConversationsState(
       conversations: conversations ?? this.conversations,
+      unreadCount: unreadCount ?? this.unreadCount,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
     );
@@ -63,61 +68,26 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     });
   }
 
-  /// 构造时先读缓存，空则等 AppWarmup 推送后再决定是否网络加载
+  /// 先读缓存立即展示，同时后台走网络静默更新
   Future<void> _loadData() async {
     if (state.conversations.isNotEmpty) return;
-    try {
-      final result = await DataLayer()
-          .query(CacheKeys.convFullList, () async => null)
-          .timeout(const Duration(seconds: 2));
-      if (result.data is List && (result.data as List).isNotEmpty) {
-        final conversations = (result.data as List<dynamic>)
-            .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
-            .toList();
-        state = state.copyWith(conversations: conversations, isLoading: false);
-        DataLayer().persistConversations(conversations);
-        return;
-      }
-
-      // 缓存空：等待 AppWarmup 写入事件（最多 3s），用 Completer 代替硬编码 sleep
-      final warmupDone = Completer<void>();
-      StreamSubscription<String>? sub;
-      sub = DataLayer().changeStream.listen((key) {
-        if (key == CacheKeys.convFullList && !warmupDone.isCompleted) {
-          warmupDone.complete();
-        }
-      });
-
-      try {
-        await warmupDone.future.timeout(const Duration(seconds: 3));
-        // AppWarmup 已写入，重新读缓存
-        final retryResult = await DataLayer()
-            .query(CacheKeys.convFullList, () async => null)
-            .timeout(const Duration(seconds: 2));
-        if (retryResult.data is List && (retryResult.data as List).isNotEmpty) {
-          final conversations = (retryResult.data as List<dynamic>)
-              .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
-              .toList();
-          state = state.copyWith(conversations: conversations, isLoading: false);
-          DataLayer().persistConversations(conversations);
-          return;
-        }
-      } on TimeoutException {
-        // warmup 超时，触发网络加载
-      } finally {
-        sub.cancel();
-      }
-
-      // 仍未命中，触发网络加载
-      unawaited(loadConversations());
-    } catch (_) {
-      // 缓存读取失败，尝试网络
-      unawaited(loadConversations());
+    // 先读缓存快速展示
+    final cached = await DataLayer().query(CacheKeys.convFullList, () async => null);
+    if (cached.data is List && (cached.data as List).isNotEmpty) {
+      state = state.copyWith(
+        conversations: (cached.data as List)
+            .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        isLoading: false,
+      );
     }
+    // 后台网络请求，静默更新
+    unawaited(loadConversations());
   }
 
   void _onSessionList(List<Map<String, dynamic>> sessions) {
     final conversations = sessions.map((e) => Conversation.fromJson(e)).toList();
+    debugPrint('[Conv] _onSessionList: ${conversations.length} sessions from WS');
     state = state.copyWith(conversations: conversations, isLoading: false);
     DataLayer().persistConversations(conversations);
     DataLayer().write(CacheKeys.convFullList, sessions);
@@ -229,6 +199,47 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     DataLayer().invalidate(CacheKeys.convPattern);
   }
 
+  /// 发送消息后更新会话列表（移顶、更新预览、更新时间）。
+  void onMessageSent(int convId, String content, String msgType, DateTime now) {
+    final preview = _formatPreview(content, msgType);
+    final lastMsg = Message(
+      id: 0,
+      conversationId: convId,
+      senderId: 0,
+      content: content,
+      messageType: MessageType.values.firstWhere(
+        (e) => e.name == msgType,
+        orElse: () => MessageType.text,
+      ),
+      createdAt: now,
+    );
+
+    final existingIdx = state.conversations.indexWhere((c) => c.id == convId);
+    if (existingIdx >= 0) {
+      final conv = state.conversations[existingIdx];
+      final updatedConv = Conversation(
+        id: conv.id,
+        user1Id: conv.user1Id,
+        user2Id: conv.user2Id,
+        otherUser: conv.otherUser,
+        lastMessage: lastMsg,
+        lastMessageAt: now,
+        unreadCount: conv.unreadCount, // 不增加未读数
+      );
+      final updated = List<Conversation>.from(state.conversations)
+        ..removeAt(existingIdx)
+        ..insert(0, updatedConv);
+      state = state.copyWith(conversations: updated);
+      DataLayer().updateConvLastMessage(
+        convId, preview, now, unreadIncrement: 0,
+      );
+      DataLayer().invalidate(CacheKeys.convPattern);
+    } else {
+      // 会话不在列表中（极少情况），全量刷新
+      loadConversations();
+    }
+  }
+
   String _formatPreview(String content, String msgType) {
     switch (msgType) {
       case 'image': return '图片';
@@ -242,27 +253,65 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   }
 
   Future<void> loadConversations() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    // 后台静默刷新：已有数据时不显示 loading，直接替换
+    state = state.copyWith(
+      isLoading: state.conversations.isEmpty,
+      clearError: true,
+    );
     try {
-      final response = await _chatService
-          .getConversations()
-          .timeout(const Duration(seconds: 25));
-      if (response.success && response.data != null) {
-        final data = response.data is String
-            ? jsonDecode(response.data as String)
-            : response.data;
+      // 并发请求：会话列表 + 未读数量
+      final results = await Future.wait([
+        _chatService.getConversations().timeout(const Duration(seconds: 25)),
+        NotificationService().getUnreadCount().timeout(const Duration(seconds: 10)),
+      ]);
+
+      // 会话列表
+      final response = results[0];
+      debugPrint('[Conv] getConversations success=${response.success}, statusCode=${response.statusCode}, msg=${response.message}, dataType=${response.data?.runtimeType}');
+      if (response.success) {
+        // data 可能为 null（新用户无会话），按空列表处理
+        final data = response.data != null
+            ? (response.data is String
+                ? jsonDecode(response.data as String)
+                : response.data)
+            : null;
         final List<dynamic> conversationList;
         if (data is Map<String, dynamic>) {
-          conversationList = data['conversations'] ?? [];
+          conversationList = (data['conversations'] ?? data['sessions']) ?? [];
         } else if (data is List) {
           conversationList = data;
         } else {
           conversationList = [];
         }
+        debugPrint('[Conv] parsed conversationList.length=${conversationList.length}, data is ${data.runtimeType}');
         final conversations = conversationList
             .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
             .toList();
-        state = state.copyWith(conversations: conversations, isLoading: false);
+
+        debugPrint('[Conv] conversations.length=${conversations.length}');
+
+        // 提取未读通知数量
+        int unread = state.unreadCount;
+        try {
+          final unreadResp = results[1];
+          debugPrint('[Conv] getUnreadCount success=${unreadResp.success}, data=${unreadResp.data}');
+          if (unreadResp.success && unreadResp.data != null) {
+            final unreadData = unreadResp.data;
+            if (unreadData is Map) {
+              unread = unreadData['unread_count'] ?? unreadData['count'] ?? 0;
+            } else if (unreadData is int) {
+              unread = unreadData;
+            }
+          }
+        } catch (_) {}
+
+        state = state.copyWith(
+          conversations: conversations,
+          unreadCount: unread,
+          isLoading: false,
+          error: null,
+        );
+        debugPrint('[Conv] STATE SET: conversations=${conversations.length}, unread=$unread, isLoading=false, error=null');
         await DataLayer().persistConversations(conversations);
         DataLayer().write(CacheKeys.convFullList, conversationList);
       } else {
@@ -270,9 +319,12 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
           error: response.message ?? '加载失败',
           isLoading: false,
         );
+        debugPrint('[Conv] STATE SET: error="${response.message ?? "加载失败"}", isLoading=false');
       }
-    } catch (e) {
+    } catch (e, stack) {
       state = state.copyWith(error: '网络错误，请稍后重试', isLoading: false);
+      debugPrint('[Conv] STATE SET: error="网络错误", exception=$e');
+      debugPrint('[Conv] stack: $stack');
     }
   }
 
@@ -368,7 +420,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   int? _currentUserId;
   bool _initialized = false;
 
-  MessagesNotifier(this.conversationId) : super(const MessagesState()) {
+  final void Function(int convId, String content, String msgType, DateTime now)? _onMessageSent;
+
+  MessagesNotifier(this.conversationId, {void Function(int convId, String content, String msgType, DateTime now)? onMessageSent})
+      : _onMessageSent = onMessageSent, super(const MessagesState()) {
     _wsMsgSub = _ws.messageStream.listen(_onWsMessage);
     _wsTypingSub = _ws.typingStream.listen(_onWsTyping);
     _wsConnSub = _ws.connectionStream.listen((connected) {
@@ -514,6 +569,33 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
     // Step 4: 标记已读
     _sendMarkRead();
+  }
+
+  /// 重试：发送失败→重发消息，加载失败→重新加载
+  Future<void> retry() async {
+    // WS 发送失败 → 重发最后一条失败消息
+    if ((state.error ?? '').startsWith('发送失败')) {
+      final failedIdx = state.messages.lastIndexWhere(
+          (m) => m.id >= 1000000000000);
+      if (failedIdx < 0) {
+        state = state.copyWith(error: null);
+        return;
+      }
+
+      final failed = state.messages[failedIdx];
+      // 移除失败消息（内存 + 持久层）
+      final updated = List<Message>.from(state.messages)..removeAt(failedIdx);
+      state = state.copyWith(messages: updated, error: null);
+      DataLayer().deletePersistedMessage(failed.id);
+
+      sendMessage(failed.content ?? '',
+          messageType: failed.messageType.name,
+          mediaUrl: failed.mediaUrl);
+    } else {
+      // 加载失败 → 重新加载消息
+      state = state.copyWith(error: null);
+      _loadMessages();
+    }
   }
 
   /// 增量同步：获取本地最新消息 ID 之后的服务端消息
@@ -673,6 +755,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     DataLayer().persistMessage(optimisticMsg);
     _syncL1();
 
+    // 通知会话列表更新
+    _onMessageSent?.call(conversationId, content, messageType, now);
+
     _ws.sendMessage(conversationId, content,
         messageType: messageType, mediaUrl: mediaUrl)
       .then((clientMsgId) {
@@ -737,6 +822,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           _ws.sendMessage(conversationId, url,
               messageType: 'image', mediaUrl: url);
           SoundService().playSendSound();
+          // 通知会话列表更新
+          _onMessageSent?.call(conversationId, '图片', 'image', now);
           // 超时保护：8s 后重置 isSending
           Future.delayed(const Duration(seconds: 8), () {
             if (mounted && state.isSending) {
@@ -762,6 +849,15 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       isSending: false,
     );
     DataLayer().deletePersistedMessage(optimisticId);
+  }
+
+  /// 从本地列表中移除一条消息（长按删除）
+  void removeMessage(int msgId) {
+    if (!mounted) return;
+    state = state.copyWith(
+      messages: state.messages.where((m) => m.id != msgId).toList(),
+    );
+    DataLayer().deletePersistedMessage(msgId);
   }
 
   String? _extractUrl(dynamic data) {
@@ -911,6 +1007,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 final messagesProvider =
     StateNotifierProvider.family<MessagesNotifier, MessagesState, int>(
   (ref, conversationId) {
-    return MessagesNotifier(conversationId);
+    return MessagesNotifier(
+      conversationId,
+      onMessageSent: (convId, content, msgType, now) {
+        ref.read(conversationsProvider.notifier).onMessageSent(convId, content, msgType, now);
+      },
+    );
   },
 );

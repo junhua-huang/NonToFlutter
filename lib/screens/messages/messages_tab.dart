@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/models/conversation.dart';
 import 'package:facebook_clone/providers/auth_notifier.dart';
@@ -9,6 +8,8 @@ import 'package:facebook_clone/providers/core_providers.dart';
 import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
 import 'package:facebook_clone/screens/notifications/notifications_tab.dart';
 import 'package:facebook_clone/services/api/notification_service.dart';
+import 'package:facebook_clone/services/cache_keys.dart';
+import 'package:facebook_clone/services/data_layer.dart';
 import 'package:facebook_clone/services/local_db_service.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
 import 'package:facebook_clone/widgets/shimmer_skeletons.dart';
@@ -73,23 +74,30 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
 
   Future<void> _fetchUnreadNotifications() async {
     try {
-      final resp = await _notifService.getUnreadCount();
-      if (resp.success && resp.data != null && mounted) {
-        final data = resp.data;
-        int count = 0;
-        if (data is Map) {
-          count = data['count'] ?? data['unread_count'] ?? 0;
-        } else if (data is int) {
-          count = data;
-        }
-        setState(() => _unreadNotifications = count);
+      final result = await DataLayer().query(
+        CacheKeys.notifUnreadCount,
+        () => _notifService.getUnreadCount(),
+      );
+      if (!mounted) return;
+      final data = result.data;
+      int count = 0;
+      if (data is int) {
+        count = data;
+      } else if (data is Map) {
+        count = data['count'] ?? data['unread_count'] ?? 0;
       }
+      setState(() => _unreadNotifications = count);
     } catch (_) {}
   }
 
   Future<void> _onRefresh() async {
-    ref.read(conversationsProvider.notifier).refresh();
+    await ref.read(conversationsProvider.notifier).loadConversations();
     _fetchUnreadNotifications();
+    // 会话列表非空时才批量预取聊天记录
+    final convs = ref.read(conversationsProvider).conversations;
+    if (convs.isNotEmpty) {
+      LocalDbService().preloadAllConversationMessages().catchError((_) {});
+    }
     _refreshController.refreshCompleted();
   }
 
@@ -137,7 +145,22 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
           },
         ),
       ),
-      body: Consumer(
+      body: NotificationListener<ScrollUpdateNotification>(
+        onNotification: (notif) {
+          final delta = notif.scrollDelta ?? 0;
+          final barVisible = ref.read(barVisibleProvider);
+          if (notif.metrics.pixels <= 0 && !barVisible) {
+            ref.read(barVisibleProvider.notifier).state = true;
+            return false;
+          }
+          if (delta > 3 && barVisible) {
+            ref.read(barVisibleProvider.notifier).state = false;
+          } else if (delta < -3 && !barVisible) {
+            ref.read(barVisibleProvider.notifier).state = true;
+          }
+          return false;
+        },
+        child: Consumer(
         builder: (context, ref, _) {
           final convState = ref.watch(conversationsProvider);
           final conversations = convState.conversations;
@@ -157,6 +180,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
                     : _buildContent(conversations),
           );
         },
+      ),
       ),
     );
   }
@@ -309,7 +333,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
         child: Column(children: [
           Icon(Icons.chat_bubble_outline, size: 48, color: AppColors.textTertiary),
           SizedBox(height: 12),
-          Text('暂无聊天消息', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+          Text('暂无会话', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
           SizedBox(height: 4),
           Text('开始和好友聊天吧', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
         ]),

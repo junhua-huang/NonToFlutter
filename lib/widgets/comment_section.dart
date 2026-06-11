@@ -168,7 +168,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         final isExpanded = state.expandedReplies.contains(comment.id);
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -185,52 +185,46 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                 onDelete: () => _confirmDelete(comment),
                 isLiking: state.likingIds.contains(comment.id),
               ),
-              // Reply list
+              // Reply list — show expand button only if there are replies
               if (comment.replyCount > 0) ...[
                 if (comment.replies.isNotEmpty && isExpanded)
                   Padding(
                     padding: const EdgeInsets.only(left: 48),
-                    child: AnimatedSize(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                      child: Column(
-                        children: [
-                          ...comment.replies.map((r) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 3),
-                            child: _CommentItem(
-                              comment: r,
-                              targetType: widget.targetType,
-                              isOwner: false,
-                              onReply: () => _notifier.startReply(
-                                r.id.toString(),
-                                r.user?.displayName ?? r.user?.username ?? '用户',
-                                r.userId,
-                              ),
-                              onLike: () => _notifier.toggleLike(r.id),
-                              onDelete: () => _confirmDelete(r),
-                              isLiking: state.likingIds.contains(r.id),
+                    child: Column(
+                      children: [
+                        ...comment.replies.map((r) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: _CommentItem(
+                            comment: r,
+                            targetType: widget.targetType,
+                            isOwner: false,
+                            onReply: () => _notifier.startReply(
+                              r.id.toString(),
+                              r.user?.displayName ?? r.user?.username ?? '用户',
+                              r.userId,
                             ),
-                          )),
-                          // 自动加载更多回复
-                          if (comment.repliesHasMore)
-                            _AutoLoadMore(
-                              isLoading: state.loadingRepliesIds.contains(comment.id),
-                              key: ValueKey('reply_more_${comment.id}'),
-                              onVisible: () {
-                                _notifier.loadMoreReplies(comment.id);
-                              },
-                            ),
-                        ],
-                      ),
+                            onLike: () => _notifier.toggleLike(r.id),
+                            onDelete: () => _confirmDelete(r),
+                            isLiking: state.likingIds.contains(r.id),
+                          ),
+                        )),
+                        if (comment.repliesHasMore)
+                          _AutoLoadMore(
+                            isLoading: state.loadingRepliesIds.contains(comment.id),
+                            key: ValueKey('reply_more_${comment.id}'),
+                            onVisible: () {
+                              _notifier.loadMoreReplies(comment.id);
+                            },
+                          ),
+                      ],
                     ),
                   ),
-                // Toggle reply expand
                 Padding(
-                  padding: const EdgeInsets.only(left: 48, top: 2),
+                  padding: const EdgeInsets.only(left: 48, top: 0),
                   child: GestureDetector(
                     onTap: () => _notifier.toggleExpandReplies(comment.id),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Text(
                         isExpanded ? '收起回复' : '查看 ${comment.replyCount} 条回复',
                         style: TextStyle(
@@ -255,9 +249,11 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: const Text('删除评论'),
-        content: const Text('确定要删除这条评论吗？'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('删除评论',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: const Text('确定要删除这条评论吗？',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -411,21 +407,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  Emoji Picker
+  //  Emoji Picker — 统一使用 EmojiData.categories，与聊天室一致
   // ═══════════════════════════════════════════════════════════
-
-  static const List<List<String>> _emojiCategories = [
-    EmojiData.faces,
-    EmojiData.hearts,
-    EmojiData.gestures,
-    EmojiData.nature,
-    EmojiData.food,
-    EmojiData.objects,
-  ];
-
-  static const List<String> _emojiCategoryNames = [
-    '基础表情', '爱心与装饰', '手势与人物', '动物与自然', '食物与出行', '物品与符号',
-  ];
 
   void _insertEmoji(String emoji) {
     final text = _commentController.text;
@@ -442,6 +425,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
 
   void _showEmojiPicker(BuildContext context, ColorScheme colors) {
     final currentIndexNotifier = ValueNotifier<int>(0);
+    final categories = EmojiData.categories;
 
     showModalBottomSheet(
       context: context,
@@ -453,7 +437,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       builder: (ctx) {
         return Container(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.4,
+            maxHeight: MediaQuery.of(ctx).size.height * 0.42,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -468,73 +452,63 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // Category tabs
+              // Category tabs (emoji icons)
               SizedBox(
-                height: 40,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: _emojiCategories.length,
-                  itemBuilder: (_, i) => ValueListenableBuilder<int>(
-                    valueListenable: currentIndexNotifier,
-                    builder: (_, tabIndex, __) {
-                      final isActive = tabIndex == i;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () => currentIndexNotifier.value = i,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isActive ? colors.primaryContainer : Colors.transparent,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              _emojiCategoryNames[i],
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                                color: isActive ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                height: 44,
+                child: Row(
+                  children: List.generate(categories.length, (i) {
+                    final isSelected = i == 0;
+                    return Expanded(
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: currentIndexNotifier,
+                        builder: (_, tabIndex, __) {
+                          final active = i == tabIndex;
+                          return GestureDetector(
+                            onTap: () => currentIndexNotifier.value = i,
+                            child: Container(
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: active ? colors.primary : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
                               ),
+                              child: Text(categories[i].key, style: const TextStyle(fontSize: 20)),
                             ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
+                    );
+                  }),
                 ),
               ),
               const SizedBox(height: 4),
-              // Divider
               Divider(height: 1, thickness: 0.3, color: colors.outlineVariant),
               // Emoji grid
               Expanded(
                 child: ValueListenableBuilder<int>(
                   valueListenable: currentIndexNotifier,
                   builder: (_, tabIndex, __) {
-                    final emojis = _emojiCategories[tabIndex];
+                    final emojis = categories[tabIndex].value;
                     return GridView.builder(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 6,
-                        childAspectRatio: 1.1,
+                        crossAxisCount: 8,
+                        childAspectRatio: 1.2,
+                        crossAxisSpacing: 4,
+                        mainAxisSpacing: 4,
                       ),
                       itemCount: emojis.length,
-                      itemBuilder: (_, i) => Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            _insertEmoji(emojis[i]);
-                            Navigator.pop(ctx);
-                          },
-                          child: Center(
-                            child: Text(
-                              emojis[i],
-                              style: const TextStyle(fontSize: 28),
-                            ),
-                          ),
+                      itemBuilder: (_, i) => InkWell(
+                        onTap: () {
+                          _insertEmoji(emojis[i]);
+                          Navigator.pop(ctx);
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Center(
+                          child: Text(emojis[i], style: const TextStyle(fontSize: 22)),
                         ),
                       ),
                     );
@@ -592,7 +566,7 @@ class _CommentItem extends ConsumerWidget {
       onTap: onReply,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -647,7 +621,7 @@ class _CommentItem extends ConsumerWidget {
                       style: TextStyle(fontSize: 13, color: colors.onSurface),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   // 时间 + 操作按钮行
                   Row(
                     children: [
@@ -656,27 +630,6 @@ class _CommentItem extends ConsumerWidget {
                         style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
                       ),
                       const SizedBox(width: 12),
-                      // Reply button
-                      SizedBox(
-                        width: touchSize,
-                        height: touchSize,
-                        child: TextButton(
-                          onPressed: onReply,
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(40, 40),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            '回复',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
                       // Delete (owner only)
                       if (isOwnerCheck) ...[
                         const SizedBox(width: 8),
@@ -695,7 +648,7 @@ class _CommentItem extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: colors.error,
+                                color: colors.onSurfaceVariant,
                               ),
                             ),
                           ),

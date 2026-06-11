@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
 import 'package:facebook_clone/config/app_config.dart';
 import 'package:facebook_clone/services/websocket_service.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'request_manager.dart';
 
@@ -22,11 +23,17 @@ class ApiClient {
 
   static String? token;
 
+  /// 全局 NavigatorKey，供 token 失效时跳转登录页
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   /// 请求管理器：去重 + 限并发，可全局配置
   static final RequestManager requestManager = RequestManager(maxConcurrent: 4);
 
   /// 防止并发刷新 token
   static bool _isRefreshing = false;
+
+  /// token 刷新失败回调（供 auth_notifier 注册，触发跳转登录页）
+  static VoidCallback? onTokenExpired;
 
   late final Dio _dio = _createDio();
 
@@ -125,16 +132,63 @@ class ApiClient {
     return dio;
   }
 
+  /// 打印 token 完整信息（JWT 解码 header + payload）
+  static void printToken(String source, String? t) {
+    if (t == null || t.isEmpty) {
+      debugPrint('═══════════════════════════════════════');
+      debugPrint('[TOKEN] $source → NULL/EMPTY');
+      debugPrint('═══════════════════════════════════════');
+      return;
+    }
+    debugPrint('═══════════════════════════════════════');
+    debugPrint('[TOKEN] 来源: $source');
+    debugPrint('[TOKEN] 长度: ${t.length} chars');
+    debugPrint('[TOKEN] 原始值: $t');
+
+    // 尝试 JWT 解码（3 段 base64，以 . 分隔）
+    final parts = t.split('.');
+    if (parts.length == 3) {
+      try {
+        final header = _tryBase64Decode(parts[0]);
+        debugPrint('[TOKEN] JWT Header : $header');
+      } catch (_) {
+        debugPrint('[TOKEN] JWT Header : (decode failed)');
+      }
+      try {
+        final payload = _tryBase64Decode(parts[1]);
+        debugPrint('[TOKEN] JWT Payload: $payload');
+      } catch (_) {
+        debugPrint('[TOKEN] JWT Payload: (decode failed)');
+      }
+    }
+    debugPrint('═══════════════════════════════════════');
+  }
+
+  static String _tryBase64Decode(String str) {
+    // JWT base64 是 URL-safe 的，补全 padding
+    String normalized = str.replaceAll('-', '+').replaceAll('_', '/');
+    switch (normalized.length % 4) {
+      case 2:
+        normalized += '==';
+        break;
+      case 3:
+        normalized += '=';
+        break;
+    }
+    final bytes = base64.decode(normalized);
+    return utf8.decode(bytes);
+  }
+
   static void setToken(String? t) {
     token = t;
     if (t != null && t.isNotEmpty) {
+      printToken('ApiClient.setToken (内存写入)', t);
       // Async connect WS whenever token is available
       WebSocketService().connect().catchError((e, stack) {
         debugPrint('❗ WebSocket connect failed: $e');
         debugPrint(stack.toString());
       });
     } else {
-      // Disconnect WS when token is cleared
       WebSocketService().disconnect();
     }
   }
@@ -160,6 +214,7 @@ class ApiClient {
         final newToken = data['access_token'] as String?;
         debugPrint('[ApiClient] _doRefreshToken: step4 newToken=${newToken != null ? "yes(${newToken.length}chars)" : "no"}');
         if (newToken != null && newToken.isNotEmpty) {
+          printToken('HTTP POST /auth/refresh (网络刷新)', newToken);
           // 持久化新 token
           try {
             debugPrint('[ApiClient] _doRefreshToken: step5 persisting to SharedPreferences...');
@@ -206,6 +261,8 @@ class ApiClient {
         debugPrint('[ApiClient] _handleRefreshFailed: prefs cleanup error: $e');
       }
     }();
+    // 通知 UI 层跳转登录页
+    onTokenExpired?.call();
   }
 
   Future<ApiResponse<T>> get<T>(String path, {Map<String, dynamic>? params}) async {
@@ -233,6 +290,14 @@ class ApiClient {
       priority: priority,
       bypassManager: bypassManager,
     );
+  }
+
+  /// 按键取消一个请求（排队中或执行中均可）。
+  void cancelRequest(String key) => requestManager.cancel(key);
+
+  /// 取消一个去重 GET 请求（自动生成 key）。
+  void cancelGet(String path, {Map<String, dynamic>? params}) {
+    requestManager.cancel(_makeKey('GET', path, params));
   }
 
   /// 生成请求去重 key。

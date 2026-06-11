@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:facebook_clone/config/app_config.dart';
@@ -14,9 +15,10 @@ import 'package:facebook_clone/widgets/mention_topic_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_compress_ohos/video_compress_ohos.dart';
+import 'package:video_player/video_player.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:video_compress_ohos/video_compress_ohos.dart';
 import 'package:video_thumbnail_ohos/video_thumbnail_ohos.dart';
 
 /// 发帖页面 — 支持 1-9 张图片、压缩、上传进度、草稿恢复
@@ -40,6 +42,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   XFile? _selectedVideo;
   Uint8List? _videoBytes;
   Uint8List? _thumbnailBytes; // 视频首帧封面
+  VideoPlayerController? _videoController;
+  bool _isVideoPlaying = false;
+
+  // 长按删除
+  bool _showDeleteButtons = false;
 
   bool _isSubmitting = false;
   double _uploadProgress = 0.0;
@@ -69,6 +76,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   @override
   void dispose() {
+    _videoController?.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -222,7 +230,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
-  void _removeImage(int index) {
+  void _removeImageAt(int index) {
     setState(() {
       _selectedImages.removeAt(index);
       _imageBytesList.removeAt(index);
@@ -236,6 +244,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _selectedVideo = null;
       _videoBytes = null;
       _thumbnailBytes = null;
+      _videoController?.dispose();
+      _videoController = null;
+      _isVideoPlaying = false;
     });
   }
 
@@ -457,7 +468,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       top: 4,
                       right: 4,
                       child: GestureDetector(
-                        onTap: () => _removeImage(index),
+                        onTap: () => _removeImageAt(index),
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
@@ -499,12 +510,32 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             margin: const EdgeInsets.only(right: 8),
             child: GestureDetector(
               onTap: () => _previewImage(index),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.memory(
-                  _imageBytesList[index],
-                  fit: BoxFit.cover,
-                ),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(
+                      _imageBytesList[index],
+                      fit: BoxFit.cover,
+                      width: 120, height: 120,
+                    ),
+                  ),
+                  if (_showDeleteButtons)
+                    Positioned(
+                      top: 4, right: 4,
+                      child: GestureDetector(
+                        onTap: () => _removeImageAt(index),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.close, size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           );
@@ -531,9 +562,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   void _showEmojiPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => _EmojiPickerPanel(
         onEmojiSelected: (emoji) {
@@ -620,40 +651,98 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 200,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(Icons.videocam, size: 40, color: Colors.white54),
-                  Icon(Icons.play_arrow, size: 48, color: Colors.white),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: 8,
-            right: 8,
             child: GestureDetector(
-              onTap: _removeMedia,
+              onTap: _toggleVideoPlayback,
+              onLongPress: _showDeleteWithTimer,
               child: Container(
-                padding: const EdgeInsets.all(4),
+                height: 220,
+                width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.black54,
+                  color: Colors.black,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.close, size: 18, color: Colors.white),
+                child: _isVideoPlaying && _videoController != null
+                    ? VideoPlayer(_videoController!)
+                    : Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // 封面缩略图
+                          if (_thumbnailBytes != null)
+                            Image.memory(_thumbnailBytes!, fit: BoxFit.cover)
+                          else
+                            const Icon(Icons.videocam, size: 40, color: Colors.white24),
+                          // 播放按钮
+                          Center(
+                            child: Container(
+                              width: 56, height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.black45,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.play_arrow, size: 36, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),
+          // 删除按钮（长按后显示，3秒后消失）
+          if (_showDeleteButtons)
+            Positioned(
+              top: 8, right: 8,
+              child: GestureDetector(
+                onTap: _removeMedia,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.close, size: 18, color: Colors.white),
+                ),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  void _toggleVideoPlayback() async {
+    if (_videoController == null && _selectedVideo != null) {
+      try {
+        _videoController = VideoPlayerController.file(
+          File(_selectedVideo!.path),
+        );
+        await _videoController!.initialize();
+        _videoController!.play();
+        _videoController!.addListener(() {
+          if (mounted && _videoController!.value.position >= _videoController!.value.duration) {
+            setState(() => _isVideoPlaying = false);
+            _videoController?.dispose();
+            _videoController = null;
+          }
+        });
+        setState(() => _isVideoPlaying = true);
+      } catch (_) {}
+      return;
+    }
+    if (_videoController != null) {
+      if (_videoController!.value.isPlaying) {
+        _videoController!.pause();
+        setState(() => _isVideoPlaying = false);
+      } else {
+        _videoController!.play();
+        setState(() => _isVideoPlaying = true);
+      }
+    }
+  }
+
+  void _showDeleteWithTimer() {
+    setState(() => _showDeleteButtons = true);
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showDeleteButtons = false);
+    });
   }
 
   @override
@@ -679,8 +768,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             Navigator.of(context).pop();
           },
         ),
-        centerTitle: false,
-        title: TextButton(
+        actions: [
+          TextButton(
           onPressed: canPost && !isOverLimit ? _submitPost : null,
           style: TextButton.styleFrom(
             backgroundColor: canPost && !isOverLimit ? _xBlue : Colors.grey[300],
@@ -697,6 +786,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               : const Text('发帖',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
         ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(0.5),
           child: Container(height: 0.5, color: AppColors.borderLight),
@@ -917,60 +1007,85 @@ class _ToolbarButton extends StatelessWidget {
 
 // ========== Emoji picker panel ==========
 
-class _EmojiPickerPanel extends StatelessWidget {
+class _EmojiPickerPanel extends StatefulWidget {
   final void Function(String emoji) onEmojiSelected;
 
   const _EmojiPickerPanel({required this.onEmojiSelected});
 
-  static const _emojis = <String>[
-    ...EmojiData.faces,
-    ...EmojiData.hearts,
-    ...EmojiData.gestures,
-    ...EmojiData.nature,
-    ...EmojiData.food,
-    ...EmojiData.objects,
-  ];
+  @override
+  State<_EmojiPickerPanel> createState() => _EmojiPickerPanelState();
+}
+
+class _EmojiPickerPanelState extends State<_EmojiPickerPanel> {
+  int _tabIndex = 0;
 
   @override
   Widget build(BuildContext context) {
+    final categories = EmojiData.categories;
+    final emojis = categories[_tabIndex].value;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      child: Container(
+        height: 320,
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              width: 36,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
+            // Category tabs
             SizedBox(
-              height: 280,
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 8,
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                ),
-                itemCount: _emojis.length,
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onTap: () {
-                      onEmojiSelected(_emojis[index]);
-                      Navigator.pop(context);
-                    },
-                    child: Center(
-                      child: Text(
-                        _emojis[index],
-                        style: const TextStyle(fontSize: 24),
+              height: 44,
+              child: Row(
+                children: List.generate(categories.length, (i) {
+                  final isSelected = i == _tabIndex;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _tabIndex = i),
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: isSelected ? AppColors.primary : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                        child: Text(categories[i].key, style: const TextStyle(fontSize: 20)),
                       ),
                     ),
                   );
-                },
+                }),
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.borderLight),
+            // Emoji grid
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 8,
+                  childAspectRatio: 1.2,
+                  crossAxisSpacing: 4,
+                  mainAxisSpacing: 4,
+                ),
+                itemCount: emojis.length,
+                itemBuilder: (context, index) => InkWell(
+                  onTap: () {
+                    widget.onEmojiSelected(emojis[index]);
+                    Navigator.pop(context);
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Center(
+                    child: Text(emojis[index], style: const TextStyle(fontSize: 22)),
+                  ),
+                ),
               ),
             ),
           ],

@@ -460,21 +460,23 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
 
     return NotificationListener<ScrollUpdateNotification>(
       onNotification: (notif) {
-        if (notif.dragDetails != null) {
-          final delta = notif.scrollDelta ?? 0;
-          final barVisible = ref.read(barVisibleProvider);
-          if (delta > 5 && barVisible) {
-            ref.read(barVisibleProvider.notifier).state = false;
-          } else if (delta < -5 && !barVisible) {
-            ref.read(barVisibleProvider.notifier).state = true;
-          }
+        final delta = notif.scrollDelta ?? 0;
+        final barVisible = ref.read(barVisibleProvider);
+        if (notif.metrics.pixels <= 0 && !barVisible) {
+          ref.read(barVisibleProvider.notifier).state = true;
+          return false;
+        }
+        if (delta > 3 && barVisible) {
+          ref.read(barVisibleProvider.notifier).state = false;
+        } else if (delta < -3 && !barVisible) {
+          ref.read(barVisibleProvider.notifier).state = true;
         }
         return false;
       },
       child: NestedScrollView(
       headerSliverBuilder: (context, innerBoxIsScrolled) => [
         SliverAppBar(
-          expandedHeight: 480,
+          expandedHeight: 420,
           floating: false,
           pinned: true,
           automaticallyImplyLeading: false,

@@ -1,9 +1,11 @@
 import 'package:facebook_clone/models/comment.dart';
+import 'package:facebook_clone/models/user.dart';
 import 'package:facebook_clone/providers/comment_state.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
 import 'package:facebook_clone/services/api/comment_service.dart';
 import 'package:facebook_clone/services/comic_service.dart';
 import 'package:facebook_clone/services/sound_service.dart';
+import 'package:facebook_clone/providers/auth_notifier.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Family parameter for comment provider — identifies a comment section uniquely.
@@ -37,8 +39,11 @@ class CommentNotifier extends StateNotifier<CommentState> {
   final CommentSectionKey key;
   final CommentService _commentService = CommentService();
   final ComicService _comicService = ComicService();
+  final User? _currentUser; // 用于乐观更新显示头像和名称
 
-  CommentNotifier(this.key) : super(const CommentState()) {
+  CommentNotifier(this.key, {User? currentUser})
+      : _currentUser = currentUser,
+        super(const CommentState()) {
     loadComments();
   }
 
@@ -78,8 +83,13 @@ class CommentNotifier extends StateNotifier<CommentState> {
       }
 
       if (mounted) {
+        // 合并：保留本地已添加但服务器尚未返回的评论，避免加载覆盖
+        final serverIds = comments.map((c) => c.id).toSet();
+        final kept = state.comments
+            .where((c) => c.id < 0 || !serverIds.contains(c.id))
+            .toList();
         state = state.copyWith(
-          comments: comments,
+          comments: [...kept, ...comments],
           isLoading: false,
           hasMore: hasMore,
           error: null,
@@ -149,11 +159,12 @@ class CommentNotifier extends StateNotifier<CommentState> {
     // 立即播放发送音效
     SoundService().playSendSound();
 
-    // 乐观更新：立即显示评论
+    // 乐观更新：立即显示评论，使用当前登录用户信息
     final optimisticComment = Comment(
       id: -DateTime.now().millisecondsSinceEpoch,
       content: text,
-      userId: 0, // 会由服务端返回真实值
+      userId: _currentUser?.id ?? 0,
+      user: _currentUser,
       postId: key.targetId,
       parentId: parentId,
       replyToUserId: replyingToUserId,
@@ -523,6 +534,11 @@ class CommentNotifier extends StateNotifier<CommentState> {
       replyingToName: name,
       replyingToUserId: userId,
     );
+    // 自动展开被回复评论的回复列表
+    final cid = int.tryParse(commentId);
+    if (cid != null && !state.expandedReplies.contains(cid)) {
+      loadReplies(cid);
+    }
   }
 
   void cancelReply() {
@@ -555,5 +571,5 @@ class CommentNotifier extends StateNotifier<CommentState> {
 
 /// Family provider: creates one CommentNotifier per (targetType, targetId) pair.
 final commentProvider = StateNotifierProvider.family<CommentNotifier, CommentState, CommentSectionKey>(
-  (ref, key) => CommentNotifier(key),
+  (ref, key) => CommentNotifier(key, currentUser: ref.read(authProvider).user),
 );

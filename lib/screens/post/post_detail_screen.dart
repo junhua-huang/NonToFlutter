@@ -15,6 +15,7 @@ import 'package:facebook_clone/utils/image_utils.dart';
 import 'package:facebook_clone/widgets/comment_section.dart';
 import 'package:facebook_clone/widgets/media_viewer.dart';
 import 'package:facebook_clone/widgets/rich_text_content.dart';
+import 'package:facebook_clone/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -155,14 +156,21 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('帖子统计'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('帖子统计',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('浏览量: ${stats['views'] ?? 0}'),
-                Text('点赞数: ${stats['likes'] ?? post.likeCount}'),
-                Text('评论数: ${stats['comments'] ?? post.commentCount}'),
+                Text('浏览量: ${stats['views'] ?? 0}',
+                    style: const TextStyle(fontSize: 15)),
+                const SizedBox(height: 4),
+                Text('点赞数: ${stats['likes'] ?? post.likeCount}',
+                    style: const TextStyle(fontSize: 15)),
+                const SizedBox(height: 4),
+                Text('评论数: ${stats['comments'] ?? post.commentCount}',
+                    style: const TextStyle(fontSize: 15)),
               ],
             ),
             actions: [
@@ -229,8 +237,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除帖子'),
-        content: const Text('确定要删除这条帖子吗？此操作不可撤销'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('删除帖子',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: const Text('确定要删除这条帖子吗？此操作不可撤销',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -276,11 +287,13 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('举报帖子'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('举报帖子',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         children: [
           ..._reportReasons.map((r) => SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, r),
-            child: Text(r),
+            child: Text(r, style: const TextStyle(fontSize: 15)),
           )),
         ],
       ),
@@ -326,40 +339,44 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         title: Text('帖子', style: TextStyle(color: _xBlack, fontSize: 18, fontWeight: FontWeight.w700)),
         centerTitle: false,
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: _xBlue))
-          : _post == null
-              ? Center(child: Text('帖子不存在', style: TextStyle(color: _xDarkGrey)))
-              : Column(
-                  children: [
-                    Expanded(
-                      child: CustomScrollView(
-                        controller: _scrollController,
-                        slivers: [
-                          SliverToBoxAdapter(child: _buildPostCard()),
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Divider(height: 1, color: _xLightGrey),
-                            ),
-                          ),
-                          SliverFillRemaining(
-                            hasScrollBody: true,
-                            child: CommentSection(
-                              targetType: 'post',
-                              targetId: widget.postId,
-                              onCommentCountChanged: (count) {
-                                if (mounted) {
-                                  setState(() => _post = _post!.copyWith(commentCount: count));
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+      body: _post != null
+          ? _buildContent()
+          : _isLoading
+              ? Center(child: CircularProgressIndicator(color: _xBlue))
+              : Center(child: Text('帖子不存在', style: TextStyle(color: _xDarkGrey))),
+    );
+  }
+
+  Widget _buildContent() {
+    return Column(
+      children: [
+        Expanded(
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              SliverToBoxAdapter(child: _buildPostCard()),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Divider(height: 1, color: _xLightGrey),
                 ),
+              ),
+              SliverFillRemaining(
+                hasScrollBody: true,
+                child: CommentSection(
+                  targetType: 'post',
+                  targetId: widget.postId,
+                  onCommentCountChanged: (count) {
+                    if (mounted && _post != null) {
+                      setState(() => _post = _post!.copyWith(commentCount: count));
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -419,22 +436,23 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                 builder: (ctx) {
                   final auth = ref.read(authProvider);
                   final isOwner = post.userId == auth.user?.id;
-                  return PopupMenuButton<String>(
+                  return IconButton(
                     icon: Icon(Icons.more_horiz, size: 18, color: _xDarkGrey),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    onSelected: (value) {
-                      if (value == 'delete') {
+                    onPressed: () async {
+                      final options = <TwitterSheetOption<String>>[
+                        if (isOwner)
+                          const TwitterSheetOption(icon: Icons.delete_outline, label: '删除', value: 'delete', isDestructive: true),
+                        const TwitterSheetOption(icon: Icons.flag_outlined, label: '举报', value: 'report'),
+                      ];
+                      final action = await TwitterBottomSheet.show<String>(ctx, options: options);
+                      if (action == 'delete') {
                         _deletePost();
-                      } else if (value == 'report') {
+                      } else if (action == 'report') {
                         _reportPost();
                       }
                     },
-                    itemBuilder: (ctx) => [
-                      if (isOwner)
-                        const PopupMenuItem(value: 'delete', child: Text('删除')),
-                      const PopupMenuItem(value: 'report', child: Text('举报')),
-                    ],
                   );
                 },
               ),

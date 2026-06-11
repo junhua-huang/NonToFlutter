@@ -59,9 +59,9 @@ class FeedNotifier extends StateNotifier<FeedState> {
     });
   }
 
-  /// 构造时先读缓存，空则等预热推送
+  /// 构造时先读缓存，空则触发网络加载
   Future<void> _loadCached() async {
-    if (state.posts.isNotEmpty) return; // 已有数据，不覆盖
+    if (state.posts.isNotEmpty) return;
     try {
       final result = await DataLayer()
           .query('feed:1:posts', () async => null)
@@ -71,8 +71,11 @@ class FeedNotifier extends StateNotifier<FeedState> {
         final posts =
             cached.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
         state = state.copyWith(posts: posts, isLoading: false);
+        return;
       }
     } catch (_) {}
+    // 缓存空 → 触发网络加载
+    unawaited(loadPosts());
   }
 
   Future<void> _fetchAndRefreshFeed() async {

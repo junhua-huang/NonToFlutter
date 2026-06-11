@@ -1,11 +1,11 @@
 import 'user.dart';
 
-enum NotificationType { like, comment, friendRequest, friendAccept, mention, message }
+enum NotificationType { like, comment, friendRequest, friendAccept, mention, message, system }
 
 class AppNotification {
   final int id;
   final int userId;
-  final int senderId;
+  final int? senderId;
   final User? sender;
   final String notificationType;
   final String? title;
@@ -16,14 +16,14 @@ class AppNotification {
   final DateTime? createdAt;
 
   AppNotification({
-    required this.id, required this.userId, required this.senderId,
+    required this.id, required this.userId, this.senderId,
     this.sender, required this.notificationType, this.title, this.content,
     this.relatedId, this.relatedType, this.isRead = false, this.createdAt,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
     id: _p(json['id']), userId: _p(json['user_id']),
-    senderId: _p(json['sender_id']),
+    senderId: json['sender_id'] != null ? _p(json['sender_id']) : null,
     sender: json['sender'] != null ? User.fromJson(json['sender']) : null,
     notificationType: json['notification_type'] ?? '',
     title: json['title'], content: json['content'],
@@ -51,6 +51,7 @@ class AppNotification {
       case 'friend_accept': return NotificationType.friendAccept;
       case 'mention': return NotificationType.mention;
       case 'message': return NotificationType.message;
+      case 'system': return NotificationType.system;
       default: return NotificationType.message;
     }
   }

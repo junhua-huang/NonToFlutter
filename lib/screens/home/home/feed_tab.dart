@@ -126,26 +126,7 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                           padding: const EdgeInsets.only(left: 12),
                           child: GestureDetector(
                             onTap: () => Scaffold.of(context).openDrawer(),
-                            child: CircleAvatar(
-                              radius: 16,
-                              backgroundColor: AppColors.primary,
-                              backgroundImage: authState.user?.avatarUrl != null &&
-                                      authState.user!.avatarUrl!.isNotEmpty
-                                  ? NetworkImage(
-                                      ImageUtils.resolveUrl(authState.user!.avatarUrl),
-                                    )
-                                  : null,
-                              child: (authState.user?.avatarUrl == null ||
-                                      authState.user!.avatarUrl!.isEmpty)
-                                  ? Text(
-                                      authState.user?.initials ?? '?',
-                                      style: const TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold),
-                                    )
-                                  : null,
-                            ),
+                            child: ImageUtils.buildAvatar(authState.user, radius: 10),
                           ),
                         ),
                         title: Text(
@@ -173,14 +154,17 @@ class _FeedTabState extends ConsumerState<FeedTab> {
             return Expanded(
               child: NotificationListener<ScrollUpdateNotification>(
                 onNotification: (notif) {
-                  if (notif.dragDetails != null) {
-                    final delta = notif.scrollDelta ?? 0;
-                    final barVisible = ref.read(barVisibleProvider);
-                    if (delta > 5 && barVisible) {
-                      ref.read(barVisibleProvider.notifier).state = false;
-                    } else if (delta < -5 && !barVisible) {
-                      ref.read(barVisibleProvider.notifier).state = true;
-                    }
+                  final delta = notif.scrollDelta ?? 0;
+                  final barVisible = ref.read(barVisibleProvider);
+                  // 在列表顶部时始终显示
+                  if (notif.metrics.pixels <= 0 && !barVisible) {
+                    ref.read(barVisibleProvider.notifier).state = true;
+                    return false;
+                  }
+                  if (delta > 3 && barVisible) {
+                    ref.read(barVisibleProvider.notifier).state = false;
+                  } else if (delta < -3 && !barVisible) {
+                    ref.read(barVisibleProvider.notifier).state = true;
                   }
                   return false;
                 },

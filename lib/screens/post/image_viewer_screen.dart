@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:facebook_clone/models/post.dart';
 import 'package:facebook_clone/models/user.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 /// 全屏图片浏览模式
@@ -243,11 +244,19 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
     );
   }
 
-  /// 构建图片滑动页（PageView + 上下滑动导航）
+  /// 构建图片滑动页（PageView + 上下滑动导航）— Web 端支持鼠标/触控板拖拽
   Widget _buildImagePages(List<String> resolved, int safeIndex) {
     return NotificationListener<ScrollNotification>(
-      onNotification: (_) => false, // 不拦截，让 PageView 正常处理
-      child: PageView.builder(
+      onNotification: (_) => false,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          dragDevices: {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.trackpad,
+          },
+        ),
+        child: PageView.builder(
         controller: _pageController,
         itemCount: resolved.length,
         onPageChanged: (index) {
@@ -268,6 +277,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           );
         },
       ),
+    ),
     );
   }
 

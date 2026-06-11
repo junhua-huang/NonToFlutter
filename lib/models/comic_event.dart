@@ -133,10 +133,15 @@ class ComicEvent {
       venue: json['venue'] ?? '',
       startDate: json['startDate'],
       endDate: json['endDate'],
+      ticketInfo: json['ticketInfo'],
       status: json['status'] ?? 0,
       statusText: json['statusText'] ?? '即将开始',
       tags: List<String>.from(json['tags'] ?? []),
       coverImage: json['coverImage'],
+      images: (json['images'] as List<dynamic>?)
+              ?.map((e) => ComicEventImage.fromJson(e))
+              .toList() ??
+          [],
       followCount: json['followCount'] ?? 0,
       isFollowed: json['isFollowed'] ?? json['is_following'] ?? false,
       isOwner: json['isOwner'] ?? json['is_owner'] ?? false,

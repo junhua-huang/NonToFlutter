@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:facebook_clone/config/app_theme.dart';
 import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/routes/app_routes.dart';
 import 'package:facebook_clone/screens/auth/login_screen.dart';
 import 'package:facebook_clone/screens/home/home_screen.dart';
 import 'package:facebook_clone/services/api/api_client.dart';
@@ -11,10 +10,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Splash screen — follows the three-layer architecture:
-///   1. Read token from SharedPreferences (local, <10ms) → decide login/home
-///   2. If logged in → warmup DataLayer from SQLite L2 (50-100ms, no network)
-///   3. Navigate immediately, auth.validateSession() runs in background
+/// 闪屏页 — 职责单一：校验 token 有效性，放行前不做任何业务网络请求。
+///
+/// 流程：
+///   1. 读 SharedPreferences 中的 token
+///   2. 无 token → 直接进登录页
+///   3. 有 token → 设置到 ApiClient → 调 /auth/profile 校验
+///   4. 校验通过 → 进首页（Provider 自行初始化数据）
+///   5. 校验失败（401/网络错误）→ 清除 token → 进登录页
+///
+/// 在确定 token 有效/无效之前，闪屏不消失。
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -25,103 +30,110 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _logoScaleAnimation;
-  late final Animation<double> _logoFadeAnimation;
-  late final Animation<double> _textFadeAnimation;
-  late final Animation<double> _progressAnimation;
-  late final TickerFuture _animationDone;
-  bool _showCookieConsent = false;
   bool _navigated = false;
+  bool _showCookieConsent = false;
 
   @override
   void initState() {
     super.initState();
-
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 2500),
       vsync: this,
     );
-
-    _logoScaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
-      ),
-    );
-    _logoFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
-      ),
-    );
-    _textFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.4, 0.7, curve: Curves.easeOut),
-      ),
-    );
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeInOut),
-      ),
-    );
-
-    _animationDone = _controller.forward();
-    _checkCookieConsentAndNavigate();
+    _controller.forward();
+    _validateAndNavigate();
   }
 
-  Future<void> _checkCookieConsentAndNavigate() async {
-    try {
-      // Wait for animation to complete (3000ms)
-      await _animationDone;
-
-      if (!mounted) return;
-
-      final prefs = await SharedPreferences.getInstance();
-      final hasConsent = prefs.getBool('cookie_consent') ?? false;
-
-      if (!hasConsent && mounted) {
-        setState(() => _showCookieConsent = true);
-      } else {
-        _navigateAfterSplash();
-      }
-    } catch (e) {
-      debugPrint('SplashScreen error: $e');
-      if (mounted) _doNavigate(false);
-    }
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
-  /// Read token from SharedPreferences (<10ms).
-  /// If logged in → warmup SQLite cache → navigate to home.
-  /// If not → navigate to login.
-  /// Network profile validation runs in background via auth.validateSession().
-  Future<void> _navigateAfterSplash() async {
-    if (_navigated) return;
+  /// ═══════════════════════════════════════════════════════
+  ///  核心：校验 token → 放行
+  /// ═══════════════════════════════════════════════════════
+
+  Future<void> _validateAndNavigate() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('access_token');
       final userId = prefs.getString('current_user_id');
-      final isLoggedIn = token != null &&
-          token.isNotEmpty &&
-          userId != null &&
-          userId.isNotEmpty;
+
+      // 无 token → 直接进登录，不等动画
+      if (token == null || token.isEmpty || userId == null || userId.isEmpty) {
+        if (mounted) _doNavigate(false);
+        return;
+      }
+
+      // 有 token → 设置到全局，发起校验
+      ApiClient.setToken(token);
+      await DataLayer().initDb(userId).catchError((_) {});
+
+      // 仅发一个请求：校验 token
+      final valid = await _verifyToken();
 
       if (!mounted) return;
 
-      if (isLoggedIn) {
-        // 预热前必须设置 token，否则网络请求全部 403
-        ApiClient.setToken(token);
-        // DB 初始化 + 预热由 AuthNotifier._initDbAndCache() 统一触发，闪屏不重复做
-        DataLayer().initDb(userId).catchError((_) {});
-
-        if (mounted) _doNavigate(true);
+      if (valid) {
+        // Token 有效 → 等动画播完（如果还没播完）
+        if (_controller.isCompleted) {
+          _checkCookieAndGo(true);
+        } else {
+          await _controller.forward().catchError((_) {});
+          if (mounted) _checkCookieAndGo(true);
+        }
       } else {
+        // Token 无效 → 清除，进登录
+        await _clearLocalAuth(prefs);
         if (mounted) _doNavigate(false);
       }
     } catch (e) {
-      debugPrint('SplashScreen._navigateAfterSplash error: $e');
+      debugPrint('SplashScreen validate error: $e');
       if (mounted) _doNavigate(false);
+    }
+  }
+
+  /// 发一个 /auth/profile 确认 token 是否有效
+  Future<bool> _verifyToken() async {
+    try {
+      final resp = await ApiClient()
+          .get<Map<String, dynamic>>('/auth/profile')
+          .timeout(const Duration(seconds: 10));
+      if (resp.success && resp.data != null) {
+        // 顺便缓存用户信息到 DataLayer，AuthNotifier 恢复时可直接读
+        final userId = SharedPreferences.getInstance()
+            .then((p) => p.getString('current_user_id'));
+        final uid = await userId;
+        if (uid != null && mounted) {
+          DataLayer().write('user:$uid:profile', resp.data);
+        }
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _clearLocalAuth(SharedPreferences prefs) async {
+    ApiClient.setToken(null);
+    await prefs.remove('access_token');
+    await prefs.remove('current_user_id');
+    await prefs.remove('current_user_json');
+  }
+
+  Future<void> _checkCookieAndGo(bool isLoggedIn) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasConsent = prefs.getBool('cookie_consent') ?? false;
+      if (!hasConsent && mounted) {
+        setState(() => _showCookieConsent = true);
+      } else {
+        if (mounted) _doNavigate(isLoggedIn);
+      }
+    } catch (_) {
+      if (mounted) _doNavigate(isLoggedIn);
     }
   }
 
@@ -129,18 +141,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted || _navigated) return;
     _navigated = true;
 
-    // Trigger auth initialization now (reads cached user from prefs)
-    // so HomeScreen sees auth state on first build.
+    // 触发 AuthNotifier 读取 prefs 中的用户缓存
     if (isLoggedIn) {
       ref.read(authProvider);
-      Future.microtask(() {
-        ref.read(authProvider.notifier).validateSession();
-      });
     }
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
+        transitionDuration: const Duration(milliseconds: 400),
         pageBuilder: (context, animation, secondaryAnimation) {
           return FadeTransition(
             opacity: animation,
@@ -151,110 +159,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  // ═══════════════════════════════════════════════════════
+  //  Cookie 同意弹窗
+  // ═══════════════════════════════════════════════════════
 
-  @override
-  Widget build(BuildContext context) {
-    // Cookie consent dialog
-    if (_showCookieConsent) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showCookieConsentDialog(context);
-      });
+  void _onCookieResult(bool accepted) {
+    setState(() => _showCookieConsent = false);
+    if (accepted) {
+      SharedPreferences.getInstance().then((p) => p.setBool('cookie_consent', true));
     }
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 2),
-              FadeTransition(
-                opacity: _logoFadeAnimation,
-                child: ScaleTransition(
-                  scale: _logoScaleAnimation,
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppColors.textPrimary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'N',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 40,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              FadeTransition(
-                opacity: _textFadeAnimation,
-                child: const Text(
-                  'nonto',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              FadeTransition(
-                opacity: _textFadeAnimation,
-                child: const Text(
-                  '发现世界的动态',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              const Spacer(flex: 3),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 80),
-                child: Column(
-                  children: [
-                    AnimatedBuilder(
-                      animation: _progressAnimation,
-                      builder: (context, child) {
-                        return LinearProgressIndicator(
-                          value: _progressAnimation.value,
-                          backgroundColor: AppColors.borderLight,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppColors.primary),
-                          borderRadius: BorderRadius.circular(4),
-                          minHeight: 3,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    _doNavigate(true);
   }
 
   void _showCookieConsentDialog(BuildContext context) async {
     _showCookieConsent = false;
-    final result = await showModalBottomSheet<bool>(
+    await showModalBottomSheet<bool>(
       context: context,
       isDismissible: false,
       enableDrag: false,
@@ -275,45 +194,31 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               const SizedBox(height: 12),
               Center(
                 child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCED5DC),
-                    borderRadius: BorderRadius.circular(2),
+                  width: 36, height: 4,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFCED5DC),
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
                   ),
                 ),
               ),
               const SizedBox(height: 24),
               Container(
-                width: 48,
-                height: 48,
+                width: 48, height: 48,
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.cookie_outlined,
-                    size: 26, color: AppColors.primary),
+                child: const Icon(Icons.cookie_outlined, size: 26, color: AppColors.primary),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Cookie 偏好设置',
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    letterSpacing: -0.3),
-              ),
+              const Text('Cookie 偏好设置',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.3)),
               const SizedBox(height: 8),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  '我们使用 Cookie 和类似技术来改善您的体验。继续使用即表示您同意。',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      height: 1.6),
-                ),
+                child: Text('我们使用 Cookie 和类似技术来改善您的体验。继续使用即表示您同意。',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.6)),
               ),
               const SizedBox(height: 28),
               Padding(
@@ -328,52 +233,100 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         backgroundColor: AppColors.textPrimary,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: const Text('接受全部',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700)),
+                      child: const Text('接受全部', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
                     const SizedBox(height: 10),
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
                       style: TextButton.styleFrom(
                         minimumSize: const Size(double.infinity, 44),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(22)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                       ),
-                      child: const Text(
-                        '查看隐私政策',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary),
-                      ),
+                      child: const Text('查看隐私政策',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
             ],
           ),
         ),
       ),
-    );
-
-    if (!mounted) return;
-    if (result == false) {
-      Navigator.pushNamed(context, AppRoutes.privacyPolicy);
-      final prefs = await SharedPreferences.getInstance();
-      final hasConsent = prefs.getBool('cookie_consent') ?? false;
-      if (!hasConsent && mounted) {
-        _showCookieConsentDialog(context);
+    ).then((value) {
+      if (value != null) {
+        _onCookieResult(value);
+      } else {
+        _onCookieResult(false);
       }
-    } else {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('cookie_consent', true);
-      if (mounted) _navigateAfterSplash();
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  UI
+  // ═══════════════════════════════════════════════════════
+
+  @override
+  Widget build(BuildContext context) {
+    // Cookie 弹窗
+    if (_showCookieConsent) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _showCookieConsent) {
+          _showCookieConsentDialog(context);
+        }
+      });
     }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final progress = _controller.value;
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo: 蓝色圆底 + 大写 N
+                Transform.scale(
+                  scale: 0.5 + 0.5 * Curves.elasticOut.transform(progress.clamp(0.0, 0.6) / 0.6),
+                  child: Opacity(
+                    opacity: (progress.clamp(0.0, 0.4) / 0.4),
+                    child: Container(
+                      width: 88, height: 88,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: const Center(
+                        child: Text('N',
+                            style: TextStyle(fontSize: 46, fontWeight: FontWeight.w800, color: Colors.white, height: 1)),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // App name
+                Opacity(
+                  opacity: ((progress - 0.35).clamp(0.0, 0.25) / 0.25),
+                  child: const Text('NonTo',
+                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -1)),
+                ),
+                const SizedBox(height: 10),
+                // Subtitle
+                Opacity(
+                  opacity: ((progress - 0.5).clamp(0.0, 0.3) / 0.3),
+                  child: const Text('连接你的异次元世界',
+                      style: TextStyle(fontSize: 15, color: AppColors.textSecondary, letterSpacing: 0.5)),
+                ),
+                const SizedBox(height: 32),
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 }

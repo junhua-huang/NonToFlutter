@@ -5,6 +5,9 @@ import 'package:facebook_clone/models/post.dart';
 import 'package:facebook_clone/models/topic.dart';
 import 'package:facebook_clone/models/user.dart';
 import 'package:facebook_clone/providers/core_providers.dart';
+import 'package:facebook_clone/widgets/comic_event_card.dart';
+import 'package:facebook_clone/screens/comic/comic_timeline_page.dart';
+import 'package:facebook_clone/screens/comic/comic_my_events_page.dart';
 import 'package:facebook_clone/screens/comic/comic_detail_page.dart';
 import 'package:facebook_clone/screens/post/post_detail_screen.dart';
 import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
@@ -39,6 +42,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
   List<String> _searchHistory = [];
   List<User> _userResults = [];
   List<Post> _postResults = [];
+  List<ComicEvent> _comicEventResults = [];
 
   bool _isSearching = false;
   bool _isLoading = false;
@@ -50,7 +54,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
     // Explorer data auto-loads via exploreProvider constructor — no _activate needed
@@ -67,8 +71,11 @@ class _SearchTabState extends ConsumerState<SearchTab>
   }
 
   Future<void> _onRefresh() async {
-    await ref.read(exploreProvider.notifier).loadDefault(forceRefresh: true);
+    try {
+      await ref.read(exploreProvider.notifier).loadDefault(forceRefresh: true);
+    } catch (_) {}
     _refreshController.refreshCompleted();
+    _refreshController.loadComplete?.call();
   }
 
   void _onTextChanged() {
@@ -90,6 +97,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
         _isSearching = false;
         _userResults.clear();
         _postResults.clear();
+        _comicEventResults.clear();
         _error = null;
       });
       return;
@@ -105,6 +113,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
               .map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
           _postResults = (data['posts'] as List? ?? [])
               .map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+          _comicEventResults = (data['events'] as List? ?? [])
+              .map((e) => ComicEvent.fromListJson(e as Map<String, dynamic>)).toList();
         });
         SearchService().saveHistory(query, 'global');
       } else {
@@ -175,6 +185,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
                                 _showSuggestions = false;
                                 _userResults.clear();
                                 _postResults.clear();
+                                _comicEventResults.clear();
                                 _error = null;
                               });
                             },
@@ -210,6 +221,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
                       _showSuggestions = false;
                       _userResults.clear();
                       _postResults.clear();
+                      _comicEventResults.clear();
                       _error = null;
                     });
                     ref.read(exploreProvider.notifier).loadDefault();
@@ -261,14 +273,16 @@ class _SearchTabState extends ConsumerState<SearchTab>
             return Expanded(
               child: NotificationListener<ScrollUpdateNotification>(
                 onNotification: (notif) {
-                  if (notif.dragDetails != null) {
-                    final delta = notif.scrollDelta ?? 0;
-                    final barVisible = ref.read(barVisibleProvider);
-                    if (delta > 5 && barVisible) {
-                      ref.read(barVisibleProvider.notifier).state = false;
-                    } else if (delta < -5 && !barVisible) {
-                      ref.read(barVisibleProvider.notifier).state = true;
-                    }
+                  final delta = notif.scrollDelta ?? 0;
+                  final barVisible = ref.read(barVisibleProvider);
+                  if (notif.metrics.pixels <= 0 && !barVisible) {
+                    ref.read(barVisibleProvider.notifier).state = true;
+                    return false;
+                  }
+                  if (delta > 3 && barVisible) {
+                    ref.read(barVisibleProvider.notifier).state = false;
+                  } else if (delta < -3 && !barVisible) {
+                    ref.read(barVisibleProvider.notifier).state = true;
                   }
                   return false;
                 },
@@ -307,45 +321,58 @@ class _SearchTabState extends ConsumerState<SearchTab>
     // Flatten all sections into indexed items for ListView.builder
     final List<_DefaultItem> items = [];
 
-    // 1) Trending Topics (prominent, at top like Twitter/X)
+    // 1) Trending Topics
     if (s.trendingTopics.isNotEmpty) {
-      items.add(_DefaultItem.header('热门话题'));
+      items.add(_DefaultItem.headerWithAction('热门话题', '查看全部', () {
+        _controller.text = '热门话题';
+        _doSearch('热门话题');
+      }));
       for (final topic in s.trendingTopics.take(8)) {
         items.add(_DefaultItem.topic(topic));
       }
       items.add(_DefaultItem.divider());
     }
 
-    // 2) Hot / Trending Posts
+    // 2) Hot Posts → global search
     if (s.trendingPosts.isNotEmpty) {
-      items.add(_DefaultItem.header('热门帖子'));
+      items.add(_DefaultItem.headerWithAction('热门帖子', '查看全部', () {
+        _controller.text = '热门帖子';
+        _doSearch('热门帖子');
+      }));
       for (final post in s.trendingPosts.take(5)) {
         items.add(_DefaultItem.post(post));
       }
       items.add(_DefaultItem.divider());
     }
 
-    // 3) Recent Comic Events
+    // 3) Recent Comic Events → navigation to timeline
     if (s.recentComicEvents.isNotEmpty) {
-      items.add(_DefaultItem.header('近期漫展'));
+      items.add(_DefaultItem.headerWithAction('近期漫展', '查看全部', () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ComicTimelinePage()));
+      }));
       for (final event in s.recentComicEvents.take(3)) {
         items.add(_DefaultItem.comicEvent(event));
       }
       items.add(_DefaultItem.divider());
     }
 
-    // 5) Followed Comic Events
+    // 4) Followed Comic Events → navigation to my events
     if (s.followedComicEvents.isNotEmpty) {
-      items.add(_DefaultItem.header('我关注的漫展'));
+      items.add(_DefaultItem.headerWithAction('我关注的漫展', '查看全部', () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ComicMyEventsPage()));
+      }));
       for (final event in s.followedComicEvents.take(3)) {
         items.add(_DefaultItem.comicEvent(event));
       }
       items.add(_DefaultItem.divider());
     }
 
-    // 6) Recommended Users
+    // 5) Recommended Users
     if (s.suggestedUsers.isNotEmpty) {
-      items.add(_DefaultItem.header('推荐好友'));
+      items.add(_DefaultItem.headerWithAction('推荐好友', '查看全部', () {
+        _controller.text = '';
+        _doSearch('');
+      }));
       items.add(_DefaultItem.friendRow(s.suggestedUsers.take(10).toList()));
       items.add(_DefaultItem.divider());
     }
@@ -358,23 +385,6 @@ class _SearchTabState extends ConsumerState<SearchTab>
       itemBuilder: (context, index) {
         final item = items[index];
         switch (item.type) {
-          case _DefaultItemType.header:
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Row(
-                children: [
-                  Text(item.label!, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.textPrimary)),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () {
-                      _controller.text = item.label ?? '';
-                      _doSearch(item.label ?? '');
-                    },
-                    child: Text('查看全部', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            );
           case _DefaultItemType.headerWithAction:
             return Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
@@ -417,7 +427,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
           case _DefaultItemType.topicItem:
             return _buildTopicItem(item.topic!);
           case _DefaultItemType.comicEventItem:
-            return _buildComicEventCard(item.comicEvent!);
+            return ComicEventCard(event: item.comicEvent!);
           case _DefaultItemType.friendRow:
             return _buildFriendRow(item.friends!);
           case _DefaultItemType.spacer:
@@ -638,77 +648,6 @@ class _SearchTabState extends ConsumerState<SearchTab>
     );
   }
 
-  // --- Search Results ---
-
-  Widget _buildComicEventCard(ComicEvent event) {
-    final url = (event.coverImage != null && event.coverImage!.isNotEmpty)
-        ? (event.coverImage!.startsWith('http')
-            ? event.coverImage!
-            : '${AppConfig.baseUrl.replaceFirst('/api', '')}${event.coverImage}')
-        : null;
-    return InkWell(
-      onTap: () {
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ComicDetailPage(eventId: event.id),
-        ));
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.borderLight),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            if (url != null)
-              ClipRRect(
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
-                child: Image.network(url, width: 80, height: 80, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 80, height: 80, color: AppColors.backgroundSecondary,
-                    child: const Icon(Icons.event, color: AppColors.textTertiary, size: 28),
-                  ),
-                ),
-              )
-            else
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundSecondary,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
-                ),
-                child: const Icon(Icons.event, color: AppColors.textTertiary, size: 28),
-              ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(event.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary)),
-                    const SizedBox(height: 4),
-                    Text(event.cityName, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                    const SizedBox(height: 2),
-                    Text(event.statusText, style: TextStyle(fontSize: 11, color: _statusColor(event.status))),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _statusColor(int status) {
-    switch (status) {
-      case 1: return AppColors.successGreen;
-      case 2: return AppColors.textTertiary;
-      default: return const Color(0xFFFFA726);
-    }
-  }
-
   Widget _buildSearchResults() {
     if (_isLoading) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -720,7 +659,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
       );
     }
 
-    final hasNoResults = _userResults.isEmpty && _postResults.isEmpty;
+    final hasNoResults = _userResults.isEmpty && _postResults.isEmpty && _comicEventResults.isEmpty;
     if (hasNoResults) {
       return Center(
         child: Column(
@@ -755,6 +694,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
             tabs: const [
               Tab(text: '全部'),
               Tab(text: '用户'),
+              Tab(text: '漫展'),
               Tab(text: '帖子'),
             ],
           ),
@@ -765,6 +705,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
             children: [
               _buildAllResults(),
               _buildUsersList(),
+              _buildComicEventsList(),
               _buildPostsList(),
             ],
           ),
@@ -792,6 +733,13 @@ class _SearchTabState extends ConsumerState<SearchTab>
           ),
           ..._postResults.map((p) => _buildPostTile(p)),
         ],
+        if (_comicEventResults.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text('漫展', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
+          ),
+          ..._comicEventResults.map((e) => ComicEventCard(event: e)),
+        ],
       ],
     );
   }
@@ -813,6 +761,16 @@ class _SearchTabState extends ConsumerState<SearchTab>
     return ListView.builder(
       itemCount: _postResults.length,
       itemBuilder: (_, i) => _buildPostTile(_postResults[i]),
+    );
+  }
+
+  Widget _buildComicEventsList() {
+    if (_comicEventResults.isEmpty) {
+      return const Center(child: Text('没有匹配的漫展', style: TextStyle(color: AppColors.textSecondary)));
+    }
+    return ListView.builder(
+      itemCount: _comicEventResults.length,
+      itemBuilder: (_, i) => ComicEventCard(event: _comicEventResults[i]),
     );
   }
 
@@ -996,7 +954,6 @@ class _SmallIcon extends StatelessWidget {
 // --- Default View Item Types for ListView.builder ---
 
 enum _DefaultItemType {
-  header,
   headerWithAction,
   friendRow,
   divider,
@@ -1029,9 +986,6 @@ class _DefaultItem {
     this.topic,
     this.comicEvent,
   });
-
-  factory _DefaultItem.header(String label) =>
-      _DefaultItem._(type: _DefaultItemType.header, label: label);
 
   factory _DefaultItem.headerWithAction(String label, String actionLabel, VoidCallback onAction) =>
       _DefaultItem._(type: _DefaultItemType.headerWithAction, label: label, actionLabel: actionLabel, onAction: onAction);

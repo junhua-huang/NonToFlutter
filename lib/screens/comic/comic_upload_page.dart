@@ -521,7 +521,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
               context: context,
               backgroundColor: AppColors.background,
               shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               builder: (ctx) => SafeArea(
                 child: Column(

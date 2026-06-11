@@ -19,7 +19,7 @@ class ImageUtils {
       final url = resolveUrl(user.avatarUrl);
       return CircleAvatar(
         radius: radius,
-        backgroundImage: CachedNetworkImageProvider(url),
+        backgroundImage: NetworkImage(url),
         backgroundColor: Colors.grey[200]!,
       );
     }

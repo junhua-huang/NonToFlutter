@@ -25,6 +25,7 @@ class WebSocketService {
   final _sessionListController = StreamController<List<Map<String, dynamic>>>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final _authExpiredController = StreamController<String>.broadcast();
+  final _friendOnlineController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get notificationStream => _notificationController.stream;
@@ -35,6 +36,9 @@ class WebSocketService {
 
   /// 认证失效流（JWT 过期/被踢下线/认证失败），业务层监听后执行注销
   Stream<String> get authExpiredStream => _authExpiredController.stream;
+
+  /// 好友上线流
+  Stream<Map<String, dynamic>> get friendOnlineStream => _friendOnlineController.stream;
 
   bool get isConnected => _isConnected;
 
@@ -137,6 +141,11 @@ class WebSocketService {
         }
         break;
 
+      case 'friend_online':
+        _friendOnlineController.add(payload);
+        SoundService().playNotificationSound();
+        break;
+
       case 'new_notification':
         _notificationController.add(payload);
         SoundService().playNotificationSound();
@@ -231,5 +240,6 @@ class WebSocketService {
     _sessionListController.close();
     _errorController.close();
     _authExpiredController.close();
+    _friendOnlineController.close();
   }
 }
