@@ -244,16 +244,22 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
   }
 
   Future<void> _onRefresh() async {
-    // 重新获取用户信息（清除缓存后获取最新头像/背景/简介）
+    // 重新获取用户信息（头像/背景/简介），下拉刷新时添加 cacheTs 触发 UI 更新
     try {
       final auth = ref.read(authProvider);
       if (auth.user != null) {
         final resp = await AuthService().getProfile();
         if (resp.success && resp.data != null) {
           final refreshed = User.fromJson(resp.data as Map<String, dynamic>);
-          ref.read(authProvider.notifier).updateUser(refreshed);
-          await ImageUtils.evictCachedImage(refreshed.avatarUrl);
-          await ImageUtils.evictCachedImage(refreshed.coverPhotoUrl);
+          // 如果头像或背景 URL 有变化，添加 cacheTs 触发 CachedNetworkImage 重新加载
+          final now = DateTime.now().millisecondsSinceEpoch;
+          final avatarChanged = refreshed.avatarUrl != auth.user!.avatarUrl;
+          final coverChanged = refreshed.coverPhotoUrl != auth.user!.coverPhotoUrl;
+          final updated = refreshed.copyWith(
+            avatarCacheTs: avatarChanged ? now : auth.user!.avatarCacheTs,
+            coverCacheTs: coverChanged ? now : auth.user!.coverCacheTs,
+          );
+          ref.read(authProvider.notifier).updateUser(updated);
         }
       }
     } catch (_) {}
@@ -329,7 +335,10 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
         if (newAvatarUrl != null) {
           final user = auth.user;
           if (user != null) {
-            ref.read(authProvider.notifier).updateUser(user.copyWith(avatarUrl: newAvatarUrl));
+            final now = DateTime.now().millisecondsSinceEpoch;
+            ref.read(authProvider.notifier).updateUser(
+              user.copyWith(avatarUrl: newAvatarUrl, avatarCacheTs: now),
+            );
           }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -429,7 +438,10 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
         if (newCoverUrl != null) {
           final user = auth.user;
           if (user != null) {
-            ref.read(authProvider.notifier).updateUser(user.copyWith(coverPhotoUrl: newCoverUrl));
+            final now = DateTime.now().millisecondsSinceEpoch;
+            ref.read(authProvider.notifier).updateUser(
+              user.copyWith(coverPhotoUrl: newCoverUrl, coverCacheTs: now),
+            );
           }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -781,10 +793,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
       return const SizedBox(height: 180);
     }
     final url = ImageUtils.resolveUrl(user.coverPhotoUrl);
+    final cacheBustedUrl = user.coverCacheTs != null
+        ? '${url}${url.contains('?') ? '&' : '?'}t=${user.coverCacheTs}'
+        : url;
     return Stack(
       children: [
         CachedNetworkImage(
-          imageUrl: url,
+          key: ValueKey(cacheBustedUrl),
+          imageUrl: cacheBustedUrl,
           height: 180,
           width: double.infinity,
           fit: BoxFit.cover,
@@ -856,14 +872,10 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
       context,
       MaterialPageRoute(builder: (_) => const EditProfileScreen()),
     );
+    // EditProfileScreen 保存时已更新 authProvider 中的 avatarCacheTs/coverCacheTs，
+    // CachedNetworkImage 会因 URL 变化（?t=xxx）自动重新加载。
+    // 但 setState 确保 SliverAppBar 内部的 widget 重建
     if (result == true && mounted) {
-      // 清除 CachedNetworkImage 缓存，确保新头像/背景图可见
-      final user = ref.read(authProvider).user;
-      if (user != null) {
-        await ImageUtils.evictCachedImage(user.avatarUrl);
-        await ImageUtils.evictCachedImage(user.coverPhotoUrl);
-      }
-      // 强制刷新 UI
       setState(() {});
     }
   }

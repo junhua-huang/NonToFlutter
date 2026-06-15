@@ -9,6 +9,10 @@ class User {
   final String? coverPhotoUrl;
   final DateTime? createdAt;
   final bool? isOnline;
+  /// 头像缓存破坏标记（上传后更新，防止 CachedNetworkImage 使用旧缓存）
+  final int? avatarCacheTs;
+  /// 背景图缓存破坏标记
+  final int? coverCacheTs;
 
   User({
     required this.id,
@@ -20,6 +24,8 @@ class User {
     this.coverPhotoUrl,
     this.createdAt,
     this.isOnline,
+    this.avatarCacheTs,
+    this.coverCacheTs,
   });
 
   String get initials {
@@ -36,6 +42,8 @@ class User {
       avatarUrl: json['avatar_url'],
       coverPhotoUrl: json['cover_photo_url'],
       isOnline: json['is_online'],
+      avatarCacheTs: json['avatar_cache_ts'],
+      coverCacheTs: json['cover_cache_ts'],
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
@@ -61,6 +69,8 @@ class User {
     String? avatarUrl,
     String? coverPhotoUrl,
     bool? isOnline,
+    int? avatarCacheTs,
+    int? coverCacheTs,
   }) {
     return User(
       id: id,
@@ -72,6 +82,8 @@ class User {
       coverPhotoUrl: coverPhotoUrl ?? this.coverPhotoUrl,
       isOnline: isOnline ?? this.isOnline,
       createdAt: createdAt,
+      avatarCacheTs: avatarCacheTs ?? this.avatarCacheTs,
+      coverCacheTs: coverCacheTs ?? this.coverCacheTs,
     );
   }
 }

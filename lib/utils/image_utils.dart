@@ -16,13 +16,13 @@ class ImageUtils {
 
   static Widget buildAvatar(User? user, {double radius = 20}) {
     if (user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty) {
-      final url = resolveUrl(user.avatarUrl);
-      // 使用 CachedNetworkImage 替代 NetworkImage，以便控制缓存
+      final url = _cacheBustUrl(resolveUrl(user.avatarUrl), user.avatarCacheTs);
       return CircleAvatar(
         radius: radius,
         backgroundColor: Colors.grey[200]!,
         child: ClipOval(
           child: CachedNetworkImage(
+            key: ValueKey(url),
             imageUrl: url,
             fit: BoxFit.cover,
             width: radius * 2,
@@ -49,6 +49,13 @@ class ImageUtils {
         style: TextStyle(fontSize: radius * 0.8, color: Colors.white, fontWeight: FontWeight.bold),
       ),
     );
+  }
+
+  /// 为 URL 追加 ?t=xxx 缓存破坏参数，确保上传新图后 CachedNetworkImage 视为不同 URL
+  static String _cacheBustUrl(String url, int? cacheTs) {
+    if (cacheTs == null) return url;
+    final sep = url.contains('?') ? '&' : '?';
+    return '${url}${sep}t=$cacheTs';
   }
 
   /// 清除指定 URL 的 CachedNetworkImage 缓存
@@ -78,10 +85,11 @@ class ImageUtils {
     );
   }
 
-  static Widget buildCoverPhoto(String? url) {
+  static Widget buildCoverPhoto(String? url, {int? cacheTs}) {
     if (url == null || url.isEmpty) return Container(color: Colors.grey[300]);
-    final fullUrl = resolveUrl(url);
+    final fullUrl = _cacheBustUrl(resolveUrl(url), cacheTs);
     return CachedNetworkImage(
+      key: ValueKey(fullUrl),
       imageUrl: fullUrl, fit: BoxFit.cover, width: double.infinity, height: 200,
       placeholder: (_, __) => Container(color: Colors.grey[300], height: 200),
       errorWidget: (_, __, ___) => Container(color: Colors.grey[300], height: 200),

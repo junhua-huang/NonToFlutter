@@ -81,7 +81,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           final data = resp.data as Map<String, dynamic>;
           final url = data['avatar_url'] ?? data['url'];
           if (url != null) {
-            user = user.copyWith(avatarUrl: url);
+            final now = DateTime.now().millisecondsSinceEpoch;
+            user = user.copyWith(avatarUrl: url, avatarCacheTs: now);
             ref.read(authProvider.notifier).updateUser(user);
             _writeUserToCache(user);
           }
@@ -104,7 +105,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           final data = resp.data as Map<String, dynamic>;
           final url = data['cover_photo_url'] ?? data['url'];
           if (url != null) {
-            user = user.copyWith(coverPhotoUrl: url);
+            final now = DateTime.now().millisecondsSinceEpoch;
+            user = user.copyWith(coverPhotoUrl: url, coverCacheTs: now);
             ref.read(authProvider.notifier).updateUser(user);
             _writeUserToCache(user);
           }
