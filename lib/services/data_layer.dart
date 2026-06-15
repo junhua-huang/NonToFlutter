@@ -1,11 +1,12 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/models/message.dart';
-import 'package:facebook_clone/services/database/app_database.dart';
-import 'package:facebook_clone/services/local_db_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/models/message.dart';
+import 'package:nonto/services/database/app_database.dart';
+import 'package:nonto/services/local_db_service.dart';
 
 /// Source of cached data returned from [DataLayer.query].
 enum CacheSource { memory, local, remote }
@@ -76,19 +77,22 @@ class DataLayer {
         return QueryResult(data: l1.data, source: CacheSource.memory);
       }
       // L2 (带超时，防止 Web IndexedDB 卡死阻塞整个查询)
-      try {
-        final l2Raw = await _db?.cacheGet(cacheKey).timeout(
-          const Duration(seconds: 2),
-        );
-        if (l2Raw != null) {
-          try {
-            final decoded = jsonDecode(l2Raw);
-            _addL1(cacheKey, decoded);
-            return QueryResult(data: decoded, source: CacheSource.local);
-          } catch (_) {}
+      // Web 端 skip L2：drift WASM worker 通信延迟累加会导致 UI 明显卡顿
+      if (!kIsWeb) {
+        try {
+          final l2Raw = await _db?.cacheGet(cacheKey).timeout(
+            const Duration(seconds: 2),
+          );
+          if (l2Raw != null) {
+            try {
+              final decoded = jsonDecode(l2Raw);
+              _addL1(cacheKey, decoded);
+              return QueryResult(data: decoded, source: CacheSource.local);
+            } catch (_) {}
+          }
+        } catch (_) {
+          // DB not ready, schema error, or IndexedDB hang → fall through to L3
         }
-      } catch (_) {
-        // DB not ready, schema error, or IndexedDB hang → fall through to L3
       }
     }
 
@@ -112,12 +116,15 @@ class DataLayer {
   }
 
   /// Dual-write L1 + L2. [ttlSeconds] overrides domain-based TTL when set.
+  /// Web 端仅写 L1（IndexedDB/WASM 写入延迟高且无离线价值）
   Future<void> write(String cacheKey, dynamic data, {int? ttlSeconds}) async {
     _addL1(cacheKey, data);
-    try {
-      await _db?.cacheSet(cacheKey, jsonEncode(data),
-          ttlSeconds: ttlSeconds ?? _ttlFor(cacheKey));
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await _db?.cacheSet(cacheKey, jsonEncode(data),
+            ttlSeconds: ttlSeconds ?? _ttlFor(cacheKey));
+      } catch (_) {}
+    }
   }
 
   /// Invalidate L1 + L2 entries matching a key pattern.
@@ -126,11 +133,15 @@ class DataLayer {
     if (pattern.contains('*')) {
       final regex = RegExp('^${pattern.replaceAll('*', r'[^:]+')}\$');
       _l1.removeWhere((k, _) => regex.hasMatch(k));
-      final likePattern = pattern.replaceAll('*', '%');
-      try { await _db?.cacheDeleteLike(likePattern); } catch (_) {}
+      if (!kIsWeb) {
+        final likePattern = pattern.replaceAll('*', '%');
+        try { await _db?.cacheDeleteLike(likePattern); } catch (_) {}
+      }
     } else {
       _l1.remove(pattern);
-      try { await _db?.cacheDelete(pattern); } catch (_) {}
+      if (!kIsWeb) {
+        try { await _db?.cacheDelete(pattern); } catch (_) {}
+      }
     }
   }
 
@@ -202,7 +213,12 @@ class DataLayer {
     if (_lastBackgroundTime == null) return;
     final elapsed = DateTime.now().difference(_lastBackgroundTime!);
     if (elapsed.inMinutes >= 5) {
-      _l1.clear();
+      // Domain-level clearing: short-TTL caches (feed/explore/notif) are stale after 5min,
+      // but long-TTL caches (user/conv/msg) can survive to reduce network requests
+      _l1.removeWhere((key, _) {
+        final domain = key.split(':').first;
+        return domain == 'feed' || domain == 'explore' || domain == 'notif';
+      });
     }
     _lastBackgroundTime = null;
   }

@@ -1,11 +1,12 @@
-import 'package:facebook_clone/models/comment.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/comment_state.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/api/comment_service.dart';
-import 'package:facebook_clone/services/comic_service.dart';
-import 'package:facebook_clone/services/sound_service.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
+﻿import 'package:nonto/models/comment.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/comment_state.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/comment_service.dart';
+import 'package:nonto/services/comic_service.dart';
+import 'package:nonto/services/sound_service.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Family parameter for comment provider — identifies a comment section uniquely.
@@ -48,6 +49,13 @@ class CommentNotifier extends StateNotifier<CommentState> {
   }
 
   bool get _isPost => key.targetType == 'post';
+  bool get _isComic => key.targetType == 'comic';
+
+  void _warnUnknownTarget() {
+    if (!_isPost && !_isComic) {
+      debugPrint('[CommentNotifier] ⚠️ Unknown targetType "${key.targetType}" — falling back to comic API');
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════
   //  Loading & Pagination
@@ -55,6 +63,7 @@ class CommentNotifier extends StateNotifier<CommentState> {
 
   Future<void> loadComments() async {
     if (!mounted) return;
+    _warnUnknownTarget();
     state = state.copyWith(isLoading: true, error: null);
     try {
       final List<Comment> comments;
@@ -430,8 +439,12 @@ class CommentNotifier extends StateNotifier<CommentState> {
         final updated = List<Comment>.from(state.comments);
         for (int i = 0; i < updated.length; i++) {
           if (updated[i].id == parentId) {
+            // 保留乐观回复（id < 0），不被 API 返回的结果覆盖
+            final existingReplies = updated[i].replies;
+            final optimisticReplies = existingReplies.where((r) => r.id < 0).toList();
+            final merged = [...replies, ...optimisticReplies];
             updated[i] = updated[i].copyWith(
-              replies: replies,
+              replies: merged,
               repliesHasMore: hasMore,
               repliesPage: page,
             );

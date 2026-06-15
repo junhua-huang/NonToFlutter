@@ -127,15 +127,15 @@ class ConnectionManager {
 
       _log.info('WebSocket connected to $_url');
 
-      await _onSocketReady?.call();
-
-      // 异步间隙中 _channel 可能被 _onDone 置 null，用局部变量
+      // 必须先监听再发 auth，避免服务端极快返回 auth_result/session_list 时监听尚未建立而丢帧。
       channel.stream.listen(
         _onData,
         onError: _onError,
         onDone: _onDone,
         cancelOnError: false,
       );
+
+      await _onSocketReady?.call();
     } catch (e, _) {
       _log.severe('Connect failed: $e');
       _closeChannel();
@@ -155,8 +155,9 @@ class ConnectionManager {
   Future<void> disconnect() async {
     _log.info('Disconnecting...');
     _cancelTimers();
-    _closeChannel();
+    // 必须先设状态再关 channel，否则 _onDone 检测到 _state != disconnected 会触发重连
     _setState(ConnectionState.disconnected);
+    _closeChannel();
   }
 
   // ========== 消息收发 ==========
@@ -164,6 +165,9 @@ class ConnectionManager {
   /// 发送原始帧（直接写入 WebSocket）
   void sendFrame(ProtocolFrame frame) {
     final data = _codec.encode(frame);
+    if (frame.type != MessageType.ping) {
+      _log.info('→ ${frame.type.name}: $data');
+    }
     _channel?.sink.add(data);
   }
 
@@ -174,14 +178,15 @@ class ConnectionManager {
 
   void _onData(dynamic data) {
     try {
-      final frame = _codec.decode(data as String);
-      _log.fine('← Received: ${frame.type.name}');
-
-      // 心跳响应
+      final rawStr = data as String;
+      final frame = _codec.decode(rawStr);
+      // 接收的所有 WS 帧完整打印原始 JSON
       if (frame.type == MessageType.pong) {
+        _log.fine('← pong');
         _pingMissCount = 0;
         return;
       }
+      _log.info('← ${frame.type.name}: $rawStr');
 
       _onFrameReceived(frame);
     } catch (e) {

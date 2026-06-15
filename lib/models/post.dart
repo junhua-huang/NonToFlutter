@@ -57,19 +57,38 @@ class Post {
       userId: _parseInt(json['user_id']),
       visibility: json['visibility'],
       isPublic: json['is_public'],
-      user: userJson != null ? User.fromJson(userJson as Map<String, dynamic>) : null,
+      user: userJson != null
+          ? User.fromJson(userJson is Map<String, dynamic>
+              ? userJson as Map<String, dynamic>
+              : <String, dynamic>{})
+          : null,
       likeCount: _parseInt(json['like_count']),
       commentCount: _parseInt(json['comment_count']),
       viewCount: _parseInt(json['view_count']),
       isLiked: json['is_liked'] ?? false,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
-      topics: (json['topics'] as List<dynamic>?)?.map((e) {
-        if (e is Map) return (e['name'] ?? '').toString();
-        return e.toString();
-      }).toList() ?? [],
-      images: (json['images'] as List<dynamic>?)?.map((e) => e.toString()).toList()
-          ?? (json['image_urls'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
+      topics: () {
+        final dynamic raw = json['topics'];
+        if (raw is List) {
+          return raw.map((e) {
+            if (e is Map) return (e['name'] ?? '').toString();
+            return e.toString();
+          }).toList();
+        }
+        return <String>[];
+      }(),
+      images: () {
+        final dynamic rawImgs = json['images'];
+        if (rawImgs is List) {
+          return rawImgs.map((e) => e.toString()).toList();
+        }
+        final dynamic rawUrls = json['image_urls'];
+        if (rawUrls is List) {
+          return rawUrls.map((e) => e.toString()).toList();
+        }
+        return null;
+      }(),
     );
   }
 

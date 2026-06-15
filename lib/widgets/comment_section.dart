@@ -1,13 +1,13 @@
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/data/emoji_data.dart';
-import 'package:facebook_clone/models/comment.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/providers/comment_notifier.dart';
-import 'package:facebook_clone/providers/comment_state.dart';
-import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
+﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/data/emoji_data.dart';
+import 'package:nonto/models/comment.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/comment_notifier.dart';
+import 'package:nonto/providers/comment_state.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -394,6 +394,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   void _submitWithText(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+    if (_state.isSending) return; // 防止快速双击/异步竞态
     _commentController.clear();
     _commentFocusNode.unfocus();
     final error = await _notifier.submitComment(trimmed);
@@ -584,77 +585,45 @@ class _CommentItem extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 名字行：用户名 @被回复人
-                  Wrap(
-                    spacing: 4,
-                    children: [
-                      GestureDetector(
-                        onTap: () => _navigateToProfile(context, user),
-                        child: Text(
-                          displayName,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: colors.onSurface,
-                          ),
-                        ),
-                      ),
-                      if (comment.replyToUser != null)
-                        GestureDetector(
-                          onTap: () => _navigateToProfile(context, comment.replyToUser),
-                          child: Text(
-                            '@${comment.replyToUser!.displayName ?? comment.replyToUser!.username}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: colors.primary,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  // 内容行
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      comment.content,
-                      style: TextStyle(fontSize: 13, color: colors.onSurface),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  // 时间 + 操作按钮行
+                  // 第一行：名字 + @被回复人 + 时间 + 点赞
                   Row(
                     children: [
-                      Text(
-                        AppDateUtils.formatTimeAgo(comment.createdAt),
-                        style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
-                      ),
-                      const SizedBox(width: 12),
-                      // Delete (owner only)
-                      if (isOwnerCheck) ...[
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: touchSize,
-                          height: touchSize,
-                          child: TextButton(
-                            onPressed: onDelete,
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(40, 40),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              '删除',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: colors.onSurfaceVariant,
+                      Expanded(
+                        child: Wrap(
+                          spacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            GestureDetector(
+                              onTap: () => _navigateToProfile(context, user),
+                              child: Text(
+                                displayName,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: colors.onSurface,
+                                ),
                               ),
                             ),
-                          ),
+                            if (comment.replyToUser != null)
+                              GestureDetector(
+                                onTap: () => _navigateToProfile(context, comment.replyToUser),
+                                child: Text(
+                                  '@${comment.replyToUser!.displayName ?? comment.replyToUser!.username}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.primary,
+                                  ),
+                                ),
+                              ),
+                            Text(
+                              AppDateUtils.formatTimeAgo(comment.createdAt),
+                              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+                            ),
+                          ],
                         ),
-                      ],
-                      const Spacer(),
+                      ),
+                      const SizedBox(width: 8),
                       // Like button
                       SizedBox(
                         width: touchSize,
@@ -690,6 +659,36 @@ class _CommentItem extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  // 内容行
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      comment.content,
+                      style: TextStyle(fontSize: 13, color: colors.onSurface),
+                    ),
+                  ),
+                  // 删除按钮（仅自己可见）
+                  if (isOwnerCheck)
+                    SizedBox(
+                      width: touchSize,
+                      height: touchSize,
+                      child: TextButton(
+                        onPressed: onDelete,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(40, 40),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          '删除',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

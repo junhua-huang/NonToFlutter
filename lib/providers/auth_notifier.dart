@@ -1,15 +1,15 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_state.dart';
-import 'package:facebook_clone/routes/app_routes.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/api/auth_service.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_state.dart';
+import 'package:nonto/routes/app_routes.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/auth_service.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -55,7 +55,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       ApiClient.printToken('SharedPreferences (持久层恢复)', token);
-      ApiClient.setToken(token);
+      // WS 由闪屏页/登录流程负责连接，这里只恢复 token 内存状态
+      ApiClient.setToken(token, connectWs: false);
 
       final userIdStr = _prefs.getString('current_user_id');
       final userJson = _prefs.getString('current_user_json');
@@ -371,14 +372,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    ApiClient.setToken(null);
     await WebSocketService().disconnect();
+    ApiClient.setToken(null);
     DataLayer().clearAll();
     await DataLayer().closeDb();
     await _prefs.remove('access_token');
     await _prefs.remove('current_user_id');
     await _prefs.remove('current_user_json');
     state = AuthState.initial;
+    // 跳转登录页
+    ApiClient.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (_) => false,
+    );
   }
 
   /// 将技术异常映射为用户可读的错误提示

@@ -1,10 +1,10 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
-import 'package:facebook_clone/models/notification.dart';
-import 'package:facebook_clone/services/api/notification_service.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
+import 'package:nonto/models/notification.dart';
+import 'package:nonto/services/api/notification_service.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class NotificationsState {
@@ -53,6 +53,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
   final WebSocketService _ws = WebSocketService();
   StreamSubscription? _wsSub;
   StreamSubscription? _dataSub;
+  bool _loadInProgress = false;
 
   NotificationsNotifier() : super(const NotificationsState()) {
     _wsSub = _ws.notificationStream.listen(_onWsNotification);
@@ -68,7 +69,8 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
 
   /// 构造时先读缓存，空则等预热推送
   Future<void> _loadCached() async {
-    if (state.notifications.isNotEmpty) return;
+    if (!state.isInitialLoading || _loadInProgress) return;
+    _loadInProgress = true;
     try {
       final result = await DataLayer()
           .query('notif:list:1', () async => null)
@@ -81,22 +83,68 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
         state = state.copyWith(
           notifications: list,
           hasMore: list.length >= 20,
+          unreadCount: list.where((n) => !n.isRead).length,
           isLoading: false,
           isInitialLoading: false,
         );
       }
     } catch (_) {}
+    _loadInProgress = false;
   }
 
   void _onWsNotification(Map<String, dynamic> data) {
-    final event = data['event'] as String?;
-    final notification = data['notification'] as Map<String, dynamic>?;
+    final event = data['event'] is String ? data['event'] as String : null;
+    if (event == 'notifications_read') {
+      final val = data['unread_count'];
+      final count = val is int
+          ? val
+          : (val is double ? val.toInt() : int.tryParse(val?.toString() ?? '') ?? 0);
+      final ids = data['notification_ids'];
+      final readIds = ids is List
+          ? ids.map((e) => int.tryParse(e.toString())).whereType<int>().toSet()
+          : <int>{};
+      final updated = readIds.isEmpty
+          ? state.notifications.map((n) => n.copyWith(isRead: true)).toList()
+          : state.notifications.map((n) => readIds.contains(n.id) ? n.copyWith(isRead: true) : n).toList();
+      state = state.copyWith(notifications: updated, unreadCount: count);
+      try {
+        DataLayer().write('notif:list:1',
+          state.notifications.map((n) => n.toJson()).toList(),
+          ttlSeconds: 600,
+        );
+      } catch (_) {}
+      return;
+    }
+    final dynamic rawNotif = data['notification'];
+    final notification = rawNotif is Map ? Map<String, dynamic>.from(rawNotif) : null;
     if (event == 'new_notification' && notification != null) {
       final appNotif = AppNotification.fromJson(notification);
+      final val = data['unread_count'];
+      final unread = val is int
+          ? val
+          : (val is double ? val.toInt() : int.tryParse(val?.toString() ?? '') ?? state.unreadCount + 1);
+      final existing = state.notifications.where((n) => n.id != appNotif.id).toList();
       state = state.copyWith(
-        notifications: [appNotif, ...state.notifications],
+        notifications: [appNotif, ...existing],
+        unreadCount: unread,
+        isInitialLoading: false,
       );
+      try {
+        DataLayer().write('notif:list:1',
+          state.notifications.map((n) => n.toJson()).toList(),
+          ttlSeconds: 600,
+        );
+      } catch (_) {}
     }
+  }
+
+  /// 移除所有指定类型的通知（如好友请求被处理后清理）
+  void removeByType(String notificationType) {
+    state = state.copyWith(
+      notifications: state.notifications
+          .where((n) => n.notificationType != notificationType)
+          .toList(),
+    );
   }
 
   Future<void> loadNotifications({bool refresh = false}) async {
@@ -170,7 +218,25 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
   }
 
   Future<void> markAsRead(int notificationId) async {
-    await _service.markRead(notificationId);
+    final resp = await _service.markRead(notificationId);
+    if (resp.success) {
+      final updated = state.notifications
+          .map((n) => n.id == notificationId ? n.copyWith(isRead: true) : n)
+          .toList();
+      int unread = updated.where((n) => !n.isRead).length;
+      final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
+      if (data is Map && data['unread_count'] != null) {
+        final raw = data['unread_count'];
+        unread = raw is int ? raw : int.tryParse(raw.toString()) ?? unread;
+      }
+      state = state.copyWith(notifications: updated, unreadCount: unread);
+      try {
+        DataLayer().write('notif:list:1',
+          state.notifications.map((n) => n.toJson()).toList(),
+          ttlSeconds: 600,
+        );
+      } catch (_) {}
+    }
     DataLayer().invalidate('notif:*');
   }
 

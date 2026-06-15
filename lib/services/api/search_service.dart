@@ -10,8 +10,17 @@ class SearchService {
       _api.getDeduped('/search/users', params: {'q': q, 'page': page});
   Future<ApiResponse> searchPosts(String q, {int page = 1}) =>
       _api.getDeduped('/search/posts', params: {'q': q, 'page': page});
-  Future<ApiResponse> globalSearch(String q, {int page = 1}) =>
-      _api.getDeduped('/search/global', params: {'q': q, 'page': page});
+  Future<ApiResponse> globalSearch(String q, {int page = 1, int perPage = 10}) {
+    final trimmed = q.trim();
+    if (trimmed.length < 2) {
+      return Future.value(ApiResponse(
+        success: false,
+        message: '搜索关键词至少需要2个字符',
+        statusCode: 422,
+      ));
+    }
+    return _api.getDeduped('/search/global', params: {'q': q, 'page': page, 'per_page': perPage});
+  }
   Future<ApiResponse> hashtagSearch(String tag, {int page = 1}) =>
       _api.getDeduped('/search/hashtag/$tag', params: {'page': page});
   Future<ApiResponse> trendingHashtags({int limit = 10}) =>

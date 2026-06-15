@@ -132,6 +132,11 @@ class SyncRecovery {
 
   /// 发送 sync 请求并等待 sync_result
   Future<List<ProtocolFrame>> _doSyncRequest(int fromSeq) {
+    final existing = _syncCompleter;
+    if (existing != null && !existing.isCompleted) {
+      return existing.future;
+    }
+
     final completer = Completer<List<ProtocolFrame>>();
     _syncCompleter = completer;
 
@@ -141,14 +146,19 @@ class SyncRecovery {
 
     // 超时处理
     return completer.future.timeout(syncTimeout, onTimeout: () {
-      _syncCompleter = null;
+      if (_syncCompleter == completer) {
+        _syncCompleter = null;
+      }
       throw TimeoutException('Sync request timed out');
     });
   }
 
   /// 收到 sync_result 时调用
   void onSyncResult(List<ProtocolFrame> messages) {
-    _syncCompleter?.complete(messages);
+    final completer = _syncCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete(messages);
+    }
     _syncCompleter = null;
   }
 
@@ -159,7 +169,10 @@ class SyncRecovery {
 
   /// 释放资源
   void dispose() {
-    _syncCompleter?.complete([]);
+    final completer = _syncCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete([]);
+    }
     _syncCompleter = null;
   }
 }

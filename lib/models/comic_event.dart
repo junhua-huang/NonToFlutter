@@ -138,10 +138,15 @@ class ComicEvent {
       statusText: json['statusText'] ?? '即将开始',
       tags: List<String>.from(json['tags'] ?? []),
       coverImage: json['coverImage'],
-      images: (json['images'] as List<dynamic>?)
-              ?.map((e) => ComicEventImage.fromJson(e))
-              .toList() ??
-          [],
+      images: () {
+        final dynamic raw = json['images'];
+        if (raw is List) {
+          return raw.map((e) => ComicEventImage.fromJson(
+              e is Map<String, dynamic> ? e : <String, dynamic>{}))
+            .toList();
+        }
+        return <ComicEventImage>[];
+      }(),
       followCount: json['followCount'] ?? 0,
       isFollowed: json['isFollowed'] ?? json['is_following'] ?? false,
       isOwner: json['isOwner'] ?? json['is_owner'] ?? false,
@@ -175,10 +180,15 @@ class ComicEvent {
       followCount: json['followCount'] ?? 0,
       isFollowed: json['isFollowed'] ?? json['is_following'] ?? false,
       isOwner: json['isOwner'] ?? json['is_owner'] ?? false,
-      images: (json['images'] as List<dynamic>?)
-              ?.map((e) => ComicEventImage.fromJson(e))
-              .toList() ??
-          [],
+      images: () {
+        final dynamic raw = json['images'];
+        if (raw is List) {
+          return raw.map((e) => ComicEventImage.fromJson(
+              e is Map<String, dynamic> ? e : <String, dynamic>{}))
+            .toList();
+        }
+        return <ComicEventImage>[];
+      }(),
       creatorName: json['creatorName'] ?? json['creator_name'],
       creatorAvatar: json['creatorAvatar'] ?? json['creator_avatar'],
       createdAt: json['createdAt'] ?? json['created_at'],
@@ -234,10 +244,12 @@ class ComicEventsPage {
   });
 
   factory ComicEventsPage.fromJson(Map<String, dynamic> json) {
+    final dynamic rawRecords = json['records'];
     return ComicEventsPage(
-      records: (json['records'] as List<dynamic>)
-          .map((e) => ComicEvent.fromListJson(e))
-          .toList(),
+      records: rawRecords is List
+          ? rawRecords.map((e) => ComicEvent.fromListJson(
+              e is Map<String, dynamic> ? e : <String, dynamic>{})).toList()
+          : <ComicEvent>[],
       total: json['total'] ?? 0,
       page: json['page'] ?? 1,
       size: json['size'] ?? 10,

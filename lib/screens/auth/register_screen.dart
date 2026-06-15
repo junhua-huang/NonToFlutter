@@ -1,7 +1,7 @@
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/routes/app_routes.dart';
-import 'package:facebook_clone/screens/home/home_screen.dart';
+﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
+import 'package:nonto/screens/home/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

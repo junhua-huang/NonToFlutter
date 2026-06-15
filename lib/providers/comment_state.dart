@@ -1,4 +1,4 @@
-import 'package:facebook_clone/models/comment.dart';
+﻿import 'package:nonto/models/comment.dart';
 
 /// Immutable state for comment sections (post / comic).
 class CommentState {

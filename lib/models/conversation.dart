@@ -20,8 +20,12 @@ class Conversation {
     user2Id: _p(json['user2_id']),
     lastMessageAt: json['last_message_at'] != null
         ? DateTime.tryParse(json['last_message_at'].toString()) : null,
-    otherUser: json['other_user'] != null ? User.fromJson(json['other_user']) : null,
-    lastMessage: json['last_message'] != null ? Message.fromJson(json['last_message']) : null,
+    otherUser: json['other_user'] is Map
+        ? User.fromJson(Map<String, dynamic>.from(json['other_user']))
+        : null,
+    lastMessage: json['last_message'] is Map
+        ? Message.fromJson(Map<String, dynamic>.from(json['last_message']))
+        : null,
     unreadCount: _p(json['unread_count']),
   );
 

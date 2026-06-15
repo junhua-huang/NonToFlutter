@@ -1,17 +1,17 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/data/emoji_data.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/screens/home/home/feed_tab.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/api/post_service.dart';
-import 'package:facebook_clone/services/api/upload_service.dart';
-import 'package:facebook_clone/widgets/mention_topic_picker.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/data/emoji_data.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/home/home/feed_tab.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/widgets/mention_topic_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -434,113 +434,149 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     return data.toString();
   }
 
-  // ========== Reorderable image list (tap to preview, drag to reorder) ==========
+  // ========== 可拖拽图片条（水平拖动排序 + 删除模式切换） ==========
 
   Widget _buildImageList() {
-    return SizedBox(
-      height: 120,
-      child: ReorderableListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(top: 12),
-        itemCount: _selectedImages.length,
-        onReorder: (oldIndex, newIndex) {
-          setState(() {
-            if (newIndex > oldIndex) newIndex--;
-            final img = _selectedImages.removeAt(oldIndex);
-            _selectedImages.insert(newIndex, img);
-            final bytes = _imageBytesList.removeAt(oldIndex);
-            _imageBytesList.insert(newIndex, bytes);
-          });
-        },
-        buildDefaultDragHandles: true,
-        proxyDecorator: (child, index, animation) {
-          return AnimatedBuilder(
-            animation: animation,
-            builder: (context, child) {
-              return Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(12),
-                child: Stack(
-                  children: [
-                    child!,
-                    // 拖动时显示删除按钮
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: () => _removeImageAt(index),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 删除模式提示条
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          child: _showDeleteButtons
+              ? Container(
+                  width: double.infinity,
+                  height: 36,
+                  margin: const EdgeInsets.only(top: 8, left: 12, right: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                      const SizedBox(width: 6),
+                      const Text('点击图片上的 × 删除', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => setState(() => _showDeleteButtons = false),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text('完成', style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox(height: 4),
+        ),
+        SizedBox(
+          height: 120,
+          child: ReorderableListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(top: 12),
+            itemCount: _selectedImages.length,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex--;
+                final img = _selectedImages.removeAt(oldIndex);
+                _selectedImages.insert(newIndex, img);
+                final bytes = _imageBytesList.removeAt(oldIndex);
+                _imageBytesList.insert(newIndex, bytes);
+              });
+            },
+            buildDefaultDragHandles: true,
+            proxyDecorator: (child, index, animation) {
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, child) {
+                  return Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(12),
+                    child: child!,
+                  );
+                },
+                child: child,
+              );
+            },
+            itemBuilder: (context, index) {
+              return Container(
+                key: ValueKey('img_grid_$index'),
+                width: 120,
+                height: 120,
+                margin: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => _previewImage(index),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          _imageBytesList[index],
+                          fit: BoxFit.cover,
+                          width: 120, height: 120,
+                        ),
+                      ),
+                      // 删除模式下显示 X 按钮
+                      if (_showDeleteButtons)
+                        Positioned(
+                          top: 4, right: 4,
+                          child: GestureDetector(
+                            onTap: () => _removeImageAt(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.all(Radius.circular(14)),
+                              ),
+                              child: const Icon(Icons.close, size: 16, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      // 序号角标
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
                         child: Container(
-                          padding: const EdgeInsets.all(4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.black54,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.close, size: 16, color: Colors.white),
+                          child: Text(
+                            '${index + 1}/${_selectedImages.length}',
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
-                    ),
-                    // 拖动时显示序号
-                    Positioned(
-                      bottom: 4,
-                      left: 4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '${index + 1}/${_selectedImages.length}',
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },
-            child: child,
-          );
-        },
-        itemBuilder: (context, index) {
-          return Container(
-            key: ValueKey('img_grid_$index'),
-            width: 120,
-            height: 120,
-            margin: const EdgeInsets.only(right: 8),
+          ),
+        ),
+        // 普通模式下底部提示
+        if (!_showDeleteButtons)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 12, right: 12),
             child: GestureDetector(
-              onTap: () => _previewImage(index),
-              child: Stack(
+              onTap: () => setState(() => _showDeleteButtons = true),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(
-                      _imageBytesList[index],
-                      fit: BoxFit.cover,
-                      width: 120, height: 120,
-                    ),
+                  Icon(Icons.delete_outline, size: 14, color: AppColors.textSecondary.withValues(alpha: 0.6)),
+                  const SizedBox(width: 4),
+                  Text(
+                    '长按拖动排序 / 点击进入删除模式',
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary.withValues(alpha: 0.6)),
                   ),
-                  if (_showDeleteButtons)
-                    Positioned(
-                      top: 4, right: 4,
-                      child: GestureDetector(
-                        onTap: () => _removeImageAt(index),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.close, size: 16, color: Colors.white),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
-          );
-        },
-      ),
+          ),
+      ],
     );
   }
 

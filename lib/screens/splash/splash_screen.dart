@@ -1,11 +1,16 @@
-import 'dart:async';
+﻿import 'dart:async';
 
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/screens/auth/login_screen.dart';
-import 'package:facebook_clone/screens/home/home_screen.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/data_layer.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/providers/explore_notifier.dart';
+import 'package:nonto/providers/feed_notifier.dart';
+import 'package:nonto/providers/notifications_notifier.dart';
+import 'package:nonto/screens/auth/login_screen.dart';
+import 'package:nonto/screens/home/home_screen.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,6 +37,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final AnimationController _controller;
   bool _navigated = false;
   bool _showCookieConsent = false;
+  static bool _validating = false; // 防止重入
 
   @override
   void initState() {
@@ -55,6 +61,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// ═══════════════════════════════════════════════════════
 
   Future<void> _validateAndNavigate() async {
+    if (_validating) return;
+    _validating = true;
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('access_token');
@@ -66,8 +74,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      // 有 token → 设置到全局，发起校验
-      ApiClient.setToken(token);
+      // 有 token → 设置到全局（延迟 WS 连接，等 Provider 预热后再连）
+      ApiClient.setToken(token, connectWs: false);
       await DataLayer().initDb(userId).catchError((_) {});
 
       // 仅发一个请求：校验 token
@@ -76,7 +84,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (!mounted) return;
 
       if (valid) {
-        // Token 有效 → 等动画播完（如果还没播完）
+        // Token 有效 → 预热 Provider → 建立 WS 并等待认证
+        if (mounted) _prewarmProviders();
+        final wsOk = await _verifyWsConnection();
+        if (!mounted) return;
+        if (!wsOk) {
+          // WS 认证也失败 → 清 token 踢登录
+          debugPrint('[Splash] ❌ WS 认证失败，跳转登录');
+          await _clearLocalAuth(prefs);
+          if (mounted) _doNavigate(false);
+          return;
+        }
+        debugPrint('[Splash] ✅ HTTP + WS 双向验证通过');
+        // 等动画播完（如果还没播完）
         if (_controller.isCompleted) {
           _checkCookieAndGo(true);
         } else {
@@ -116,11 +136,59 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
   }
 
+  /// 预热四个首页 Tab 的 Provider：在 WS 连接前触发构造和初始数据加载。
+  /// 先 invalidate 强制重建（覆盖旧账号的 Provider 实例），再 read 触发构造。
+  void _prewarmProviders() {
+    ref.invalidate(feedProvider);
+    ref.invalidate(exploreProvider);
+    ref.invalidate(conversationsProvider);
+    ref.invalidate(notificationsProvider);
+    // 读取触发构造，网络请求异步发出
+    ref.read(feedProvider);
+    ref.read(exploreProvider);
+    ref.read(conversationsProvider);
+    ref.read(notificationsProvider);
+  }
+
+  /// 建立 WS 连接并等待认证完成（10s 超时）
+  /// 返回 true = 认证成功，false = 超时（不阻塞放行）
+  Future<bool> _verifyWsConnection() async {
+    try {
+      final ws = WebSocketService();
+      debugPrint('[Splash] _verifyWsConnection: isConnected=${ws.isConnected}, token=${ApiClient.token?.substring(0, 12)}...');
+      if (ws.isConnected) return true;
+      debugPrint('[Splash] _verifyWsConnection: calling ws.connect()');
+      await ws.connect();
+      debugPrint('[Splash] _verifyWsConnection: ws.connect() returned, isConnected=${ws.isConnected}');
+      // connect() 返回后 auth 可能已经异步完成，先检查再监听
+      if (ws.isConnected) return true;
+      // 等待 connectionStream 变为 true
+      final completer = Completer<bool>();
+      final sub = ws.connectionStream.listen((connected) {
+        if (connected && !completer.isCompleted) {
+          completer.complete(true);
+        }
+      });
+      final result = await completer.future
+          .timeout(const Duration(seconds: 10), onTimeout: () => false);
+      sub.cancel();
+      return result;
+    } catch (e) {
+      debugPrint('[Splash] _verifyWsConnection error: $e');
+      return false;
+    }
+  }
+
   Future<void> _clearLocalAuth(SharedPreferences prefs) async {
+    // 必须等待 WS 断开，防止旧连接导致新登录时服务端返回 duplicate_connection
+    await WebSocketService().disconnect();
     ApiClient.setToken(null);
     await prefs.remove('access_token');
     await prefs.remove('current_user_id');
     await prefs.remove('current_user_json');
+    // 清除 DataLayer 和数据库，防止下次同用户登录复用脏 DB
+    DataLayer().clearAll();
+    await DataLayer().closeDb();
   }
 
   Future<void> _checkCookieAndGo(bool isLoggedIn) async {
@@ -322,6 +390,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       style: TextStyle(fontSize: 15, color: AppColors.textSecondary, letterSpacing: 0.5)),
                 ),
                 const SizedBox(height: 32),
+                // 版本号
+                const Text('v0.2.4',
+                    style: TextStyle(fontSize: 11, color: AppColors.textTertiary, letterSpacing: 1)),
               ],
             );
           },

@@ -1,69 +1,65 @@
-/// 协议消息类型定义
+/// 协议消息类型定义 — WS 协议 v1.0
 ///
-/// 客户端和服务端之间的所有通信都遵循此协议格式。
-/// 业务数据封装在 [payload] 字段中，模块透传不解析。
+/// 所有消息遵循统一信封：{type, request_id?, seq?, payload:{...}}
 library;
 
 /// WebSocket 消息类型枚举
 enum MessageType {
   // ---- 客户端 → 服务端 ----
-  /// 认证请求：连接建立后立即发送，携带 [token]
+  /// 认证请求：连接建立后立即发送，payload: {token, device_id?}
   auth,
 
-  /// 业务消息发送：携带 [clientMsgId] 和 [payload]
-  send,
+  /// 聊天消息发送：payload: {client_msg_id, conversation_id, content, ...}
+  sendMessage('send_message'),
 
-  /// 消息确认回执：确认收到某条消息（可选，用于流量控制）
+  /// 状态事件发送（fire-and-forget，不走 ACK）：payload: {event, ...}
+  sendEvent('send_event'),
+
+  /// 消息确认回执：payload: {seq}
   ackReceive('ack_receive'),
 
-  /// 同步请求：重连后请求补发缺失消息，携带 [lastReceivedSeq]
+  /// 同步请求：payload: {last_received_seq, limit?}
   sync,
 
-  /// 心跳保活
+  /// 心跳保活：payload: {}
   ping,
 
-  /// 加入会话房间
+  /// 加入会话房间：payload: {conversation_id}
   join,
 
-  /// 离开会话房间
+  /// 离开会话房间：payload: {conversation_id}
   leave,
 
-  /// 正在输入
+  /// 正在输入：payload: {conversation_id}
   typing,
 
-  /// 停止输入
+  /// 停止输入：payload: {conversation_id}
   stopTyping('stop_typing'),
 
   // ---- 服务端 → 客户端 ----
-  /// 认证结果：携带 [success] 和可选的 [error]
+  /// 认证结果：payload: {success, user_id?, code?, msg?}
   authResult('auth_result'),
 
-  /// 服务端确认收到客户端消息：携带 [clientMsgId] 和 [serverSeq]
+  /// 确认回执：payload: {client_msg_id, server_seq, message_id, status, msg?}
   ack,
 
-  /// 服务端推送消息：携带 [seq] 和 [payload]
+  /// 推送消息：seq + payload: {event, data: {...}}
   message,
 
-  /// 同步结果：响应 sync 请求，返回补发消息列表
+  /// 同步结果：payload: {list, count, has_more?, current_max_seq?}
   syncResult('sync_result'),
 
-  /// 心跳响应
+  /// 心跳响应：payload: {}
   pong,
 
-  /// 服务端错误通知：携带 [error]（message 字段）和 [clientMsgId]
+  /// 错误通知：payload: {code, msg}
   error;
 
-  /// JSON 序列化时使用的线格式名称
   final String wireName;
-
   const MessageType([this.wireName = '']);
-
-  /// 获取线格式名称（有自定义名称用自定义，否则用枚举名）
   String get jsonName => wireName.isNotEmpty ? wireName : name;
 
-  /// 从线格式名称解析
   static MessageType fromJsonName(String name) {
-    // 先按 wireName 匹配
     for (final type in values) {
       if (type.jsonName == name) return type;
     }
@@ -71,111 +67,130 @@ enum MessageType {
   }
 }
 
-/// 协议消息帧
+/// 协议消息帧（v1.0 统一信封格式）
 ///
-/// 所有上下行消息均为此 JSON 格式：
 /// ```json
-/// { "type": "send", "clientMsgId": "...", "payload": {...} }
+/// { "type": "send_message", "request_id": "req_001", "payload": { "client_msg_id": "uuid", ... } }
 /// ```
 class ProtocolFrame {
-  /// 消息类型
   final MessageType type;
-
-  /// 客户端消息 ID（send / ack 帧使用）
-  final String? clientMsgId;
-
-  /// 服务端序号（message / ack 帧使用）
+  final String? requestId;
   final int? seq;
-
-  /// 服务端分配的序号（ack 帧使用）
-  final int? serverSeq;
-
-  /// 业务 payload（send / message 帧使用）
   final Map<String, dynamic>? payload;
-
-  /// 认证 token（auth 帧使用）
-  final String? token;
-
-  /// 认证结果（auth_result 帧使用）
-  final bool? success;
-
-  /// 错误信息（auth_result 帧使用）
-  final String? error;
-
-  /// 最后已接收序号（sync 帧使用）
-  final int? lastReceivedSeq;
-
-  /// 补发消息列表（sync_result 帧使用）
-  final List<ProtocolFrame>? messages;
+  /// 完整原始 JSON（用于访问未建模的自定义字段）
+  final Map<String, dynamic>? rawJson;
 
   const ProtocolFrame({
     required this.type,
-    this.clientMsgId,
+    this.requestId,
     this.seq,
-    this.serverSeq,
     this.payload,
-    this.token,
-    this.success,
-    this.error,
-    this.lastReceivedSeq,
-    this.messages,
+    this.rawJson,
   });
 
   /// 从 JSON Map 解码
   factory ProtocolFrame.fromJson(Map<String, dynamic> json) {
-    // sync_result 内嵌消息可能没有 type 字段，默认为 message
     final typeStr = json['type'] as String?;
     final type = typeStr != null
         ? MessageType.fromJsonName(typeStr)
         : MessageType.message;
 
-    final messagesRaw = json['messages'];
-    List<ProtocolFrame>? messages;
-    if (messagesRaw is List) {
-      messages = messagesRaw
-          .map((m) => ProtocolFrame.fromJson(m as Map<String, dynamic>))
-          .toList();
+    var payload = json['payload'] as Map<String, dynamic>?;
+    // 向后兼容旧协议（字段平铺无 payload 包裹）
+    if (payload == null) {
+      payload = _extractLegacyPayload(json, type);
     }
 
     return ProtocolFrame(
       type: type,
-      clientMsgId: json['clientMsgId'] as String?,
+      requestId: json['request_id'] as String?,
       seq: json['seq'] as int?,
-      serverSeq: json['serverSeq'] as int?,
-      payload: json['payload'] as Map<String, dynamic>?,
-      token: json['token'] as String?,
-      success: json['success'] as bool?,
-      // error 帧用 message 字段，auth_result 用 error 字段
-      error: (json['error'] ?? json['message']) as String?,
-      lastReceivedSeq: json['lastReceivedSeq'] as int?,
-      messages: messages,
+      payload: payload,
+      rawJson: json,
     );
+  }
+
+  /// 旧协议帧字段平铺 → 聚合成 payload
+  static Map<String, dynamic>? _extractLegacyPayload(
+      Map<String, dynamic> json, MessageType type) {
+    switch (type) {
+      case MessageType.authResult:
+        return {
+          if (json.containsKey('success')) 'success': json['success'],
+          if (json.containsKey('user_id')) 'user_id': json['user_id'],
+        };
+      case MessageType.ack:
+        return {
+          if (json.containsKey('client_msg_id')) 'client_msg_id': json['client_msg_id'],
+          if (json.containsKey('server_seq')) 'server_seq': json['server_seq'],
+          if (json.containsKey('message_id')) 'message_id': json['message_id'],
+          if (json.containsKey('status')) 'status': json['status'],
+          if (json.containsKey('msg')) 'msg': json['msg'],
+        };
+      case MessageType.error:
+        return {
+          if (json.containsKey('code')) 'code': json['code'],
+          if (json.containsKey('msg')) 'msg': json['msg'],
+          if (json.containsKey('message')) 'message': json['message'],
+        };
+      case MessageType.syncResult:
+        final list = json['list'] ?? json['messages'];
+        return {
+          if (json.containsKey('count')) 'count': json['count'],
+          if (list != null) 'list': list,
+          'has_more': json['has_more'] ?? false,
+        };
+      case MessageType.message:
+        return Map<String, dynamic>.from(json)
+          ..remove('type')
+          ..remove('seq')
+          ..remove('request_id');
+      default:
+        return null;
+    }
   }
 
   /// 编码为 JSON Map
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{'type': type.jsonName};
-
-    void putIf(String key, Object? value) {
-      if (value != null) map[key] = value;
-    }
-
-    putIf('clientMsgId', clientMsgId);
-    putIf('seq', seq);
-    putIf('serverSeq', serverSeq);
-    putIf('payload', payload);
-    putIf('token', token);
-    putIf('success', success);
-    putIf('error', error);
-    putIf('lastReceivedSeq', lastReceivedSeq);
-    if (messages != null) {
-      map['messages'] = messages!.map((m) => m.toJson()).toList();
-    }
-
+    if (requestId != null) map['request_id'] = requestId;
+    if (seq != null) map['seq'] = seq;
+    if (payload != null) map['payload'] = payload;
     return map;
   }
 
+  // ── 便捷：从 payload 读取字段 ──
+
+  /// auth_result: payload.success
+  bool? get success => payload?['success'] as bool?;
+
+  /// auth_result: payload.user_id
+  int? get userId => payload is Map ? (payload!['user_id'] as int?) : null;
+
+  /// error: payload.msg 或 payload.code
+  String? get errorMsg => payload is Map
+      ? ((payload!['msg'] ?? payload!['message'] ?? payload!['error']) as String?)
+      : null;
+
+  /// ack: payload.client_msg_id
+  String? get ackClientMsgId => payload is Map ? payload!['client_msg_id'] as String? : null;
+
+  /// ack: payload.message_id
+  int? get ackMessageId => payload is Map ? payload!['message_id'] as int? : null;
+
+  /// ack: payload.server_seq
+  int? get ackServerSeq => payload is Map ? payload!['server_seq'] as int? : null;
+
+  /// sync_result: payload.list
+  List<dynamic>? get syncList => payload is Map ? payload!['list'] as List<dynamic>? : null;
+
+  /// session_list: payload.sessions
+  List<dynamic>? get sessionList => payload is Map ? payload!['sessions'] as List<dynamic>? : null;
+
+  /// friend_online / typing 等自定义事件
+  String? get eventName => payload is Map ? payload!['event'] as String? : null;
+
   @override
-  String toString() => 'ProtocolFrame(type: ${type.name}, '
-      'clientMsgId: $clientMsgId, seq: $seq)';
+  String toString() =>
+      'ProtocolFrame(type: ${type.name}, requestId: $requestId, seq: $seq)';
 }

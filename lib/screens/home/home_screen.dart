@@ -1,13 +1,17 @@
-import 'dart:async';
+﻿import 'dart:async';
 
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/providers/core_providers.dart';
-import 'package:facebook_clone/services/cache_keys.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/models/notification.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/providers/core_providers.dart';
+import 'package:nonto/providers/notifications_notifier.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -147,6 +151,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           currentIndex: currentIndex,
           onTap: (i) {
             ref.read(currentTabIndexProvider.notifier).state = i;
+            // 切换到消息 Tab 时清除会话未读
+            if (i == 2) {
+              ref.read(conversationsProvider.notifier).clearAllUnreadCounts();
+            }
           },
           type: BottomNavigationBarType.fixed,
           showSelectedLabels: true,
@@ -181,16 +189,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               label: '',
             ),
             BottomNavigationBarItem(
-              icon: _NavIcon(
-                asset: 'assets/icons/未选中消息.svg',
-                isSelected: currentIndex == 2,
-                size: 26,
-              ),
-              activeIcon: _NavIcon(
-                asset: 'assets/icons/选中消息.svg',
-                isSelected: currentIndex == 2,
-                size: 26,
-              ),
+              icon: totalBadge > 0
+                  ? Badge(
+                      label: Text(totalBadge > 99 ? '99+' : '$totalBadge'),
+                      child: _NavIcon(
+                        asset: 'assets/icons/未选中消息.svg',
+                        isSelected: currentIndex == 2,
+                        size: 26,
+                      ),
+                    )
+                  : _NavIcon(
+                      asset: 'assets/icons/未选中消息.svg',
+                      isSelected: currentIndex == 2,
+                      size: 26,
+                    ),
+              activeIcon: totalBadge > 0
+                  ? Badge(
+                      label: Text(totalBadge > 99 ? '99+' : '$totalBadge'),
+                      child: _NavIcon(
+                        asset: 'assets/icons/选中消息.svg',
+                        isSelected: currentIndex == 2,
+                        size: 26,
+                      ),
+                    )
+                  : _NavIcon(
+                      asset: 'assets/icons/选中消息.svg',
+                      isSelected: currentIndex == 2,
+                      size: 26,
+                    ),
               label: '',
             ),
             BottomNavigationBarItem(
@@ -231,21 +257,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: AppColors.primary,
-                    backgroundImage: user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty
-                        ? NetworkImage(
-                            user.avatarUrl!.startsWith('http')
-                                ? user.avatarUrl!
-                                : '${AppConfig.baseUrl.replaceFirst('/api', '')}${user.avatarUrl}',
-                          )
-                        : null,
-                    child: user?.avatarUrl == null || user!.avatarUrl!.isEmpty
-                        ? Text(user?.initials ?? '?',
-                            style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold))
-                        : null,
-                  ),
+                  ImageUtils.buildAvatar(user, radius: 22),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -282,7 +294,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.person_add_outlined, color: AppColors.textPrimary),
-              title: const Text('好友申请', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              title: Consumer(
+                builder: (context, ref, _) {
+                  final notifs = ref.watch(notificationsProvider).notifications;
+                  final friendCount = notifs.where((n) => n.parsedType == NotificationType.friendRequest).length;
+                  return Row(
+                    children: [
+                      const Text('好友申请', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+                      if (friendCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.likeRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$friendCount',
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              ),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -343,7 +379,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onTap: () {
                 Navigator.pop(context);
                 ref.read(authProvider.notifier).logout();
-                Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
               },
             ),
             const SizedBox(height: 8),

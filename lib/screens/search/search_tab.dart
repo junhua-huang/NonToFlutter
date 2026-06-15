@@ -1,27 +1,27 @@
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/comic_event.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/models/topic.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/core_providers.dart';
-import 'package:facebook_clone/widgets/comic_event_card.dart';
-import 'package:facebook_clone/screens/comic/comic_timeline_page.dart';
-import 'package:facebook_clone/screens/comic/comic_my_events_page.dart';
-import 'package:facebook_clone/screens/comic/comic_detail_page.dart';
-import 'package:facebook_clone/screens/post/post_detail_screen.dart';
-import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
-import 'package:facebook_clone/screens/search/search_results_screen.dart';
-import 'package:facebook_clone/services/api/recommendation_service.dart';
-import 'package:facebook_clone/services/api/search_service.dart';
-import 'package:facebook_clone/services/api/topic_service.dart';
-import 'package:facebook_clone/providers/explore_notifier.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/add_friend_button.dart';
-import 'package:facebook_clone/widgets/error_state_widget.dart';
-import 'package:facebook_clone/widgets/post_card.dart';
-import 'package:facebook_clone/widgets/search_suggestions.dart';
+﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/comic_event.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/topic.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/core_providers.dart';
+import 'package:nonto/widgets/comic_event_card.dart';
+import 'package:nonto/screens/comic/comic_timeline_page.dart';
+import 'package:nonto/screens/comic/comic_my_events_page.dart';
+import 'package:nonto/screens/comic/comic_detail_page.dart';
+import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/screens/search/search_results_screen.dart';
+import 'package:nonto/services/api/recommendation_service.dart';
+import 'package:nonto/services/api/search_service.dart';
+import 'package:nonto/services/api/topic_service.dart';
+import 'package:nonto/providers/explore_notifier.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/add_friend_button.dart';
+import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/post_card.dart';
+import 'package:nonto/widgets/search_suggestions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
@@ -75,7 +75,6 @@ class _SearchTabState extends ConsumerState<SearchTab>
       await ref.read(exploreProvider.notifier).loadDefault(forceRefresh: true);
     } catch (_) {}
     _refreshController.refreshCompleted();
-    _refreshController.loadComplete?.call();
   }
 
   void _onTextChanged() {
@@ -103,24 +102,46 @@ class _SearchTabState extends ConsumerState<SearchTab>
       return;
     }
     setState(() { _isSearching = true; _isLoading = true; _error = null; });
-    _tabController.index = 0;
     try {
       final resp = await SearchService().globalSearch(query);
       if (resp.success && resp.data != null) {
-        final data = resp.data as Map<String, dynamic>;
+        final dynamic rawData = resp.data;
+        if (rawData is! Map) {
+          setState(() => _error = '搜索结果格式异常');
+          return;
+        }
+        final data = rawData as Map<String, dynamic>;
         setState(() {
-          _userResults = (data['users'] as List? ?? [])
-              .map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
-          _postResults = (data['posts'] as List? ?? [])
-              .map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-          _comicEventResults = (data['events'] as List? ?? [])
-              .map((e) => ComicEvent.fromListJson(e as Map<String, dynamic>)).toList();
+          final dynamic usersRaw = data['users'];
+          _userResults = (usersRaw is List ? usersRaw : const <dynamic>[])
+              .map((e) => User.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+              .toList();
+          final dynamic postsRaw = data['posts'];
+          _postResults = (postsRaw is List ? postsRaw : const <dynamic>[])
+              .map((e) => Post.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+              .toList();
+          final dynamic eventsRaw = data['events'];
+          _comicEventResults = (eventsRaw is List ? eventsRaw : const <dynamic>[])
+              .map((e) => ComicEvent.fromListJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+              .toList();
         });
+        // 根据搜索结果类型自动切到对应 Tab（无动画，直接跳到目标 Tab）
+        final specialType = data['type'] as String?;
+        if (specialType == 'hot_posts' || specialType == 'trending_topics') {
+          _tabController.index = 1; // 帖子
+        } else if (specialType == 'comic_events') {
+          _tabController.index = 3; // 漫展
+        } else {
+          _tabController.index = 0; // 默认用户
+        }
         SearchService().saveHistory(query, 'global');
       } else {
-        setState(() => _error = resp.message ?? '搜索失败');
+        final msg = resp.message ?? '搜索失败';
+        debugPrint('[Search] globalSearch failed: $msg, statusCode=${resp.statusCode}');
+        setState(() => _error = (resp.statusCode == 422) ? '搜索关键词至少需要2个字符' : msg);
       }
     } catch (e) {
+      debugPrint('[Search] globalSearch exception for query="$query": $e');
       setState(() => _error = '搜索失败，请重试');
     } finally {
       setState(() => _isLoading = false);
@@ -288,7 +309,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
                 },
                 child: SmartRefresher(
             controller: _refreshController,
-            enablePullDown: true,
+            enablePullDown: !_isSearching && !_showSuggestions,
             enablePullUp: false,
             onRefresh: _onRefresh,
             header: const WaterDropHeader(
@@ -381,6 +402,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
     return ListView.builder(
       padding: const EdgeInsets.only(top: 4),
+      physics: const AlwaysScrollableScrollPhysics(),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];

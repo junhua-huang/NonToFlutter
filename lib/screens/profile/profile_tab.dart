@@ -1,30 +1,31 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cross_file/cross_file.dart';
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/screens/friends/friends_screen.dart';
-import 'package:facebook_clone/providers/core_providers.dart';
-import 'package:facebook_clone/screens/post/post_detail_screen.dart';
-import 'package:facebook_clone/screens/profile/edit_profile_screen.dart';
-import 'package:facebook_clone/services/api/friend_service.dart';
-import 'package:facebook_clone/services/api/post_service.dart';
-import 'package:facebook_clone/services/api/upload_service.dart';
-import 'package:facebook_clone/services/cache_keys.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/post_interaction_notifier.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/error_state_widget.dart';
-import 'package:facebook_clone/widgets/media_viewer.dart';
-import 'package:facebook_clone/widgets/post_card.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/friends/friends_screen.dart';
+import 'package:nonto/providers/core_providers.dart';
+import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/screens/profile/edit_profile_screen.dart';
+import 'package:nonto/services/api/auth_service.dart';
+import 'package:nonto/services/api/friend_service.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/post_interaction_notifier.dart';
+import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/media_viewer.dart';
+import 'package:nonto/widgets/post_card.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper_plus/image_cropper_plus.dart';
 import 'package:image_picker/image_picker.dart';
@@ -49,9 +50,8 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
   bool _likesLoading = true;
   List<Post> _likedPosts = [];
   String? _likesError;
-  final RefreshController _postsRefreshController = RefreshController(initialRefresh: false);
-  final RefreshController _likesRefreshController = RefreshController(initialRefresh: false);
-  final RefreshController _photosRefreshController = RefreshController(initialRefresh: false);
+  /// 全局刷新控制器 — 包裹 NestedScrollView，在 header 区域下拉即可触发
+  final RefreshController _refreshController = RefreshController(initialRefresh: false);
 
   late final TabController _tabController;
   final ImagePicker _picker = ImagePicker();
@@ -78,9 +78,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
   @override
   void dispose() {
     _tabController.dispose();
-    _postsRefreshController.dispose();
-    _likesRefreshController.dispose();
-    _photosRefreshController.dispose();
+    _refreshController.dispose();
     super.dispose();
   }
 
@@ -88,7 +86,12 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
 
   Future<void> _loadStats() async {
     final auth = ref.read(authProvider);
-    if (auth.user == null) return;
+    if (auth.user == null) {
+      if (mounted) {
+        setState(() { _isLoadingStats = false; _error = '无法获取用户信息'; });
+      }
+      return;
+    }
 
     bool hasError = false;
 
@@ -147,7 +150,12 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
 
   Future<void> _loadLikedPosts() async {
     final auth = ref.read(authProvider);
-    if (auth.user == null) return;
+    if (auth.user == null) {
+      if (mounted) {
+        setState(() { _likesLoading = false; _likesError = '无法获取用户信息'; });
+      }
+      return;
+    }
     try {
       final cacheKey = CacheKeys.userLiked(auth.user!.id);
       final likeResult = await DataLayer()
@@ -187,7 +195,12 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
 
   Future<void> _loadUserPosts() async {
     final auth = ref.read(authProvider);
-    if (auth.user == null) return;
+    if (auth.user == null) {
+      if (mounted) {
+        setState(() { _isLoadingPosts = false; _error = '无法获取用户信息'; });
+      }
+      return;
+    }
     setState(() { _isLoadingPosts = true; _error = null; });
     try {
       final userId = auth.user!.id.toString();
@@ -230,12 +243,22 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     }
   }
 
-  Future<void> _onRefresh(RefreshController controller) async {
-    await Future.wait([
-      // session already loaded,
-      _loadStats(),
-    ]);
-    controller.refreshCompleted();
+  Future<void> _onRefresh() async {
+    // 重新获取用户信息（清除缓存后获取最新头像/背景/简介）
+    try {
+      final auth = ref.read(authProvider);
+      if (auth.user != null) {
+        final resp = await AuthService().getProfile();
+        if (resp.success && resp.data != null) {
+          final refreshed = User.fromJson(resp.data as Map<String, dynamic>);
+          ref.read(authProvider.notifier).updateUser(refreshed);
+          await ImageUtils.evictCachedImage(refreshed.avatarUrl);
+          await ImageUtils.evictCachedImage(refreshed.coverPhotoUrl);
+        }
+      }
+    } catch (_) {}
+    await _loadStats();
+    _refreshController.refreshCompleted();
   }
 
   /// 修改头像
@@ -473,7 +496,16 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
         }
         return false;
       },
-      child: NestedScrollView(
+      child: SmartRefresher(
+        controller: _refreshController,
+        enablePullDown: true,
+        enablePullUp: false,
+        onRefresh: _onRefresh,
+        header: const WaterDropHeader(
+          complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+          waterDropColor: AppColors.primary,
+        ),
+        child: NestedScrollView(
       headerSliverBuilder: (context, innerBoxIsScrolled) => [
         SliverAppBar(
           expandedHeight: 420,
@@ -694,12 +726,13 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildPostsTab(),
-          _buildLikesTab(),
-          _buildPhotosTab(),
+          _buildPostsContent(),
+          _buildLikesContent(),
+          _buildPhotosContent(),
         ],
       ),
-    )
+    ),
+    ),
   );
   }
 
@@ -789,8 +822,12 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
 
   /// 在线状态指示器
   Widget _buildOnlineIndicator() {
-    final isConnected = WebSocketService().isConnected;
-    return Tooltip(
+    return StreamBuilder<bool>(
+      stream: WebSocketService().connectionStream,
+      initialData: WebSocketService().isConnected,
+      builder: (context, snapshot) {
+        final isConnected = snapshot.data ?? false;
+        return Tooltip(
       message: isConnected ? '在线' : '离线',
       child: Container(
         width: 14,
@@ -802,6 +839,8 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
         ),
       ),
     );
+      },
+    );
   }
 
   /// 点击查看头像/背景大图
@@ -811,26 +850,22 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     ImageViewerScreen.show(context, [resolved]);
   }
 
-  /// 导航到编辑资料页
-  void _navigateToEditProfile() {
-    Navigator.push(
+  /// 导航到编辑资料页，返回后刷新头像/背景缓存
+  Future<void> _navigateToEditProfile() async {
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const EditProfileScreen()),
     );
-  }
-
-  Widget _buildPostsTab() {
-    return SmartRefresher(
-      controller: _postsRefreshController,
-      enablePullDown: true,
-      enablePullUp: false,
-      onRefresh: () => _onRefresh(_postsRefreshController),
-      header: const WaterDropHeader(
-        complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-        waterDropColor: AppColors.primary,
-      ),
-      child: _buildPostsContent(),
-    );
+    if (result == true && mounted) {
+      // 清除 CachedNetworkImage 缓存，确保新头像/背景图可见
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        await ImageUtils.evictCachedImage(user.avatarUrl);
+        await ImageUtils.evictCachedImage(user.coverPhotoUrl);
+      }
+      // 强制刷新 UI
+      setState(() {});
+    }
   }
 
   Widget _buildPostsContent() {
@@ -876,23 +911,6 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     );
   }
 
-  Widget _buildLikesTab() {
-    return SmartRefresher(
-      controller: _likesRefreshController,
-      enablePullDown: true,
-      enablePullUp: false,
-      onRefresh: () async {
-        await _loadLikedPosts();
-        _likesRefreshController.refreshCompleted();
-      },
-      header: const WaterDropHeader(
-        complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-        waterDropColor: AppColors.primary,
-      ),
-      child: _buildLikesContent(),
-    );
-  }
-
   Widget _buildLikesContent() {
     if (_likesLoading) {
       return ListView(children: const [
@@ -934,41 +952,22 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     );
   }
 
-  Widget _buildPhotosTab() {
+  Widget _buildPhotosContent() {
     final photoPosts = _userPosts.where((p) => p.hasImage).toList();
     if (photoPosts.isEmpty) {
-      return SmartRefresher(
-        controller: _photosRefreshController,
-        enablePullDown: true,
-        enablePullUp: false,
-        onRefresh: () => _onRefresh(_photosRefreshController),
-        header: const WaterDropHeader(
-          complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-          waterDropColor: AppColors.primary,
+      return ListView(children: [
+        const SizedBox(height: 120),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey[300]),
+            const SizedBox(height: 12),
+            const Text('还没有照片', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+          ],
         ),
-        child: ListView(children: [
-          const SizedBox(height: 120),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey[300]),
-              const SizedBox(height: 12),
-              const Text('还没有照片', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
-            ],
-          ),
-        ]),
-      );
+      ]);
     }
-    return SmartRefresher(
-      controller: _photosRefreshController,
-      enablePullDown: true,
-      enablePullUp: false,
-      onRefresh: () => _onRefresh(_photosRefreshController),
-      header: const WaterDropHeader(
-        complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-        waterDropColor: AppColors.primary,
-      ),
-      child: GridView.builder(
+    return GridView.builder(
         padding: const EdgeInsets.all(2),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
@@ -989,8 +988,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
             ),
           );
         },
-      ),
-    );
+      );
   }
 
   void _navigateToFriends() {

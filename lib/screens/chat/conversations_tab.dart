@@ -1,11 +1,11 @@
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/providers/chat_notifiers.dart';
-import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/widgets/empty_state_widget.dart';
-import 'package:facebook_clone/widgets/error_state_widget.dart';
-import 'package:facebook_clone/widgets/shimmer_skeletons.dart';
+﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/widgets/empty_state_widget.dart';
+import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
@@ -123,7 +123,9 @@ class _ConversationTile extends StatelessWidget {
         ],
       ),
       subtitle: Text(
-        '${conversation.lastMessage ?? '暂无消息'}',
+        conversation.lastMessage?.isRecalled == true
+            ? '消息已撤回'
+            : (conversation.lastMessage?.content ?? '暂无消息'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(

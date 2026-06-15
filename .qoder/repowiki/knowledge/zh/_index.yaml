@@ -1,4 +1,4 @@
-# 知识卡导出索引文件
+﻿# 知识卡导出索引文件
 schema_version: 1
 locale: zh-CN
 branch: master
@@ -47,8 +47,8 @@ modules:
             - android\app\src\profile\AndroidManifest.xml
             - android\build.gradle.kts
             - android\create_keystore.ps1
-            - android\facebook_clone-release-key.jks
-            - android\facebook_clone_android.iml
+            - android\nonto-release-key.jks
+            - android\nonto_android.iml
             - android\gradle.properties
             - android\gradle\wrapper\gradle-wrapper.jar
             - android\gradle\wrapper\gradle-wrapper.properties
@@ -62,8 +62,8 @@ modules:
             - assets\sounds\online.mp3
             - assets\sounds\send.mp3
             - build_log.txt
-            - facebook_clone-release-key.jks
-            - facebook_clone.iml
+            - nonto-release-key.jks
+            - nonto.iml
             - lib\config\app_config.dart
             - lib\config\app_theme.dart
             - lib\main.dart

@@ -1,9 +1,9 @@
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/comic_event.dart';
-import 'package:facebook_clone/screens/comic/comic_detail_page.dart';
-import 'package:facebook_clone/screens/post/image_viewer_screen.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
+﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/comic_event.dart';
+import 'package:nonto/screens/comic/comic_detail_page.dart';
+import 'package:nonto/screens/post/image_viewer_screen.dart';
+import 'package:nonto/utils/date_utils.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 

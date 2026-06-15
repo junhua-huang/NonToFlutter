@@ -1,11 +1,11 @@
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
-import 'package:facebook_clone/services/api/friend_service.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/empty_state_widget.dart';
-import 'package:facebook_clone/widgets/error_state_widget.dart';
-import 'package:facebook_clone/widgets/shimmer_skeletons.dart';
+﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/services/api/friend_service.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/empty_state_widget.dart';
+import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 

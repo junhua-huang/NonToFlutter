@@ -1,13 +1,17 @@
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
-import 'package:facebook_clone/services/api/friend_service.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/empty_state_widget.dart';
-import 'package:facebook_clone/widgets/error_state_widget.dart';
-import 'package:facebook_clone/widgets/shimmer_skeletons.dart';
+﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/notifications_notifier.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/services/api/friend_service.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/empty_state_widget.dart';
+import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
 class FriendRequestsScreen extends StatefulWidget {
   const FriendRequestsScreen({super.key});
@@ -20,6 +24,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final FriendService _friendService = FriendService();
+  final RefreshController _refreshController = RefreshController();
 
   List<_RequestItem> _sentRequests = [];
   List<_RequestItem> _receivedRequests = [];
@@ -28,17 +33,40 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
   String? _sentError;
   String? _receivedError;
 
+  static const _cacheKeySent = 'friends:requests:sent';
+  static const _cacheKeyReceived = 'friends:requests:received';
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadAll();
+    _loadCached();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _refreshController.dispose();
     super.dispose();
+  }
+
+  /// 先从缓存加载，再请求网络
+  Future<void> _loadCached() async {
+    final sentCached = await DataLayer().query(_cacheKeySent, () async => null);
+    if (sentCached.data is List && (sentCached.data as List).isNotEmpty) {
+      final list = (sentCached.data as List)
+          .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+          .toList();
+      if (mounted) setState(() { _sentRequests = list; _isLoadingSent = false; });
+    }
+    final recvCached = await DataLayer().query(_cacheKeyReceived, () async => null);
+    if (recvCached.data is List && (recvCached.data as List).isNotEmpty) {
+      final list = (recvCached.data as List)
+          .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+          .toList();
+      if (mounted) setState(() { _receivedRequests = list; _isLoadingReceived = false; });
+    }
+    _loadAll();
   }
 
   Future<void> _loadAll() async {
@@ -49,15 +77,21 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
     try {
       final resp = await _friendService.getSentRequests();
       if (resp.success && resp.data != null) {
-        final data = resp.data as Map<String, dynamic>;
-        final list = (data['requests'] as List? ?? [])
-            .map((e) => _RequestItem.fromJson(e as Map<String, dynamic>))
+        final dynamic rawData = resp.data;
+        final data = rawData is Map ? rawData as Map<String, dynamic> : <String, dynamic>{};
+        final dynamic rawList = data['requests'];
+        final list = (rawList is List ? rawList : const <dynamic>[])
+            .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
             .toList();
         setState(() {
           _sentRequests = list;
           _isLoadingSent = false;
           _sentError = null;
         });
+        // 写入持久层缓存
+        if (rawList is List) {
+          DataLayer().write(_cacheKeySent, rawList, ttlSeconds: 300);
+        }
       } else {
         setState(() {
           _sentError = resp.message ?? '加载失败';
@@ -76,15 +110,21 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
     try {
       final resp = await _friendService.getReceivedRequests();
       if (resp.success && resp.data != null) {
-        final data = resp.data as Map<String, dynamic>;
-        final list = (data['requests'] as List? ?? [])
-            .map((e) => _RequestItem.fromJson(e as Map<String, dynamic>))
+        final dynamic rawData = resp.data;
+        final data = rawData is Map ? rawData as Map<String, dynamic> : <String, dynamic>{};
+        final dynamic rawList = data['requests'];
+        final list = (rawList is List ? rawList : const <dynamic>[])
+            .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
             .toList();
         setState(() {
           _receivedRequests = list;
           _isLoadingReceived = false;
           _receivedError = null;
         });
+        // 写入持久层缓存
+        if (rawList is List) {
+          DataLayer().write(_cacheKeyReceived, rawList, ttlSeconds: 300);
+        }
       } else {
         setState(() {
           _receivedError = resp.message ?? '加载失败';
@@ -102,10 +142,13 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
   Future<void> _accept(int requestId) async {
     try {
       final resp = await _friendService.acceptRequest(requestId);
-      if (resp.success) {
+      if (resp.success && mounted) {
         setState(() {
           _receivedRequests.removeWhere((r) => r.id == requestId);
         });
+        DataLayer().invalidate(_cacheKeyReceived);
+        // 清除通知列表中的好友请求通知
+        try { ProviderScope.containerOf(context).read(notificationsProvider.notifier).removeByType('friend_request'); } catch (_) {}
       }
     } catch (_) {}
   }
@@ -113,10 +156,13 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
   Future<void> _reject(int requestId) async {
     try {
       final resp = await _friendService.rejectRequest(requestId);
-      if (resp.success) {
+      if (resp.success && mounted) {
         setState(() {
           _receivedRequests.removeWhere((r) => r.id == requestId);
         });
+        DataLayer().invalidate(_cacheKeyReceived);
+        // 清除通知列表中的好友请求通知
+        try { ProviderScope.containerOf(context).read(notificationsProvider.notifier).removeByType('friend_request'); } catch (_) {}
       }
     } catch (_) {}
   }
@@ -128,6 +174,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
         setState(() {
           _sentRequests.removeWhere((r) => r.id == requestId);
         });
+        DataLayer().invalidate(_cacheKeySent);
       }
     } catch (_) {}
   }
@@ -170,12 +217,22 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
           ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildReceivedTab(),
-          _buildSentTab(),
-        ],
+      body: SmartRefresher(
+        controller: _refreshController,
+        onRefresh: () async {
+          await _loadAll();
+          _refreshController.refreshCompleted();
+        },
+        header: const WaterDropHeader(
+          waterDropColor: AppColors.primary,
+        ),
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildReceivedTab(),
+            _buildSentTab(),
+          ],
+        ),
       ),
     );
   }
@@ -438,7 +495,9 @@ class _RequestItem {
           : int.tryParse(json['receiver_id'].toString()) ?? 0,
       status: json['status'] ?? 'pending',
       user: json['user'] != null
-          ? User.fromJson(json['user'] as Map<String, dynamic>)
+          ? User.fromJson(json['user'] is Map<String, dynamic>
+              ? json['user'] as Map<String, dynamic>
+              : <String, dynamic>{})
           : null,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())

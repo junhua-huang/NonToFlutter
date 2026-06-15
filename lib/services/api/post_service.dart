@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
-import 'package:facebook_clone/services/sound_service.dart';
+import 'package:nonto/services/sound_service.dart';
 
 import 'api_client.dart';
 
@@ -38,7 +38,7 @@ class PostService {
           if (visibleUserIds != null && visibleUserIds.isNotEmpty)
             'visible_user_ids': visibleUserIds.join(','),
         });
-        resp = await _api.post('/posts/', data: formData);
+        resp = await _api.post('/posts', data: formData);
         if (resp.success) SoundService().playSendSound();
         return resp;
       }
@@ -55,7 +55,7 @@ class PostService {
       if (visibleUserIds != null && visibleUserIds.isNotEmpty)
         'visible_user_ids': visibleUserIds.join(','),
     });
-    resp = await _api.post('/posts/', data: formData);
+    resp = await _api.post('/posts', data: formData);
     if (resp.success) SoundService().playSendSound();
     return resp;
   }

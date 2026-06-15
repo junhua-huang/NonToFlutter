@@ -1,15 +1,15 @@
 import 'dart:ui' show PlatformDispatcher;
 
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/providers/theme_notifier.dart';
-import 'package:facebook_clone/routes/app_routes.dart';
-import 'package:facebook_clone/routes/route_generator.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/sound_service.dart';
-import 'package:facebook_clone/services/connectivity_service.dart';
-import 'package:facebook_clone/services/web_utils.dart'
-    if (dart.library.html) 'package:facebook_clone/services/web_utils_web.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/theme_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
+import 'package:nonto/routes/route_generator.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/sound_service.dart';
+import 'package:nonto/services/connectivity_service.dart';
+import 'package:nonto/services/web_utils.dart'
+    if (dart.library.html) 'package:nonto/services/web_utils_web.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,7 +73,7 @@ void main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
       ],
-      child: const FacebookCloneApp(),
+      child: const NonToApp(),
     ),
   );
 
@@ -81,8 +81,8 @@ void main() async {
   hideWebLoadingOverlay();
 }
 
-class FacebookCloneApp extends ConsumerWidget {
-  const FacebookCloneApp({super.key});
+class NonToApp extends ConsumerWidget {
+  const NonToApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -101,6 +101,7 @@ class FacebookCloneApp extends ConsumerWidget {
           final isOnline = snapshot.data ?? true;
 
           return MaterialApp(
+            key: const ValueKey('nonto_app'),
             title: 'nonto',
             navigatorKey: ApiClient.navigatorKey,
             debugShowCheckedModeBanner: false,

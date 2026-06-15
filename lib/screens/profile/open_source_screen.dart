@@ -1,4 +1,4 @@
-import 'package:facebook_clone/config/app_theme.dart';
+﻿import 'package:nonto/config/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class OpenSourceScreen extends StatelessWidget {

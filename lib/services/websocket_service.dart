@@ -1,9 +1,10 @@
 import 'dart:async';
 
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/sound_service.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/connectivity_service.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/sound_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:reliable_websocket/reliable_websocket.dart';
 
@@ -16,6 +17,7 @@ class WebSocketService {
 
   ReliableWebSocketClient? _client;
   bool _isConnected = false;
+  Future<void>? _connecting;
 
   // 事件流控制器
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -26,6 +28,10 @@ class WebSocketService {
   final _errorController = StreamController<String>.broadcast();
   final _authExpiredController = StreamController<String>.broadcast();
   final _friendOnlineController = StreamController<Map<String, dynamic>>.broadcast();
+  final _friendOfflineController = StreamController<Map<String, dynamic>>.broadcast();
+  final _onlineFriendsController = StreamController<Map<String, dynamic>>.broadcast();
+  final _ackMessageIdController = StreamController<Map<String, dynamic>>.broadcast();
+  final _sendErrorController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get notificationStream => _notificationController.stream;
@@ -40,6 +46,18 @@ class WebSocketService {
   /// 好友上线流
   Stream<Map<String, dynamic>> get friendOnlineStream => _friendOnlineController.stream;
 
+  /// 好友下线流
+  Stream<Map<String, dynamic>> get friendOfflineStream => _friendOfflineController.stream;
+
+  /// 在线好友批量推送流（认证时服务端推送当前所有在线好友）
+  Stream<Map<String, dynamic>> get onlineFriendsStream => _onlineFriendsController.stream;
+
+  /// ACK 携带 message_id 流
+  Stream<Map<String, dynamic>> get ackMessageIdStream => _ackMessageIdController.stream;
+
+  /// 发送错误流（携带 clientMsgId，用于 ChatSendQueue 匹配失败消息）
+  Stream<Map<String, dynamic>> get sendErrorStream => _sendErrorController.stream;
+
   bool get isConnected => _isConnected;
 
   /// 初始化连接（通常在登录成功后调用）
@@ -53,26 +71,52 @@ class WebSocketService {
       debugPrint('[WS] ⚠️ already connected, skip');
       return;
     }
+    final pending = _connecting;
+    if (pending != null) {
+      debugPrint('[WS] ⚠️ connect already in progress, await existing');
+      await pending;
+      return;
+    }
+    _connecting = _connectInternal(token);
+    try {
+      await _connecting;
+    } finally {
+      _connecting = null;
+    }
+  }
 
-    // 断开旧连接
+  Future<void> _connectInternal(String token) async {
+    // 断开旧连接，避免登录/重登期间产生多个 ReliableWebSocketClient 同时收同一条 seq。
     await _client?.disconnect();
 
     final wsUrl = AppConfig.wsUrl
         .replaceFirst('http://', 'ws://')
         .replaceFirst('https://', 'wss://');
-    // 后端协议：连接不带 token，认证通过 auth 消息完成（reliable_websocket 自动处理）
-    final uri = '$wsUrl/ws';
+    // 带 token query 参数兼容连接层的低层鉴权
+    final uri = '$wsUrl/ws?access_token=$token';
 
-    debugPrint('[WS] 🔌 connecting to $uri (token=${token.substring(0, 12)}...)');
+    debugPrint('[WS] 🔌 connecting to $wsUrl/ws');
 
     _client = ReliableWebSocketClient(
       url: uri,
       getToken: () async => ApiClient.token ?? '',
       onMessage: _onMessage,
+      onAckMessageId: (clientMsgId, messageId) {
+        _ackMessageIdController.add({'clientMsgId': clientMsgId, 'message_id': messageId});
+        _messageController.add({
+          'event': 'ack',
+          'clientMsgId': clientMsgId,
+          'client_msg_id': clientMsgId,
+          'message_id': messageId,
+        });
+      },
       onConnectionStateChange: _onConnectionStateChange,
       onError: (message, clientMsgId) {
         debugPrint('[WS] server error: $message (clientMsgId=$clientMsgId)');
         _errorController.add(message);
+        if (clientMsgId != null && clientMsgId.isNotEmpty) {
+          _sendErrorController.add({'clientMsgId': clientMsgId, 'error': message});
+        }
       },
       onAuthFailed: (error) {
         debugPrint('[WS] ❗ auth failed/expired: $error');
@@ -111,49 +155,131 @@ class WebSocketService {
 
   /// 处理收到的推送消息（payload 来自 {type:'message', seq, payload:{event:...}} 的内层）
   void _onMessage(Map<String, dynamic> payload, int seq) {
-    // 后端协议：payload 内用 event 字段标识事件类型
     final event = payload['event'] as String?;
+    final innerData = payload['data'];
     debugPrint('WebSocket: received event=$event seq=$seq');
 
     switch (event) {
       case 'new_message':
-        _messageController.add(payload);
-        SoundService().playNotificationSound();
+        final msgData = innerData is Map<String, dynamic>
+            ? innerData
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : <String, dynamic>{});
+        final normalized = <String, dynamic>{
+          ...msgData,
+          if (msgData['conversation_id'] != null) 'conversation_id': msgData['conversation_id'],
+          if (msgData['data'] is Map) ...Map<String, dynamic>.from(msgData['data'] as Map),
+        };
+        if (normalized['conversation_id'] == null && payload['conversation_id'] != null) {
+          normalized['conversation_id'] = payload['conversation_id'];
+        }
+        if (normalized['data'] == null) {
+          normalized['data'] = msgData;
+        }
+        if (normalized['message_type'] == null && normalized['type'] != null) {
+          normalized['message_type'] = normalized['type'];
+        }
+        if (normalized['content'] == null && normalized['text'] != null) {
+          normalized['content'] = normalized['text'];
+        }
+        if (normalized['sender_id'] == null && normalized['user_id'] != null) {
+          normalized['sender_id'] = normalized['user_id'];
+        }
+        if (normalized['message_type'] == null) {
+          normalized['message_type'] = 'text';
+        }
+        if (normalized['created_at'] == null) {
+          normalized['created_at'] = DateTime.now().toIso8601String();
+        }
+        // Notifier 需要 event 字段；MessagesNotifier 读 data 子对象，ConversationsNotifier 读顶层字段
+        _messageController.add({
+          'event': 'new_message',
+          'conversation_id': normalized['conversation_id'],
+          'data': normalized,
+          ...normalized,
+        });
         break;
 
       case 'message_read':
-        // 对方标记消息已读（已读回执）
-        _messageController.add(payload);
-        break;
-
       case 'conversation_read':
-        // 会话已读确认（含全局未读数）
-        _messageController.add(payload);
+        final readData = innerData is Map<String, dynamic>
+            ? innerData
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : payload);
+        _messageController.add({
+          'event': event,
+          'conversation_id': readData['conversation_id'],
+          ...readData,
+        });
         break;
 
       case 'session_list':
         // 认证成功后服务端自动推送会话列表
-        final sessions = payload['sessions'];
+        final sessions = (innerData is Map ? innerData['sessions'] : null) ?? payload['sessions'];
         if (sessions is List) {
           _sessionListController.add(
-            sessions.map((s) => Map<String, dynamic>.from(s as Map)).toList(),
+            sessions.whereType<Map>().map((s) => Map<String, dynamic>.from(s)).toList(),
           );
         }
         break;
 
       case 'friend_online':
-        _friendOnlineController.add(payload);
-        SoundService().playNotificationSound();
+        final onlineData = innerData is Map<String, dynamic>
+            ? innerData
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : payload);
+        _friendOnlineController.add(onlineData);
+        SoundService().playOnlineSound();
+        break;
+
+      case 'friend_offline':
+        final offlineData = innerData is Map<String, dynamic>
+            ? innerData
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : payload);
+        _friendOfflineController.add(offlineData);
+        break;
+
+      case 'online_friends':
+        final friendsData = innerData is Map<String, dynamic>
+            ? innerData
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : payload);
+        _onlineFriendsController.add(friendsData);
         break;
 
       case 'new_notification':
-        _notificationController.add(payload);
-        SoundService().playNotificationSound();
+      case 'notifications_read':
+        final notifData = innerData is Map<String, dynamic>
+            ? Map<String, dynamic>.from(innerData)
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : Map<String, dynamic>.from(payload));
+        final rawNotification = notifData['notification'];
+        if (rawNotification is Map) {
+          notifData['notification'] = Map<String, dynamic>.from(rawNotification);
+        }
+        _notificationController.add({
+          'event': event,
+          ...notifData,
+        });
+        if (event == 'new_notification') {
+          SoundService().playNotificationSound();
+        }
         break;
 
       case 'typing':
       case 'stop_typing':
-        _typingController.add(payload);
+        final typingData = innerData is Map<String, dynamic>
+            ? Map<String, dynamic>.from(innerData)
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : Map<String, dynamic>.from(payload));
+        typingData['event'] ??= event;
+        _typingController.add(typingData);
+        break;
+
+      case 'message_recalled':
+        final recallData = innerData is Map<String, dynamic>
+            ? Map<String, dynamic>.from(innerData)
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : Map<String, dynamic>.from(payload));
+        // 同时推给 messageStream，ConversationsNotifier 和 MessagesNotifier 都能收到
+        _messageController.add({
+          'event': 'message_recalled',
+          'conversation_id': recallData['conversation_id'],
+          ...recallData,
+        });
         break;
 
       default:
@@ -164,18 +290,24 @@ class WebSocketService {
   /// 断开连接（通常在注销时调用）
   Future<void> disconnect() async {
     debugPrint('[WS] disconnecting');
-    await _client?.disconnect();
-    _isConnected = false;
+    _connecting = null;
+    final client = _client;
+    _client = null;
+    await client?.disconnect();
+    if (_isConnected) {
+      _isConnected = false;
+      _connectionController.add(false);
+    }
   }
 
-  /// 加入会话房间（fire-and-forget，不经过发件箱）
+  /// 加入会话房间
   void joinConversation(int conversationId) {
-    _sendRaw({'type': 'join', 'conversation_id': conversationId});
+    _sendRaw({'type': 'join', 'payload': {'conversation_id': conversationId}});
   }
 
-  /// 离开会话房间（fire-and-forget）
+  /// 离开会话房间
   void leaveConversation(int conversationId) {
-    _sendRaw({'type': 'leave', 'conversation_id': conversationId});
+    _sendRaw({'type': 'leave', 'payload': {'conversation_id': conversationId}});
   }
 
   /// 通过 WebSocket 发送聊天消息（经发件箱 + ACK 可靠发送）
@@ -184,33 +316,51 @@ class WebSocketService {
     String? mediaUrl,
     int? relatedId,
     String? receiverId,
+    int? quoteMessageId,
+    String? quotePreview,
   }) {
     final payload = <String, dynamic>{
       'conversation_id': conversationId,
       'content': content,
       'message_type': messageType,
     };
+    if (quoteMessageId != null) payload['quote_message_id'] = quoteMessageId;
+    if (quotePreview != null) payload['quote_preview'] = quotePreview;
     if (mediaUrl != null) payload['media_url'] = mediaUrl;
     if (relatedId != null) payload['related_id'] = relatedId;
     if (receiverId != null) payload['receiver_id'] = int.parse(receiverId);
     return _send(payload);
   }
 
-  /// 发送"正在输入"状态（fire-and-forget）
+  /// 发送"正在输入"状态
   void sendTyping(int conversationId) {
-    _sendRaw({'type': 'typing', 'conversation_id': conversationId});
+    _sendRaw({'type': 'typing', 'payload': {'conversation_id': conversationId}});
   }
 
-  /// 发送"停止输入"状态（fire-and-forget）
+  /// 发送"停止输入"状态
   void sendStopTyping(int conversationId) {
-    _sendRaw({'type': 'stop_typing', 'conversation_id': conversationId});
+    _sendRaw({'type': 'stop_typing', 'payload': {'conversation_id': conversationId}});
   }
 
-  /// 标记会话消息为已读（经发件箱可靠发送）
+  /// 标记会话消息为已读
   Future<String> markConversationRead(int conversationId) {
-    return _send({
-      'event': 'conversation_read',
-      'conversation_id': conversationId,
+    _sendRaw({
+      'type': 'send_event',
+      'payload': {
+        'event': 'conversation_read',
+        'conversation_id': conversationId,
+      },
+    });
+    return Future.value('');
+  }
+
+  /// 撤回消息
+  void sendRecallMessage(int messageId) {
+    _sendRaw({
+      'type': 'recall_message',
+      'payload': {
+        'message_id': messageId,
+      },
     });
   }
 
@@ -241,5 +391,8 @@ class WebSocketService {
     _errorController.close();
     _authExpiredController.close();
     _friendOnlineController.close();
+    _friendOfflineController.close();
+    _onlineFriendsController.close();
+    _sendErrorController.close();
   }
 }

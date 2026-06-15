@@ -1,6 +1,6 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/models/user.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/models/user.dart';
 import 'package:flutter/material.dart';
 
 class ImageUtils {
@@ -17,10 +17,28 @@ class ImageUtils {
   static Widget buildAvatar(User? user, {double radius = 20}) {
     if (user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty) {
       final url = resolveUrl(user.avatarUrl);
+      // 使用 CachedNetworkImage 替代 NetworkImage，以便控制缓存
       return CircleAvatar(
         radius: radius,
-        backgroundImage: NetworkImage(url),
         backgroundColor: Colors.grey[200]!,
+        child: ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            width: radius * 2,
+            height: radius * 2,
+            placeholder: (_, __) => Center(
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey[400]),
+            ),
+            errorWidget: (_, __, ___) => Center(
+              child: Text(
+                user.initials ?? '?',
+                style: TextStyle(fontSize: radius * 0.8, color: Colors.blue, fontWeight: FontWeight.bold),
+              ),
+            ),
+            fadeInDuration: const Duration(milliseconds: 200),
+          ),
+        ),
       );
     }
     return CircleAvatar(
@@ -31,6 +49,17 @@ class ImageUtils {
         style: TextStyle(fontSize: radius * 0.8, color: Colors.white, fontWeight: FontWeight.bold),
       ),
     );
+  }
+
+  /// 清除指定 URL 的 CachedNetworkImage 缓存
+  static Future<void> evictCachedImage(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final fullUrl = resolveUrl(url);
+    try {
+      await CachedNetworkImage.evictFromCache(fullUrl);
+    } catch (_) {
+      // 忽略清除缓存失败
+    }
   }
 
   static Widget buildPostImage(String? imageUrl, {BoxFit fit = BoxFit.cover, double? width, double? height}) {

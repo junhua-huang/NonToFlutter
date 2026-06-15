@@ -1,18 +1,18 @@
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
-import 'package:facebook_clone/screens/search/search_results_screen.dart';
-import 'package:facebook_clone/services/api/block_service.dart';
-import 'package:facebook_clone/services/api/post_service.dart';
-import 'package:facebook_clone/services/api/report_service.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/enhanced_media_viewer.dart';
-import 'package:facebook_clone/widgets/media_viewer.dart';
-import 'package:facebook_clone/widgets/rich_text_content.dart';
-import 'package:facebook_clone/widgets/twitter_bottom_sheet.dart';
+﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/screens/search/search_results_screen.dart';
+import 'package:nonto/services/api/block_service.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/report_service.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/enhanced_media_viewer.dart';
+import 'package:nonto/widgets/media_viewer.dart';
+import 'package:nonto/widgets/rich_text_content.dart';
+import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_social_video/flutter_social_video.dart';
 import 'package:flutter/material.dart';
@@ -45,32 +45,65 @@ class PostCard extends StatelessWidget {
       if (!context.mounted) return;
       if (resp.success && resp.data != null) {
         final stats = resp.data as Map<String, dynamic>;
-        showDialog(
+        final colors = Theme.of(context).colorScheme;
+        showModalBottomSheet(
           context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text('帖子统计',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('浏览量 ${stats['views'] ?? 0}',
-                    style: const TextStyle(fontSize: 15)),
-                const SizedBox(height: 4),
-                Text('点赞数 ${stats['likes'] ?? post.likeCount}',
-                    style: const TextStyle(fontSize: 15)),
-                const SizedBox(height: 4),
-                Text('评论数 ${stats['comments'] ?? post.commentCount}',
-                    style: const TextStyle(fontSize: 15)),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('关闭'),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (ctx) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 拖拽指示条
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('帖子统计',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 20),
+                  _StatRow(
+                    icon: Icons.visibility_outlined,
+                    label: '浏览量',
+                    value: '${stats['views'] ?? 0}',
+                  ),
+                  const SizedBox(height: 14),
+                  _StatRow(
+                    icon: Icons.favorite_border,
+                    label: '点赞数',
+                    value: '${stats['likes'] ?? post.likeCount}',
+                  ),
+                  const SizedBox(height: 14),
+                  _StatRow(
+                    icon: Icons.chat_bubble_outline,
+                    label: '评论数',
+                    value: '${stats['comments'] ?? post.commentCount}',
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('关闭'),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       } else {
@@ -345,7 +378,8 @@ class PostCard extends StatelessWidget {
                   return GestureDetector(
                     onTap: () {
                       final items = _buildMediaItems(post, allImages, feedPosts);
-                      EnhancedImageViewerScreen.show(context, items);
+                      final index = _indexForPost(items, post.id);
+                      EnhancedImageViewerScreen.show(context, items, initialPostIndex: index);
                     },
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
@@ -417,6 +451,32 @@ class PostCard extends StatelessWidget {
   }
 }
 
+class _StatRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _StatRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 22, color: colors.primary),
+        const SizedBox(width: 12),
+        Text(label, style: TextStyle(fontSize: 15, color: colors.onSurface)),
+        const Spacer(),
+        Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.onSurface)),
+      ],
+    );
+  }
+}
+
 class _ActionIcon extends StatelessWidget {
   final IconData icon;
   final int count;
@@ -462,25 +522,62 @@ class _ReportOption {
 }
 
 /// Build a list of PostMediaItem from current post and nearby posts
+int _indexForPost(List<PostMediaItem> items, int postId) {
+  for (int i = 0; i < items.length; i++) {
+    if (items[i].post.id == postId) return i;
+  }
+  return 0;
+}
+
 List<PostMediaItem> _buildMediaItems(Post post, List<String> allImages, List<Post>? feedPosts) {
   final items = <PostMediaItem>[];
-  // Current post's media
-  items.add(PostMediaItem(post: post, mediaUrls: allImages));
-  // Nearby posts with media
-  if (feedPosts != null) {
-    for (final p in feedPosts) {
-      if (p.id == post.id) continue;
-      final urls = <String>[];
-      if (p.images != null) {
-        for (final u in p.images!) {
-          if (u.isNotEmpty) urls.add(u);
-        }
+  // Helper: extract media URLs from a post
+  List<String> mediaUrlsOf(Post p) {
+    final urls = <String>[];
+    if (p.images != null) {
+      for (final u in p.images!) {
+        if (u.isNotEmpty) urls.add(u);
       }
-      if (urls.isNotEmpty) {
-        items.add(PostMediaItem(post: p, mediaUrls: urls));
+    }
+    return urls;
+  }
+
+  if (feedPosts == null || feedPosts.isEmpty) {
+    items.add(PostMediaItem(post: post, mediaUrls: allImages));
+    return items;
+  }
+
+  // Find current post position
+  final currentIdx = feedPosts.indexWhere((p) => p.id == post.id);
+  if (currentIdx < 0) {
+    items.add(PostMediaItem(post: post, mediaUrls: allImages));
+    return items;
+  }
+
+  // Collect before/after posts in feed order (only those with media)
+  final before = <Post>[];
+  final after = <Post>[];
+  for (int i = 0; i < feedPosts.length; i++) {
+    if (i == currentIdx) continue;
+    final p = feedPosts[i];
+    if (p.hasImage || p.hasVideo) {
+      if (i < currentIdx) {
+        before.add(p);
+      } else {
+        after.add(p);
       }
     }
   }
+
+  // Build items: before (feed order) → current → after (feed order)
+  for (final p in before) {
+    items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
+  }
+  items.add(PostMediaItem(post: post, mediaUrls: allImages));
+  for (final p in after) {
+    items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
+  }
+
   return items;
 }
 

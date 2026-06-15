@@ -1,22 +1,22 @@
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
-import 'package:facebook_clone/screens/post/post_detail_screen.dart';
-import 'package:facebook_clone/services/api/block_service.dart';
-import 'package:facebook_clone/services/api/chat_service.dart';
-import 'package:facebook_clone/services/api/friend_service.dart';
-import 'package:facebook_clone/services/api/post_service.dart';
-import 'package:facebook_clone/services/api/report_service.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/error_state_widget.dart';
-import 'package:facebook_clone/widgets/media_viewer.dart';
-import 'package:facebook_clone/widgets/post_card.dart';
-import 'package:facebook_clone/widgets/twitter_bottom_sheet.dart';
+﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/services/api/block_service.dart';
+import 'package:nonto/services/api/chat_service.dart';
+import 'package:nonto/services/api/friend_service.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/report_service.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/media_viewer.dart';
+import 'package:nonto/widgets/post_card.dart';
+import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
@@ -669,19 +669,21 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                   ),
                   child: ImageUtils.buildAvatar(user, radius: 44),
                 ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: (user.isOnline == true) ? Colors.green : Colors.grey,
-                      border: Border.all(color: Colors.white, width: 2.5),
+                // 仅好友才显示在线状态（隐私保护：非好友不应看到对方在线状态）
+                if (_statusLoaded && _friendStatus == _FriendStatus.friends)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: (user.isOnline == true) ? Colors.green : Colors.grey,
+                        border: Border.all(color: Colors.white, width: 2.5),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),

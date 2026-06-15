@@ -1,5 +1,5 @@
-import 'api_client.dart';
-import 'package:facebook_clone/services/sound_service.dart';
+﻿import 'api_client.dart';
+import 'package:nonto/services/sound_service.dart';
 
 class ChatService {
   static final ChatService _i = ChatService._();
@@ -24,7 +24,7 @@ class ChatService {
   
   /// Incremental sync: fetch messages after a given message ID.
   Future<ApiResponse> getMessagesAfter(int convId, int afterId, {int limit = 50}) =>
-      _api.getDeduped('/chat/messages', params: {'conv_id': convId, 'after_id': afterId, 'limit': limit});
+      _api.getDeduped('/chat/conversations/$convId/messages', params: {'after_id': afterId, 'limit': limit});
   Future<ApiResponse> markRead(int convId) => _api.post('/chat/conversations/$convId/mark-read');
   Future<ApiResponse> getOnlineUsers() => _api.getDeduped('/chat/users/online');
   Future<ApiResponse> getUserStatus(int userId) => _api.getDeduped('/chat/users/$userId/status');

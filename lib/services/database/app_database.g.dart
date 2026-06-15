@@ -67,6 +67,18 @@ class $MessagesTableTable extends MessagesTable
   late final GeneratedColumn<String> requestId = GeneratedColumn<String>(
       'request_id', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _seqMeta = const VerificationMeta('seq');
+  @override
+  late final GeneratedColumn<int> seq = GeneratedColumn<int>(
+      'seq', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('sent'));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -77,7 +89,9 @@ class $MessagesTableTable extends MessagesTable
         messageType,
         isRead,
         createdAt,
-        requestId
+        requestId,
+        seq,
+        status
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -132,6 +146,14 @@ class $MessagesTableTable extends MessagesTable
       context.handle(_requestIdMeta,
           requestId.isAcceptableOrUnknown(data['request_id']!, _requestIdMeta));
     }
+    if (data.containsKey('seq')) {
+      context.handle(
+          _seqMeta, seq.isAcceptableOrUnknown(data['seq']!, _seqMeta));
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
     return context;
   }
 
@@ -159,6 +181,10 @@ class $MessagesTableTable extends MessagesTable
           .read(DriftSqlType.int, data['${effectivePrefix}created_at']),
       requestId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}request_id']),
+      seq: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}seq']),
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
     );
   }
 
@@ -179,6 +205,8 @@ class MessagesTableData extends DataClass
   final bool isRead;
   final int? createdAt;
   final String? requestId;
+  final int? seq;
+  final String status;
   const MessagesTableData(
       {required this.id,
       required this.conversationId,
@@ -188,7 +216,9 @@ class MessagesTableData extends DataClass
       required this.messageType,
       required this.isRead,
       this.createdAt,
-      this.requestId});
+      this.requestId,
+      this.seq,
+      required this.status});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -209,6 +239,10 @@ class MessagesTableData extends DataClass
     if (!nullToAbsent || requestId != null) {
       map['request_id'] = Variable<String>(requestId);
     }
+    if (!nullToAbsent || seq != null) {
+      map['seq'] = Variable<int>(seq);
+    }
+    map['status'] = Variable<String>(status);
     return map;
   }
 
@@ -231,6 +265,8 @@ class MessagesTableData extends DataClass
       requestId: requestId == null && nullToAbsent
           ? const Value.absent()
           : Value(requestId),
+      seq: seq == null && nullToAbsent ? const Value.absent() : Value(seq),
+      status: Value(status),
     );
   }
 
@@ -247,6 +283,8 @@ class MessagesTableData extends DataClass
       isRead: serializer.fromJson<bool>(json['isRead']),
       createdAt: serializer.fromJson<int?>(json['createdAt']),
       requestId: serializer.fromJson<String?>(json['requestId']),
+      seq: serializer.fromJson<int?>(json['seq']),
+      status: serializer.fromJson<String>(json['status']),
     );
   }
   @override
@@ -262,6 +300,8 @@ class MessagesTableData extends DataClass
       'isRead': serializer.toJson<bool>(isRead),
       'createdAt': serializer.toJson<int?>(createdAt),
       'requestId': serializer.toJson<String?>(requestId),
+      'seq': serializer.toJson<int?>(seq),
+      'status': serializer.toJson<String>(status),
     };
   }
 
@@ -274,7 +314,9 @@ class MessagesTableData extends DataClass
           String? messageType,
           bool? isRead,
           Value<int?> createdAt = const Value.absent(),
-          Value<String?> requestId = const Value.absent()}) =>
+          Value<String?> requestId = const Value.absent(),
+          Value<int?> seq = const Value.absent(),
+          String? status}) =>
       MessagesTableData(
         id: id ?? this.id,
         conversationId: conversationId ?? this.conversationId,
@@ -285,6 +327,8 @@ class MessagesTableData extends DataClass
         isRead: isRead ?? this.isRead,
         createdAt: createdAt.present ? createdAt.value : this.createdAt,
         requestId: requestId.present ? requestId.value : this.requestId,
+        seq: seq.present ? seq.value : this.seq,
+        status: status ?? this.status,
       );
   MessagesTableData copyWithCompanion(MessagesTableCompanion data) {
     return MessagesTableData(
@@ -300,6 +344,8 @@ class MessagesTableData extends DataClass
       isRead: data.isRead.present ? data.isRead.value : this.isRead,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       requestId: data.requestId.present ? data.requestId.value : this.requestId,
+      seq: data.seq.present ? data.seq.value : this.seq,
+      status: data.status.present ? data.status.value : this.status,
     );
   }
 
@@ -314,14 +360,16 @@ class MessagesTableData extends DataClass
           ..write('messageType: $messageType, ')
           ..write('isRead: $isRead, ')
           ..write('createdAt: $createdAt, ')
-          ..write('requestId: $requestId')
+          ..write('requestId: $requestId, ')
+          ..write('seq: $seq, ')
+          ..write('status: $status')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, conversationId, senderId, content,
-      mediaUrl, messageType, isRead, createdAt, requestId);
+      mediaUrl, messageType, isRead, createdAt, requestId, seq, status);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -334,7 +382,9 @@ class MessagesTableData extends DataClass
           other.messageType == this.messageType &&
           other.isRead == this.isRead &&
           other.createdAt == this.createdAt &&
-          other.requestId == this.requestId);
+          other.requestId == this.requestId &&
+          other.seq == this.seq &&
+          other.status == this.status);
 }
 
 class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
@@ -347,6 +397,8 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
   final Value<bool> isRead;
   final Value<int?> createdAt;
   final Value<String?> requestId;
+  final Value<int?> seq;
+  final Value<String> status;
   const MessagesTableCompanion({
     this.id = const Value.absent(),
     this.conversationId = const Value.absent(),
@@ -357,6 +409,8 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     this.isRead = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.requestId = const Value.absent(),
+    this.seq = const Value.absent(),
+    this.status = const Value.absent(),
   });
   MessagesTableCompanion.insert({
     this.id = const Value.absent(),
@@ -368,6 +422,8 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     this.isRead = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.requestId = const Value.absent(),
+    this.seq = const Value.absent(),
+    this.status = const Value.absent(),
   })  : conversationId = Value(conversationId),
         senderId = Value(senderId);
   static Insertable<MessagesTableData> custom({
@@ -380,6 +436,8 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     Expression<bool>? isRead,
     Expression<int>? createdAt,
     Expression<String>? requestId,
+    Expression<int>? seq,
+    Expression<String>? status,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -391,6 +449,8 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       if (isRead != null) 'is_read': isRead,
       if (createdAt != null) 'created_at': createdAt,
       if (requestId != null) 'request_id': requestId,
+      if (seq != null) 'seq': seq,
+      if (status != null) 'status': status,
     });
   }
 
@@ -403,7 +463,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       Value<String>? messageType,
       Value<bool>? isRead,
       Value<int?>? createdAt,
-      Value<String?>? requestId}) {
+      Value<String?>? requestId,
+      Value<int?>? seq,
+      Value<String>? status}) {
     return MessagesTableCompanion(
       id: id ?? this.id,
       conversationId: conversationId ?? this.conversationId,
@@ -414,6 +476,8 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
       requestId: requestId ?? this.requestId,
+      seq: seq ?? this.seq,
+      status: status ?? this.status,
     );
   }
 
@@ -447,6 +511,12 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     if (requestId.present) {
       map['request_id'] = Variable<String>(requestId.value);
     }
+    if (seq.present) {
+      map['seq'] = Variable<int>(seq.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
     return map;
   }
 
@@ -461,7 +531,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
           ..write('messageType: $messageType, ')
           ..write('isRead: $isRead, ')
           ..write('createdAt: $createdAt, ')
-          ..write('requestId: $requestId')
+          ..write('requestId: $requestId, ')
+          ..write('seq: $seq, ')
+          ..write('status: $status')
           ..write(')'))
         .toString();
   }
@@ -1115,6 +1187,8 @@ typedef $$MessagesTableTableCreateCompanionBuilder = MessagesTableCompanion
   Value<bool> isRead,
   Value<int?> createdAt,
   Value<String?> requestId,
+  Value<int?> seq,
+  Value<String> status,
 });
 typedef $$MessagesTableTableUpdateCompanionBuilder = MessagesTableCompanion
     Function({
@@ -1127,6 +1201,8 @@ typedef $$MessagesTableTableUpdateCompanionBuilder = MessagesTableCompanion
   Value<bool> isRead,
   Value<int?> createdAt,
   Value<String?> requestId,
+  Value<int?> seq,
+  Value<String> status,
 });
 
 class $$MessagesTableTableFilterComposer
@@ -1165,6 +1241,12 @@ class $$MessagesTableTableFilterComposer
 
   ColumnFilters<String> get requestId => $composableBuilder(
       column: $table.requestId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get seq => $composableBuilder(
+      column: $table.seq, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
 }
 
 class $$MessagesTableTableOrderingComposer
@@ -1203,6 +1285,12 @@ class $$MessagesTableTableOrderingComposer
 
   ColumnOrderings<String> get requestId => $composableBuilder(
       column: $table.requestId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get seq => $composableBuilder(
+      column: $table.seq, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
 }
 
 class $$MessagesTableTableAnnotationComposer
@@ -1240,6 +1328,12 @@ class $$MessagesTableTableAnnotationComposer
 
   GeneratedColumn<String> get requestId =>
       $composableBuilder(column: $table.requestId, builder: (column) => column);
+
+  GeneratedColumn<int> get seq =>
+      $composableBuilder(column: $table.seq, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
 }
 
 class $$MessagesTableTableTableManager extends RootTableManager<
@@ -1277,6 +1371,8 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             Value<bool> isRead = const Value.absent(),
             Value<int?> createdAt = const Value.absent(),
             Value<String?> requestId = const Value.absent(),
+            Value<int?> seq = const Value.absent(),
+            Value<String> status = const Value.absent(),
           }) =>
               MessagesTableCompanion(
             id: id,
@@ -1288,6 +1384,8 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             isRead: isRead,
             createdAt: createdAt,
             requestId: requestId,
+            seq: seq,
+            status: status,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -1299,6 +1397,8 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             Value<bool> isRead = const Value.absent(),
             Value<int?> createdAt = const Value.absent(),
             Value<String?> requestId = const Value.absent(),
+            Value<int?> seq = const Value.absent(),
+            Value<String> status = const Value.absent(),
           }) =>
               MessagesTableCompanion.insert(
             id: id,
@@ -1310,6 +1410,8 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             isRead: isRead,
             createdAt: createdAt,
             requestId: requestId,
+            seq: seq,
+            status: status,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

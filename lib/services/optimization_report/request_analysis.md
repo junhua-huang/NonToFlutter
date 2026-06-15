@@ -1,7 +1,7 @@
-# 聊天系统请求频率优化分析报告
+﻿# 聊天系统请求频率优化分析报告
 
 > 生成日期：2026-06-05
-> 分析范围：`D:\FlutterProject\facebook_clone\lib` + `D:\NanTuPy\app`
+> 分析范围：`D:\FlutterProject\nonto\lib` + `D:\NanTuPy\app`
 
 ---
 

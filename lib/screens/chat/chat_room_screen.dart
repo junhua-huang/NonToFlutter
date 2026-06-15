@@ -1,19 +1,19 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:facebook_clone/data/emoji_data.dart';
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/models/message.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/providers/chat_notifiers.dart';
-import 'package:facebook_clone/services/api/chat_service.dart';
-import 'package:facebook_clone/screens/messages/messages_tab.dart';
-import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/twitter_bottom_sheet.dart';
-import 'package:facebook_clone/widgets/empty_state_widget.dart';
+import 'package:nonto/data/emoji_data.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/models/message.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/services/api/chat_service.dart';
+import 'package:nonto/screens/messages/messages_tab.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/twitter_bottom_sheet.dart';
+import 'package:nonto/widgets/empty_state_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -62,6 +62,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   StreamSubscription? _errorSub;
   final Set<int> _reactions = {}; // optimistic reaction message IDs
   bool _loadingMore = false; // track history loading state
+  int _lastMsgCount = 0; // track message count for auto-scroll
 
   @override
   void initState() {
@@ -72,7 +73,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final currentUserId = auth.user?.id ?? 0;
     ref
         .read(messagesProvider(widget.conversation.id).notifier)
-        .init(currentUserId);
+        .init(currentUserId, otherUserId: widget.conversation.otherUser?.id);
 
     _errorSub = WebSocketService().errorStream.listen((error) {
       if (mounted) {
@@ -87,6 +88,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (!WebSocketService().isConnected) {
       ChatService().markRead(widget.conversation.id);
     }
+
+    // 立即清除本地未读气泡（不等服务端确认）
+    ref.read(conversationsProvider.notifier).clearConversationUnread(widget.conversation.id);
   }
 
   @override
@@ -119,7 +123,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
     final notifier = ref.read(messagesProvider(widget.conversation.id).notifier);
     if (_quotedMessage != null) {
-      notifier.sendMessage('「回复」$text');
+      // 发送带引用的消息，不再拼「回复」前缀
+      notifier.sendMessage(
+        text,
+        quoteMessageId: _quotedMessage!.id,
+        quotePreview: _quotedMessage!.content ?? '',
+      );
     } else {
       notifier.sendMessage(text);
     }
@@ -197,14 +206,23 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   void _showMessageMenu(Message msg) async {
     final isMe = msg.senderId == ref.read(authProvider).user?.id;
+    final canRecall = isMe && !msg.isRecalled && msg.id < 1000000000000;
     final options = <TwitterSheetOption<String>>[
-      const TwitterSheetOption(icon: Icons.copy, label: '复制文字', value: 'copy'),
-      const TwitterSheetOption(icon: Icons.format_quote, label: '引用回复', value: 'quote'),
-      const TwitterSheetOption(icon: Icons.forward, label: '转发', value: 'forward'),
-      if (isMe)
+      if (!msg.isRecalled)
+        const TwitterSheetOption(icon: Icons.copy, label: '复制文字', value: 'copy'),
+      if (!msg.isRecalled)
+        const TwitterSheetOption(icon: Icons.format_quote, label: '引用回复', value: 'quote'),
+      if (!msg.isRecalled)
+        const TwitterSheetOption(icon: Icons.forward, label: '转发', value: 'forward'),
+      if (canRecall)
+        const TwitterSheetOption(icon: Icons.undo, label: '撤回', value: 'recall', isDestructive: true),
+      if (isMe && !msg.isRecalled)
         const TwitterSheetOption(icon: Icons.delete_outline, label: '删除消息', value: 'delete', isDestructive: true),
-      const TwitterSheetOption(icon: Icons.flag_outlined, label: '举报', value: 'report'),
+      if (!msg.isRecalled)
+        const TwitterSheetOption(icon: Icons.flag_outlined, label: '举报', value: 'report'),
     ];
+
+    if (options.isEmpty) return; // 已撤回消息无菜单
 
     final action = await TwitterBottomSheet.show<String>(context, options: options);
     if (!mounted) return;
@@ -215,6 +233,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       case 'quote':
         setState(() => _quotedMessage = msg);
         _messageFocusNode.requestFocus();
+        break;
+      case 'recall':
+        ref.read(messagesProvider(widget.conversation.id).notifier).recallMessage(msg.id);
         break;
       case 'delete':
         ref.read(messagesProvider(widget.conversation.id).notifier).removeMessage(msg.id);
@@ -250,9 +271,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final msgState = ref.watch(messagesProvider(widget.conversation.id));
     final otherUser = widget.conversation.otherUser;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
+    // 仅在消息数量变化时滚动到底部（避免每次 build 都滚）
+    final msgCount = msgState.messages.length;
+    if (msgCount != _lastMsgCount && msgCount > 0) {
+      _lastMsgCount = msgCount;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
+    }
 
     return Scaffold(
       backgroundColor: _isDark ? _TwColors.darkBg : _TwColors.bg,
@@ -310,24 +336,31 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  (otherUser?.isOnline == true)
+                Builder(builder: (context) {
+                  // 优先使用 msgState.otherUserIsOnline（来自 WS 实时推送）
+                  // 回退到 otherUser.isOnline（构造时传入的静态值）
+                  final isOnline = msgState.otherUserIsOnline ?? otherUser?.isOnline;
+                  final statusText = isOnline == true
                       ? '在线'
-                      : (otherUser?.isOnline == false)
+                      : isOnline == false
                           ? '离线'
-                          : (msgState.otherUserTyping ? '正在输入...' : '@${otherUser?.username ?? ''}'),
-                  style: TextStyle(
-                    color: (otherUser?.isOnline == true)
-                        ? const Color(0xFF00BA7C)
-                        : msgState.otherUserTyping
-                            ? _TwColors.selfBubble
-                            : subColor,
-                    fontSize: 13,
-                    fontStyle: msgState.otherUserTyping
-                        ? FontStyle.italic
-                        : FontStyle.normal,
-                  ),
-                ),
+                          : (msgState.otherUserTyping ? '正在输入...' : '@${otherUser?.username ?? ''}');
+                  final statusColor = isOnline == true
+                      ? const Color(0xFF00BA7C)
+                      : msgState.otherUserTyping
+                          ? _TwColors.selfBubble
+                          : subColor;
+                  return Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 13,
+                      fontStyle: msgState.otherUserTyping
+                          ? FontStyle.italic
+                          : FontStyle.normal,
+                    ),
+                  );
+                }),
               ],
             ),
           ],
@@ -662,12 +695,47 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   }) {
     final isText = msg.messageType == MessageType.text;
     final isImage = msg.messageType == MessageType.image;
+    final isRecalled = msg.isRecalled;
     final bubbleColor = isMe
         ? _TwColors.selfBubble
         : (_isDark ? _TwColors.darkOtherBubble : _TwColors.otherBubble);
     final textColor = isMe
         ? Colors.white
         : (_isDark ? _TwColors.darkText : _TwColors.text);
+
+    // ── 已撤回消息：居中灰色提示 ──
+    if (isRecalled) {
+      return Padding(
+        padding: EdgeInsets.only(
+          left: isMe ? 48 : (showAvatar ? 0 : 44),
+          right: isMe ? 0 : 48,
+          top: isFirst ? 0 : 1,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: _isDark ? _TwColors.darkOtherBubble : _TwColors.otherBubble,
+            borderRadius: const BorderRadius.all(Radius.circular(16)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.undo, size: 14,
+                color: _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp),
+              const SizedBox(width: 4),
+              Text(
+                isMe ? '你撤回了一条消息' : '消息已撤回',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     // 连续消息圆角
     const r = Radius.circular(16);
@@ -719,6 +787,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // ── 引用预览条 ──
+                  if (msg.quoteMessageId != null && msg.quotePreview != null)
+                    _buildQuotePreview(msg, isMe),
                   if (isText)
                     Text(
                       msg.content ?? '',
@@ -763,30 +834,102 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   }
 
   Widget _buildImageBubble(Message msg) {
+    final url = msg.mediaUrl ?? msg.content ?? '';
+    final isUploading = msg.status == 'uploading';
+    final isFailed = msg.status == 'failed';
+    final progress = (msg.uploadProgress ?? 0).clamp(0.0, 1.0).toDouble();
+
+    Widget imageChild;
+    if (isFailed) {
+      // ── 上传失败：显示占位图 + 重试提示 ──
+      imageChild = GestureDetector(
+        onTap: () {
+          ref
+              .read(messagesProvider(widget.conversation.id).notifier)
+              .retryImageUpload(msg.id);
+        },
+        child: Container(
+          width: 240,
+          height: 180,
+          color: Colors.grey[300],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 36, color: Colors.grey[600]),
+              const SizedBox(height: 8),
+              Text(
+                '上传失败，点击重试',
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (isUploading || url.isEmpty || !url.startsWith('http')) {
+      imageChild = Container(
+        width: 240,
+        height: 240,
+        color: Colors.grey[300],
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(Icons.image_outlined, size: 48, color: Colors.grey[500]),
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 28,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(
+                    value: progress > 0 ? progress : null,
+                    minHeight: 4,
+                    backgroundColor: Colors.white.withValues(alpha: 0.6),
+                    valueColor: const AlwaysStoppedAnimation<Color>(_TwColors.selfBubble),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    progress > 0 ? '上传中 ${(progress * 100).round()}%' : '准备上传...',
+                    style: const TextStyle(fontSize: 12, color: _TwColors.timestamp),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      imageChild = CachedNetworkImage(
+        imageUrl: url,
+        width: 240,
+        height: 240,
+        fit: BoxFit.cover,
+        placeholder: (ctx, url) => Container(
+          width: 240,
+          height: 240,
+          color: Colors.grey[300],
+          child: const Center(
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+        errorWidget: (ctx, url, err) => Container(
+          width: 240,
+          height: 100,
+          color: Colors.grey[300],
+          child: const Icon(Icons.broken_image, color: Colors.grey),
+        ),
+      );
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: GestureDetector(
-        onTap: () => _showImageViewer(msg.mediaUrl ?? msg.content ?? ''),
-        child: CachedNetworkImage(
-          imageUrl: msg.mediaUrl ?? msg.content ?? '',
-          width: 240,
-          height: 240,
-          fit: BoxFit.cover,
-          placeholder: (ctx, url) => Container(
-            width: 240,
-            height: 240,
-            color: Colors.grey[300],
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-          errorWidget: (ctx, url, err) => Container(
-            width: 240,
-            height: 100,
-            color: Colors.grey[300],
-            child: const Icon(Icons.broken_image, color: Colors.grey),
-          ),
-        ),
+        onTap: isFailed
+            ? () => ref
+                .read(messagesProvider(widget.conversation.id).notifier)
+                .retryImageUpload(msg.id)
+            : (url.startsWith('http') && !isUploading ? () => _showImageViewer(url) : null),
+        child: imageChild,
       ),
     );
   }
@@ -847,6 +990,43 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   }
 
   // ── 快速回复栏 ──
+
+  Widget _buildQuotePreview(Message msg, bool isMe) {
+    final quoteColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : _TwColors.selfBubble;
+    final quoteBg = isMe
+        ? Colors.white.withValues(alpha: 0.15)
+        : _TwColors.selfBubble.withValues(alpha: 0.08);
+    final quoteTextColor = isMe
+        ? Colors.white.withValues(alpha: 0.85)
+        : (_isDark ? _TwColors.darkText : _TwColors.text);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: quoteBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border(
+          left: BorderSide(color: quoteColor, width: 2.5),
+        ),
+      ),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.60,
+      ),
+      child: Text(
+        msg.quotePreview ?? '',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.3,
+          color: quoteTextColor,
+        ),
+      ),
+    );
+  }
 
   Widget _buildQuickReplyBar() {
     final msg = _quotedMessage!;
@@ -1235,8 +1415,14 @@ class _SendStatusIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!isMe) return const SizedBox.shrink();
-    // 未发送（乐观消息）
-    if (message.id >= 1000000000000) {
+    // 上传/发送中（乐观消息）
+    if (message.status == 'uploading') {
+      return Text(
+        '上传中 ${(message.uploadProgress ?? 0) > 0 ? ((message.uploadProgress ?? 0) * 100).round() : 0}%',
+        style: const TextStyle(fontSize: 11, color: _TwColors.timestamp),
+      );
+    }
+    if (message.status == 'sending' || message.id >= 1000000000000) {
       return const SizedBox(
         width: 12,
         height: 12,

@@ -1,4 +1,4 @@
-import 'package:facebook_clone/config/app_theme.dart';
+﻿import 'package:nonto/config/app_theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 /// 解析文本中的话题(#xxx)和@提及(@xxx)，高亮显示并支持点击

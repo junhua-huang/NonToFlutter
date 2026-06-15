@@ -1,15 +1,15 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/models/message.dart';
-import 'package:facebook_clone/models/user.dart' as app_user;
-import 'package:facebook_clone/services/api/chat_service.dart';
-import 'package:facebook_clone/services/database/app_database.dart';
-import 'package:facebook_clone/services/cache_keys.dart';
-import 'package:facebook_clone/services/data_layer.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/models/message.dart';
+import 'package:nonto/models/user.dart' as app_user;
+import 'package:nonto/services/api/chat_service.dart';
+import 'package:nonto/services/database/app_database.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/data_layer.dart';
 
 /// 本地数据库服务 - 存储聊天记录（按用户账号隔离）
 /// 基于 drift，支持 Web / iOS / Android 三端
@@ -21,13 +21,23 @@ class LocalDbService {
   AppDatabase? _db;
   String? _currentUserId;
 
+  Future<void> _closeCurrent() async {
+    await _db?.close();
+  }
+
   /// 初始化数据库（传入当前登录用户ID以隔离数据）
   Future<void> init(String userId) async {
     if (_currentUserId == userId && _db != null) return;
-    await _db?.close();
+    await _closeCurrent();
     _currentUserId = userId;
-    _db = await AppDatabase.forUser(userId);
-    DataLayer().init(_db!);
+    try {
+      _db = await AppDatabase.forUser(userId);
+      DataLayer().init(_db!);
+    } catch (e) {
+      debugPrint('[LocalDbService] DB init failed for user $userId: $e');
+      _db = null;
+      // Don't rethrow — app should still work with network-only mode
+    }
   }
 
   // ==================== 消息操作 ====================
@@ -35,14 +45,22 @@ class LocalDbService {
   Future<void> insertMessage(Message msg) async {
     final db = _db;
     if (db == null) return;
-    await db.insertMessage(_messageToCompanion(msg));
+    try {
+      await db.insertMessage(_messageToCompanion(msg));
+    } catch (e) {
+      print('[DB] insertMessage failed (non-critical): $e');
+    }
   }
 
   Future<void> insertMessages(List<Message> messages) async {
     final db = _db;
     if (db == null) return;
-    await db.insertMessages(
-        messages.map(_messageToCompanion).toList());
+    try {
+      await db.insertMessages(
+          messages.map(_messageToCompanion).toList());
+    } catch (e) {
+      print('[DB] insertMessages failed (non-critical): $e');
+    }
   }
 
   Future<List<Message>> getMessages(int conversationId,
@@ -155,6 +173,9 @@ class LocalDbService {
       messageType: Value(msg.messageType.name),
       isRead: Value(msg.isRead),
       createdAt: Value(msg.createdAt?.millisecondsSinceEpoch),
+      requestId: Value(msg.requestId),
+      seq: msg.seq != null ? Value(msg.seq) : const Value.absent(),
+      status: Value(msg.status),
     );
   }
 
@@ -189,7 +210,8 @@ class LocalDbService {
       lastMessageAt: Value(conv.lastMessageAt?.millisecondsSinceEpoch),
       unreadCount: Value(conv.unreadCount),
       isOnline: const Value(false),
-      createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+      // Use lastMessageAt as the best available timestamp for SQLite creation order
+      createdAt: Value(conv.lastMessageAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch),
     );
   }
 

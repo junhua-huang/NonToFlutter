@@ -1,18 +1,18 @@
-import 'dart:async';
+﻿import 'dart:async';
 
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/providers/chat_notifiers.dart';
-import 'package:facebook_clone/providers/core_providers.dart';
-import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
-import 'package:facebook_clone/screens/notifications/notifications_tab.dart';
-import 'package:facebook_clone/services/api/notification_service.dart';
-import 'package:facebook_clone/services/cache_keys.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/local_db_service.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
-import 'package:facebook_clone/widgets/shimmer_skeletons.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/providers/core_providers.dart';
+import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/screens/notifications/notifications_tab.dart';
+import 'package:nonto/services/api/notification_service.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/local_db_service.dart';
+import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
@@ -65,7 +65,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   void _onWsNotification(Map<String, dynamic> data) {
     if (!mounted) return;
     final event = data['event'] as String?;
-    if (event == 'new_notification') {
+    if (event == 'new_notification' || event == 'notifications_read') {
       final val = data['unread_count'];
       final count = val is int ? val : (val is double ? val.toInt() : 0);
       setState(() => _unreadNotifications = count);

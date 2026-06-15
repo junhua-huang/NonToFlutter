@@ -1,8 +1,9 @@
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'request_manager.dart';
@@ -62,10 +63,10 @@ class ApiClient {
       onRequest: (options, handler) {
         if (token != null && token!.isNotEmpty) {
           final url = options.uri.toString();
-          // 仅对自身 API 请求注入 Authorization，COS / 第三方 URL 不注入
-          // （COS 预签名 URL 已自带鉴权签名，额外 Header 会导致 403 签名不匹配）
+          // 仅对自身 API 请求注入 token，COS / 第三方 URL 不注入
           if (!url.startsWith('http') || url.startsWith(AppConfig.baseUrl)) {
-            options.headers['Authorization'] = 'Bearer $token';
+            // 通过 query 参数传递 token，兼容 Web 端无自定义请求头的限制
+            options.queryParameters.addAll({'access_token': token});
           }
         }
         return handler.next(options);
@@ -90,7 +91,7 @@ class ApiClient {
                   debugPrint('[ApiClient] refresh OK, retrying original request');
                   token = newToken;
                   final opts = error.requestOptions;
-                  opts.headers['Authorization'] = 'Bearer $newToken';
+                  opts.queryParameters = {'access_token': newToken};
                   try {
                     final response = await dio.fetch(opts);
                     debugPrint('[ApiClient] retry succeeded');
@@ -179,15 +180,17 @@ class ApiClient {
     return utf8.decode(bytes);
   }
 
-  static void setToken(String? t) {
+  static void setToken(String? t, {bool connectWs = true}) {
     token = t;
     if (t != null && t.isNotEmpty) {
       printToken('ApiClient.setToken (内存写入)', t);
-      // Async connect WS whenever token is available
-      WebSocketService().connect().catchError((e, stack) {
-        debugPrint('❗ WebSocket connect failed: $e');
-        debugPrint(stack.toString());
-      });
+      if (connectWs) {
+        // Async connect WS whenever token is available
+        WebSocketService().connect().catchError((e, stack) {
+          debugPrint('❗ WebSocket connect failed: $e');
+          debugPrint(stack.toString());
+        });
+      }
     } else {
       WebSocketService().disconnect();
     }
@@ -201,8 +204,8 @@ class ApiClient {
         debugPrint('[ApiClient] _doRefreshToken: token is null, abort');
         return null;
       }
-      debugPrint('[ApiClient] _doRefreshToken: step1 setting auth header...');
-      _refreshDio.options.headers['Authorization'] = 'Bearer $token';
+      debugPrint('[ApiClient] _doRefreshToken: step1 setting query param...');
+      _refreshDio.options.queryParameters = {'access_token': token};
       debugPrint('[ApiClient] _doRefreshToken: step2 calling POST /auth/refresh...');
       final resp = await _refreshDio
           .post('/auth/refresh')
@@ -246,7 +249,7 @@ class ApiClient {
     debugPrint('[ApiClient] _handleRefreshFailed: disconnecting WS...');
     WebSocketService().disconnect();
     // 异步清除 SharedPreferences 中的过期 token
-    () async {
+    unawaited(Future(() async {
       try {
         final prefs = await SharedPreferences.getInstance();
         if (prefs.getString('access_token') == oldToken) {
@@ -260,7 +263,7 @@ class ApiClient {
       } catch (e) {
         debugPrint('[ApiClient] _handleRefreshFailed: prefs cleanup error: $e');
       }
-    }();
+    }));
     // 通知 UI 层跳转登录页
     onTokenExpired?.call();
   }

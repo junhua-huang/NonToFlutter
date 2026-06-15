@@ -14,6 +14,8 @@ class MessagesTable extends Table {
   BoolColumn get isRead => boolean().withDefault(const Constant(false))();
   IntColumn get createdAt => integer().nullable()();
   TextColumn get requestId => text().nullable()();
+  IntColumn get seq => integer().nullable()();           // 服务端消息序号
+  TextColumn get status => text().withDefault(const Constant('sent'))();  // sending/sent/failed
 
   @override
   Set<Column> get primaryKey => {id};
@@ -55,26 +57,27 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
-  @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (Migrator m) async {
           await m.createAll();
-          await customStatement(
-              'CREATE INDEX idx_msg_conv ON messages (conversation_id, created_at)');
+          try {
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages (conversation_id, created_at)');
+          } catch (_) {}
           await _createCacheTable();
           await _createOfflineQueueTable();
         },
         onUpgrade: (Migrator m, int from, int to) async {
-          if (from < 2) {
-            await _createCacheTable();
-          }
-          if (from < 3) {
-            await _createOfflineQueueTable();
+          // v5: 重建 messages 表（Web IndexedDB 的 ALTER TABLE 不可靠）
+          if (from < 5) {
+            print('[DB] migration v5: recreating messages table');
+            try { await m.deleteTable('messages_table'); } catch (_) {}
+            await m.createTable(messagesTable);
             try {
               await customStatement(
-                  'ALTER TABLE messages ADD COLUMN request_id TEXT');
+                  'CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages (conversation_id, created_at)');
             } catch (_) {}
           }
         },

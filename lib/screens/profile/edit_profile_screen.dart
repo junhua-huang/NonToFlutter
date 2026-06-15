@@ -1,15 +1,15 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:cross_file/cross_file.dart';
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/screens/profile/image_crop_screen.dart';
-import 'package:facebook_clone/services/api/auth_service.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/api/upload_service.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/profile/image_crop_screen.dart';
+import 'package:nonto/services/api/auth_service.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -121,9 +121,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ref.read(authProvider.notifier).updateUser(optimistic);
         _writeUserToCache(optimistic); // L2 + L1 乐观写入
         try {
-          final bioResp = await AuthService().updateProfile({
+          final updateData = <String, dynamic>{
             'bio': _bioController.text.trim(),
-          });
+          };
+          // 将已更新的封面 URL 一并发送，防止后端全量替换覆盖
+          final u = ref.read(authProvider).user;
+          if (u?.coverPhotoUrl != null) {
+            updateData['cover_photo_url'] = u!.coverPhotoUrl;
+          }
+          final bioResp = await AuthService().updateProfile(updateData);
           if (!mounted) return;
           if (bioResp.success) {
             Navigator.of(context).pop(true);

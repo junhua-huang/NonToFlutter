@@ -1,12 +1,12 @@
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/providers/auth_state.dart';
-import 'package:facebook_clone/providers/theme_notifier.dart';
-import 'package:facebook_clone/routes/app_routes.dart';
-import 'package:facebook_clone/screens/auth/login_screen.dart';
-import 'package:facebook_clone/services/api/auth_service.dart';
-import 'package:facebook_clone/services/api/notification_service.dart';
+﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/auth_state.dart';
+import 'package:nonto/providers/theme_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
+import 'package:nonto/screens/auth/login_screen.dart';
+import 'package:nonto/services/api/auth_service.dart';
+import 'package:nonto/services/api/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -70,11 +70,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final resp = await NotificationService().getSettings();
       if (resp.success && resp.data != null && mounted) {
+        // 后端返回 {"settings": {"notify_push": bool, "notify_message": bool, "notify_sound": bool}}
         final data = resp.data as Map<String, dynamic>;
+        final settings = (data['settings'] ?? data) as Map<String, dynamic>;
         setState(() {
-          _pushNotifications = data['push_notifications'] == true;
-          _messageAlerts = data['message_alerts'] == true;
-          _soundEnabled = data['sound_enabled'] == true;
+          _pushNotifications = settings['notify_push'] == true;
+          _messageAlerts = settings['notify_message'] == true;
+          _soundEnabled = settings['notify_sound'] == true;
           _isNotifSettingsLoaded = true;
         });
         _persistToPrefs();
@@ -92,7 +94,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() {
       _pushNotifications = prefs.getBool(_prefPush) ?? false;
       _messageAlerts = prefs.getBool(_prefMessage) ?? false;
-      _soundEnabled = prefs.getBool(_prefSound) ?? false;
+      _soundEnabled = prefs.getBool(_prefSound) ?? true;
       _isNotifSettingsLoaded = true;
     });
   }
@@ -105,12 +107,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
   Future<void> _updateNotificationSetting(String key, bool value) async {
     if (!_isNotifSettingsLoaded) return;
-    // 同时持久化到本地和 API
+    // 同时持久化到本地和 API（字段名对齐后端 notify_push / notify_message / notify_sound）
     final prefs = await SharedPreferences.getInstance();
     switch (key) {
-      case 'push_notifications': await prefs.setBool(_prefPush, value); break;
-      case 'message_alerts': await prefs.setBool(_prefMessage, value); break;
-      case 'sound_enabled': await prefs.setBool(_prefSound, value); break;
+      case 'notify_push': await prefs.setBool(_prefPush, value); break;
+      case 'notify_message': await prefs.setBool(_prefMessage, value); break;
+      case 'notify_sound': await prefs.setBool(_prefSound, value); break;
     }
     try {
       await NotificationService().updateSettings({key: value});
@@ -118,10 +120,90 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       debugPrint('Failed to update notification setting $key: $e');
     }
   }
+
+  // ─── 主题选择 ───
+  IconData _themeIcon(ThemeMode mode) => switch (mode) {
+    ThemeMode.dark   => Icons.dark_mode,
+    ThemeMode.system => Icons.brightness_auto,
+    _                => Icons.light_mode,
+  };
+
+  String _themeLabel(ThemeMode mode) => switch (mode) {
+    ThemeMode.dark   => '深色',
+    ThemeMode.system => '跟随系统',
+    _                => '浅色',
+  };
+
+  void _showThemePicker(BuildContext context, WidgetRef ref) {
+    final current = ref.read(themeProvider);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: const BoxDecoration(color: AppColors.dragHandle, borderRadius: BorderRadius.all(Radius.circular(2))),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('外观模式', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const SizedBox(height: 16),
+              _themeOption(ctx, ref, ThemeMode.light, '浅色模式', Icons.light_mode, current),
+              const SizedBox(height: 8),
+              _themeOption(ctx, ref, ThemeMode.dark, '深色模式', Icons.dark_mode, current),
+              const SizedBox(height: 8),
+              _themeOption(ctx, ref, ThemeMode.system, '跟随系统', Icons.brightness_auto, current),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _themeOption(BuildContext ctx, WidgetRef ref, ThemeMode mode, String label, IconData icon, ThemeMode current) {
+    final isSelected = mode == current;
+    return GestureDetector(
+      onTap: () {
+        ref.read(themeProvider.notifier).setThemeMode(mode);
+        Navigator.pop(ctx);
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.selectionHighlight : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? AppColors.primary : AppColors.textPrimary, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: isSelected ? AppColors.primary : AppColors.textPrimary)),
+            ),
+            if (isSelected) const Icon(Icons.check_circle, color: AppColors.primary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-    final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -177,7 +259,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               value: _pushNotifications,
               onChanged: (v) {
                 setState(() => _pushNotifications = v);
-                _updateNotificationSetting('push_notifications', v);
+                _updateNotificationSetting('notify_push', v);
               },
             ),
             _buildSettingsDivider(),
@@ -187,7 +269,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               value: _messageAlerts,
               onChanged: (v) {
                 setState(() => _messageAlerts = v);
-                _updateNotificationSetting('message_alerts', v);
+                _updateNotificationSetting('notify_message', v);
               },
             ),
             _buildSettingsDivider(),
@@ -197,18 +279,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               value: _soundEnabled,
               onChanged: (v) {
                 setState(() => _soundEnabled = v);
-                _updateNotificationSetting('sound_enabled', v);
+                _updateNotificationSetting('notify_sound', v);
               },
             ),
           ]),
           const SizedBox(height: 24),
           // 通用
           _buildSettingsSection('通用', [
-            _buildSwitchTile(
-              title: '深色模式',
-              icon: isDark ? Icons.dark_mode : Icons.light_mode,
-              value: isDark,
-              onChanged: (_) => ref.read(themeProvider.notifier).toggleTheme(),
+            _buildListTile(
+              title: '外观模式',
+              icon: _themeIcon(ref.watch(themeProvider)),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _themeLabel(ref.watch(themeProvider)),
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, size: 20),
+                ],
+              ),
+              onTap: () => _showThemePicker(context, ref),
             ),
           ]),
           const SizedBox(height: 24),
@@ -547,6 +639,8 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
           _allowFriendRequests = resp.data['allow_friend_requests'] ?? 'everyone';
           _isLoading = false;
         });
+      } else {
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);

@@ -1,21 +1,21 @@
-import 'dart:async';
+﻿import 'dart:async';
 
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/models/notification.dart' as app_notif;
-import 'package:facebook_clone/providers/core_providers.dart';
-import 'package:facebook_clone/providers/notifications_notifier.dart';
-import 'package:facebook_clone/screens/chat/chat_room_screen.dart';
-import 'package:facebook_clone/screens/friends/friend_requests_screen.dart';
-import 'package:facebook_clone/screens/post/post_detail_screen.dart';
-import 'package:facebook_clone/services/api/chat_service.dart';
-import 'package:facebook_clone/services/api/notification_service.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/empty_state_widget.dart';
-import 'package:facebook_clone/widgets/error_state_widget.dart';
-import 'package:facebook_clone/widgets/shimmer_skeletons.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/models/notification.dart' as app_notif;
+import 'package:nonto/providers/core_providers.dart';
+import 'package:nonto/providers/notifications_notifier.dart';
+import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/screens/friends/friend_requests_screen.dart';
+import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/services/api/chat_service.dart';
+import 'package:nonto/services/api/notification_service.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/empty_state_widget.dart';
+import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
@@ -121,10 +121,11 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
     try {
       final resp = await ChatService().getOrCreateConversation(otherUserId);
       if (resp.success && resp.data != null) {
-        final data = resp.data as Map<String, dynamic>;
-        final convJson = data['conversation'] ?? data;
-        final conversation =
-            Conversation.fromJson(convJson as Map<String, dynamic>);
+        final dynamic rawData = resp.data;
+        final data = rawData is Map ? rawData as Map<String, dynamic> : <String, dynamic>{};
+        final dynamic rawConv = data['conversation'] ?? data;
+        final convJson = rawConv is Map ? rawConv as Map<String, dynamic> : <String, dynamic>{};
+        final conversation = Conversation.fromJson(convJson);
         if (!mounted) return;
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => ChatRoomScreen(conversation: conversation),
@@ -346,7 +347,9 @@ class _NotificationTile extends StatelessWidget {
                           color: AppColors.textPrimary),
                       children: [
                         TextSpan(
-                          text: notification.sender?.displayName ?? '未知用户',
+                          text: notification.sender?.displayName
+                              ?? notification.sender?.username
+                              ?? '未知用户',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         TextSpan(text: ' ${notification.title ?? ''}'),

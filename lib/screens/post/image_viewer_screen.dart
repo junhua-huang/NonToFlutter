@@ -1,8 +1,9 @@
-import 'dart:math';
+﻿import 'dart:math';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/models/user.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -312,30 +313,48 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           if (author != null) ...[
             Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.grey[800],
-                  backgroundImage: author.avatarUrl != null && author.avatarUrl!.isNotEmpty
-                      ? NetworkImage(author.avatarUrl!)
-                      : null,
-                  child: author.avatarUrl == null || author.avatarUrl!.isEmpty
-                      ? Text(
-                          author.initials,
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        )
-                      : null,
+                GestureDetector(
+                  onTap: () {
+                    if (author != null) {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => UserProfileScreen(user: author),
+                      ));
+                    }
+                  },
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.grey[800],
+                    backgroundImage: author.avatarUrl != null && author.avatarUrl!.isNotEmpty
+                        ? NetworkImage(author.avatarUrl!)
+                        : null,
+                    child: author.avatarUrl == null || author.avatarUrl!.isEmpty
+                        ? Text(
+                            author.initials,
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          )
+                        : null,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        author.displayName ?? author.username,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
+                      GestureDetector(
+                        onTap: () {
+                          if (author != null) {
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => UserProfileScreen(user: author),
+                            ));
+                          }
+                        },
+                        child: Text(
+                          author.displayName ?? author.username,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       if (createdAt != null)

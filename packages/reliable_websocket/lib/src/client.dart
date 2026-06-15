@@ -52,6 +52,12 @@ typedef ErrorHandler = void Function(String message, String? clientMsgId);
 /// 认证失败回调
 typedef AuthFailedHandler = void Function(String? error);
 
+/// 非序号自定义消息回调
+typedef CustomMessageHandler = void Function(Map<String, dynamic> payload);
+
+/// ACK 携带 message_id 回调
+typedef AckMessageIdHandler = void Function(String clientMsgId, int messageId);
+
 /// 可靠 WebSocket 客户端配置
 class ReliableWebSocketConfig {
   /// WebSocket 服务器地址
@@ -77,6 +83,10 @@ class ReliableWebSocketConfig {
 
   /// 认证失败回调（可选）
   final AuthFailedHandler? onAuthFailed;
+  /// 非序号消息回调（可选）
+  final CustomMessageHandler? onCustomMessage;
+  /// ACK message_id 回调（可选）
+  final AckMessageIdHandler? onAckMessageId;
   final Duration connectTimeout;
 
   /// ACK 超时（默认 15 秒）
@@ -112,6 +122,8 @@ class ReliableWebSocketConfig {
     this.onMessageFailed,
     this.onError,
     this.onAuthFailed,
+    this.onCustomMessage,
+    this.onAckMessageId,
     this.connectTimeout = const Duration(seconds: 15),
     this.ackTimeout = const Duration(seconds: 15),
     this.heartbeatInterval = const Duration(seconds: 30),
@@ -158,6 +170,8 @@ class ReliableWebSocketClient {
     MessageFailedHandler? onMessageFailed,
     ErrorHandler? onError,
     AuthFailedHandler? onAuthFailed,
+    CustomMessageHandler? onCustomMessage,
+    AckMessageIdHandler? onAckMessageId,
     AppDatabase? database,
     Duration connectTimeout = const Duration(seconds: 15),
     Duration ackTimeout = const Duration(seconds: 15),
@@ -176,6 +190,8 @@ class ReliableWebSocketClient {
           onMessageFailed: onMessageFailed,
           onError: onError,
           onAuthFailed: onAuthFailed,
+          onCustomMessage: onCustomMessage,
+          onAckMessageId: onAckMessageId,
           connectTimeout: connectTimeout,
           ackTimeout: ackTimeout,
           heartbeatInterval: heartbeatInterval,
@@ -370,9 +386,14 @@ class ReliableWebSocketClient {
 
       case MessageType.error:
         _config.onError?.call(
-          frame.error ?? 'Unknown error',
-          frame.clientMsgId,
+          frame.errorMsg ?? 'Unknown error',
+          frame.ackClientMsgId,
         );
+        break;
+
+      case MessageType.typing:
+      case MessageType.stopTyping:
+        _config.onCustomMessage?.call(frame.payload ?? const <String, dynamic>{});
         break;
 
       default:
@@ -380,26 +401,29 @@ class ReliableWebSocketClient {
     }
   }
 
-  /// 处理认证结果
+  /// 处理认证结果（v1.0: 读 payload.success / payload.user_id）
   Future<void> _onAuthResult(ProtocolFrame frame) async {
+    _log.info('[Auth] result: success=${frame.success}, userId=${frame.userId}, payload=${frame.payload}');
     if (frame.success == true) {
-      _log.info('Authentication successful');
+      _log.info('[Auth] ✅ Authenticated');
       _connection.onAuthenticated();
-
-      // 触发同步恢复
       await _sync.recover();
     } else {
-      _log.warning('Authentication failed: ${frame.error ?? 'unknown'}');
-      _config.onAuthFailed?.call(frame.error);
+      _log.warning('[Auth] ❌ Failed: ${frame.errorMsg}');
+      _config.onAuthFailed?.call(frame.errorMsg);
       await _connection.disconnect();
     }
   }
 
-  /// 处理 ACK 确认
+  /// 处理 ACK 确认（v1.0: 读 payload.client_msg_id / payload.message_id）
   Future<void> _onAck(ProtocolFrame frame) async {
-    final clientMsgId = frame.clientMsgId;
+    final clientMsgId = frame.ackClientMsgId;
     if (clientMsgId != null) {
       await _sender.onAck(clientMsgId);
+    }
+    final msgId = frame.ackMessageId;
+    if (msgId != null && clientMsgId != null) {
+      _config.onAckMessageId?.call(clientMsgId, msgId);
     }
   }
 
@@ -420,9 +444,17 @@ class ReliableWebSocketClient {
     }
   }
 
-  /// 处理 sync_result
+  /// 处理 sync_result（v1.0: 读 payload.list）
   void _onSyncResult(ProtocolFrame frame) {
-    final messages = frame.messages ?? [];
+    final list = frame.syncList;
+    final messages = <ProtocolFrame>[];
+    if (list != null) {
+      for (final item in list) {
+        if (item is Map<String, dynamic>) {
+          messages.add(ProtocolFrame.fromJson(item));
+        }
+      }
+    }
     _sync.onSyncResult(messages);
   }
 }

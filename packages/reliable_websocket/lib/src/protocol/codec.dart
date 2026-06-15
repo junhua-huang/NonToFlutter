@@ -1,48 +1,51 @@
-/// 协议编解码器
-///
-/// 负责 JSON 帧的构造与解析，区分控制消息和业务透传 payload。
+/// 协议编解码器 — WS 协议 v1.0
 library;
 
 import 'dart:convert';
 import 'message.dart';
 
-/// WebSocket 协议编解码器
 class ProtocolCodec {
   const ProtocolCodec();
 
-  /// 编码为 JSON 字符串
-  String encode(ProtocolFrame frame) {
-    return jsonEncode(frame.toJson());
+  String encode(ProtocolFrame frame) => jsonEncode(frame.toJson());
+  ProtocolFrame decode(String data) =>
+      ProtocolFrame.fromJson(jsonDecode(data) as Map<String, dynamic>);
+
+  /// auth: {type:"auth", payload:{token, device_id?}}
+  static ProtocolFrame auth(String token, {String? deviceId}) {
+    final p = <String, dynamic>{'token': token};
+    if (deviceId != null) p['device_id'] = deviceId;
+    return ProtocolFrame(type: MessageType.auth, payload: p);
   }
 
-  /// 解码 JSON 字符串为协议帧
-  ProtocolFrame decode(String data) {
-    final json = jsonDecode(data) as Map<String, dynamic>;
-    return ProtocolFrame.fromJson(json);
+  /// send_message: {type:"send_message", payload:{client_msg_id, conversation_id, content, ...}}
+  static ProtocolFrame sendMessage(String clientMsgId, Map<String, dynamic> payload) {
+    final p = Map<String, dynamic>.from(payload);
+    p['client_msg_id'] = clientMsgId;
+    return ProtocolFrame(type: MessageType.sendMessage, payload: p);
   }
 
-  /// 便捷方法：构造 auth 帧
-  static ProtocolFrame auth(String token) {
-    return ProtocolFrame(type: MessageType.auth, token: token);
+  /// send_event: {type:"send_event", payload:{event, ...}}
+  static ProtocolFrame sendEvent(Map<String, dynamic> payload) {
+    return ProtocolFrame(type: MessageType.sendEvent, payload: payload);
   }
 
-  /// 便捷方法：构造 send 帧
-  static ProtocolFrame send(String clientMsgId, Map<String, dynamic> payload) {
-    return ProtocolFrame(
-      type: MessageType.send,
-      clientMsgId: clientMsgId,
-      payload: payload,
-    );
+  /// sync: {type:"sync", payload:{last_received_seq, limit:200}}
+  static ProtocolFrame sync(int lastReceivedSeq, {int limit = 200}) {
+    return ProtocolFrame(type: MessageType.sync, payload: {
+      'last_received_seq': lastReceivedSeq,
+      'limit': limit,
+    });
   }
 
-  /// 便捷方法：构造 sync 帧
-  static ProtocolFrame sync(int lastReceivedSeq) {
-    return ProtocolFrame(
-      type: MessageType.sync,
-      lastReceivedSeq: lastReceivedSeq,
-    );
-  }
+  /// ping: {type:"ping", payload:{}}
+  static const ProtocolFrame ping = ProtocolFrame(
+    type: MessageType.ping,
+    payload: <String, dynamic>{},
+  );
 
-  /// 便捷方法：构造 ping 帧
-  static const ProtocolFrame ping = ProtocolFrame(type: MessageType.ping);
+  /// 通用 payload 帧（join/leave/typing 等）
+  static ProtocolFrame withPayload(MessageType type, Map<String, dynamic> payload) {
+    return ProtocolFrame(type: type, payload: payload);
+  }
 }

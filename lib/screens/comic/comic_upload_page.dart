@@ -1,12 +1,12 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:cross_file/cross_file.dart';
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/comic_event.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/comic_service.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/comic_event.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/comic_service.dart';
+import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 

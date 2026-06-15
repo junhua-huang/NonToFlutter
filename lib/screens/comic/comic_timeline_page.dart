@@ -1,13 +1,13 @@
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/comic_event.dart';
-import 'package:facebook_clone/widgets/comic_event_card.dart';
-import 'package:facebook_clone/screens/comic/comic_detail_page.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/cache_keys.dart';
-import 'package:facebook_clone/services/comic_service.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/widgets/empty_state_widget.dart';
+﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/comic_event.dart';
+import 'package:nonto/widgets/comic_event_card.dart';
+import 'package:nonto/screens/comic/comic_detail_page.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/comic_service.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/widgets/empty_state_widget.dart';
 import 'package:flutter/material.dart';
 
 class ComicTimelinePage extends StatefulWidget {

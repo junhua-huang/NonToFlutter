@@ -101,7 +101,7 @@ class ReliableSender {
   /// 发送 WebSocket 帧
   void _sendFrame(String clientMsgId, Map<String, dynamic> payload) {
     if (_connection.isConnected) {
-      final frame = ProtocolCodec.send(clientMsgId, payload);
+      final frame = ProtocolCodec.sendMessage(clientMsgId, payload);
       _connection.sendFrame(frame);
       _log.fine('Sent: $clientMsgId');
     }

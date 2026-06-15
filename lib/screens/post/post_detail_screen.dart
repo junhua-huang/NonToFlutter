@@ -1,25 +1,28 @@
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/screens/profile/user_profile_screen.dart';
-import 'package:facebook_clone/screens/search/search_results_screen.dart';
-import 'package:facebook_clone/services/api/post_service.dart';
-import 'package:facebook_clone/services/api/report_service.dart';
-import 'package:facebook_clone/services/api/search_service.dart';
-import 'package:facebook_clone/services/cache_keys.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/post_interaction_notifier.dart';
-import 'package:facebook_clone/utils/date_utils.dart';
-import 'package:facebook_clone/utils/image_utils.dart';
-import 'package:facebook_clone/widgets/comment_section.dart';
-import 'package:facebook_clone/widgets/media_viewer.dart';
-import 'package:facebook_clone/widgets/rich_text_content.dart';
-import 'package:facebook_clone/widgets/twitter_bottom_sheet.dart';
+﻿import 'dart:async';
+
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/screens/search/search_results_screen.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/report_service.dart';
+import 'package:nonto/services/api/search_service.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/post_interaction_notifier.dart';
+import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/comment_section.dart';
+import 'package:nonto/widgets/media_viewer.dart';
+import 'package:nonto/widgets/rich_text_content.dart';
+import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_social_video/flutter_social_video.dart';
+import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 import 'package:video_player/video_player.dart';
 
 /// 帖子详情页 — 顶部展示帖子内容，下方集成统一评论区
@@ -38,8 +41,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   bool _hasFreshData = false;
   bool _isLoading = true;
   bool _isLikingPost = false;
+  StreamSubscription? _likeSub;
 
   final ScrollController _scrollController = ScrollController();
+  final RefreshController _refreshController = RefreshController();
 
   Color get _xBlack => AppColors.textPrimary;
   Color get _xDarkGrey => AppColors.textSecondary;
@@ -59,11 +64,24 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       _isLoading = false;
     }
     _loadData();
+    // 监听来自图片浏览器等外部点赞事件，同步更新本地状态
+    _likeSub = PostInteractionNotifier().onLikeChanged.listen((event) {
+      if (event.postId == widget.postId && mounted) {
+        setState(() {
+          _post = _post?.copyWith(
+            isLiked: event.isLiked,
+            likeCount: event.likeCount,
+          );
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _likeSub?.cancel();
     _scrollController.dispose();
+    _refreshController.dispose();
     super.dispose();
   }
 
@@ -348,35 +366,41 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 
   Widget _buildContent() {
-    return Column(
-      children: [
-        Expanded(
-          child: CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              SliverToBoxAdapter(child: _buildPostCard()),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Divider(height: 1, color: _xLightGrey),
-                ),
-              ),
-              SliverFillRemaining(
-                hasScrollBody: true,
-                child: CommentSection(
-                  targetType: 'post',
-                  targetId: widget.postId,
-                  onCommentCountChanged: (count) {
-                    if (mounted && _post != null) {
-                      setState(() => _post = _post!.copyWith(commentCount: count));
-                    }
-                  },
-                ),
-              ),
-            ],
+    return SmartRefresher(
+      controller: _refreshController,
+      onRefresh: () async {
+        await _loadData();
+        _refreshController.refreshCompleted();
+      },
+      header: const WaterDropHeader(
+        complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+        waterDropColor: AppColors.primary,
+      ),
+      child: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          SliverToBoxAdapter(child: _buildPostCard()),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Divider(height: 1, color: _xLightGrey),
+            ),
           ),
-        ),
-      ],
+          SliverFillRemaining(
+            hasScrollBody: true,
+            child: CommentSection(
+              targetType: 'post',
+              targetId: widget.postId,
+              scrollController: _scrollController,
+              onCommentCountChanged: (count) {
+                if (mounted && _post != null) {
+                  setState(() => _post = _post!.copyWith(commentCount: count));
+                }
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 

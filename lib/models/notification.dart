@@ -21,11 +21,41 @@ class AppNotification {
     this.relatedId, this.relatedType, this.isRead = false, this.createdAt,
   });
 
+  AppNotification copyWith({
+    int? id,
+    int? userId,
+    int? senderId,
+    User? sender,
+    String? notificationType,
+    String? title,
+    String? content,
+    int? relatedId,
+    String? relatedType,
+    bool? isRead,
+    DateTime? createdAt,
+  }) {
+    return AppNotification(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      senderId: senderId ?? this.senderId,
+      sender: sender ?? this.sender,
+      notificationType: notificationType ?? this.notificationType,
+      title: title ?? this.title,
+      content: content ?? this.content,
+      relatedId: relatedId ?? this.relatedId,
+      relatedType: relatedType ?? this.relatedType,
+      isRead: isRead ?? this.isRead,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
     id: _p(json['id']), userId: _p(json['user_id']),
     senderId: json['sender_id'] != null ? _p(json['sender_id']) : null,
-    sender: json['sender'] != null ? User.fromJson(json['sender']) : null,
-    notificationType: json['notification_type'] ?? '',
+    sender: json['sender'] is Map
+        ? User.fromJson(Map<String, dynamic>.from(json['sender']))
+        : null,
+    notificationType: (json['notification_type'] ?? json['type']) ?? '',
     title: json['title'], content: json['content'],
     relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
     relatedType: json['related_type'],

@@ -1,8 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:facebook_clone/config/app_config.dart';
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/widgets/enhanced_media_viewer.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/widgets/enhanced_media_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
@@ -293,7 +293,9 @@ class ImageGalleryGrid extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         if (post != null) {
-          EnhancedImageViewerScreen.show(context, _buildMediaItems());
+          final items = _buildMediaItems();
+          final initialPostIdx = items.indexWhere((it) => it.post.id == post!.id).clamp(0, items.length - 1);
+          EnhancedImageViewerScreen.show(context, items, initialPostIndex: initialPostIdx);
         } else {
           ImageViewerScreen.show(context, imageUrls);
         }
@@ -332,7 +334,10 @@ class ImageGalleryGrid extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         if (post != null) {
-          EnhancedImageViewerScreen.show(context, _buildMediaItems(), initialMediaIndex: index);
+          final items = _buildMediaItems();
+          final initialPostIdx = items.indexWhere((it) => it.post.id == post!.id).clamp(0, items.length - 1);
+          EnhancedImageViewerScreen.show(context, items,
+              initialMediaIndex: index, initialPostIndex: initialPostIdx);
         } else {
           ImageViewerScreen.show(context, imageUrls, initialIndex: index);
         }
@@ -368,19 +373,49 @@ class ImageGalleryGrid extends StatelessWidget {
 
   List<PostMediaItem> _buildMediaItems() {
     final items = <PostMediaItem>[];
-    items.add(PostMediaItem(post: post!, mediaUrls: imageUrls));
-    if (feedPosts != null) {
-      for (final p in feedPosts!) {
-        if (p.id == post!.id) continue;
-        final urls = <String>[];
-        if (p.images != null) {
-          for (final u in p.images!) {
-            if (u.isNotEmpty) urls.add(u);
-          }
+    List<String> mediaUrlsOf(Post p) {
+      final urls = <String>[];
+      if (p.images != null) {
+        for (final u in p.images!) {
+          if (u.isNotEmpty) urls.add(u);
         }
-        if (urls.isNotEmpty) items.add(PostMediaItem(post: p, mediaUrls: urls));
+      }
+      return urls;
+    }
+
+    if (feedPosts == null || feedPosts!.isEmpty) {
+      items.add(PostMediaItem(post: post!, mediaUrls: imageUrls));
+      return items;
+    }
+
+    final currentIdx = feedPosts!.indexWhere((p) => p.id == post!.id);
+    if (currentIdx < 0) {
+      items.add(PostMediaItem(post: post!, mediaUrls: imageUrls));
+      return items;
+    }
+
+    final before = <Post>[];
+    final after = <Post>[];
+    for (int i = 0; i < feedPosts!.length; i++) {
+      if (i == currentIdx) continue;
+      final p = feedPosts![i];
+      if (p.hasImage || p.hasVideo) {
+        if (i < currentIdx) {
+          before.add(p);
+        } else {
+          after.add(p);
+        }
       }
     }
+
+    for (final p in before) {
+      items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
+    }
+    items.add(PostMediaItem(post: post!, mediaUrls: imageUrls));
+    for (final p in after) {
+      items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
+    }
+
     return items;
   }
 }

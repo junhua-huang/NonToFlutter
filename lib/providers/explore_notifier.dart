@@ -1,14 +1,15 @@
-import 'dart:async';
+﻿import 'dart:async';
 
-import 'package:facebook_clone/models/comic_event.dart';
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/models/topic.dart';
-import 'package:facebook_clone/models/user.dart';
-import 'package:facebook_clone/services/api/recommendation_service.dart';
-import 'package:facebook_clone/services/api/search_service.dart';
-import 'package:facebook_clone/services/api/topic_service.dart';
-import 'package:facebook_clone/services/comic_service.dart';
-import 'package:facebook_clone/services/data_layer.dart';
+import 'package:nonto/models/comic_event.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/topic.dart';
+import 'package:nonto/models/user.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/recommendation_service.dart';
+import 'package:nonto/services/api/search_service.dart';
+import 'package:nonto/services/api/topic_service.dart';
+import 'package:nonto/services/comic_service.dart';
+import 'package:nonto/services/data_layer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -60,6 +61,8 @@ class ExploreState {
 
 class ExploreNotifier extends StateNotifier<ExploreState> {
   StreamSubscription? _sub;
+  bool _loadInProgress = false;    // guards loadDefault()
+  bool _cachedInProgress = false;  // guards _loadCached() cache-read phase
 
   ExploreNotifier() : super(const ExploreState()) {
     _loadCached();
@@ -74,8 +77,11 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
 
   /// 构造时先读缓存，无论是否命中都触发网络全量加载
   Future<void> _loadCached() async {
-    if (state.trendingPosts.isNotEmpty) return;
+    // 防重入：已有数据，或 loadDefault 正在跑，或自身正在缓存读取
+    if (state.trendingPosts.isNotEmpty || _loadInProgress || _cachedInProgress) return;
+    _cachedInProgress = true;
     try {
+
       final topicResult = await DataLayer().query('explore:trending_topics', () async => null);
       final postResult = await DataLayer().query('explore:trending_posts', () async => null);
       final userResult = await DataLayer().query('explore:suggested_users', () async => null);
@@ -93,6 +99,7 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
         );
       }
     } catch (_) {}
+    _cachedInProgress = false;
     // 始终触发网络全量加载（含漫展、话题、帖子、用户）
     unawaited(loadDefault());
   }
@@ -134,6 +141,10 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
   }
 
   Future<void> loadDefault({bool forceRefresh = false}) async {
+    // 防重入：已在加载中（包括 changeStream 触发的并发调用）
+    if (_loadInProgress) return;
+    _loadInProgress = true;
+    try {
     // Try cache first (isolated try-catch: cache failure must not break network fallback)
     if (!forceRefresh) {
       try {
@@ -186,8 +197,8 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       // History (isolated try-catch: 单个 API 失败不影响其他)
       List<String> history = [];
       try {
-        final histResp = results[0];
-        if (histResp.success && histResp.data != null) {
+        final histResp = results[0] as dynamic;
+        if (histResp is ApiResponse && histResp.success && histResp.data != null) {
           final data = histResp.data;
           List items = [];
           if (data is List) {
@@ -209,8 +220,8 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       // Trending topics
       List<Topic> topics = state.trendingTopics;
       try {
-        final topicResp = results[1];
-        if (topicResp.success && topicResp.data != null) {
+        final topicResp = results[1] as dynamic;
+        if (topicResp is ApiResponse && topicResp.success && topicResp.data != null) {
           final data = topicResp.data;
           List topicList = [];
           if (data is List) {
@@ -221,7 +232,9 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
           topics = topicList
               .map((e) => Topic.fromJson(e as Map<String, dynamic>))
               .toList();
-          DataLayer().write('explore:trending_topics', topicList, ttlSeconds: 600);
+          try {
+            DataLayer().write('explore:trending_topics', topicList, ttlSeconds: 600);
+          } catch (_) {}
         }
       } catch (e) {
         debugPrint('ExploreNotifier topics parse error: $e');
@@ -230,8 +243,8 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       // Trending posts
       List<Post> posts = state.trendingPosts;
       try {
-        final postResp = results[2];
-        if (postResp.success && postResp.data != null) {
+        final postResp = results[2] as dynamic;
+        if (postResp is ApiResponse && postResp.success && postResp.data != null) {
           final data = postResp.data;
           List list = [];
           if (data is Map) {
@@ -242,7 +255,9 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
           posts = list
               .map((e) => Post.fromJson(e as Map<String, dynamic>))
               .toList();
-          DataLayer().write('explore:trending_posts', list, ttlSeconds: 300);
+          try {
+            DataLayer().write('explore:trending_posts', list, ttlSeconds: 300);
+          } catch (_) {}
         }
       } catch (e) {
         debugPrint('ExploreNotifier posts parse error: $e');
@@ -251,8 +266,8 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       // Suggested users
       List<User> users = state.suggestedUsers;
       try {
-        final userResp = results[3];
-        if (userResp.success && userResp.data != null) {
+        final userResp = results[3] as dynamic;
+        if (userResp is ApiResponse && userResp.success && userResp.data != null) {
           final data = userResp.data;
           List userList = [];
           if (data is List) {
@@ -263,7 +278,9 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
           users = userList
               .map((e) => User.fromJson(e as Map<String, dynamic>))
               .toList();
-          DataLayer().write('explore:suggested_users', userList, ttlSeconds: 600);
+          try {
+            DataLayer().write('explore:suggested_users', userList, ttlSeconds: 600);
+          } catch (_) {}
         }
       } catch (e) {
         debugPrint('ExploreNotifier users parse error: $e');
@@ -272,16 +289,20 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       // Comic events
       List<ComicEvent> recentComics = state.recentComicEvents;
       try {
-        final comicResp = results[4];
-        if (comicResp.success && comicResp.data != null) {
+        final comicResp = results[4] as dynamic;
+        if (comicResp is ApiResponse && comicResp.success && comicResp.data != null) {
           if (comicResp.data is ComicEventsPage) {
             recentComics = (comicResp.data as ComicEventsPage).records;
           } else if (comicResp.data is Map) {
             final map = comicResp.data as Map;
-            final records = map['records'] as List? ?? [];
-            recentComics = records
-                .map((e) => ComicEvent.fromJson(e as Map<String, dynamic>))
-                .toList();
+            try {
+              final records = (map['records'] as List<dynamic>?) ?? [];
+              recentComics = records
+                  .map((e) => ComicEvent.fromJson(e is Map<String, dynamic> ? e : {}))
+                  .toList();
+            } catch (parseErr) {
+              debugPrint('ExploreNotifier comic records parse error: $parseErr');
+            }
           }
         }
       } catch (e) {
@@ -290,16 +311,20 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
 
       List<ComicEvent> followedComics = state.followedComicEvents;
       try {
-        final followedResp = results[5];
-        if (followedResp.success && followedResp.data != null) {
+        final followedResp = results[5] as dynamic;
+        if (followedResp is ApiResponse && followedResp.success && followedResp.data != null) {
           if (followedResp.data is ComicEventsPage) {
             followedComics = (followedResp.data as ComicEventsPage).records;
           } else if (followedResp.data is Map) {
             final map = followedResp.data as Map;
-            final records = map['records'] as List? ?? [];
-            followedComics = records
-                .map((e) => ComicEvent.fromJson(e as Map<String, dynamic>))
-                .toList();
+            try {
+              final records = (map['records'] as List<dynamic>?) ?? [];
+              followedComics = records
+                  .map((e) => ComicEvent.fromJson(e is Map<String, dynamic> ? e : {}))
+                  .toList();
+            } catch (parseErr) {
+              debugPrint('ExploreNotifier followed records parse error: $parseErr');
+            }
           }
         }
       } catch (e) {
@@ -319,9 +344,14 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       debugPrint('ExploreNotifier error: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+    } finally {
+    _loadInProgress = false;
+    }
   }
 
   void _reset() {
+    _loadInProgress = false;
+    _cachedInProgress = false;
     state = const ExploreState();
   }
 

@@ -1,8 +1,15 @@
-import 'package:facebook_clone/config/app_theme.dart';
-import 'package:facebook_clone/providers/auth_notifier.dart';
-import 'package:facebook_clone/routes/app_routes.dart';
-import 'package:facebook_clone/screens/auth/register_screen.dart';
-import 'package:facebook_clone/screens/home/home_screen.dart';
+﻿import 'dart:async';
+
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/providers/explore_notifier.dart';
+import 'package:nonto/providers/feed_notifier.dart';
+import 'package:nonto/providers/notifications_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
+import 'package:nonto/screens/auth/register_screen.dart';
+import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/screens/home/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,6 +42,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
     if (!mounted) return;
     if (success) {
+      // 换号登录后强制重建所有 Provider
+      ref.invalidate(feedProvider);
+      ref.invalidate(exploreProvider);
+      ref.invalidate(conversationsProvider);
+      ref.invalidate(notificationsProvider);
+      // 预热 Provider + 等待 WS 认证完成（setToken 已触发 connect）
+      final ws = WebSocketService();
+      // 先设置监听再检查，防止 auth 已经在 setToken 期间完成而漏掉事件
+      final completer = Completer<bool>();
+      final sub = ws.connectionStream.listen((connected) {
+        if (connected && !completer.isCompleted) completer.complete(true);
+      });
+      if (ws.isConnected) {
+        // 已经认证完成，直接放行
+        completer.complete(true);
+      }
+      final wsOk = await completer.future.timeout(const Duration(seconds: 10), onTimeout: () => false);
+      sub.cancel();
+      if (!mounted) return;
+      if (!wsOk) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('连接服务器失败，请重试'), backgroundColor: Colors.red),
+        );
+        return;
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
@@ -268,6 +300,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  const Text('v0.2.2',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 10, color: Color(0xFF8899A6))),
                 ],
               ),
             ),

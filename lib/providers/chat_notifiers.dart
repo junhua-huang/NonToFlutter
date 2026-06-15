@@ -1,16 +1,18 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
-import 'package:facebook_clone/models/conversation.dart';
-import 'package:facebook_clone/models/message.dart';
-import 'package:facebook_clone/services/api/api_client.dart';
-import 'package:facebook_clone/services/api/chat_service.dart';
-import 'package:facebook_clone/services/api/notification_service.dart';
-import 'package:facebook_clone/services/cache_keys.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/sound_service.dart';
-import 'package:facebook_clone/services/websocket_service.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/models/message.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/chat_service.dart';
+import 'package:nonto/services/api/notification_service.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/chat_send_queue.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/sound_service.dart';
+import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -53,12 +55,21 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   static const int _maxProcessedIds = 1000;
   StreamSubscription? _wsMsgSub;
   StreamSubscription? _wsSessionSub;
+  StreamSubscription? _wsFriendOnlineSub;
+  StreamSubscription? _wsFriendOfflineSub;
+  StreamSubscription? _wsOnlineFriendsSub;
   StreamSubscription? _dataSub;
+  bool _loadInProgress = false;
+  int? _currentUserId;
 
   ConversationsNotifier() : super(const ConversationsState()) {
+    _loadCurrentUserId();
     _loadData();
     _wsMsgSub = _ws.messageStream.listen(_onWsMessage);
     _wsSessionSub = _ws.sessionListStream.listen(_onSessionList);
+    _wsFriendOnlineSub = _ws.friendOnlineStream.listen(_onFriendOnline);
+    _wsFriendOfflineSub = _ws.friendOfflineStream.listen(_onFriendOffline);
+    _wsOnlineFriendsSub = _ws.onlineFriendsStream.listen(_onOnlineFriends);
     _dataSub = DataLayer().changeStream.listen((key) {
       if (key == '__auth:logout') {
         _reset();
@@ -68,34 +79,105 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     });
   }
 
+  Future<void> _loadCurrentUserId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('current_user_id');
+      _currentUserId = raw == null ? null : int.tryParse(raw);
+    } catch (_) {}
+  }
+
   /// 先读缓存立即展示，同时后台走网络静默更新
   Future<void> _loadData() async {
-    if (state.conversations.isNotEmpty) return;
+    if (!state.isLoading || _loadInProgress) return;
+    _loadInProgress = true;
+    debugPrint('[Conv] _loadData START');
     // 先读缓存快速展示
     final cached = await DataLayer().query(CacheKeys.convFullList, () async => null);
     if (cached.data is List && (cached.data as List).isNotEmpty) {
+      debugPrint('[Conv] _loadData: loaded from CACHE, ${(cached.data as List).length} items');
       state = state.copyWith(
         conversations: (cached.data as List)
-            .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+            .whereType<Map>()
+            .map((e) => Conversation.fromJson(Map<String, dynamic>.from(e)))
             .toList(),
         isLoading: false,
       );
+    } else {
+      debugPrint('[Conv] _loadData: cache empty or miss, source=${cached.source}');
     }
     // 后台网络请求，静默更新
-    unawaited(loadConversations());
+    unawaited(loadConversations().whenComplete(() => _loadInProgress = false));
   }
 
   void _onSessionList(List<Map<String, dynamic>> sessions) {
-    final conversations = sessions.map((e) => Conversation.fromJson(e)).toList();
+    // WS 推送的字段名是 partner，统一转成 other_user 对齐 Conversation.fromJson
+    final normalized = sessions.map((e) => Map<String, dynamic>.from(e)).map((s) {
+      if (s['partner'] != null && s['other_user'] == null) {
+        s['other_user'] = s['partner'];
+        s['partner_id'] ??= s['partner']?['id'];
+        s['conversation_id'] ??= s['id'];
+      }
+      return s;
+    }).toList();
+    final conversations = normalized.map((e) => Conversation.fromJson(e)).toList();
     debugPrint('[Conv] _onSessionList: ${conversations.length} sessions from WS');
     state = state.copyWith(conversations: conversations, isLoading: false);
     DataLayer().persistConversations(conversations);
-    DataLayer().write(CacheKeys.convFullList, sessions);
+    DataLayer().write(CacheKeys.convFullList, normalized);
     DataLayer().invalidate(CacheKeys.convPattern);
+  }
+
+  void _onFriendOnline(Map<String, dynamic> data) {
+    final userId = data['user_id'];
+    if (userId == null) return;
+    final uid = userId is int ? userId : int.tryParse(userId.toString());
+    if (uid == null) return;
+    _updateOtherUserOnlineStatus(uid, true);
+  }
+
+  void _onFriendOffline(Map<String, dynamic> data) {
+    final userId = data['user_id'];
+    if (userId == null) return;
+    final uid = userId is int ? userId : int.tryParse(userId.toString());
+    if (uid == null) return;
+    _updateOtherUserOnlineStatus(uid, false);
+  }
+
+  /// 认证成功后服务端推送当前所有在线好友（解决后上线用户看不到早在线好友的问题）
+  void _onOnlineFriends(Map<String, dynamic> data) {
+    final userIds = data['user_ids'];
+    if (userIds is! List) return;
+    for (final uid in userIds) {
+      final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
+      if (id != null) {
+        _updateOtherUserOnlineStatus(id, true);
+      }
+    }
+  }
+
+  /// 更新会话列表中指定用户的在线状态
+  void _updateOtherUserOnlineStatus(int userId, bool isOnline) {
+    final updated = state.conversations.map((c) {
+      if (c.otherUser?.id == userId) {
+        return Conversation.fromJson({
+          ...c.toJson(),
+          'other_user': {
+            ...?c.otherUser?.toJson(),
+            'is_online': isOnline,
+          },
+        });
+      }
+      return c;
+    }).toList();
+    state = state.copyWith(conversations: updated);
   }
 
   void _onWsMessage(Map<String, dynamic> data) {
     final event = data['event'] as String?;
+    // #region agent log
+    debugPrint('[Conv] _onWsMessage event=$event keys=${data.keys} convId=${data['conversation_id']}');
+    // #endregion
     if (event == 'new_message') {
       final convId = data['conversation_id'] as int?;
       if (convId != null) {
@@ -107,6 +189,18 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       if (convId != null && messages != null) {
         _handleBatchMessages(convId, messages);
       }
+    } else if (event == 'message_recalled') {
+      _handleMessageRecalledConv(data);
+    } else if (event == 'conversation_read') {
+      // 对方标记已读 → 清除本地未读气泡
+      final convId = data['conversation_id'] as int?;
+      if (convId != null) {
+        clearConversationUnread(convId);
+      }
+    } else if (data['conversation'] != null) {
+      // friend_accepted_chat → 重新拉取会话列表
+      debugPrint('[Conv] friend_accepted_chat received, reloading conversations');
+      unawaited(loadConversations());
     }
   }
 
@@ -126,6 +220,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     final content = data['content'] as String? ?? '';
     final msgType = data['message_type'] as String? ?? 'text';
     final preview = _formatPreview(content, msgType);
+    final rawUnread = data['unread_count'];
+    final serverUnread = rawUnread is int ? rawUnread : int.tryParse(rawUnread?.toString() ?? '');
 
     final lastMsg = Message(
       id: msgId ?? 0,
@@ -137,11 +233,12 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         orElse: () => MessageType.text,
       ),
       createdAt: data['created_at'] != null
-          ? DateTime.tryParse(data['created_at'].toString())
+          ? (DateTime.tryParse(data['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
     );
 
     final existingIdx = state.conversations.indexWhere((c) => c.id == convId);
+    final shouldIncreaseUnread = _currentUserId == null || lastMsg.senderId != _currentUserId;
     List<Conversation> updated;
     if (existingIdx >= 0) {
       final conv = state.conversations[existingIdx];
@@ -152,7 +249,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         otherUser: conv.otherUser,
         lastMessage: lastMsg,
         lastMessageAt: lastMsg.createdAt,
-        unreadCount: conv.unreadCount + 1,
+        unreadCount: serverUnread ?? (shouldIncreaseUnread ? conv.unreadCount + 1 : conv.unreadCount),
       );
       updated = List.from(state.conversations)
         ..removeAt(existingIdx)
@@ -163,7 +260,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     }
     state = state.copyWith(conversations: updated);
     DataLayer().updateConvLastMessage(
-      convId, preview, lastMsg.createdAt!, unreadIncrement: 1,
+      convId, preview, lastMsg.createdAt!, unreadIncrement: shouldIncreaseUnread ? 1 : 0,
     );
     DataLayer().invalidate(CacheKeys.convPattern);
   }
@@ -171,6 +268,9 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   void _handleBatchMessages(int conversationId, List<dynamic> messages) {
     final msgs = messages.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
     DataLayer().persistMessages(msgs);
+    final unreadIncoming = _currentUserId == null
+        ? msgs.length
+        : msgs.where((m) => m.senderId != _currentUserId).length;
 
     final lastMsg = msgs.last;
     final preview = _formatPreview(lastMsg.content ?? '', lastMsg.messageType.name);
@@ -184,19 +284,48 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         otherUser: conv.otherUser,
         lastMessage: lastMsg,
         lastMessageAt: lastMsg.createdAt,
-        unreadCount: conv.unreadCount + msgs.length,
+        unreadCount: conv.unreadCount + unreadIncoming,
       );
       final updated = List<Conversation>.from(state.conversations)
         ..removeAt(existingIdx)
         ..insert(0, updatedConv);
       state = state.copyWith(conversations: updated);
       DataLayer().updateConvLastMessage(
-        conversationId, preview, lastMsg.createdAt!, unreadIncrement: msgs.length,
+        conversationId, preview, lastMsg.createdAt!, unreadIncrement: unreadIncoming,
       );
     } else {
       loadConversations();
     }
     DataLayer().invalidate(CacheKeys.convPattern);
+  }
+
+  /// 处理 WS message_recalled 事件：更新会话列表 lastMessage
+  void _handleMessageRecalledConv(Map<String, dynamic> data) {
+    final recalledMsgId = data['message_id'] as int?;
+    final convId = data['conversation_id'] as int?;
+    if (recalledMsgId == null || convId == null) return;
+
+    final existingIdx = state.conversations.indexWhere((c) => c.id == convId);
+    if (existingIdx < 0) return;
+
+    final conv = state.conversations[existingIdx];
+    // 如果 lastMessage 就是被撤回的消息，更新预览
+    if (conv.lastMessage?.id == recalledMsgId) {
+      final updatedConv = Conversation(
+        id: conv.id,
+        user1Id: conv.user1Id,
+        user2Id: conv.user2Id,
+        otherUser: conv.otherUser,
+        lastMessage: conv.lastMessage?.copyWith(isRecalled: true),
+        lastMessageAt: conv.lastMessageAt,
+        unreadCount: conv.unreadCount,
+      );
+      final updated = List<Conversation>.from(state.conversations)
+        ..removeAt(existingIdx)
+        ..insert(existingIdx, updatedConv);
+      state = state.copyWith(conversations: updated);
+      DataLayer().updateConvLastMessage(convId, '消息已撤回', conv.lastMessageAt ?? DateTime.now());
+    }
   }
 
   /// 发送消息后更新会话列表（移顶、更新预览、更新时间）。
@@ -253,47 +382,67 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   }
 
   Future<void> loadConversations() async {
-    // 后台静默刷新：已有数据时不显示 loading，直接替换
+    debugPrint('[Conv] loadConversations START (NETWORK)');
     state = state.copyWith(
       isLoading: state.conversations.isEmpty,
       clearError: true,
     );
     try {
-      // 并发请求：会话列表 + 未读数量
+      // 并发请求：会话列表 + 未读数量（各自独立超时，不互相影响）
       final results = await Future.wait([
-        _chatService.getConversations().timeout(const Duration(seconds: 25)),
-        NotificationService().getUnreadCount().timeout(const Duration(seconds: 10)),
+        _chatService.getConversations()
+            .timeout(const Duration(seconds: 25))
+            .catchError((_) => null as dynamic),
+        NotificationService().getUnreadCount()
+            .timeout(const Duration(seconds: 10))
+            .catchError((_) => null as dynamic),
       ]);
 
       // 会话列表
       final response = results[0];
+      if (response == null) {
+        debugPrint('[Conv] getConversations timed out or failed');
+        state = state.copyWith(
+          isLoading: false,
+          error: state.conversations.isEmpty ? '加载超时，下拉重试' : null,
+        );
+        return;
+      }
       debugPrint('[Conv] getConversations success=${response.success}, statusCode=${response.statusCode}, msg=${response.message}, dataType=${response.data?.runtimeType}');
       if (response.success) {
-        // data 可能为 null（新用户无会话），按空列表处理
+        debugPrint('[Conv] raw response.data type=${response.data?.runtimeType}');
         final data = response.data != null
             ? (response.data is String
                 ? jsonDecode(response.data as String)
                 : response.data)
             : null;
         final List<dynamic> conversationList;
-        if (data is Map<String, dynamic>) {
-          conversationList = (data['conversations'] ?? data['sessions']) ?? [];
+        if (data is Map) {
+          final map = Map<String, dynamic>.from(data);
+          conversationList = (map['conversations'] ?? map['sessions']) ?? [];
         } else if (data is List) {
           conversationList = data;
         } else {
           conversationList = [];
         }
         debugPrint('[Conv] parsed conversationList.length=${conversationList.length}, data is ${data.runtimeType}');
+        debugPrint('[Conv] first item type=${conversationList.isNotEmpty ? conversationList[0].runtimeType : "empty"}');
+        debugPrint('[Conv] first item keys=${conversationList.isNotEmpty && conversationList[0] is Map ? (conversationList[0] as Map).keys : "n/a"}');
         final conversations = conversationList
-            .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
+            .whereType<Map>()
+            .map((item) => Conversation.fromJson(Map<String, dynamic>.from(item)))
             .toList();
 
         debugPrint('[Conv] conversations.length=${conversations.length}');
+        if (conversations.isNotEmpty) {
+          final c = conversations[0];
+          debugPrint('[Conv] conv[0] otherUser=${c.otherUser?.username} displayName=${c.otherUser?.displayName} avatar=${c.otherUser?.avatarUrl}');
+        }
 
-        // 提取未读通知数量
+        // 提取未读通知数量（独立 try/catch，单个超时不影响会话列表）
         int unread = state.unreadCount;
+        final unreadResp = results[1]!;
         try {
-          final unreadResp = results[1];
           debugPrint('[Conv] getUnreadCount success=${unreadResp.success}, data=${unreadResp.data}');
           if (unreadResp.success && unreadResp.data != null) {
             final unreadData = unreadResp.data;
@@ -312,8 +461,13 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
           error: null,
         );
         debugPrint('[Conv] STATE SET: conversations=${conversations.length}, unread=$unread, isLoading=false, error=null');
-        await DataLayer().persistConversations(conversations);
-        DataLayer().write(CacheKeys.convFullList, conversationList);
+        // 持久化操作独立 try/catch：数据库异常不影响内存中的会话列表
+        try {
+          await DataLayer().persistConversations(conversations);
+          DataLayer().write(CacheKeys.convFullList, conversationList);
+        } catch (dbError) {
+          debugPrint('[Conv] persistConversations failed (non-fatal): $dbError');
+        }
       } else {
         state = state.copyWith(
           error: response.message ?? '加载失败',
@@ -340,13 +494,34 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   }
 
   void _reset() {
+    _loadInProgress = false;
     state = const ConversationsState();
+  }
+
+  /// 清除所有会话的未读数（仅用于外层总角标归零；不会错误改写服务端每个会话未读）
+  void clearAllUnreadCounts() {
+    state = state.copyWith(unreadCount: 0);
+  }
+
+  /// 当前会话已读后，把这个会话的本地未读数归零。
+  void clearConversationUnread(int conversationId) {
+    final updated = state.conversations.map((c) {
+      if (c.id == conversationId && c.unreadCount > 0) {
+        return Conversation.fromJson({...c.toJson(), 'unread_count': 0});
+      }
+      return c;
+    }).toList();
+    state = state.copyWith(conversations: updated);
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   @override
   void dispose() {
     _wsMsgSub?.cancel();
     _wsSessionSub?.cancel();
+    _wsFriendOnlineSub?.cancel();
+    _wsFriendOfflineSub?.cancel();
+    _wsOnlineFriendsSub?.cancel();
     _dataSub?.cancel();
     super.dispose();
   }
@@ -369,17 +544,19 @@ class MessagesState {
   final List<int> typingUserIds;
   final bool wsConnected;
   final bool otherUserTyping;
+  final bool? otherUserIsOnline;
 
   const MessagesState({
     this.messages = const [],
     this.isLoading = false,
     this.isSending = false,
-    this.hasMore = true,
+    this.hasMore = false,
     this.page = 1,
     this.error,
     this.typingUserIds = const [],
     this.wsConnected = false,
     this.otherUserTyping = false,
+    this.otherUserIsOnline,
   });
 
   MessagesState copyWith({
@@ -392,6 +569,7 @@ class MessagesState {
     List<int>? typingUserIds,
     bool? wsConnected,
     bool? otherUserTyping,
+    bool? otherUserIsOnline,
     bool clearError = false,
   }) {
     return MessagesState(
@@ -404,6 +582,7 @@ class MessagesState {
       typingUserIds: typingUserIds ?? this.typingUserIds,
       wsConnected: wsConnected ?? this.wsConnected,
       otherUserTyping: otherUserTyping ?? this.otherUserTyping,
+      otherUserIsOnline: otherUserIsOnline ?? this.otherUserIsOnline,
     );
   }
 }
@@ -412,10 +591,14 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   final int conversationId;
   final ChatService _chatService = ChatService();
   final WebSocketService _ws = WebSocketService();
+  late final ChatSendQueue _sendQueue;
   StreamSubscription? _wsMsgSub;
   StreamSubscription? _wsTypingSub;
   StreamSubscription? _wsConnSub;
   StreamSubscription? _wsErrorSub;
+  StreamSubscription? _wsSendErrorSub;
+  StreamSubscription? _wsFriendOnlineSub;
+  StreamSubscription? _wsFriendOfflineSub;
   Timer? _typingTimer;
   int? _currentUserId;
   bool _initialized = false;
@@ -430,14 +613,65 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       if (mounted) state = state.copyWith(wsConnected: connected);
     });
     _wsErrorSub = _ws.errorStream.listen(_onWsError);
+    // 监听发送错误（携带 clientMsgId），用于通知 ChatSendQueue 标记消息失败
+    _wsSendErrorSub = _ws.sendErrorStream.listen(_onSendError);
+    // 监听 ACK 携带的 message_id，用于替换乐观消息的临时 ID
+    _ws.ackMessageIdStream.listen(_onAckMessageId);
     state = state.copyWith(wsConnected: _ws.isConnected);
   }
 
-  /// 由 ChatRoomScreen 在 initState 中调用，传入当前用户 ID 并启动加载
-  void init(int currentUserId) {
+  void _onAckMessageId(Map<String, dynamic> data) {
+    final clientMsgId = data['clientMsgId'] as String?;
+    final messageId = data['message_id'] as int?;
+    if (clientMsgId == null || messageId == null || !mounted) return;
+
+    if (_sendQueue.handleProtocolAck(clientMsgId, messageId)) {
+      return;
+    }
+
+    // 找到 clientMsgId 匹配的乐观消息，替换 ID
+    final idx = state.messages.indexWhere((m) => m.clientMsgId == clientMsgId);
+    if (idx < 0) return;
+    final msg = state.messages[idx];
+    if (msg.id < 1000000000000) return; // 已被服务端回显替换
+    final updated = List<Message>.from(state.messages);
+    updated[idx] = msg.copyWith(id: messageId, clientMsgId: clientMsgId, status: 'sent');
+    state = state.copyWith(messages: updated, isSending: false);
+    DataLayer().persistMessage(updated[idx]);
+    _syncL1();
+    debugPrint('[Chat] ack message_id: ${msg.id} → $messageId (clientMsgId=$clientMsgId)');
+  }
+
+  /// 由 ChatRoomScreen 在 initState 中调用，传入当前用户 ID 和对方用户 ID 并启动加载
+  void init(int currentUserId, {int? otherUserId}) {
     if (_initialized) return;
     _initialized = true;
     _currentUserId = currentUserId;
+
+    // 监听好友在线/离线事件，实时更新 AppBar 状态
+    if (otherUserId != null) {
+      _wsFriendOnlineSub = _ws.friendOnlineStream.listen((data) {
+        final uid = data['user_id'];
+        final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
+        if (id == otherUserId && mounted) {
+          state = state.copyWith(otherUserIsOnline: true);
+        }
+      });
+      _wsFriendOfflineSub = _ws.friendOfflineStream.listen((data) {
+        final uid = data['user_id'];
+        final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
+        if (id == otherUserId && mounted) {
+          state = state.copyWith(otherUserIsOnline: false);
+        }
+      });
+    }
+
+    _sendQueue = ChatSendQueue(
+      conversationId: conversationId,
+      senderId: currentUserId,
+    );
+    _sendQueue.onAck = _onQueueAck;
+    _sendQueue.onFailed = _onQueueFailed;
     _ws.joinConversation(conversationId);
     _loadMessages();
   }
@@ -520,11 +754,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     }
 
     // Step 3: DataLayer 标准缓存 + 网络兜底
-    // 已有数据时静默更新，无数据时强制网络
+    // 已有数据时静默更新（优先读缓存再网络），无数据时强制网络获取
     try {
-      final cacheKey = state.messages.isNotEmpty
-          ? CacheKeys.msgRecent(conversationId)
-          : CacheKeys.msgRecent(conversationId);
+      final cacheKey = CacheKeys.msgRecent(conversationId);
 
       final result = await DataLayer().query(cacheKey, () async {
         debugPrint('[Messages] Step3 HTTP fetch conv=$conversationId');
@@ -533,21 +765,35 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           final data =
               resp.data is String ? jsonDecode(resp.data) : resp.data;
           final list = data['messages'] as List<dynamic>? ?? [];
-          debugPrint('[Messages] Step3 HTTP got ${list.length} msgs');
-          return list;
+          final hasMoreFromServer = data['has_more'] == true || (list.length >= 50);
+          debugPrint('[Messages] Step3 HTTP got ${list.length} msgs has_more=$hasMoreFromServer');
+          // 将 has_more 信息嵌入返回数据，供外层读取
+          return {'messages': list, 'has_more': hasMoreFromServer};
         }
         return null;
       }, forceRefresh: state.messages.isEmpty); // 无数据时强制网络
 
       if (result.data != null) {
-        final messages = (result.data as List<dynamic>)
+        final resultData = result.data;
+        List<dynamic> msgList;
+        bool hasMoreFromLoad = false;
+        if (resultData is Map && resultData.containsKey('messages')) {
+          msgList = resultData['messages'] as List<dynamic>;
+          hasMoreFromLoad = resultData['has_more'] == true;
+        } else if (resultData is List) {
+          msgList = resultData;
+          hasMoreFromLoad = resultData.length >= 50;
+        } else {
+          msgList = [];
+        }
+        final messages = msgList
             .map((e) => Message.fromJson(e as Map<String, dynamic>))
             .toList();
         if (result.source.name != 'memory' ||
             messages.length != state.messages.length) {
-          state = state.copyWith(messages: messages, isLoading: false);
+          state = state.copyWith(messages: messages, isLoading: false, hasMore: hasMoreFromLoad);
           await DataLayer().persistMessages(messages);
-          debugPrint('[Messages] Step3 → updated: ${messages.length} msgs (source=${result.source.name})');
+          debugPrint('[Messages] Step3 → updated: ${messages.length} msgs (source=${result.source.name}) hasMore=$hasMoreFromLoad');
         }
       } else if (state.messages.isEmpty) {
         state = state.copyWith(isLoading: false);
@@ -718,21 +964,26 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   // ── 发送消息 ──
 
+  static final _random = Random();
+
   String _generateRequestId() {
-    final r = Random();
+    final r = _random;
     return '${DateTime.now().millisecondsSinceEpoch}-'
         '${r.nextInt(0xFFFFF).toRadixString(16).padLeft(5, '0')}-'
         '${r.nextInt(0xFFFF).toRadixString(16).padLeft(4, '0')}';
   }
 
-  /// 发送文本消息（经 WebSocket 可靠投递）
+  /// 发送文本消息（经发送队列保序串行）
   void sendMessage(String content,
-      {String messageType = 'text', String? mediaUrl}) {
+      {String messageType = 'text', String? mediaUrl,
+       int? quoteMessageId, String? quotePreview}) {
     if (_currentUserId == null) return;
     final requestId = _generateRequestId();
     final now = DateTime.now();
 
-    // 乐观消息
+    debugPrint('[Chat] sendMessage conv=$conversationId content="$content" type=$messageType qDepth=${_sendQueue.pendingCount}');
+
+    // 乐观消息（先落本地再入队）
     final optimisticMsg = Message(
       id: now.millisecondsSinceEpoch,
       conversationId: conversationId,
@@ -746,6 +997,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       isRead: false,
       createdAt: now,
       requestId: requestId,
+      status: 'sending',
+      quoteMessageId: quoteMessageId,
+      quotePreview: quotePreview,
     );
 
     state = state.copyWith(
@@ -754,37 +1008,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     );
     DataLayer().persistMessage(optimisticMsg);
     _syncL1();
-
-    // 通知会话列表更新
     _onMessageSent?.call(conversationId, content, messageType, now);
-
-    _ws.sendMessage(conversationId, content,
-        messageType: messageType, mediaUrl: mediaUrl)
-      .then((clientMsgId) {
-        if (clientMsgId.isNotEmpty && mounted) {
-          // 回填 clientMsgId 到乐观消息，用于后续服务端回显匹配
-          final idx = state.messages.indexWhere((m) => m.id == optimisticMsg.id);
-          if (idx >= 0) {
-            final updated = List<Message>.from(state.messages);
-            updated[idx] = updated[idx].copyWith(clientMsgId: clientMsgId);
-            state = state.copyWith(messages: updated);
-          }
-        }
-        debugPrint('[Chat] WS send queued: requestId=$requestId, clientMsgId=$clientMsgId');
-      })
-      .catchError((e) {
-        debugPrint('[Chat] WS send error: $e');
-        _removeOptimistic(optimisticMsg.id);
-      });
     SoundService().playSendSound();
 
-    // 超时保护：8s 后若仍未收到服务端 echo，重置 isSending
-    Future.delayed(const Duration(seconds: 8), () {
-      if (mounted && state.isSending) {
-        debugPrint('[Chat] isSending timeout reset');
-        state = state.copyWith(isSending: false);
-      }
-    });
+    // 入队由 ChatSendQueue 串行发送
+    _sendQueue.enqueue(optimisticMsg);
   }
 
   /// 发送图片消息（先上传再发送）
@@ -802,6 +1030,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       messageType: MessageType.image,
       createdAt: now,
       requestId: requestId,
+      status: 'uploading',
+      tempBytes: bytes, // 暂存原始 bytes 用于失败重试
     );
 
     state = state.copyWith(
@@ -815,30 +1045,126 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         '/upload/chat/image',
         bytes,
         fileName,
+        onSendProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          final progress = (sent / total).clamp(0.0, 1.0).toDouble();
+          final updated = state.messages
+              .map((m) => m.id == optimisticMsg.id
+                  ? m.copyWith(status: 'uploading', uploadProgress: progress)
+                  : m)
+              .toList();
+          state = state.copyWith(messages: updated, isSending: true);
+          _syncL1();
+        },
       );
       if (uploadResp.success) {
         final url = _extractUrl(uploadResp.data);
         if (url != null) {
-          _ws.sendMessage(conversationId, url,
-              messageType: 'image', mediaUrl: url);
+          final queuedMsg = optimisticMsg.copyWith(
+            content: url,
+            mediaUrl: url,
+            status: 'sending',
+            uploadProgress: 1.0,
+            clearTempBytes: true, // 上传成功后清除临时 bytes
+          );
+          final updated = state.messages
+              .map((m) => m.id == optimisticMsg.id ? queuedMsg : m)
+              .toList();
+          state = state.copyWith(messages: updated, isSending: true);
+          await DataLayer().persistMessage(queuedMsg);
+          _syncL1();
           SoundService().playSendSound();
           // 通知会话列表更新
           _onMessageSent?.call(conversationId, '图片', 'image', now);
-          // 超时保护：8s 后重置 isSending
-          Future.delayed(const Duration(seconds: 8), () {
-            if (mounted && state.isSending) {
-              debugPrint('[Chat] sendImage isSending timeout reset');
-              state = state.copyWith(isSending: false);
-            }
-          });
+          _sendQueue.enqueue(queuedMsg);
         }
       } else {
-        // 上传失败，移除乐观消息
-        _removeOptimistic(optimisticMsg.id);
+        // 上传失败，标记为 failed 但保留 tempBytes 用于重试
+        _markUploadFailed(optimisticMsg.id, bytes);
       }
     } catch (e) {
       debugPrint('Send image error: $e');
-      _removeOptimistic(optimisticMsg.id);
+      // 上传失败，标记为 failed 但保留 tempBytes 用于重试
+      _markUploadFailed(optimisticMsg.id, bytes);
+    }
+  }
+
+  /// 标记图片上传失败（保留 tempBytes 以便重试）
+  void _markUploadFailed(int optimisticId, Uint8List bytes) {
+    if (!mounted) return;
+    final updated = state.messages.map((m) {
+      if (m.id == optimisticId) {
+        return m.copyWith(status: 'failed', tempBytes: bytes);
+      }
+      return m;
+    }).toList();
+    state = state.copyWith(messages: updated, isSending: false);
+  }
+
+  /// 重试上传失败的图片消息
+  Future<void> retryImageUpload(int msgId) async {
+    final msgIdx = state.messages.indexWhere((m) => m.id == msgId);
+    if (msgIdx < 0) return;
+    final msg = state.messages[msgIdx];
+    if (msg.status != 'failed' || msg.tempBytes == null) return;
+
+    // 恢复为上传中状态
+    final updated = state.messages.map((m) {
+      if (m.id == msgId) {
+        return m.copyWith(
+          status: 'uploading',
+          uploadProgress: 0.0,
+          tempBytes: msg.tempBytes,
+        );
+      }
+      return m;
+    }).toList();
+    state = state.copyWith(messages: updated, isSending: true);
+
+    try {
+      final uploadResp = await ApiClient().uploadBytes(
+        '/upload/chat/image',
+        msg.tempBytes!,
+        'retry_${msgId}.jpg',
+        onSendProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          final progress = (sent / total).clamp(0.0, 1.0).toDouble();
+          final progressUpdated = state.messages.map((m) {
+            if (m.id == msgId) {
+              return m.copyWith(status: 'uploading', uploadProgress: progress);
+            }
+            return m;
+          }).toList();
+          state = state.copyWith(messages: progressUpdated, isSending: true);
+          _syncL1();
+        },
+      );
+      if (uploadResp.success) {
+        final url = _extractUrl(uploadResp.data);
+        if (url != null) {
+          final queuedMsg = msg.copyWith(
+            content: url,
+            mediaUrl: url,
+            status: 'sending',
+            uploadProgress: 1.0,
+            clearTempBytes: true,
+          );
+          final finalUpdated = state.messages
+              .map((m) => m.id == msgId ? queuedMsg : m)
+              .toList();
+          state = state.copyWith(messages: finalUpdated, isSending: true);
+          await DataLayer().persistMessage(queuedMsg);
+          _syncL1();
+          SoundService().playSendSound();
+          _onMessageSent?.call(conversationId, '图片', 'image', msg.createdAt ?? DateTime.now());
+          _sendQueue.enqueue(queuedMsg);
+        }
+      } else {
+        _markUploadFailed(msgId, msg.tempBytes!);
+      }
+    } catch (e) {
+      debugPrint('Retry image upload error: $e');
+      _markUploadFailed(msgId, msg.tempBytes!);
     }
   }
 
@@ -875,7 +1201,23 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   void _onWsMessage(Map<String, dynamic> data) {
     final event = data['event'] as String?;
     final msgConvId = data['conversation_id'];
-    if (msgConvId != conversationId) return;
+    // #region agent log
+    debugPrint('[Chat] _onWsMessage event=$event conv=$msgConvId target=$conversationId');
+    // #endregion
+    if (event == 'ack') {
+      final ackClientMsgId = data['clientMsgId'] as String? ?? data['client_msg_id'] as String?;
+      final ackMessageId = data['message_id'] is int
+          ? data['message_id'] as int
+          : int.tryParse(data['message_id']?.toString() ?? '');
+      if (ackClientMsgId != null && ackMessageId != null) {
+        _onAckMessageId({'clientMsgId': ackClientMsgId, 'message_id': ackMessageId});
+      }
+      return;
+    }
+
+    // 类型安全比较：WS JSON 可能返回 String 或 int
+    final msgConvIdInt = msgConvId is int ? msgConvId : int.tryParse(msgConvId?.toString() ?? '');
+    if (msgConvIdInt != conversationId) return;
 
     switch (event) {
       case 'new_message':
@@ -886,6 +1228,13 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           _syncL1();
         } else {
           debugPrint('[Chat] _onWsMessage new_message: data is ${msgData.runtimeType}, raw=${data.keys}');
+        }
+        break;
+      case 'ack':
+        final ackClientMsgId = data['clientMsgId'] as String? ?? data['client_msg_id'] as String?;
+        final ackMessageId = data['message_id'] as int?;
+        if (ackClientMsgId != null && ackMessageId != null) {
+          _onAckMessageId({'clientMsgId': ackClientMsgId, 'message_id': ackMessageId});
         }
         break;
       case 'message_read':
@@ -906,10 +1255,82 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         }
         _syncL1();
         break;
+      case 'message_recalled':
+        _handleMessageRecalled(data);
+        break;
     }
   }
 
+  // ── 发送队列回调 ──
+
+  void _onQueueAck(int optimisticMsgId, Message serverMsg) {
+    if (!mounted) return;
+    // 替换乐观消息为服务端回显
+    final filtered = state.messages.where((m) => m.id != optimisticMsgId).toList();
+    // 避免重复（_handleNewMessage 可能已添加）
+    if (!filtered.any((m) => m.id == serverMsg.id)) {
+      filtered.add(serverMsg);
+    }
+    filtered.sort((a, b) {
+      if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
+      return (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0));
+    });
+    state = state.copyWith(messages: filtered, isSending: false);
+    DataLayer().persistMessage(serverMsg);
+    DataLayer().deletePersistedMessage(optimisticMsgId);
+    _syncL1();
+  }
+
+  void _onQueueFailed(int optimisticMsgId, String reason) {
+    if (!mounted) return;
+    final idx = state.messages.indexWhere((m) => m.id == optimisticMsgId);
+    if (idx < 0) return;
+    final updated = List<Message>.from(state.messages);
+    updated[idx] = updated[idx].copyWith(status: 'failed');
+    state = state.copyWith(messages: updated, isSending: false);
+    DataLayer().persistMessage(updated[idx]);
+    _syncL1();
+  }
+
+  /// 处理 WS message_recalled 事件：将对应消息标记为已撤回
+  void _handleMessageRecalled(Map<String, dynamic> data) {
+    final recalledMsgId = data['message_id'] as int?;
+    if (recalledMsgId == null) return;
+
+    final updated = state.messages.map((m) {
+      if (m.id == recalledMsgId) {
+        final recalled = m.copyWith(isRecalled: true);
+        DataLayer().persistMessage(recalled);
+        return recalled;
+      }
+      return m;
+    }).toList();
+    state = state.copyWith(messages: updated);
+    _syncL1();
+    debugPrint('[Chat] message_recalled: msgId=$recalledMsgId');
+  }
+
+  /// 撤回消息
+  void recallMessage(int messageId) {
+    if (!_ws.isConnected) return;
+    _ws.sendRecallMessage(messageId);
+
+    // 乐观更新：立即标记本地消息为已撤回
+    final updated = state.messages.map((m) {
+      if (m.id == messageId) {
+        final recalled = m.copyWith(isRecalled: true);
+        DataLayer().persistMessage(recalled);
+        return recalled;
+      }
+      return m;
+    }).toList();
+    state = state.copyWith(messages: updated);
+    _syncL1();
+  }
+
   void _handleNewMessage(Message message) {
+    // 通知发送队列：匹配到的乐观消息会被队列移除并触发 onAck
+    _sendQueue.handleAck(message);
     // 替换乐观消息：优先 requestId → 次选 clientMsgId → 兜底（同发送者 + 同内容）
     final filtered = state.messages.where((m) {
       // 1) requestId 完全匹配
@@ -929,8 +1350,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       return m.id != message.id;
     }).toList();
     filtered.add(message);
-    filtered.sort((a, b) =>
-        (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
+    // 排序：优先用服务端 seq，无 seq 时按 createdAt
+    filtered.sort((a, b) {
+      if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
+      return (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0));
+    });
     state = state.copyWith(messages: filtered, isSending: false);
     DataLayer().persistMessage(message);
   }
@@ -958,6 +1382,27 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   void _onWsError(String error) {
     if (!mounted) return;
     state = state.copyWith(isSending: false, error: '发送失败: $error');
+  }
+
+  void _onSendError(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final clientMsgId = data['clientMsgId'] as String?;
+    final error = data['error'] as String? ?? '未知错误';
+    if (clientMsgId == null) return;
+
+    // 通知 ChatSendQueue 立即标记该消息为失败
+    if (_sendQueue.handleSendError(clientMsgId, error)) {
+      return;
+    }
+
+    // 兜底：直接在消息列表中查找匹配的消息并标记
+    final idx = state.messages.indexWhere((m) => m.clientMsgId == clientMsgId);
+    if (idx >= 0) {
+      final updated = List<Message>.from(state.messages);
+      updated[idx] = updated[idx].copyWith(status: 'failed');
+      state = state.copyWith(messages: updated, isSending: false);
+      DataLayer().persistMessage(updated[idx]);
+    }
   }
 
   // ── 输入状态 & 已读 ──
@@ -996,7 +1441,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _wsTypingSub?.cancel();
     _wsConnSub?.cancel();
     _wsErrorSub?.cancel();
+    _wsSendErrorSub?.cancel();
+    _wsFriendOnlineSub?.cancel();
+    _wsFriendOfflineSub?.cancel();
     _typingTimer?.cancel();
+    _sendQueue.dispose();
     // 清理旧消息（保留最近 500 条或 30 天内）
     DataLayer()
         .pruneMessages(conversationId, maxCount: 500, maxDays: 30);

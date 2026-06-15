@@ -1,10 +1,10 @@
-import 'dart:async';
+﻿import 'dart:async';
 
-import 'package:facebook_clone/models/post.dart';
-import 'package:facebook_clone/services/api/post_service.dart';
-import 'package:facebook_clone/services/api/recommendation_service.dart';
-import 'package:facebook_clone/services/data_layer.dart';
-import 'package:facebook_clone/services/post_interaction_notifier.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/recommendation_service.dart';
+import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -47,6 +47,7 @@ class FeedState {
 class FeedNotifier extends StateNotifier<FeedState> {
   final Set<int> _likingPostIds = {};
   StreamSubscription? _sub;
+  bool _loadInProgress = false;
 
   FeedNotifier() : super(const FeedState()) {
     _loadCached();
@@ -61,7 +62,8 @@ class FeedNotifier extends StateNotifier<FeedState> {
 
   /// 构造时先读缓存，空则触发网络加载
   Future<void> _loadCached() async {
-    if (state.posts.isNotEmpty) return;
+    if (state.posts.isNotEmpty || _loadInProgress) return;
+    _loadInProgress = true;
     try {
       final result = await DataLayer()
           .query('feed:1:posts', () async => null)
@@ -75,66 +77,63 @@ class FeedNotifier extends StateNotifier<FeedState> {
       }
     } catch (_) {}
     // 缓存空 → 触发网络加载
-    unawaited(loadPosts());
+    unawaited(loadPosts().whenComplete(() => _loadInProgress = false));
+  }
+
+  /// Parse posts from API response data and update state.
+  void _applyPostsFromData(Map<String, dynamic> data, List postsJson) {
+    final posts =
+        postsJson.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+    final newPosts =
+        state.page == 1 ? posts : [...state.posts, ...posts];
+    state = state.copyWith(
+      posts: newPosts,
+      hasMore: data['has_more'] == true || posts.length >= 20,
+      page: state.page + 1,
+      clearError: true,
+    );
+    _syncFeedToCache();
+  }
+
+  /// Fetch feed from recommendation service, with automatic fallback to PostService.
+  Future<Map<String, dynamic>?> _fetchFeedResponse() async {
+    try {
+      final resp = await RecommendationService().getFeed(page: state.page);
+      if (resp.success && resp.data != null) {
+        return resp.data as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('FeedNotifier recommendation error: $e');
+    }
+    // Fallback to basic feed
+    try {
+      final resp = await PostService().getFeed(page: state.page);
+      if (resp.success && resp.data != null) {
+        return resp.data as Map<String, dynamic>;
+      }
+    } catch (e2) {
+      debugPrint('FeedNotifier fallback error: $e2');
+    }
+    return null;
   }
 
   Future<void> _fetchAndRefreshFeed() async {
     try {
-      final resp = await RecommendationService().getFeed(page: state.page);
-      if (resp.success && resp.data != null) {
-        final data = resp.data as Map<String, dynamic>;
+      final data = await _fetchFeedResponse();
+      if (data != null) {
         final List postsJson = data['posts'] ?? data['items'] ?? [];
-        final posts =
-            postsJson.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-
-        final newPosts =
-            state.page == 1 ? posts : [...state.posts, ...posts];
-        state = state.copyWith(
-          posts: newPosts,
-          hasMore: data['has_more'] == true || posts.length >= 20,
-          page: state.page + 1,
-          clearError: true,
-        );
-
-        if (state.page <= 2) {
-          await DataLayer().write('feed:1:posts', postsJson);
-        }
+        _applyPostsFromData(data, postsJson);
       } else {
-        state = state.copyWith(hasMore: false);
-      }
-    } catch (e) {
-      debugPrint('FeedNotifier loadPosts error: $e');
-      // Fallback to basic feed
-      try {
-        final resp = await PostService().getFeed(page: state.page);
-        if (resp.success && resp.data != null) {
-          final data = resp.data as Map<String, dynamic>;
-          final List postsJson = data['posts'] ?? data['items'] ?? [];
-          final posts =
-              postsJson.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-
-          final newPosts =
-              state.page == 1 ? posts : [...state.posts, ...posts];
-          state = state.copyWith(
-            posts: newPosts,
-            hasMore: data['has_more'] == true,
-            page: state.page + 1,
-            clearError: true,
-          );
-
-          if (state.page <= 2) {
-            await DataLayer().write('feed:1:posts', postsJson);
-          }
-        } else {
-          state = state.copyWith(hasMore: false);
-        }
-      } catch (e2) {
-        debugPrint('FeedNotifier fallback error: $e2');
+        // API 返回空但不是错误 — 只设 error 提示，不清除 hasMore（可能下次请求成功）
         state = state.copyWith(
-          hasMore: false,
           error: state.posts.isEmpty ? '加载失败' : null,
         );
       }
+    } catch (e) {
+      debugPrint('FeedNotifier _fetchAndRefreshFeed error: $e');
+      state = state.copyWith(
+        error: state.posts.isEmpty ? '加载失败' : null,
+      );
     } finally {
       state = state.copyWith(isLoading: false);
     }
@@ -142,8 +141,8 @@ class FeedNotifier extends StateNotifier<FeedState> {
 
   /// Pull-to-refresh: reset to page 1 and force-reload.
   Future<void> refreshPosts() async {
-    state = const FeedState(isLoading: true);
-    state = state.copyWith(page: 1);
+    // 保留现有 posts 防止闪烁，只标记 isLoading + 重置 page
+    state = state.copyWith(isLoading: true, page: 1, clearError: true);
     await _fetchAndRefreshFeed();
   }
 
@@ -215,18 +214,16 @@ class FeedNotifier extends StateNotifier<FeedState> {
     state = state.copyWith(posts: updatedPosts);
   }
 
-  /// Sync current posts to DataLayer cache.
+  /// Sync current posts to DataLayer cache (always uses canonical 'feed:1:posts' key).
   void _syncFeedToCache() {
     if (state.posts.isEmpty) return;
     final data = state.posts.map((p) => p.toJson()).toList();
-    DataLayer().write('feed:${state.page}:posts', data);
-    if (state.page <= 2) {
-      DataLayer().write('feed:1:posts', data);
-    }
+    DataLayer().write('feed:1:posts', data);
   }
 
   /// Reset to initial state.
   void reset() {
+    _loadInProgress = false;
     state = const FeedState();
   }
 

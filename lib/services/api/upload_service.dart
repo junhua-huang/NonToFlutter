@@ -1,7 +1,7 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:cross_file/cross_file.dart';
-import 'package:facebook_clone/utils/image_compressor.dart';
+import 'package:nonto/utils/image_compressor.dart';
 
 import 'api_client.dart';
 

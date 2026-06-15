@@ -1,4 +1,4 @@
-import 'package:facebook_clone/models/user.dart';
+﻿import 'package:nonto/models/user.dart';
 
 /// Immutable auth state used by [AuthNotifier].
 class AuthState {

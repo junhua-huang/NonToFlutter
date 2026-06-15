@@ -1,6 +1,6 @@
-{
-    "name": "facebook_clone",
-    "short_name": "facebook_clone",
+﻿{
+    "name": "nonto",
+    "short_name": "nonto",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

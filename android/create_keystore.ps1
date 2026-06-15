@@ -1,12 +1,12 @@
-# 创建 Android 签名密钥库脚本
+﻿# 创建 Android 签名密钥库脚本
 
 Write-Host "正在创建密钥库文件..." -ForegroundColor Green
 
 $keytoolPath = "keytool"
-$keystoreFile = "facebook_clone-release-key.jks"
-$alias = "facebook_clone"
-$storePass = "facebook_clone_password"
-$keyPass = "facebook_clone_password"
+$keystoreFile = "nonto-release-key.jks"
+$alias = "nonto"
+$storePass = "nonto_password"
+$keyPass = "nonto_password"
 $dname = "CN=FacebookClone, OU=Development, O=FacebookClone, L=Beijing, S=Beijing, C=CN"
 
 try {
