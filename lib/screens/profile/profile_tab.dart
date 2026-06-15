@@ -31,7 +31,6 @@ import 'package:image_cropper_plus/image_cropper_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
 /// Twitter/X 风格个人资料页（头像半覆盖背景、可编辑、照片墙Tab）
 class ProfileTab extends ConsumerStatefulWidget {
@@ -50,8 +49,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
   bool _likesLoading = true;
   List<Post> _likedPosts = [];
   String? _likesError;
-  /// 全局刷新控制器 — 包裹 NestedScrollView，在 header 区域下拉即可触发
-  final RefreshController _refreshController = RefreshController(initialRefresh: false);
+  bool _isRefreshing = false;
 
   late final TabController _tabController;
   final ImagePicker _picker = ImagePicker();
@@ -78,7 +76,6 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
   @override
   void dispose() {
     _tabController.dispose();
-    _refreshController.dispose();
     super.dispose();
   }
 
@@ -244,14 +241,30 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
   }
 
   Future<void> _onRefresh() async {
-    // 重新获取用户信息（头像/背景/简介），下拉刷新时添加 cacheTs 触发 UI 更新
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+
+    // 并行刷新：个人资料 + 统计 + 帖子 + 喜欢
+    await Future.wait([
+      _refreshUserProfile(),
+      _loadStats(),
+      _loadUserPostsForceRefresh(),
+      _loadLikedPostsForceRefresh(),
+    ]);
+
+    if (mounted) {
+      setState(() => _isRefreshing = false);
+    }
+  }
+
+  /// 刷新用户资料（头像/背景/简介）
+  Future<void> _refreshUserProfile() async {
     try {
       final auth = ref.read(authProvider);
       if (auth.user != null) {
         final resp = await AuthService().getProfile();
         if (resp.success && resp.data != null) {
           final refreshed = User.fromJson(resp.data as Map<String, dynamic>);
-          // 如果头像或背景 URL 有变化，添加 cacheTs 触发 CachedNetworkImage 重新加载
           final now = DateTime.now().millisecondsSinceEpoch;
           final avatarChanged = refreshed.avatarUrl != auth.user!.avatarUrl;
           final coverChanged = refreshed.coverPhotoUrl != auth.user!.coverPhotoUrl;
@@ -263,8 +276,53 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
         }
       }
     } catch (_) {}
-    await _loadStats();
-    _refreshController.refreshCompleted();
+  }
+
+  /// 强制刷新用户帖子（绕过缓存）
+  Future<void> _loadUserPostsForceRefresh() async {
+    final auth = ref.read(authProvider);
+    if (auth.user == null) return;
+    try {
+      final resp = await PostService()
+          .getUserPosts(auth.user!.id)
+          .timeout(const Duration(seconds: 20));
+      if (resp.success && resp.data != null && mounted) {
+        final data = resp.data as Map<String, dynamic>;
+        final list = (data['posts'] as List?) ?? [];
+        setState(() {
+          _userPosts.clear();
+          _userPosts.addAll(
+            list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList(),
+          );
+          _isLoadingPosts = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Force refresh user posts error: $e');
+    }
+  }
+
+  /// 强制刷新喜欢列表（绕过缓存）
+  Future<void> _loadLikedPostsForceRefresh() async {
+    final auth = ref.read(authProvider);
+    if (auth.user == null) return;
+    try {
+      final resp = await PostService()
+          .getUserLikedPosts(auth.user!.id)
+          .timeout(const Duration(seconds: 20));
+      if (resp.success && resp.data != null && mounted) {
+        final data = resp.data as Map<String, dynamic>;
+        final list = (data['posts'] as List?) ?? [];
+        setState(() {
+          _likedPosts = list
+              .map((e) => Post.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _likesLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Force refresh liked posts error: $e');
+    }
   }
 
   /// 修改头像
@@ -508,15 +566,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
         }
         return false;
       },
-      child: SmartRefresher(
-        controller: _refreshController,
-        enablePullDown: true,
-        enablePullUp: false,
+      child: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: _onRefresh,
-        header: const WaterDropHeader(
-          complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-          waterDropColor: AppColors.primary,
-        ),
         child: NestedScrollView(
       headerSliverBuilder: (context, innerBoxIsScrolled) => [
         SliverAppBar(

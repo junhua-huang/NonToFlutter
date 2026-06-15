@@ -24,7 +24,6 @@ import 'package:nonto/widgets/post_card.dart';
 import 'package:nonto/widgets/search_suggestions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
 /// Twitter/X Explore 风格搜索页（带实时搜索建议）
 class SearchTab extends ConsumerStatefulWidget {
@@ -37,7 +36,6 @@ class _SearchTabState extends ConsumerState<SearchTab>
     with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
-  final RefreshController _refreshController = RefreshController();
 
   List<String> _searchHistory = [];
   List<User> _userResults = [];
@@ -47,6 +45,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
   bool _isSearching = false;
   bool _isLoading = false;
   bool _showSuggestions = false;
+  bool _isRefreshing = false;
   String? _error;
 
   late final TabController _tabController;
@@ -66,15 +65,18 @@ class _SearchTabState extends ConsumerState<SearchTab>
     _controller.dispose();
     _focusNode.dispose();
     _tabController.dispose();
-    _refreshController.dispose();
     super.dispose();
   }
 
   Future<void> _onRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
     try {
       await ref.read(exploreProvider.notifier).loadDefault(forceRefresh: true);
     } catch (_) {}
-    _refreshController.refreshCompleted();
+    if (mounted) {
+      setState(() => _isRefreshing = false);
+    }
   }
 
   void _onTextChanged() {
@@ -307,26 +309,22 @@ class _SearchTabState extends ConsumerState<SearchTab>
                   }
                   return false;
                 },
-                child: SmartRefresher(
-            controller: _refreshController,
-            enablePullDown: !_isSearching && !_showSuggestions,
-            enablePullUp: false,
-            onRefresh: _onRefresh,
-            header: const WaterDropHeader(
-              complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-              waterDropColor: AppColors.primary,
-            ),
-            child: exploreState.isLoading && exploreState.trendingTopics.isEmpty && exploreState.trendingPosts.isEmpty
+                child: RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: _isSearching || _showSuggestions ? () async {} : _onRefresh,
+            child: _isRefreshing && !exploreState.isLoading
                 ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                : _showSuggestions
-                    ? SearchSuggestions(
-                        query: _controller.text,
-                        onClose: () => setState(() => _showSuggestions = false),
-                        onSearch: _doSearch,
-                      )
-                    : _isSearching
-                        ? _buildSearchResults()
-                        : _buildDefaultView(exploreState),
+                : exploreState.isLoading && exploreState.trendingTopics.isEmpty && exploreState.trendingPosts.isEmpty
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                    : _showSuggestions
+                        ? SearchSuggestions(
+                            query: _controller.text,
+                            onClose: () => setState(() => _showSuggestions = false),
+                            onSearch: _doSearch,
+                          )
+                        : _isSearching
+                            ? _buildSearchResults()
+                            : _buildDefaultView(exploreState),
           ),
         ),
         );

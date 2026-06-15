@@ -79,8 +79,9 @@ class _FeedTabState extends ConsumerState<FeedTab> {
 
   Future<void> _loadPosts() async {
     await ref.read(feedProvider.notifier).loadPosts();
-    final hasMore = ref.read(feedProvider).hasMore;
-    if (hasMore) {
+    if (!mounted) return;
+    final feedState = ref.read(feedProvider);
+    if (feedState.hasMore) {
       _refreshController.loadComplete();
     } else {
       _refreshController.loadNoData();

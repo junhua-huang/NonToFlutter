@@ -141,16 +141,23 @@ class FeedNotifier extends StateNotifier<FeedState> {
 
   /// Pull-to-refresh: reset to page 1 and force-reload.
   Future<void> refreshPosts() async {
+    if (_loadInProgress) return;
+    _loadInProgress = true;
     // 保留现有 posts 防止闪烁，只标记 isLoading + 重置 page
-    state = state.copyWith(isLoading: true, page: 1, clearError: true);
+    state = state.copyWith(isLoading: true, page: 1, hasMore: true, clearError: true);
     await _fetchAndRefreshFeed();
+    _loadInProgress = false;
   }
 
   /// Load more posts (pagination).
   Future<void> loadPosts() async {
-    if (!state.hasMore || state.isLoading) return;
+    if (!state.hasMore) return;
+    // 用独立标志防止重入，不阻塞 UI 显示
+    if (_loadInProgress) return;
+    _loadInProgress = true;
     state = state.copyWith(isLoading: true);
     await _fetchAndRefreshFeed();
+    _loadInProgress = false;
   }
 
   /// Insert a newly created post at the top.
