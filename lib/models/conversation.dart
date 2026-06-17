@@ -1,3 +1,4 @@
+import 'package:nonto/utils/date_utils.dart';
 import 'message.dart';
 import 'user.dart';
 
@@ -19,7 +20,7 @@ class Conversation {
     id: _p(json['id']), user1Id: _p(json['user1_id']),
     user2Id: _p(json['user2_id']),
     lastMessageAt: json['last_message_at'] != null
-        ? DateTime.tryParse(json['last_message_at'].toString()) : null,
+        ? AppDateUtils.parseBeijingTime(json['last_message_at'].toString()) : null,
     otherUser: json['other_user'] is Map
         ? User.fromJson(Map<String, dynamic>.from(json['other_user']))
         : null,

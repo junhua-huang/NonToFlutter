@@ -1,4 +1,6 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'dart:async';
+
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/topic.dart';
 import 'package:nonto/models/user.dart';
@@ -32,18 +34,50 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
   List<Topic> _topics = [];
   bool _isLoading = false;
 
+  /// 请求版本号，用于丢弃过期请求的结果
+  int _generation = 0;
+
+  /// 防抖定时器
+  Timer? _debounceTimer;
+
   @override
   void initState() {
     super.initState();
-    _loadSuggestions();
+    _scheduleLoad();
   }
 
   @override
   void didUpdateWidget(covariant SearchSuggestions oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.query != widget.query) {
-      _loadSuggestions();
+      _scheduleLoad();
     }
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  /// 防抖加载：300ms 内无新输入才发起请求
+  void _scheduleLoad() {
+    _debounceTimer?.cancel();
+    if (widget.query.trim().isEmpty) {
+      setState(() {
+        _users = [];
+        _posts = [];
+        _topics = [];
+        _isLoading = false;
+      });
+      return;
+    }
+    // 短查询（<2字符）不发 globalSearch，只发 suggestUsers
+    // 不在此处设 _isLoading = true，避免防抖等待期间显示 loading 圈闪烁
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      setState(() => _isLoading = true);
+      _loadSuggestions();
+    });
   }
 
   Future<void> _loadSuggestions() async {
@@ -52,16 +86,31 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
         _users = [];
         _posts = [];
         _topics = [];
+        _isLoading = false;
       });
       return;
     }
-    setState(() => _isLoading = true);
+
+    // 递增版本号，过期请求的结果将被丢弃
+    final gen = ++_generation;
+    final query = widget.query;
+
     try {
-      final results = await Future.wait([
-        SearchService().suggestUsers(widget.query, limit: 3),
-        SearchService().globalSearch(widget.query),
-        TopicService().getTopics(q: widget.query, perPage: 3),
-      ]);
+      // 短查询（<2字符）只请求用户建议，跳过 globalSearch 和 topics
+      final bool shortQuery = query.trim().length < 2;
+
+      final List<Future> futures = [
+        SearchService().suggestUsers(query, limit: 3),
+      ];
+      if (!shortQuery) {
+        futures.add(SearchService().globalSearch(query));
+        futures.add(TopicService().getTopics(q: query, perPage: 3));
+      }
+
+      final results = await Future.wait(futures);
+
+      // 丢弃过期请求的结果
+      if (!mounted || gen != _generation) return;
 
       // Users
       final userResp = results[0];
@@ -71,29 +120,43 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
         if (data is List) { userList = data; }
         else if (data is Map) { userList = data['users'] ?? data['items'] ?? []; }
         _users = userList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
+      } else {
+        _users = [];
       }
 
-      // Posts
-      final postResp = results[1];
-      if (postResp.success && postResp.data != null) {
-        final data = postResp.data as Map<String, dynamic>;
-        final list = data['posts'] as List? ?? [];
-        _posts = list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-      }
+      if (!shortQuery) {
+        // Posts
+        final postResp = results[1];
+        if (postResp.success && postResp.data != null) {
+          final data = postResp.data as Map<String, dynamic>;
+          final list = data['posts'] as List? ?? [];
+          _posts = list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+        } else {
+          _posts = [];
+        }
 
-      // Topics
-      final topicResp = results[2];
-      if (topicResp.success && topicResp.data != null) {
-        final data = topicResp.data;
-        List topicList = [];
-        if (data is List) { topicList = data; }
-        else if (data is Map) { topicList = data['topics'] ?? data['items'] ?? []; }
-        _topics = topicList.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList();
+        // Topics
+        final topicResp = results[2];
+        if (topicResp.success && topicResp.data != null) {
+          final data = topicResp.data;
+          List topicList = [];
+          if (data is List) { topicList = data; }
+          else if (data is Map) { topicList = data['topics'] ?? data['items'] ?? []; }
+          _topics = topicList.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList();
+        } else {
+          _topics = [];
+        }
+      } else {
+        _posts = [];
+        _topics = [];
       }
     } catch (e) {
       debugPrint('SearchSuggestions error: $e');
+      if (!mounted || gen != _generation) return;
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && gen == _generation) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

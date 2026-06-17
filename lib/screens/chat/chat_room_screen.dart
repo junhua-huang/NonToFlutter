@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/data/emoji_data.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
@@ -451,10 +452,10 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             .syncIncremental();
         _refreshController.refreshCompleted();
       },
-      header: WaterDropHeader(
-        complete: const Text('刷新成功',
-            style: TextStyle(color: _TwColors.selfBubble)),
-        waterDropColor: _TwColors.selfBubble,
+      header: const WaterDropHeader(
+        complete:
+            Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+        waterDropColor: AppColors.primary,
       ),
       child: ListView.builder(
         controller: _scrollController,

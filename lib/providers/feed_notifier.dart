@@ -20,7 +20,9 @@ class FeedState {
     this.posts = const [],
     this.page = 1,
     this.hasMore = true,
-    this.isLoading = false,
+    // 默认 true：FeedNotifier 构造后会异步读缓存/网络，在此之前首帧应显示
+    // 骨架屏而非「暂无动态」缺省页（命中缓存或网络返回后会被置 false）。
+    this.isLoading = true,
     this.error,
   });
 
@@ -73,11 +75,19 @@ class FeedNotifier extends StateNotifier<FeedState> {
         final posts =
             cached.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
         state = state.copyWith(posts: posts, isLoading: false);
+        _loadInProgress = false;
         return;
       }
     } catch (_) {}
-    // 缓存空 → 触发网络加载
-    unawaited(loadPosts().whenComplete(() => _loadInProgress = false));
+    // 缓存空 → 触发网络加载。
+    // 直接调 _fetchAndRefreshFeed 而非 loadPosts()，因为 loadPosts 内部有
+    // `_loadInProgress` guard，此时该标志已被本方法置为 true，会被直接
+    // return 掉，导致 isLoading 永远卡在 true（骨架屏不消失）。
+    try {
+      await _fetchAndRefreshFeed();
+    } finally {
+      _loadInProgress = false;
+    }
   }
 
   /// Parse posts from API response data and update state.

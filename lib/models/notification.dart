@@ -1,3 +1,4 @@
+import 'package:nonto/utils/date_utils.dart';
 import 'user.dart';
 
 enum NotificationType { like, comment, friendRequest, friendAccept, mention, message, system }
@@ -60,7 +61,7 @@ class AppNotification {
     relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
     relatedType: json['related_type'],
     isRead: json['is_read'] ?? false,
-    createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+    createdAt: json['created_at'] != null ? AppDateUtils.parseBeijingTime(json['created_at'].toString()) : null,
   );
 
   static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;

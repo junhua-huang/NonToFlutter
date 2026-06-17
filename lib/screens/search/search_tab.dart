@@ -4,7 +4,6 @@ import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/topic.dart';
 import 'package:nonto/models/user.dart';
-import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/widgets/comic_event_card.dart';
 import 'package:nonto/screens/comic/comic_timeline_page.dart';
 import 'package:nonto/screens/comic/comic_my_events_page.dart';
@@ -24,6 +23,8 @@ import 'package:nonto/widgets/post_card.dart';
 import 'package:nonto/widgets/search_suggestions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
+import 'package:nonto/utils/bar_scroll_handler.dart';
 
 /// Twitter/X Explore 风格搜索页（带实时搜索建议）
 class SearchTab extends ConsumerStatefulWidget {
@@ -36,27 +37,63 @@ class _SearchTabState extends ConsumerState<SearchTab>
     with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+  final _refreshController = RefreshController(initialRefresh: false);
+  final _textNotEmpty = ValueNotifier<bool>(false);
 
   List<String> _searchHistory = [];
   List<User> _userResults = [];
   List<Post> _postResults = [];
   List<ComicEvent> _comicEventResults = [];
 
+  /// 是否处于搜索态（焦点驱动）：隐藏标题栏、展开搜索记录/建议、右侧显示按钮
+  bool _inSearchMode = false;
+  /// 是否已发起过搜索（显示结果页）
   bool _isSearching = false;
   bool _isLoading = false;
-  bool _showSuggestions = false;
   bool _isRefreshing = false;
   String? _error;
 
   late final TabController _tabController;
+
+  /// 派生：是否显示实时建议（搜索态 + 有文字 + 未在加载）
+  bool get _showSuggestions =>
+      _inSearchMode && _controller.text.isNotEmpty && !_isLoading;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _controller.addListener(_onTextChanged);
+    _controller.addListener(() => _textNotEmpty.value = _controller.text.isNotEmpty);
     _focusNode.addListener(_onFocusChanged);
+    _loadSearchHistory();
     // Explorer data auto-loads via exploreProvider constructor — no _activate needed
+  }
+
+  Future<void> _loadSearchHistory() async {
+    try {
+      final resp = await SearchService().getHistory();
+      if (resp.success && resp.data != null) {
+        final data = resp.data;
+        List list = [];
+        if (data is List) {
+          list = data;
+        } else if (data is Map) {
+          list = data['history'] ?? data['items'] ?? [];
+        }
+        if (mounted) {
+          setState(() {
+            _searchHistory = list.map((e) {
+              if (e is String) return e;
+              if (e is Map) return e['query']?.toString() ?? e.toString();
+              return e.toString();
+            }).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Load search history error: $e');
+    }
   }
 
   @override
@@ -65,6 +102,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
     _controller.dispose();
     _focusNode.dispose();
     _tabController.dispose();
+    _refreshController.dispose();
+    _textNotEmpty.dispose();
     super.dispose();
   }
 
@@ -75,24 +114,60 @@ class _SearchTabState extends ConsumerState<SearchTab>
       await ref.read(exploreProvider.notifier).loadDefault(forceRefresh: true);
     } catch (_) {}
     if (mounted) {
+      // 先完成刷新动画，再 setState 重建内容。
+      // 反过来（先 setState 再 refreshCompleted）会让 SmartRefresher 的收起
+      // 动画基于旧内容高度，而此时内容已重建出新高度，导致列表做一次补偿性
+      // 回弹（表现为"自动上拉一下"）。
+      _refreshController.refreshCompleted();
       setState(() => _isRefreshing = false);
     }
   }
 
   void _onTextChanged() {
-    final text = _controller.text;
-    setState(() {
-      _showSuggestions = text.isNotEmpty && _focusNode.hasFocus;
-    });
+    // 文字变化时刷新 UI（按钮形态、建议显隐由 build 中的 AnimatedSwitcher 自动处理）
+    setState(() {});
   }
 
   void _onFocusChanged() {
-    setState(() {}); // rebuild to show/hide search history
+    final hasFocus = _focusNode.hasFocus;
+    if (hasFocus) {
+      // 获焦 → 进入搜索态
+      if (!_inSearchMode) setState(() => _inSearchMode = true);
+    } else {
+      // 失焦：仅在未显示搜索结果时退出搜索态（有结果时保留，方便查看）
+      if (_inSearchMode && !_isSearching) {
+        setState(() => _inSearchMode = false);
+      }
+    }
+  }
+
+  /// 退出搜索态：清空输入、失焦、收起记录、恢复标题栏。
+  /// 保留 _isSearching 结果页由调用方决定是否清除。
+  void _exitSearchMode({bool clearResults = true}) {
+    _controller.clear();
+    _textNotEmpty.value = false;
+    _focusNode.unfocus();
+    setState(() {
+      _inSearchMode = false;
+      if (clearResults) {
+        _isSearching = false;
+        _userResults.clear();
+        _postResults.clear();
+        _comicEventResults.clear();
+        _error = null;
+      }
+    });
   }
 
   Future<void> _doSearch(String query) async {
     _focusNode.unfocus();
-    setState(() { _showSuggestions = false; });
+    setState(() {
+      _isSearching = true;
+      _isLoading = true;
+      _error = null;
+      // 触发搜索后退出搜索态（收起记录/建议、恢复标题栏），但保留结果页
+      _inSearchMode = false;
+    });
     if (query.trim().isEmpty) {
       setState(() {
         _isSearching = false;
@@ -100,6 +175,18 @@ class _SearchTabState extends ConsumerState<SearchTab>
         _postResults.clear();
         _comicEventResults.clear();
         _error = null;
+      });
+      return;
+    }
+    // 关键词不足2字符时直接提示，不发起请求
+    if (query.trim().length < 2) {
+      setState(() {
+        _isSearching = true;
+        _isLoading = false;
+        _error = '搜索关键词至少需要2个字符';
+        _userResults.clear();
+        _postResults.clear();
+        _comicEventResults.clear();
       });
       return;
     }
@@ -161,32 +248,32 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
     return Column(
       children: [
-        // 仅 AppBar 动画依赖 barVisibleProvider，独立 Consumer
-        Consumer(
-          builder: (context, ref, _) {
-            final barVisible = ref.watch(barVisibleProvider);
-            return AnimatedSlide(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              offset: barVisible ? Offset.zero : const Offset(0, -1),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                height: barVisible ? (kToolbarHeight + MediaQuery.of(context).padding.top) : 0,
-                child: barVisible ? AppBar(
-            title: const Text('Explore', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-            backgroundColor: AppColors.background,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            ) : const SizedBox.shrink(),
+        // (a) 标题栏：搜索态时高度收为状态栏安全区高度，平滑过渡
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          child: SizedBox(
+            height: _inSearchMode ? topPadding : (kToolbarHeight + topPadding),
+            child: _inSearchMode
+                ? const SizedBox.shrink()
+                : AppBar(
+                    title: const Text('Explore',
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    backgroundColor: AppColors.background,
+                    elevation: 0,
+                    surfaceTintColor: Colors.transparent,
+                  ),
           ),
-        );
-          },
         ),
-        // Search bar
+        // (b) 搜索框行 + 右侧按钮（AnimatedSwitcher 切换形态）
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 4, 4),
+          padding: EdgeInsets.fromLTRB(12, _inSearchMode ? 6 : 12, 4, 4),
           child: Row(
             children: [
               Expanded(
@@ -197,26 +284,26 @@ class _SearchTabState extends ConsumerState<SearchTab>
                   decoration: InputDecoration(
                     hintText: '搜索',
                     hintStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
-                    suffixIcon: _controller.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
-                            onPressed: () {
-                              _controller.clear();
-                              setState(() {
-                                _isSearching = false;
-                                _showSuggestions = false;
-                                _userResults.clear();
-                                _postResults.clear();
-                                _comicEventResults.clear();
-                                _error = null;
-                              });
-                            },
-                          )
-                        : null,
+                    prefixIcon: const Icon(Icons.search,
+                        color: AppColors.textSecondary, size: 20),
+                    suffixIcon: ValueListenableBuilder<bool>(
+                      valueListenable: _textNotEmpty,
+                      builder: (_, notEmpty, __) {
+                        if (!notEmpty) return const SizedBox.shrink();
+                        return IconButton(
+                          icon: const Icon(Icons.close,
+                              size: 18, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _controller.clear();
+                            _textNotEmpty.value = false;
+                          },
+                        );
+                      },
+                    ),
                     filled: true,
                     fillColor: AppColors.surface,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
                       borderSide: BorderSide.none,
@@ -231,104 +318,181 @@ class _SearchTabState extends ConsumerState<SearchTab>
                     ),
                   ),
                   onSubmitted: _doSearch,
-                  onChanged: (_) => setState(() {}),
                 ),
               ),
-              if (_isSearching)
-                TextButton(
-                  onPressed: () {
-                    _controller.clear();
-                    _focusNode.unfocus();
-                    setState(() {
-                      _isSearching = false;
-                      _showSuggestions = false;
-                      _userResults.clear();
-                      _postResults.clear();
-                      _comicEventResults.clear();
-                      _error = null;
-                    });
-                    ref.read(exploreProvider.notifier).loadDefault();
-                  },
-                  child: const Text('取消', style: TextStyle(color: AppColors.primary, fontSize: 14)),
+              // 右侧按钮：无按钮 / 取消 / 搜索，淡入淡出切换
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: SizeTransition(
+                    sizeFactor: anim,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
                 ),
+                child: _buildRightButton(),
+              ),
             ],
           ),
         ),
-        // Search history — displayed directly below search bar
-        if (_searchHistory.isNotEmpty && _focusNode.hasFocus && _controller.text.isEmpty && !_isSearching)
-          Container(
-            constraints: const BoxConstraints(maxHeight: 200),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              border: Border(bottom: BorderSide(color: AppColors.borderLight, width: 0.5)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 2),
-                  child: Row(
-                    children: [
-                      const Text('最近搜索',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textPrimary)),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: _clearHistory,
-                        child: const Text('清除全部',
-                          style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
-                  ),
-                ),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _searchHistory.length.clamp(0, 8),
-                    itemBuilder: (_, i) => _buildCompactHistoryItem(i),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        Consumer(
-          builder: (context, ref, _) {
-            final exploreState = ref.watch(exploreProvider);
-            return Expanded(
-              child: NotificationListener<ScrollUpdateNotification>(
-                onNotification: (notif) {
-                  final delta = notif.scrollDelta ?? 0;
-                  final barVisible = ref.read(barVisibleProvider);
-                  if (notif.metrics.pixels <= 0 && !barVisible) {
-                    ref.read(barVisibleProvider.notifier).state = true;
-                    return false;
-                  }
-                  if (delta > 3 && barVisible) {
-                    ref.read(barVisibleProvider.notifier).state = false;
-                  } else if (delta < -3 && !barVisible) {
-                    ref.read(barVisibleProvider.notifier).state = true;
-                  }
-                  return false;
-                },
-                child: RefreshIndicator(
-            color: AppColors.primary,
-            onRefresh: _isSearching || _showSuggestions ? () async {} : _onRefresh,
-            child: _isRefreshing && !exploreState.isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                : exploreState.isLoading && exploreState.trendingTopics.isEmpty && exploreState.trendingPosts.isEmpty
-                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                    : _showSuggestions
-                        ? SearchSuggestions(
-                            query: _controller.text,
-                            onClose: () => setState(() => _showSuggestions = false),
-                            onSearch: _doSearch,
-                          )
-                        : _isSearching
-                            ? _buildSearchResults()
-                            : _buildDefaultView(exploreState),
+        // (c) 内容区：默认视图 / 搜索记录 / 实时建议 / 结果，淡入淡出切换
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: _buildContentArea(),
           ),
         ),
-        );
-          },
+      ],
+    );
+  }
+
+  /// 右侧按钮形态：
+  /// - 非搜索态：无按钮
+  /// - 搜索态 + 无文字：取消（退出搜索态）
+  /// - 搜索态 + 有文字：搜索（触发搜索）
+  Widget _buildRightButton() {
+    if (!_inSearchMode) return const SizedBox.shrink(key: ValueKey('none'));
+    if (_controller.text.isEmpty) {
+      return TextButton(
+        key: const ValueKey('cancel'),
+        onPressed: () => _exitSearchMode(),
+        child: const Text('取消',
+            style: TextStyle(color: AppColors.primary, fontSize: 14)),
+      );
+    }
+    return TextButton(
+      key: const ValueKey('search'),
+      onPressed: () => _doSearch(_controller.text),
+      child: const Text('搜索',
+          style: TextStyle(color: AppColors.primary, fontSize: 14)),
+    );
+  }
+
+  /// 内容区四态切换：
+  /// 1. 搜索结果页（_isSearching）
+  /// 2. 搜索态 + 有文字：实时建议
+  /// 3. 搜索态 + 无文字：搜索记录（占满）
+  /// 4. 默认视图（推荐内容 + 下拉刷新）
+  Widget _buildContentArea() {
+    // 已发起搜索 → 结果页
+    if (_isSearching) {
+      return KeyedSubtree(
+        key: const ValueKey('results'),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : _buildSearchResults(),
+      );
+    }
+    // 搜索态 + 有文字 → 实时建议
+    if (_showSuggestions) {
+      return KeyedSubtree(
+        key: const ValueKey('suggestions'),
+        child: SearchSuggestions(
+          query: _controller.text,
+          onClose: () => _exitSearchMode(),
+          onSearch: _doSearch,
+        ),
+      );
+    }
+    // 搜索态 + 无文字 → 搜索记录占满
+    if (_inSearchMode) {
+      return KeyedSubtree(
+        key: const ValueKey('history'),
+        child: _buildSearchHistoryFull(),
+      );
+    }
+    // 默认视图
+    return KeyedSubtree(
+      key: const ValueKey('default'),
+      child: Consumer(
+        builder: (context, ref, _) {
+          final exploreState = ref.watch(exploreProvider);
+          return NotificationListener<ScrollUpdateNotification>(
+            onNotification: (notif) {
+              handleBarScrollNotification(notif, ref);
+              return false;
+            },
+            child: SmartRefresher(
+              controller: _refreshController,
+              enablePullDown: true,
+              onRefresh: _onRefresh,
+              header: const ClassicHeader(
+                refreshingText: '刷新中...',
+                completeText: '刷新成功',
+                failedText: '刷新失败',
+                idleText: '',
+                refreshingIcon: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        color: AppColors.primary, strokeWidth: 2)),
+                completeIcon: Icon(Icons.check_circle,
+                    color: AppColors.primary, size: 16),
+                failedIcon:
+                    Icon(Icons.error_outline, color: Colors.red, size: 16),
+                height: 44,
+              ),
+              child: exploreState.isLoading &&
+                      exploreState.trendingTopics.isEmpty &&
+                      exploreState.trendingPosts.isEmpty &&
+                      !_isRefreshing
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.primary))
+                  : _buildDefaultView(exploreState),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 占满剩余屏幕的搜索记录视图
+  Widget _buildSearchHistoryFull() {
+    if (_searchHistory.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.history, size: 48, color: AppColors.textTertiary.withValues(alpha: 0.5)),
+            const SizedBox(height: 12),
+            const Text('暂无搜索记录',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+          ],
+        ),
+      );
+    }
+    return Column(
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+          child: Row(
+            children: [
+              const Text('最近搜索',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: AppColors.textPrimary)),
+              const Spacer(),
+              GestureDetector(
+                onTap: _clearHistory,
+                child: const Text('清除全部',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.borderLight),
+        // 记录列表占满剩余空间
+        Expanded(
+          child: ListView.builder(
+            itemCount: _searchHistory.length,
+            itemBuilder: (_, i) => _buildCompactHistoryItem(i),
+          ),
         ),
       ],
     );
@@ -448,8 +612,6 @@ class _SearchTabState extends ConsumerState<SearchTab>
             return _buildTopicItem(item.topic!);
           case _DefaultItemType.comicEventItem:
             return ComicEventCard(event: item.comicEvent!);
-          case _DefaultItemType.friendRow:
-            return _buildFriendRow(item.friends!);
           case _DefaultItemType.spacer:
             return const SizedBox(height: 60);
         }

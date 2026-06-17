@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/search_service.dart';
@@ -101,9 +101,9 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
         centerTitle: false,
       ),
-      body: _isLoading
+      body: _isLoading && _posts.isEmpty
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : _error != null
+          : _error != null && _posts.isEmpty
               ? ErrorStateWidget(
                   message: _error!,
                   onRetry: () {
@@ -123,9 +123,15 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
                       enablePullUp: _hasMore,
                       onRefresh: () => _loadPosts(isRefresh: true),
                       onLoading: () => _loadPosts(),
-                      header: const WaterDropHeader(
-                        complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-                        waterDropColor: AppColors.primary,
+                      header: const ClassicHeader(
+                        refreshingText: '刷新中...',
+                        completeText: '刷新成功',
+                        failedText: '刷新失败',
+                        idleText: '',
+                        refreshingIcon: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+                        completeIcon: Icon(Icons.check_circle, color: AppColors.primary, size: 16),
+                        failedIcon: Icon(Icons.error_outline, color: Colors.red, size: 16),
+                        height: 44,
                       ),
                       footer: const ClassicFooter(
                         loadingText: '加载更多...',

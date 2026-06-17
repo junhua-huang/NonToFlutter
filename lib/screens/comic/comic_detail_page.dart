@@ -23,6 +23,7 @@ class ComicDetailPage extends StatefulWidget {
 
 class _ComicDetailPageState extends State<ComicDetailPage> {
   final ComicService _service = ComicService();
+  final ScrollController _scrollController = ScrollController();
 
   ComicEvent? _event;
   bool _isLoading = true;
@@ -32,6 +33,12 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
   void initState() {
     super.initState();
     _loadDetail();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDetail() async {
@@ -184,306 +191,314 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
     final event = _event!;
     final hasCover = event.coverImage != null && event.coverImage!.isNotEmpty;
 
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 顶部大图全宽
-          if (hasCover)
-            Image.network(
-              _fullUrl(event.coverImage!),
-              width: double.infinity,
-              fit: BoxFit.fitWidth,
-              errorBuilder: (_, __, ___) => AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Container(
+    return CustomScrollView(
+      controller: _scrollController,
+      slivers: [
+        // 封面图 + 发布者行 + 内容区 + 图片列表 —— 整体作为一个 sliver
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 顶部大图全宽
+              if (hasCover)
+                Image.network(
+                  _fullUrl(event.coverImage!),
+                  width: double.infinity,
+                  fit: BoxFit.fitWidth,
+                  errorBuilder: (_, __, ___) => AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Container(
+                      color: AppColors.backgroundSecondary,
+                      child: const Icon(Icons.event, size: 48, color: AppColors.textTertiary),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  height: 200,
                   color: AppColors.backgroundSecondary,
                   child: const Icon(Icons.event, size: 48, color: AppColors.textTertiary),
                 ),
-              ),
-            )
-          else
-            Container(
-              width: double.infinity,
-              height: 200,
-              color: AppColors.backgroundSecondary,
-              child: const Icon(Icons.event, size: 48, color: AppColors.textTertiary),
-            ),
 
-          // 发布者行（头像 + 用户名 + 时间 + 关注按钮）
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: AppColors.primary,
-                  backgroundImage: event.creatorAvatar != null && event.creatorAvatar!.isNotEmpty
-                      ? NetworkImage(_fullUrl(event.creatorAvatar!))
-                      : null,
-                  child: event.creatorAvatar == null || event.creatorAvatar!.isEmpty
-                      ? Text(
-                          (event.creatorName ?? '?').substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                              fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        event.creatorName ?? '匿名用户',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _formatTimeAgo(),
-                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                if (!event.isOwner)
-                  GestureDetector(
-                    onTap: _toggleFollow,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: event.isFollowed ? Colors.transparent : AppColors.textPrimary,
-                        borderRadius: BorderRadius.circular(20),
-                        border: event.isFollowed
-                            ? Border.all(color: AppColors.borderDivider)
-                            : null,
-                      ),
-                      child: Text(
-                        event.isFollowed ? '正在关注' : '关注',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: event.isFollowed ? AppColors.textPrimary : Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.borderLight),
-
-          // 内容区
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 标题 + 状态
-                Row(
+              // 发布者行（头像 + 用户名 + 时间 + 关注按钮）
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppColors.primary,
+                      backgroundImage: event.creatorAvatar != null && event.creatorAvatar!.isNotEmpty
+                          ? NetworkImage(_fullUrl(event.creatorAvatar!))
+                          : null,
+                      child: event.creatorAvatar == null || event.creatorAvatar!.isEmpty
+                          ? Text(
+                              (event.creatorName ?? '?').substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                  fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        event.name,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.creatorName ?? '匿名用户',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatTimeAgo(),
+                            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!event.isOwner)
+                      GestureDetector(
+                        onTap: _toggleFollow,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: event.isFollowed ? Colors.transparent : AppColors.textPrimary,
+                            borderRadius: BorderRadius.circular(20),
+                            border: event.isFollowed
+                                ? Border.all(color: AppColors.borderDivider)
+                                : null,
+                          ),
+                          child: Text(
+                            event.isFollowed ? '正在关注' : '关注',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: event.isFollowed ? AppColors.textPrimary : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              const Divider(height: 1, color: AppColors.borderLight),
+
+              // 内容区
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 标题 + 状态
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            event.name,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _statusColor(event.status).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            event.statusText,
+                            style: TextStyle(
+                              color: _statusColor(event.status),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 城市
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined,
+                            size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Text(
+                          event.cityName.isNotEmpty ? event.cityName : '未知城市',
+                          style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
+                    // 日期
+                    if (event.startDate != null) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today,
+                              size: 15, color: AppColors.textSecondary),
+                          const SizedBox(width: 6),
+                          Text(
+                            _formatDateRange(),
+                            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+
+                    // 场馆
+                    if (event.venue.isNotEmpty) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.place_outlined,
+                              size: 15, color: AppColors.textSecondary),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              event.venue,
+                              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+
+                    // 标签
+                    if (event.tags.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: event.tags.map((tag) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              tag,
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+
+                    // 介绍
+                    if (event.intro != null && event.intro!.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Divider(height: 1, color: AppColors.borderLight),
+                      const SizedBox(height: 16),
+                      const Text(
+                        '漫展介绍',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _statusColor(event.status).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        event.statusText,
-                        style: TextStyle(
-                          color: _statusColor(event.status),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(height: 8),
+                      Text(
+                        event.intro!,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.6,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                    ),
+                    ],
                   ],
+                ),
+              ),
+
+              // 漫展图片列表（竖列排列）
+              if (event.images.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Divider(height: 1, color: AppColors.borderLight),
                 ),
                 const SizedBox(height: 12),
-
-                // 城市
-                Row(
-                  children: [
-                    const Icon(Icons.location_on_outlined,
-                        size: 16, color: AppColors.textSecondary),
-                    const SizedBox(width: 6),
-                    Text(
-                      event.cityName.isNotEmpty ? event.cityName : '未知城市',
-                      style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-
-                // 日期
-                if (event.startDate != null) ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today,
-                          size: 15, color: AppColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Text(
-                        _formatDateRange(),
-                        style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                ],
-
-                // 场馆
-                if (event.venue.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.place_outlined,
-                          size: 15, color: AppColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          event.venue,
-                          style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                ],
-
-                // 标签
-                if (event.tags.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: event.tags.map((tag) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          tag,
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-
-                // 介绍
-                if (event.intro != null && event.intro!.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  const Divider(height: 1, color: AppColors.borderLight),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '漫展介绍',
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '漫展图片',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    event.intro!,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // 漫展图片列表（竖列排列）
-          if (event.images.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Divider(height: 1, color: AppColors.borderLight),
-            ),
-            const SizedBox(height: 12),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                '漫展图片',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ...List.generate(event.images.length, (i) {
-              final url = _fullUrl(event.images[i].imageUrl);
-              return GestureDetector(
-                onTap: () {
-                  ImageViewerScreen.show(
-                    context,
-                    event.images.map((img) => _fullUrl(img.imageUrl)).toList(),
-                    initialIndex: i,
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      url,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 200,
-                        color: AppColors.backgroundSecondary,
-                        child: const Icon(Icons.broken_image, color: AppColors.textTertiary),
+                const SizedBox(height: 8),
+                ...List.generate(event.images.length, (i) {
+                  final url = _fullUrl(event.images[i].imageUrl);
+                  return GestureDetector(
+                    onTap: () {
+                      ImageViewerScreen.show(
+                        context,
+                        event.images.map((img) => _fullUrl(img.imageUrl)).toList(),
+                        initialIndex: i,
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          url,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 200,
+                            color: AppColors.backgroundSecondary,
+                            child: const Icon(Icons.broken_image, color: AppColors.textTertiary),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            }),
-          ],
+                  );
+                }),
+              ],
 
-          const SizedBox(height: 8),
-          const Divider(height: 1, color: AppColors.borderLight),
+              const SizedBox(height: 8),
+              const Divider(height: 1, color: AppColors.borderLight),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
 
-          // 评论区
-          CommentSection(
+        // 评论区 —— SliverFillRemaining 提供有界高度，CommentSection 的 Expanded 正常工作
+        SliverFillRemaining(
+          hasScrollBody: true,
+          child: CommentSection(
             targetType: 'comic',
             targetId: event.id,
+            scrollController: _scrollController,
           ),
-
-          const SizedBox(height: 24),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

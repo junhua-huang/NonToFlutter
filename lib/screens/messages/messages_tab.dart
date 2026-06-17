@@ -16,6 +16,7 @@ import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
+import 'package:nonto/utils/bar_scroll_handler.dart';
 
 /// 统一消息页：顶部通知入口 + 聊天会话列表
 class MessagesTab extends ConsumerStatefulWidget {
@@ -147,17 +148,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
       ),
       body: NotificationListener<ScrollUpdateNotification>(
         onNotification: (notif) {
-          final delta = notif.scrollDelta ?? 0;
-          final barVisible = ref.read(barVisibleProvider);
-          if (notif.metrics.pixels <= 0 && !barVisible) {
-            ref.read(barVisibleProvider.notifier).state = true;
-            return false;
-          }
-          if (delta > 3 && barVisible) {
-            ref.read(barVisibleProvider.notifier).state = false;
-          } else if (delta < -3 && !barVisible) {
-            ref.read(barVisibleProvider.notifier).state = true;
-          }
+          handleBarScrollNotification(notif, ref);
           return false;
         },
         child: Consumer(

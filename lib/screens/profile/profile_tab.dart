@@ -27,6 +27,7 @@ import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/post_card.dart';
 import 'package:flutter/material.dart';
+import 'package:nonto/utils/bar_scroll_handler.dart';
 import 'package:image_cropper_plus/image_cropper_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,7 +45,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
   int _likeCount = 0;
   bool _isLoadingStats = true;
   final List<Post> _userPosts = [];
-  bool _isLoadingPosts = false;
+  // 默认 true：首帧显示 loading 而非「还没有发布帖子」缺省页。
+  // _loadStats/_loadLikedPosts 完成后会回调 _loadUserPosts，加载完成后置 false。
+  bool _isLoadingPosts = true;
   String? _error;
   bool _likesLoading = true;
   List<Post> _likedPosts = [];
@@ -71,6 +74,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     PostInteractionNotifier().onLikeChanged.listen(_onPostLikeEvent);
     PostInteractionNotifier().onViewChanged.listen(_onPostViewEvent);
     _loadStats();
+    // 并行触发帖子/喜欢列表加载，避免串行等待 stats 期间命中「没有帖子」缺省页。
+    // _loadStats() 内部也会再调一次（命中缓存读取，开销极小，且自带重入语义）。
+    _loadUserPosts();
   }
 
   @override
@@ -553,23 +559,10 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
 
     return NotificationListener<ScrollUpdateNotification>(
       onNotification: (notif) {
-        final delta = notif.scrollDelta ?? 0;
-        final barVisible = ref.read(barVisibleProvider);
-        if (notif.metrics.pixels <= 0 && !barVisible) {
-          ref.read(barVisibleProvider.notifier).state = true;
-          return false;
-        }
-        if (delta > 3 && barVisible) {
-          ref.read(barVisibleProvider.notifier).state = false;
-        } else if (delta < -3 && !barVisible) {
-          ref.read(barVisibleProvider.notifier).state = true;
-        }
+        handleBarScrollNotification(notif, ref);
         return false;
       },
-      child: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: _onRefresh,
-        child: NestedScrollView(
+      child: NestedScrollView(
       headerSliverBuilder: (context, innerBoxIsScrolled) => [
         SliverAppBar(
           expandedHeight: 420,
@@ -787,17 +780,23 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
           ),
         ),
       ],
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildPostsContent(),
-          _buildLikesContent(),
-          _buildPhotosContent(),
-        ],
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _onRefresh,
+        // 在 body 内部刷新：RefreshIndicator 包在 NestedScrollView 外层时，
+        // 下拉手势会被 header 的展开/收起逻辑消费，导致刷新失效。
+        // 放到 body 内部则不受 header 影响。
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildPostsContent(),
+            _buildLikesContent(),
+            _buildPhotosContent(),
+          ],
+        ),
       ),
     ),
-    ),
-  );
+    );
   }
 
   Widget _buildCoverPhoto(User user) {
@@ -918,18 +917,15 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
     ImageViewerScreen.show(context, [resolved]);
   }
 
-  /// 导航到编辑资料页，返回后刷新头像/背景缓存
+  /// 导航到编辑资料页，返回后刷新界面
   Future<void> _navigateToEditProfile() async {
-    final result = await Navigator.push<bool>(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const EditProfileScreen()),
     );
-    // EditProfileScreen 保存时已更新 authProvider 中的 avatarCacheTs/coverCacheTs，
-    // CachedNetworkImage 会因 URL 变化（?t=xxx）自动重新加载。
-    // 但 setState 确保 SliverAppBar 内部的 widget 重建
-    if (result == true && mounted) {
-      setState(() {});
-    }
+    // 编辑页现在按需保存，每个字段独立上传。
+    // 返回后只需 setState 触发重建即可看到最新状态。
+    if (mounted) setState(() {});
   }
 
   Widget _buildPostsContent() {
@@ -949,7 +945,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
       );
     }
     if (_userPosts.isEmpty) {
-      return ListView(children: [
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
         const SizedBox(height: 120),
         Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -964,6 +962,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> with TickerProviderStat
       ]);
     }
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 8),
       itemCount: _userPosts.length,
       itemBuilder: (context, index) => PostCard(

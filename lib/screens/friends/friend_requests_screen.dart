@@ -1,5 +1,6 @@
 ﻿import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/user.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/services/api/friend_service.dart';
@@ -32,6 +33,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
   bool _isLoadingReceived = true;
   String? _sentError;
   String? _receivedError;
+  // 正在处理中的请求 id 集合，用于按钮 loading 态，防止重复点击
+  final Set<int> _pendingRequestIds = {};
 
   static const _cacheKeySent = 'friends:requests:sent';
   static const _cacheKeyReceived = 'friends:requests:received';
@@ -139,44 +142,113 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
     }
   }
 
+  void _showSnackBar(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      duration: const Duration(seconds: 2),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: error ? Colors.red.shade400 : AppColors.primary,
+    ));
+  }
+
   Future<void> _accept(int requestId) async {
+    if (_pendingRequestIds.contains(requestId)) return;
+    setState(() => _pendingRequestIds.add(requestId));
     try {
       final resp = await _friendService.acceptRequest(requestId);
       if (resp.success && mounted) {
+        final accepted = _receivedRequests.firstWhere(
+          (r) => r.id == requestId,
+          orElse: () => _RequestItem(
+              id: requestId, senderId: 0, receiverId: 0, status: ''),
+        );
+        final name = accepted.user?.displayName ??
+            accepted.user?.username ??
+            '对方';
         setState(() {
           _receivedRequests.removeWhere((r) => r.id == requestId);
+          _pendingRequestIds.remove(requestId);
         });
         DataLayer().invalidate(_cacheKeyReceived);
         // 清除通知列表中的好友请求通知
-        try { ProviderScope.containerOf(context).read(notificationsProvider.notifier).removeByType('friend_request'); } catch (_) {}
+        try {
+          ProviderScope.containerOf(context)
+              .read(notificationsProvider.notifier)
+              .removeByType('friend_request');
+        } catch (_) {}
+        // 主动刷新会话列表，让发起方（点接受的人）本地立即出现新会话 + Hi 消息，
+        // 不依赖 WS 推送（WS 推送给对方，发起方靠这里刷新）。
+        try {
+          ProviderScope.containerOf(context)
+              .read(conversationsProvider.notifier)
+              .loadConversations();
+        } catch (_) {}
+        _showSnackBar('已添加 $name 为好友');
+      } else {
+        setState(() => _pendingRequestIds.remove(requestId));
+        _showSnackBar(resp.message ?? '操作失败，请重试', error: true);
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() => _pendingRequestIds.remove(requestId));
+        _showSnackBar('网络错误，请重试', error: true);
+      }
+    }
   }
 
   Future<void> _reject(int requestId) async {
+    if (_pendingRequestIds.contains(requestId)) return;
+    setState(() => _pendingRequestIds.add(requestId));
     try {
       final resp = await _friendService.rejectRequest(requestId);
       if (resp.success && mounted) {
         setState(() {
           _receivedRequests.removeWhere((r) => r.id == requestId);
+          _pendingRequestIds.remove(requestId);
         });
         DataLayer().invalidate(_cacheKeyReceived);
-        // 清除通知列表中的好友请求通知
-        try { ProviderScope.containerOf(context).read(notificationsProvider.notifier).removeByType('friend_request'); } catch (_) {}
+        try {
+          ProviderScope.containerOf(context)
+              .read(notificationsProvider.notifier)
+              .removeByType('friend_request');
+        } catch (_) {}
+        _showSnackBar('已拒绝');
+      } else {
+        setState(() => _pendingRequestIds.remove(requestId));
+        _showSnackBar(resp.message ?? '操作失败，请重试', error: true);
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() => _pendingRequestIds.remove(requestId));
+        _showSnackBar('网络错误，请重试', error: true);
+      }
+    }
   }
 
   Future<void> _cancel(int requestId) async {
+    if (_pendingRequestIds.contains(requestId)) return;
+    setState(() => _pendingRequestIds.add(requestId));
     try {
       final resp = await _friendService.cancelRequest(requestId);
-      if (resp.success) {
+      if (resp.success && mounted) {
         setState(() {
           _sentRequests.removeWhere((r) => r.id == requestId);
+          _pendingRequestIds.remove(requestId);
         });
         DataLayer().invalidate(_cacheKeySent);
+        _showSnackBar('已取消');
+      } else {
+        setState(() => _pendingRequestIds.remove(requestId));
+        _showSnackBar(resp.message ?? '操作失败，请重试', error: true);
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() => _pendingRequestIds.remove(requestId));
+        _showSnackBar('网络错误，请重试', error: true);
+      }
+    }
   }
 
   @override
@@ -224,6 +296,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
           _refreshController.refreshCompleted();
         },
         header: const WaterDropHeader(
+          complete:
+              Text('刷新成功', style: TextStyle(color: AppColors.primary)),
           waterDropColor: AppColors.primary,
         ),
         child: TabBarView(
@@ -289,13 +363,16 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
 
   Widget _buildReceivedTile(_RequestItem item) {
     final user = item.user;
+    final isPending = _pendingRequestIds.contains(item.id);
     return InkWell(
-      onTap: () {
-        if (user != null) {
-          Navigator.push(context,
-              MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)));
-        }
-      },
+      onTap: isPending
+          ? null
+          : () {
+              if (user != null) {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)));
+              }
+            },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -340,12 +417,14 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
             _ActionButton(
               label: '拒绝',
               color: AppColors.textSecondary,
+              loading: isPending,
               onTap: () => _reject(item.id),
             ),
             const SizedBox(width: 8),
             _ActionButton(
               label: '接受',
               color: AppColors.primary,
+              loading: isPending,
               onTap: () => _accept(item.id),
             ),
           ],
@@ -404,25 +483,11 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
+            _ActionButton(
+              label: '取消',
+              color: AppColors.textSecondary,
+              loading: _pendingRequestIds.contains(item.id),
               onTap: () => _cancel(item.id),
-              child: Container(
-                height: 30,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: AppColors.borderLight, width: 1),
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  '取消',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
             ),
           ],
         ),
@@ -435,17 +500,19 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
+  final bool loading;
 
   const _ActionButton({
     required this.label,
     required this.color,
     required this.onTap,
+    this.loading = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: loading ? null : onTap,
       child: Container(
         height: 30,
         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -454,14 +521,21 @@ class _ActionButton extends StatelessWidget {
           border: Border.all(color: color, width: 1.2),
         ),
         alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        child: loading
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: color),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
       ),
     );
   }
@@ -500,7 +574,7 @@ class _RequestItem {
               : <String, dynamic>{})
           : null,
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'].toString())
+          ? AppDateUtils.parseBeijingTime(json['created_at'].toString())
           : null,
     );
   }

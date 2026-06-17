@@ -1,3 +1,5 @@
+import 'package:nonto/utils/date_utils.dart';
+
 /// 用户模型
 class User {
   final int id;
@@ -45,7 +47,7 @@ class User {
       avatarCacheTs: json['avatar_cache_ts'],
       coverCacheTs: json['cover_cache_ts'],
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'].toString())
+          ? AppDateUtils.parseBeijingTime(json['created_at'].toString())
           : null,
     );
   }

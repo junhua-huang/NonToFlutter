@@ -3,6 +3,7 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/screens/comic/comic_detail_page.dart';
 import 'package:nonto/screens/post/image_viewer_screen.dart';
+import 'package:nonto/services/comic_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +18,7 @@ import 'package:flutter/material.dart';
 ///   关注按钮（右对齐）
 ///
 /// 不显示：发布者名字、发布时间、点赞信息
-class ComicEventCard extends StatelessWidget {
+class ComicEventCard extends StatefulWidget {
   final ComicEvent event;
   final VoidCallback? onTap;
   final VoidCallback? onToggleFollow;
@@ -30,6 +31,77 @@ class ComicEventCard extends StatelessWidget {
     this.onToggleFollow,
     this.showOwnerBadge = false,
   });
+
+  @override
+  State<ComicEventCard> createState() => _ComicEventCardState();
+}
+
+class _ComicEventCardState extends State<ComicEventCard> {
+  final ComicService _comicService = ComicService();
+  late bool _isFollowed;
+  late int _followCount;
+  bool _isToggling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isFollowed = widget.event.isFollowed;
+    _followCount = widget.event.followCount;
+  }
+
+  @override
+  void didUpdateWidget(covariant ComicEventCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 外部 event 更新时同步本地状态（如列表刷新后数据变化）
+    if (oldWidget.event.isFollowed != widget.event.isFollowed) {
+      _isFollowed = widget.event.isFollowed;
+    }
+    if (oldWidget.event.followCount != widget.event.followCount) {
+      _followCount = widget.event.followCount;
+    }
+  }
+
+  Future<void> _handleToggleFollow() async {
+    if (_isToggling) return;
+    if (widget.onToggleFollow != null) {
+      widget.onToggleFollow!();
+      return;
+    }
+    // 卡片自带关注能力：乐观更新 + 失败回滚
+    _isToggling = true;
+    final wasFollowed = _isFollowed;
+    final oldCount = _followCount;
+    setState(() {
+      _isFollowed = !wasFollowed;
+      _followCount = wasFollowed ? oldCount - 1 : oldCount + 1;
+    });
+    try {
+      final resp = await _comicService.toggleFollow(widget.event.id);
+      if (!resp.success && mounted) {
+        setState(() {
+          _isFollowed = wasFollowed;
+          _followCount = oldCount;
+        });
+      } else if (resp.success && resp.data != null) {
+        // 以服务端返回的真实关注数为准
+        final serverCount = resp.data!['followCount'];
+        if (serverCount is int && mounted) {
+          setState(() => _followCount = serverCount);
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isFollowed = wasFollowed;
+          _followCount = oldCount;
+        });
+      }
+    } finally {
+      _isToggling = false;
+    }
+  }
+
+  ComicEvent get _event => widget.event;
 
   // ── 工具方法 ──
 
@@ -51,18 +123,18 @@ class ComicEventCard extends StatelessWidget {
 
   /// 是否有可展示的图片
   bool get _hasImages =>
-      event.images.isNotEmpty ||
-      (event.coverImage != null && event.coverImage!.isNotEmpty);
+      _event.images.isNotEmpty ||
+      (_event.coverImage != null && _event.coverImage!.isNotEmpty);
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap ??
+      onTap: widget.onTap ??
           () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ComicDetailPage(eventId: event.id),
+                builder: (_) => ComicDetailPage(eventId: _event.id),
               ),
             );
           },
@@ -81,7 +153,7 @@ class ComicEventCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: _buildLocationDateRow(),
           ),
-          if (event.tags.isNotEmpty) ...[
+          if (_event.tags.isNotEmpty) ...[
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -113,13 +185,13 @@ class ComicEventCard extends StatelessWidget {
         CircleAvatar(
           radius: 18,
           backgroundColor: AppColors.primary,
-          backgroundImage: event.creatorAvatar != null &&
-                  event.creatorAvatar!.isNotEmpty
-              ? NetworkImage(_fullUrl(event.creatorAvatar!))
+          backgroundImage: _event.creatorAvatar != null &&
+                  _event.creatorAvatar!.isNotEmpty
+              ? NetworkImage(_fullUrl(_event.creatorAvatar!))
               : null,
-          child: event.creatorAvatar == null || event.creatorAvatar!.isEmpty
+          child: _event.creatorAvatar == null || _event.creatorAvatar!.isEmpty
               ? Text(
-                  (event.name.isNotEmpty ? event.name[0] : '?').toUpperCase(),
+                  (_event.name.isNotEmpty ? _event.name[0] : '?').toUpperCase(),
                   style: const TextStyle(
                     fontSize: 15,
                     color: Colors.white,
@@ -135,7 +207,7 @@ class ComicEventCard extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  event.name,
+                  _event.name,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -147,14 +219,14 @@ class ComicEventCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               // 状态标签
-              if (showOwnerBadge)
+              if (widget.showOwnerBadge)
                 _buildBadge('我发布的', AppColors.primary)
               else
-                _buildBadge(event.statusText, _statusColor(event.status)),
+                _buildBadge(_event.statusText, _statusColor(_event.status)),
               const SizedBox(width: 8),
               // 关注人数
               Text(
-                '${_formatCount(event.followCount)}人关注',
+                '${_formatCount(_followCount)}人关注',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -197,9 +269,9 @@ class ComicEventCard extends StatelessWidget {
   // ════════════════════════════════════════
 
   Widget _buildImageGallery(BuildContext context) {
-    final urls = event.images.isNotEmpty
-        ? event.images.map((img) => _fullUrl(img.imageUrl)).toList()
-        : [_fullUrl(event.coverImage!)];
+    final urls = _event.images.isNotEmpty
+        ? _event.images.map((img) => _fullUrl(img.imageUrl)).toList()
+        : [_fullUrl(_event.coverImage!)];
 
     final isSingle = urls.length == 1;
 
@@ -286,11 +358,11 @@ class ComicEventCard extends StatelessWidget {
 
   Widget _buildLocationDateRow() {
     final locationParts = <String>[];
-    if (event.cityName.isNotEmpty) locationParts.add(event.cityName);
-    if (event.venue.isNotEmpty) locationParts.add(event.venue);
+    if (_event.cityName.isNotEmpty) locationParts.add(_event.cityName);
+    if (_event.venue.isNotEmpty) locationParts.add(_event.venue);
     final location = locationParts.join(' · ');
 
-    final dateRange = AppDateUtils.formatDateRange(event.startDate, event.endDate);
+    final dateRange = AppDateUtils.formatDateRange(_event.startDate, _event.endDate);
 
     return Row(
       children: [
@@ -330,14 +402,14 @@ class ComicEventCard extends StatelessWidget {
           ),
         ],
         // 票价信息
-        if (event.ticketInfo != null && event.ticketInfo!.isNotEmpty) ...[
+        if (_event.ticketInfo != null && _event.ticketInfo!.isNotEmpty) ...[
           const SizedBox(width: 12),
           const Icon(Icons.confirmation_number_outlined,
               size: 13, color: AppColors.textTertiary),
           const SizedBox(width: 3),
           Flexible(
             child: Text(
-              event.ticketInfo!,
+              _event.ticketInfo!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -359,7 +431,7 @@ class ComicEventCard extends StatelessWidget {
     return Wrap(
       spacing: 6,
       runSpacing: 4,
-      children: event.tags.map((tag) {
+      children: _event.tags.map((tag) {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
@@ -384,35 +456,36 @@ class ComicEventCard extends StatelessWidget {
   // ════════════════════════════════════════
 
   Widget _buildActionRow() {
+    // 自己发布的漫展不显示关注按钮
+    if (_event.isOwner) return const SizedBox.shrink();
     return Row(
       children: [
         const Spacer(),
-        if (onToggleFollow != null)
-          GestureDetector(
-            onTap: onToggleFollow,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                color: event.isFollowed
-                    ? Colors.transparent
-                    : AppColors.textPrimary,
-                borderRadius: BorderRadius.circular(20),
-                border: event.isFollowed
-                    ? Border.all(color: AppColors.borderDivider, width: 1.2)
-                    : null,
-              ),
-              child: Text(
-                event.isFollowed ? '正在关注' : '关注',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: event.isFollowed
-                      ? AppColors.textPrimary
-                      : Colors.white,
-                ),
+        GestureDetector(
+          onTap: _handleToggleFollow,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: _isFollowed
+                  ? Colors.transparent
+                  : AppColors.textPrimary,
+              borderRadius: BorderRadius.circular(20),
+              border: _isFollowed
+                  ? Border.all(color: AppColors.borderDivider, width: 1.2)
+                  : null,
+            ),
+            child: Text(
+              _isFollowed ? '正在关注' : '关注',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _isFollowed
+                    ? AppColors.textPrimary
+                    : Colors.white,
               ),
             ),
           ),
+        ),
       ],
     );
   }

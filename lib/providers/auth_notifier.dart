@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -246,7 +246,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         ApiClient.printToken('HTTP POST /auth/login (网络登录)', token);
         state = state.copyWith(token: token, user: user, isLoading: true);
         await _prefs.setString('access_token', token);
-        ApiClient.setToken(token);
+        // 延迟 WS 连接，由调用方（如 LoginScreen._verifyWsConnection）显式控制
+        ApiClient.setToken(token, connectWs: false);
 
         if (user == null) {
           final ok = await _fetchProfile();

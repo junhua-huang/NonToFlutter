@@ -1,3 +1,4 @@
+import 'package:nonto/utils/date_utils.dart';
 import 'user.dart';
 
 enum PostVisibility { public, friends, private, custom }
@@ -96,7 +97,7 @@ class Post {
       value is int ? value : int.tryParse(value?.toString() ?? '0') ?? 0;
 
   static DateTime? _parseDate(dynamic value) =>
-      value != null ? DateTime.tryParse(value.toString()) : null;
+      value != null ? AppDateUtils.parseBeijingTime(value.toString()) : null;
 
   Map<String, dynamic> toJson() => {
     'id': id, 'content': content,

@@ -1,3 +1,4 @@
+import 'package:nonto/utils/date_utils.dart';
 import 'user.dart';
 
 class Comment {
@@ -29,21 +30,21 @@ class Comment {
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) {
-    // 后端返回 author 字段，但兼容 user 字段
+    // 后端统一 snake_case。保留 author ?? user 兼容历史调用方。
     final userJson = json['author'] ?? json['user'];
     final replyToUserJson = json['reply_to_user'];
     return Comment(
       id: _p(json['id']), content: json['content'] ?? '',
-      userId: _p(json['user_id']), postId: _p(json['post_id']),
-      parentId: json['parent_id'] != null ? _p(json['parent_id']) : null,
-      replyToUserId: json['reply_to_user_id'] != null ? _p(json['reply_to_user_id']) : null,
+      userId: _p(json['user_id']), postId: _p(json['post_id'] ?? json['event_id']),
+      parentId: _pNullable(json['parent_id']),
+      replyToUserId: _pNullable(json['reply_to_user_id']),
       replyToUser: replyToUserJson != null ? User.fromJson(replyToUserJson as Map<String, dynamic>) : null,
       user: userJson != null ? User.fromJson(userJson as Map<String, dynamic>) : null,
       likeCount: _p(json['like_count']),
       replyCount: _p(json['reply_count']),
       isLiked: json['is_liked'] == true,
-      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at'].toString()) : null,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
       replies: (json['replies'] as List<dynamic>?)
           ?.map((e) => Comment.fromJson(e)).toList() ?? [],
       repliesHasMore: json['replies_has_more'] == true,
@@ -52,6 +53,16 @@ class Comment {
   }
 
   static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
+
+  static int? _pNullable(dynamic v) {
+    if (v == null) return null;
+    return v is int ? v : int.tryParse(v.toString());
+  }
+
+  static DateTime? _parseDate(dynamic v) {
+    if (v == null) return null;
+    return AppDateUtils.parseBeijingTime(v.toString());
+  }
 
   Comment copyWith({
     int? id, String? content, int? userId, int? postId,

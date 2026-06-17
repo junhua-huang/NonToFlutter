@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
@@ -17,6 +17,7 @@ import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/post_card.dart';
 import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
+import 'package:nonto/utils/bar_scroll_handler.dart';
 
 class FeedTab extends ConsumerStatefulWidget {
   const FeedTab({super.key});
@@ -77,6 +78,70 @@ class _FeedTabState extends ConsumerState<FeedTab> {
     }
   }
 
+  /// 构建帖子列表内容 —— 始终返回 ListView.builder，避免 SmartRefresher ScrollController 失联
+  ListView _buildFeedContent(FeedState feedState) {
+    // 首次加载 + 无数据 → 显示骨架屏
+    if (feedState.isLoading && feedState.posts.isEmpty) {
+      return ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: 1,
+        itemBuilder: (_, __) => const FeedSkeleton(),
+      );
+    }
+    // 错误 + 无数据
+    if (feedState.error != null && feedState.posts.isEmpty) {
+      return ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: 1,
+        itemBuilder: (_, __) => Column(
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            ErrorStateWidget(
+              message: feedState.error!,
+              onRetry: _refreshPosts,
+            ),
+          ],
+        ),
+      );
+    }
+    // 空列表
+    if (feedState.posts.isEmpty) {
+      return ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: 1,
+        itemBuilder: (_, __) => Column(
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            const EmptyStateWidget(
+              icon: Icons.newspaper,
+              title: '暂无动态',
+              subtitle: '关注更多人后可查看更多内容',
+            ),
+          ],
+        ),
+      );
+    }
+    // 正常帖子列表
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: feedState.posts.length,
+      itemBuilder: (_, i) => PostCard(
+        post: feedState.posts[i],
+        feedPosts: feedState.posts,
+        onLike: () => _toggleLike(feedState.posts[i]),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PostDetailScreen(
+              postId: feedState.posts[i].id,
+              initialPost: feedState.posts[i],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadPosts() async {
     await ref.read(feedProvider.notifier).loadPosts();
     if (!mounted) return;
@@ -90,7 +155,11 @@ class _FeedTabState extends ConsumerState<FeedTab> {
 
   Future<void> _refreshPosts() async {
     await ref.read(feedProvider.notifier).refreshPosts();
-    _refreshController.refreshCompleted();
+    // 立即完成刷新：不要等到 postFrameCallback。
+    // 之前延后到下一帧才 refreshCompleted()，会赶上 child 重建出新高度，
+    // SmartRefresher 收起动画与内容高度变化错开，导致列表做一次补偿性
+    // 回弹（表现为"自动上拉一下"）。同帧完成可避免这个高度差。
+    if (mounted) _refreshController.refreshCompleted();
   }
 
   Future<void> _toggleLike(Post post) async {
@@ -160,18 +229,7 @@ class _FeedTabState extends ConsumerState<FeedTab> {
             return Expanded(
               child: NotificationListener<ScrollUpdateNotification>(
                 onNotification: (notif) {
-                  final delta = notif.scrollDelta ?? 0;
-                  final barVisible = ref.read(barVisibleProvider);
-                  // 在列表顶部时始终显示
-                  if (notif.metrics.pixels <= 0 && !barVisible) {
-                    ref.read(barVisibleProvider.notifier).state = true;
-                    return false;
-                  }
-                  if (delta > 3 && barVisible) {
-                    ref.read(barVisibleProvider.notifier).state = false;
-                  } else if (delta < -3 && !barVisible) {
-                    ref.read(barVisibleProvider.notifier).state = true;
-                  }
+                  handleBarScrollNotification(notif, ref);
                   return false;
                 },
                 child: SmartRefresher(
@@ -180,10 +238,15 @@ class _FeedTabState extends ConsumerState<FeedTab> {
               enablePullUp: feedState.hasMore,
               onRefresh: _refreshPosts,
               onLoading: _loadPosts,
-              header: const WaterDropHeader(
-                complete:
-                    Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-                waterDropColor: AppColors.primary,
+              header: const ClassicHeader(
+                refreshingText: '刷新中...',
+                completeText: '刷新成功',
+                failedText: '刷新失败',
+                idleText: '',
+                refreshingIcon: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+                completeIcon: Icon(Icons.check_circle, color: AppColors.primary, size: 16),
+                failedIcon: Icon(Icons.error_outline, color: Colors.red, size: 16),
+                height: 44,
               ),
               footer: CustomFooter(
                 builder: (context, mode) {
@@ -219,38 +282,10 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                   );
                 },
               ),
-              child: feedState.isLoading && feedState.posts.isEmpty
-                  ? const FeedSkeleton()
-                  : feedState.error != null && feedState.posts.isEmpty
-                      ? ErrorStateWidget(
-                          message: feedState.error!,
-                          onRetry: _refreshPosts,
-                        )
-                      : feedState.posts.isEmpty
-                          ? const EmptyStateWidget(
-                              icon: Icons.newspaper,
-                              title: '暂无动态',
-                              subtitle: '关注更多人后可查看更多内容',
-                            )
-                          : ListView.builder(
-                              physics:
-                                  const AlwaysScrollableScrollPhysics(),
-                              itemCount: feedState.posts.length,
-                              itemBuilder: (_, i) => PostCard(
-                                post: feedState.posts[i],
-                                feedPosts: feedState.posts,
-                                onLike: () =>
-                                    _toggleLike(feedState.posts[i]),
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => PostDetailScreen(
-                                          postId: feedState.posts[i].id,
-                                          initialPost:
-                                              feedState.posts[i])),
-                                ),
-                              ),
-                            ),
+              // SmartRefresher 的 child 必须始终是 ListView，
+              // 否则下拉刷新后 widget 树替换会导致 ScrollController 失联，
+              // 造成列表无法滑动。
+              child: _buildFeedContent(feedState),
             ), // SmartRefresher
           ), // NotificationListener
         ); // return Expanded

@@ -69,9 +69,12 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
     _sub = DataLayer().changeStream.listen((key) {
       if (key == '__auth:logout') {
         _reset();
-      } else if (key.startsWith('explore:')) {
-        _loadCached();
       }
+      // 不再监听 explore:* key 来触发 _loadCached()。
+      // 原来的写法导致 loadDefault() → write() → changeStream → _loadCached()
+      // → loadDefault() 无限循环，每次间隔 RequestManager TTL（30s）。
+      // ExploreNotifier 自身写入的缓存由 loadDefault 内部逻辑保证一致性，
+      // 不需要通过 changeStream 重新触发加载。
     });
   }
 
@@ -182,13 +185,18 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       }
     }
 
-    state = state.copyWith(isLoading: true, clearError: true);
+    // forceRefresh 时保留已有数据、不切 loading 态，避免下拉刷新期间
+    // child widget 类型切换（ListView ↔ 转圈）导致 SmartRefresher 抖动。
+    // 首次加载（无数据）才设 isLoading=true 显示骨架。
+    if (!forceRefresh || (state.trendingTopics.isEmpty && state.trendingPosts.isEmpty && state.suggestedUsers.isEmpty && state.recentComicEvents.isEmpty && state.followedComicEvents.isEmpty)) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
 
     try {
       final results = await Future.wait([
         SearchService().getHistory(),
         TopicService().getTrending(limit: 8),
-        RecommendationService().getTrending(limit: 5),
+        RecommendationService().getTrending(limit: 5, hours: 720),
         RecommendationService().suggestUsers(limit: 5),
         ComicService().getEvents(size: 4),
         ComicService().getMyFollowed(size: 4),

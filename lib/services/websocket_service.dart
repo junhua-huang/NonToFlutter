@@ -267,7 +267,24 @@ class WebSocketService {
             ? Map<String, dynamic>.from(innerData)
             : (innerData is Map ? Map<String, dynamic>.from(innerData) : Map<String, dynamic>.from(payload));
         typingData['event'] ??= event;
+        _messageController.add(typingData);
         _typingController.add(typingData);
+        break;
+
+      case 'friend_accepted_chat':
+        // 好友通过后服务端推送新会话 + Hi 消息。
+        // payload 顶层携带 conversation / message（无 event/data 包裹），
+        // 这里标准化后转发给 ConversationsNotifier / MessagesNotifier。
+        final conv = payload['conversation'];
+        final hiMsg = payload['message'];
+        final convId = conv is Map ? conv['id'] : null;
+        debugPrint('[WS] friend_accepted_chat convId=$convId');
+        _messageController.add({
+          'event': 'friend_accepted_chat',
+          'conversation': conv is Map ? Map<String, dynamic>.from(conv) : null,
+          'message': hiMsg is Map ? Map<String, dynamic>.from(hiMsg) : null,
+          if (convId != null) 'conversation_id': convId,
+        });
         break;
 
       case 'message_recalled':

@@ -391,7 +391,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
                 const SizedBox(height: 32),
                 // 版本号
-                const Text('v0.2.6',
+                const Text('v0.2.8',
                     style: TextStyle(fontSize: 11, color: AppColors.textTertiary, letterSpacing: 1)),
               ],
             );

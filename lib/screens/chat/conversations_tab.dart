@@ -28,10 +28,16 @@ class _ConversationsTabState extends ConsumerState<ConversationsTab> {
 
     return SmartRefresher(
       controller: _refreshController,
+      enablePullDown: true,
       onRefresh: () async {
         await ref.read(conversationsProvider.notifier).loadConversations();
         _refreshController.refreshCompleted();
       },
+      header: const WaterDropHeader(
+        complete:
+            Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+        waterDropColor: AppColors.primary,
+      ),
       child: _buildBody(state, conversations),
     );
   }

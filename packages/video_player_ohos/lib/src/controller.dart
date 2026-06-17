@@ -9,6 +9,10 @@ import 'platform_interface.dart';
 /// 统一封装三端差异：
 /// - 鸿蒙：调用 OHOS AVPlayer 原生通道
 /// - iOS/Android：委托给 [vp.VideoPlayerController]
+///
+/// 关键：iOS/Android 端必须把底层 [_vpController] 的 value 变化转发给
+/// 自身的 listeners，否则 [NontoVideoPlayer]（AnimatedBuilder）不会随播放
+/// 进度重建，导致黑屏、进度条不更新。
 class NontoVideoPlayerController extends ChangeNotifier {
   late final vp.VideoPlayerController? _vpController;
   NontoVideoPlayerPlatform? _ohosPlatform;
@@ -16,6 +20,12 @@ class NontoVideoPlayerController extends ChangeNotifier {
 
   bool _isOhos = false;
   bool _initialized = false;
+
+  // 用于在 iOS/Android 端把 position 变化推给 positionStream 的订阅者。
+  // video_player 内部更新 value 时会触发 _vpForwardListener，借此把当前
+  // position 推入流。鸿蒙端由 platform 的 positionStream 直接驱动。
+  final StreamController<Duration> _positionStreamController =
+      StreamController<Duration>.broadcast();
 
   NontoVideoPlayerController.network(String url) {
     _init(url, isAsset: false, isFile: false);
@@ -47,6 +57,23 @@ class NontoVideoPlayerController extends ChangeNotifier {
           Uri.parse(source),
         );
       }
+      // 桥接：底层 vpController 的 value 任何变化都转发给自己的 listeners，
+      // 使 NontoVideoPlayer（AnimatedBuilder）随播放进度重建，避免黑屏和进度条不动。
+      _vpController!.addListener(_vpForwardListener);
+    }
+  }
+
+  /// iOS/Android 端的桥接监听器：转发底层 value 变化，并把当前 position
+  /// 推入 positionStream，使订阅者能拿到实时进度。
+  void _vpForwardListener() {
+    if (!_initialized) return;
+    final vpc = _vpController;
+    if (vpc == null) return;
+    // 转发给 NontoVideoPlayer / 外部 listener（触发重建）
+    notifyListeners();
+    // 推送 position 给 positionStream 订阅者
+    if (!_positionStreamController.isClosed) {
+      _positionStreamController.add(vpc.value.position);
     }
   }
 
@@ -97,6 +124,15 @@ class NontoVideoPlayerController extends ChangeNotifier {
     }
   }
 
+  /// 设置音量（0.0 静音 ~ 1.0 最大）
+  Future<void> setVolume(double volume) async {
+    if (_isOhos) {
+      // 鸿蒙端 platform 暂未暴露音量接口，忽略
+      return;
+    }
+    await _vpController!.setVolume(volume);
+  }
+
   /// 视频总时长
   Duration get duration {
     if (_isOhos) {
@@ -119,6 +155,14 @@ class NontoVideoPlayerController extends ChangeNotifier {
       return _ohosPlatform!.isPlaying;
     }
     return _vpController!.value.isPlaying;
+  }
+
+  /// 是否缓冲中（iOS/Android 端从底层 value 读取）
+  bool get isBuffering {
+    if (_isOhos) {
+      return false;
+    }
+    return _vpController!.value.isBuffering;
   }
 
   /// 是否已初始化
@@ -144,15 +188,17 @@ class NontoVideoPlayerController extends ChangeNotifier {
   vp.VideoPlayerController? get vpController => _vpController;
 
   /// 播放位置流
+  ///
+  /// iOS/Android 端：由 [_vpForwardListener] 在底层 value 变化时把当前
+  /// position 推入 [_positionStreamController]（之前用 `position.asStream()`
+  /// 不会因播放进度更新而触发，导致进度条不动）。
   Stream<Duration> get positionStream {
     if (_isOhos) {
       return _ohosPlatform!.positionStream.map(
         (ms) => Duration(milliseconds: ms),
       );
     }
-    // position 是 ValueNotifier<Duration>，asStream 返回 Stream<Duration>
-    // 某些版本可能返回 Stream<Duration?>，做一层安全映射
-    return _vpController!.position.asStream().map((d) => d ?? Duration.zero);
+    return _positionStreamController.stream;
   }
 
   /// 播放结束回调
@@ -193,8 +239,10 @@ class NontoVideoPlayerController extends ChangeNotifier {
     if (_isOhos) {
       await _ohosPlatform!.dispose();
     } else {
+      _vpController?.removeListener(_vpForwardListener);
       await _vpController?.dispose();
     }
+    await _positionStreamController.close();
     super.dispose();
   }
 }

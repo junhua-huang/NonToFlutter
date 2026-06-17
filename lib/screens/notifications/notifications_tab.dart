@@ -232,6 +232,11 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
         enablePullUp: state.hasMore,
         onRefresh: _refresh,
         onLoading: _loadMore,
+        header: const WaterDropHeader(
+          complete:
+              Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+          waterDropColor: AppColors.primary,
+        ),
         child: state.isInitialLoading && state.notifications.isEmpty
             ? const NotificationSkeleton()
             : state.error != null && state.notifications.isEmpty

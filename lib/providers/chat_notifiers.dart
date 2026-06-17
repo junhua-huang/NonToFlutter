@@ -8,6 +8,7 @@ import 'package:nonto/models/message.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/notification_service.dart';
+import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/chat_send_queue.dart';
 import 'package:nonto/services/data_layer.dart';
@@ -178,6 +179,11 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     // #region agent log
     debugPrint('[Conv] _onWsMessage event=$event keys=${data.keys} convId=${data['conversation_id']}');
     // #endregion
+    if (event == 'friend_accepted_chat') {
+      // 好友通过 → 服务端推送新会话 + Hi 消息，直接插入会话列表并显示 Hi 预览
+      _handleFriendAcceptedChat(data);
+      return;
+    }
     if (event == 'new_message') {
       final convId = data['conversation_id'] as int?;
       if (convId != null) {
@@ -198,10 +204,75 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         clearConversationUnread(convId);
       }
     } else if (data['conversation'] != null) {
-      // friend_accepted_chat → 重新拉取会话列表
-      debugPrint('[Conv] friend_accepted_chat received, reloading conversations');
+      // 兼容旧逻辑：带 conversation 的事件 → 重新拉取会话列表
+      debugPrint('[Conv] conversation event received, reloading conversations');
       unawaited(loadConversations());
     }
+  }
+
+  /// 处理好友通过后的新会话 + Hi 消息推送。
+  /// 直接构造/更新会话项插到列表顶部，避免等 loadConversations() 的往返延迟。
+  void _handleFriendAcceptedChat(Map<String, dynamic> data) {
+    final convRaw = data['conversation'];
+    final msgRaw = data['message'];
+    if (convRaw is! Map) {
+      // 推送格式异常，回退到全量刷新
+      unawaited(loadConversations());
+      return;
+    }
+    final convMap = Map<String, dynamic>.from(convRaw);
+    final convId = convMap['id'];
+    if (convId == null) {
+      unawaited(loadConversations());
+      return;
+    }
+    final cid = convId is int ? convId : int.tryParse(convId.toString());
+    if (cid == null) {
+      unawaited(loadConversations());
+      return;
+    }
+    // 已存在则刷新，否则构造新会话插顶
+    final existingIdx = state.conversations.indexWhere((c) => c.id == cid);
+    Conversation? newConv;
+    try {
+      newConv = Conversation.fromJson(convMap);
+    } catch (_) {
+      newConv = null;
+    }
+
+    // 用 Hi 消息更新 lastMessage（若推送带 message）
+    if (msgRaw is Map && newConv != null) {
+      try {
+        final msg = Message.fromJson(Map<String, dynamic>.from(msgRaw));
+        newConv = Conversation(
+          id: newConv.id,
+          user1Id: newConv.user1Id,
+          user2Id: newConv.user2Id,
+          otherUser: newConv.otherUser,
+          lastMessage: msg,
+          lastMessageAt: msg.createdAt,
+          unreadCount: _currentUserId == null || msg.senderId != _currentUserId ? 1 : 0,
+        );
+      } catch (_) {}
+    }
+
+    if (newConv == null) {
+      unawaited(loadConversations());
+      return;
+    }
+
+    List<Conversation> updated;
+    if (existingIdx >= 0) {
+      updated = List.from(state.conversations)
+        ..[existingIdx] = newConv
+        ..sort((a, b) => (b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    } else {
+      updated = [newConv, ...state.conversations];
+    }
+    state = state.copyWith(conversations: updated);
+    // 失效缓存，下次拉取用最新数据
+    DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   void _handleIncrementalNewMessage(Map<String, dynamic> data) {
@@ -233,7 +304,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         orElse: () => MessageType.text,
       ),
       createdAt: data['created_at'] != null
-          ? (DateTime.tryParse(data['created_at'].toString()) ?? DateTime.now())
+          ? AppDateUtils.parseBeijingTime(data['created_at'].toString())
           : DateTime.now(),
     );
 

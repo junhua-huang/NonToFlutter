@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/providers/auth_notifier.dart';
@@ -25,6 +25,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
+  bool _isLoggingIn = false;
 
   @override
   void dispose() {
@@ -35,55 +36,77 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-    final authNotifier = ref.read(authProvider.notifier);
-    final success = await authNotifier.login(
-      _emailController.text.trim(),
-      _passwordController.text,
-    );
-    if (!mounted) return;
-    if (success) {
-      // 换号登录后强制重建所有 Provider
-      ref.invalidate(feedProvider);
-      ref.invalidate(exploreProvider);
-      ref.invalidate(conversationsProvider);
-      ref.invalidate(notificationsProvider);
-      // 预热 Provider + 等待 WS 认证完成（setToken 已触发 connect）
+    if (_isLoggingIn) return;
+    setState(() => _isLoggingIn = true);
+    try {
+      final authNotifier = ref.read(authProvider.notifier);
+      final success = await authNotifier.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+      if (!mounted) return;
+      if (success) {
+        // 换号登录后强制重建所有 Provider
+        ref.invalidate(feedProvider);
+        ref.invalidate(exploreProvider);
+        ref.invalidate(conversationsProvider);
+        ref.invalidate(notificationsProvider);
+        // 等待 WS 认证完成（与闪屏页逻辑一致）
+        final wsOk = await _verifyWsConnection();
+        if (!mounted) return;
+        if (!wsOk) {
+          setState(() => _isLoggingIn = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('连接服务器失败，请重试'), backgroundColor: Colors.red),
+          );
+          return;
+        }
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        final error = ref.read(authProvider).error;
+        if (error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isLoggingIn = false);
+    }
+  }
+
+  /// 建立 WS 连接并等待认证完成（与闪屏页逻辑一致）
+  /// 1. await ws.connect() 确保 socket 已建立
+  /// 2. 检查 isConnected（auth 可能已在 connect() 期间完成）
+  /// 3. 监听 connectionStream 等待认证结果
+  Future<bool> _verifyWsConnection() async {
+    try {
       final ws = WebSocketService();
-      // 先设置监听再检查，防止 auth 已经在 setToken 期间完成而漏掉事件
+      if (ws.isConnected) return true;
+      // login() 内部 setToken 已触发 ws.connect()，但那是 fire-and-forget，
+      // 这里 await 确保物理连接已建立、auth 帧已发送
+      await ws.connect();
+      // connect() 返回后 auth 可能已经异步完成
+      if (ws.isConnected) return true;
+      // 等待 connectionStream 变为 true
       final completer = Completer<bool>();
       final sub = ws.connectionStream.listen((connected) {
         if (connected && !completer.isCompleted) completer.complete(true);
       });
-      if (ws.isConnected) {
-        // 已经认证完成，直接放行
-        completer.complete(true);
-      }
-      final wsOk = await completer.future.timeout(const Duration(seconds: 10), onTimeout: () => false);
+      final result = await completer.future
+          .timeout(const Duration(seconds: 10), onTimeout: () => false);
       sub.cancel();
-      if (!mounted) return;
-      if (!wsOk) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('连接服务器失败，请重试'), backgroundColor: Colors.red),
-        );
-        return;
-      }
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } else {
-      final error = ref.read(authProvider).error;
-      if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error), backgroundColor: Colors.red),
-        );
-      }
+      return result;
+    } catch (e) {
+      debugPrint('[Login] _verifyWsConnection error: $e');
+      return false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -212,7 +235,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   SizedBox(
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: authState.isLoading ? null : _login,
+                      onPressed: _isLoggingIn ? null : _login,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -223,7 +246,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         elevation: 0,
                       ),
-                      child: authState.isLoading
+                      child: _isLoggingIn
                           ? const SizedBox(
                               height: 22,
                               width: 22,

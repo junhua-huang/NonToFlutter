@@ -64,14 +64,17 @@ class RequestManager {
         // 已完成 → TTL 缓存命中或过期
         if (_isFresh(existing)) {
           debugPrint('[RequestManager] cache hit: $key');
-          return existing.completer.future as Future<T>;
+          // 不能直接 as Future<T>，因为 _Entry<dynamic> 的 completer.future
+          // 是 Future<dynamic>，Dart 泛型不变（invariant）导致强转失败。
+          // 改用 then 回调转发结果，保证类型安全。
+          return existing.completer.future.then((v) => v as T);
         }
         // 缓存已过期，移除后重新执行
         _inFlight.remove(key);
       } else {
         // 执行中 → 去重复用
         debugPrint('[RequestManager] dedup hit: $key');
-        return existing.completer.future as Future<T>;
+        return existing.completer.future.then((v) => v as T);
       }
     }
 

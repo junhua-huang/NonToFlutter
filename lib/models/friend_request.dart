@@ -1,3 +1,4 @@
+import 'package:nonto/utils/date_utils.dart';
 import 'user.dart';
 
 enum FriendStatus { none, pending, accepted, rejected }
@@ -19,7 +20,7 @@ class FriendRequest {
     id: _p(json['id']), senderId: _p(json['sender_id']),
     receiverId: _p(json['receiver_id']), status: json['status'] ?? 'pending',
     sender: json['sender'] != null ? User.fromJson(json['sender']) : null,
-    createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+    createdAt: json['created_at'] != null ? AppDateUtils.parseBeijingTime(json['created_at'].toString()) : null,
   );
 
   static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;

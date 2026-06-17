@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:nonto/utils/date_utils.dart';
+
 enum MessageType { text, image, video, file, post, comment }
 
 class Message {
@@ -48,7 +50,7 @@ class Message {
     mediaUrl: json['media_url'],
     relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
     isRead: json['is_read'] ?? false,
-    createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+    createdAt: json['created_at'] != null ? AppDateUtils.parseBeijingTime(json['created_at'].toString()) : null,
     requestId: json['request_id']?.toString(),
     clientMsgId: json['client_msg_id']?.toString() ?? json['clientMsgId']?.toString(),
     seq: json['seq'] != null ? _p(json['seq']) : null,
