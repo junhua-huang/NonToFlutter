@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// 推特风格底部选项弹窗 — 统一组件
@@ -80,7 +80,7 @@ class _TwitterSheetContent<T> extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -108,19 +108,27 @@ class _TwitterSheetContent<T> extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                 child: Text(
                   groupLabel!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
-              const Divider(height: 1, color: AppColors.borderLight, indent: 20, endIndent: 20),
+              Divider(
+                  height: 1,
+                  color: AppColors.borderLight,
+                  indent: 20,
+                  endIndent: 20),
             ],
             // 选项列表
             for (int i = 0; i < options.length; i++) ...[
               if (i > 0 || groupLabel != null)
-                const Divider(height: 1, color: AppColors.borderLight, indent: 20, endIndent: 0),
+                Divider(
+                    height: 1,
+                    color: AppColors.borderLight,
+                    indent: 20,
+                    endIndent: 0),
               _OptionTile<T>(
                 option: options[i],
                 destructiveColor: destructiveColor,

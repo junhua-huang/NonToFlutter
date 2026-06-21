@@ -327,8 +327,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         title: const Text('取消好友关系',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         content: Text('确定要取消与 ${_user!.displayName} 的好友关系吗？',
-            style:
-                const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -457,8 +456,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         title: const Text('屏蔽用户',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         content: Text('确定要屏蔽 ${_user!.displayName} 吗？屏蔽后你将无法看到对方的内容。',
-            style:
-                const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -548,15 +546,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         backgroundColor: AppColors.background,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
         title: Text(user.displayName ?? user.username,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_horiz, color: AppColors.textPrimary),
+            icon: Icon(Icons.more_horiz, color: AppColors.textPrimary),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             onPressed: () async {
@@ -607,7 +605,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 children: [
                   // Name
                   Text(user.displayName ?? user.username,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
@@ -615,7 +613,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                   const SizedBox(height: 4),
                   // Username
                   Text('@${user.username}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 15, color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
                   // Bio
@@ -623,7 +621,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(user.bio!,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 15,
                               height: 1.4,
                               color: AppColors.textPrimary)),
@@ -638,7 +636,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                           user.createdAt != null
                               ? '${AppDateUtils.formatTimeAgo(user.createdAt)} 加入'
                               : '已加入',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 13, color: AppColors.textSecondary)),
                       const SizedBox(width: 16),
                       if (_isLoadingStats)
@@ -660,7 +658,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                         )
                       else
                         Text('$_friendCount 位好友',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textSecondary)),
@@ -897,7 +895,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
+            icon: Icon(Icons.more_horiz, color: AppColors.textSecondary),
             onPressed: () => _showMoreOptions(includeUnfriend: true),
           ),
         ]);
@@ -938,7 +936,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                   Icon(Icons.access_time,
                       size: 14, color: AppColors.textSecondary),
                   const SizedBox(width: 4),
-                  const Text('等待回应',
+                  Text('等待回应',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
@@ -951,7 +949,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
+            icon: Icon(Icons.more_horiz, color: AppColors.textSecondary),
             onPressed: () => _showMoreOptions(),
           ),
         ]);
@@ -999,7 +997,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
+            icon: Icon(Icons.more_horiz, color: AppColors.textSecondary),
             onPressed: () => _showMoreOptions(),
           ),
         ]);
@@ -1033,7 +1031,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
+            icon: Icon(Icons.more_horiz, color: AppColors.textSecondary),
             onPressed: () => _showMoreOptions(),
           ),
         ]);
@@ -1062,7 +1060,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
@@ -1073,7 +1071,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
                   height: 1.35,

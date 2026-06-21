@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/providers/auth_notifier.dart';
@@ -27,6 +27,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback? onLongPress;
   final VoidCallback? onDelete;
+
   /// Nearby posts for media viewer vertical swipe (e.g., all posts in feed)
   final List<Post>? feedPosts;
 
@@ -69,7 +70,8 @@ class PostCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   const Text('帖子统计',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 20),
                   _StatRow(
                     icon: Icons.visibility_outlined,
@@ -109,7 +111,8 @@ class PostCard extends StatelessWidget {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('获取统计失败'), duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('获取统计失败'), duration: Duration(seconds: 2)),
         );
       }
     } catch (e) {
@@ -132,11 +135,13 @@ class PostCard extends StatelessWidget {
     final reason = await TwitterBottomSheet.show<String>(
       context,
       groupLabel: '选择举报原因',
-      options: _reportReasons.map((r) => TwitterSheetOption(
-        icon: Icons.flag_outlined,
-        label: r.label,
-        value: r.value,
-      )).toList(),
+      options: _reportReasons
+          .map((r) => TwitterSheetOption(
+                icon: Icons.flag_outlined,
+                label: r.label,
+                value: r.value,
+              ))
+          .toList(),
     );
     if (reason == null || !context.mounted) return;
     try {
@@ -144,17 +149,21 @@ class PostCard extends StatelessWidget {
       if (!context.mounted) return;
       if (resp.success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('举报已提交'), duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('举报已提交'), duration: Duration(seconds: 2)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(resp.message ?? '举报失败'), duration: const Duration(seconds: 2)),
+          SnackBar(
+              content: Text(resp.message ?? '举报失败'),
+              duration: const Duration(seconds: 2)),
         );
       }
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('举报失败，请稍后重试'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('举报失败，请稍后重试'), duration: Duration(seconds: 2)),
       );
     }
   }
@@ -166,8 +175,9 @@ class PostCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('屏蔽用户',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        content: Text('确定要屏蔽@${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。',
-            style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+        content: Text(
+            '确定要屏蔽@${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -187,17 +197,22 @@ class PostCard extends StatelessWidget {
       if (!context.mounted) return;
       if (resp.success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已屏蔽@${post.user?.username ?? '该用户'}'), duration: const Duration(seconds: 2)),
+          SnackBar(
+              content: Text('已屏蔽@${post.user?.username ?? '该用户'}'),
+              duration: const Duration(seconds: 2)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(resp.message ?? '屏蔽失败'), duration: const Duration(seconds: 2)),
+          SnackBar(
+              content: Text(resp.message ?? '屏蔽失败'),
+              duration: const Duration(seconds: 2)),
         );
       }
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('屏蔽失败，请稍后重试'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('屏蔽失败，请稍后重试'), duration: Duration(seconds: 2)),
       );
     }
   }
@@ -209,7 +224,7 @@ class PostCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('删除帖子',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        content: const Text('确定要删除这条帖子吗？此操作不可撤销。',
+        content: Text('确定要删除这条帖子吗？此操作不可撤销。',
             style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
@@ -231,17 +246,26 @@ class PostCard extends StatelessWidget {
       if (resp.success) {
         onDelete?.call();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('帖子已删除'), backgroundColor: Colors.green, duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('帖子已删除'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(resp.message ?? '删除失败'), backgroundColor: Colors.red, duration: const Duration(seconds: 2)),
+          SnackBar(
+              content: Text(resp.message ?? '删除失败'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2)),
         );
       }
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('删除失败，请重试'), backgroundColor: Colors.red, duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('删除失败，请重试'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2)),
       );
     }
   }
@@ -264,9 +288,11 @@ class PostCard extends StatelessWidget {
                 GestureDetector(
                   onTap: () {
                     if (post.user != null) {
-                      Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => UserProfileScreen(user: post.user!),
-                      ));
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: post.user!),
+                          ));
                     }
                   },
                   child: ImageUtils.buildAvatar(post.user, radius: 20),
@@ -280,14 +306,17 @@ class PostCard extends StatelessWidget {
                       GestureDetector(
                         onTap: () {
                           if (post.user != null) {
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => UserProfileScreen(user: post.user!),
-                            ));
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      UserProfileScreen(user: post.user!),
+                                ));
                           }
                         },
                         child: Text(
                           post.user?.displayName ?? '未知用户',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
                             color: AppColors.textPrimary,
@@ -300,14 +329,18 @@ class PostCard extends StatelessWidget {
                       GestureDetector(
                         onTap: () {
                           if (post.user != null) {
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => UserProfileScreen(user: post.user!),
-                            ));
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      UserProfileScreen(user: post.user!),
+                                ));
                           }
                         },
                         child: Text(
                           '@${post.user?.username ?? ''}  ·  ${AppDateUtils.formatTimeAgo(post.createdAt)}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 13),
                         ),
                       ),
                     ],
@@ -315,19 +348,36 @@ class PostCard extends StatelessWidget {
                 ),
                 // More button
                 IconButton(
-                  icon: const Icon(Icons.more_horiz, size: 18, color: AppColors.textSecondary),
+                  icon: Icon(Icons.more_horiz,
+                      size: 18, color: AppColors.textSecondary),
                   onPressed: () async {
-                    final currentUserId = ProviderScope.containerOf(context).read(authProvider).user?.id;
-                    final isOwnPost = currentUserId != null && post.userId == currentUserId;
+                    final currentUserId = ProviderScope.containerOf(context)
+                        .read(authProvider)
+                        .user
+                        ?.id;
+                    final isOwnPost =
+                        currentUserId != null && post.userId == currentUserId;
 
                     final options = <TwitterSheetOption<String>>[
-                      const TwitterSheetOption(icon: Icons.report_outlined, label: '举报帖子', value: 'report'),
-                      const TwitterSheetOption(icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+                      const TwitterSheetOption(
+                          icon: Icons.report_outlined,
+                          label: '举报帖子',
+                          value: 'report'),
+                      const TwitterSheetOption(
+                          icon: Icons.block_outlined,
+                          label: '屏蔽用户',
+                          value: 'block'),
                       if (isOwnPost)
-                        const TwitterSheetOption(icon: Icons.delete_outline, label: '删除帖子', value: 'delete', isDestructive: true),
+                        const TwitterSheetOption(
+                            icon: Icons.delete_outline,
+                            label: '删除帖子',
+                            value: 'delete',
+                            isDestructive: true),
                     ];
 
-                    final action = await TwitterBottomSheet.show<String>(context, options: options);
+                    final action = await TwitterBottomSheet.show<String>(
+                        context,
+                        options: options);
                     if (action == null || !context.mounted) return;
                     switch (action) {
                       case 'report':
@@ -342,7 +392,8 @@ class PostCard extends StatelessWidget {
                     }
                   },
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
               ],
             ),
@@ -354,11 +405,15 @@ class PostCard extends StatelessWidget {
               child: Builder(
                 builder: (context) => RichTextContent(
                   text: post.content!,
-                  style: const TextStyle(fontSize: 15, height: 1.4, color: AppColors.textPrimary),
+                  style: TextStyle(
+                      fontSize: 15, height: 1.4, color: AppColors.textPrimary),
                   onTopicTap: (topicName) {
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => TopicSearchResultsScreen(topicName: topicName),
-                    ));
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              TopicSearchResultsScreen(topicName: topicName),
+                        ));
                   },
                 ),
               ),
@@ -378,9 +433,11 @@ class PostCard extends StatelessWidget {
                 if (allImages.length == 1) {
                   return GestureDetector(
                     onTap: () {
-                      final items = _buildMediaItems(post, allImages, feedPosts);
+                      final items =
+                          _buildMediaItems(post, allImages, feedPosts);
                       final index = _indexForPost(items, post.id);
-                      EnhancedImageViewerScreen.show(context, items, initialPostIndex: index);
+                      EnhancedImageViewerScreen.show(context, items,
+                          initialPostIndex: index);
                     },
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
@@ -410,15 +467,15 @@ class PostCard extends StatelessWidget {
               child: kIsWeb
                   ? _WebVideoPlayer(
                       videoUrl: post.videoUrl!,
-                      coverUrl: post.thumbnailUrl
-                          ?? (post.images != null && post.images!.isNotEmpty
+                      coverUrl: post.thumbnailUrl ??
+                          (post.images != null && post.images!.isNotEmpty
                               ? post.images![0]
                               : null),
                     )
                   : InlineVideoPlayer(
                       videoUrl: post.videoUrl!,
-                      coverUrl: post.thumbnailUrl
-                          ?? (post.images != null && post.images!.isNotEmpty
+                      coverUrl: post.thumbnailUrl ??
+                          (post.images != null && post.images!.isNotEmpty
                               ? post.images![0]
                               : null),
                       playerPool: videoPlayerPool,
@@ -438,7 +495,7 @@ class PostCard extends StatelessWidget {
           // Divider
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: const Divider(height: 1, color: AppColors.borderLight),
+            child: Divider(height: 1, color: AppColors.borderLight),
           ),
         ],
       ),
@@ -466,7 +523,11 @@ class _StatRow extends StatelessWidget {
         const SizedBox(width: 12),
         Text(label, style: TextStyle(fontSize: 15, color: colors.onSurface)),
         const Spacer(),
-        Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.onSurface)),
+        Text(value,
+            style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface)),
       ],
     );
   }
@@ -486,7 +547,8 @@ int _indexForPost(List<PostMediaItem> items, int postId) {
   return 0;
 }
 
-List<PostMediaItem> _buildMediaItems(Post post, List<String> allImages, List<Post>? feedPosts) {
+List<PostMediaItem> _buildMediaItems(
+    Post post, List<String> allImages, List<Post>? feedPosts) {
   final items = <PostMediaItem>[];
   // Helper: extract media URLs from a post
   List<String> mediaUrlsOf(Post p) {

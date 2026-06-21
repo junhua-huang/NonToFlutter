@@ -40,9 +40,10 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
 
   // ─── 序列化 ───
   static ThemeMode _fromString(String? s) => switch (s) {
+        null => ThemeMode.system,
         'dark' => ThemeMode.dark,
         'system' => ThemeMode.system,
-        _ => ThemeMode.light, // null / 'light' / 未知值 → light
+        _ => ThemeMode.light,
       };
 
   static String _toString(ThemeMode m) => switch (m) {

@@ -873,7 +873,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   Widget _buildComposerToolbar({required bool isOverLimit}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.borderLight)),
       ),
       child: SingleChildScrollView(
@@ -1176,7 +1176,7 @@ class _EmojiPickerPanelState extends State<_EmojiPickerPanel> {
                 }),
               ),
             ),
-            const Divider(height: 1, color: AppColors.borderLight),
+            Divider(height: 1, color: AppColors.borderLight),
             // Emoji grid
             Expanded(
               child: GridView.builder(

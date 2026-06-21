@@ -135,7 +135,7 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
-        title: const Text(
+        title: Text(
           '漫展时间线',
           style: TextStyle(
             color: AppColors.textPrimary,
@@ -152,7 +152,7 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline,
+            icon: Icon(Icons.add_circle_outline,
                 color: AppColors.textPrimary, size: 26),
             onPressed: () async {
               await Navigator.pushNamed(context, '/comic/upload');

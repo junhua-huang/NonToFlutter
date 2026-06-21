@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/screens/comic/comic_detail_page.dart';
@@ -164,7 +164,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
             child: _buildActionRow(),
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Divider(height: 1, color: AppColors.borderLight),
           ),
@@ -185,10 +185,10 @@ class _ComicEventCardState extends State<ComicEventCard> {
         CircleAvatar(
           radius: 18,
           backgroundColor: AppColors.primary,
-          backgroundImage: _event.creatorAvatar != null &&
-                  _event.creatorAvatar!.isNotEmpty
-              ? NetworkImage(_fullUrl(_event.creatorAvatar!))
-              : null,
+          backgroundImage:
+              _event.creatorAvatar != null && _event.creatorAvatar!.isNotEmpty
+                  ? NetworkImage(_fullUrl(_event.creatorAvatar!))
+                  : null,
           child: _event.creatorAvatar == null || _event.creatorAvatar!.isEmpty
               ? Text(
                   (_event.name.isNotEmpty ? _event.name[0] : '?').toUpperCase(),
@@ -208,7 +208,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
               Flexible(
                 child: Text(
                   _event.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
@@ -229,7 +229,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
               // 关注人数
               Text(
                 '${_formatCount(_followCount)}人关注',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
                 ),
@@ -294,8 +294,8 @@ class _ComicEventCardState extends State<ComicEventCard> {
               errorBuilder: (_, __, ___) => Container(
                 height: 220,
                 color: AppColors.backgroundSecondary,
-                child: const Icon(Icons.image,
-                    color: AppColors.textTertiary, size: 40),
+                child:
+                    Icon(Icons.image, color: AppColors.textTertiary, size: 40),
               ),
             ),
           ),
@@ -313,45 +313,45 @@ class _ComicEventCardState extends State<ComicEventCard> {
         },
       ),
       child: SizedBox(
-      height: 220,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: urls.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final isFirst = index == 0;
-          final isLast = index == urls.length - 1;
-          return GestureDetector(
-            onTap: () {
-              ImageViewerScreen.show(context, urls, initialIndex: index);
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(isFirst ? 12 : 2),
-                bottomLeft: Radius.circular(isFirst ? 12 : 2),
-                topRight: Radius.circular(isLast ? 12 : 2),
-                bottomRight: Radius.circular(isLast ? 12 : 2),
-              ),
-              child: Image.network(
-                urls[index],
-                width: 240,
-                height: 220,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+        height: 220,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: urls.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final isFirst = index == 0;
+            final isLast = index == urls.length - 1;
+            return GestureDetector(
+              onTap: () {
+                ImageViewerScreen.show(context, urls, initialIndex: index);
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(isFirst ? 12 : 2),
+                  bottomLeft: Radius.circular(isFirst ? 12 : 2),
+                  topRight: Radius.circular(isLast ? 12 : 2),
+                  bottomRight: Radius.circular(isLast ? 12 : 2),
+                ),
+                child: Image.network(
+                  urls[index],
                   width: 240,
                   height: 220,
-                  color: AppColors.backgroundSecondary,
-                  child: const Icon(Icons.image,
-                      color: AppColors.textTertiary, size: 32),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 240,
+                    height: 220,
+                    color: AppColors.backgroundSecondary,
+                    child: Icon(Icons.image,
+                        color: AppColors.textTertiary, size: 32),
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
-    ),
-  );
+    );
   }
 
   // ════════════════════════════════════════
@@ -364,12 +364,13 @@ class _ComicEventCardState extends State<ComicEventCard> {
     if (_event.venue.isNotEmpty) locationParts.add(_event.venue);
     final location = locationParts.join(' · ');
 
-    final dateRange = AppDateUtils.formatDateRange(_event.startDate, _event.endDate);
+    final dateRange =
+        AppDateUtils.formatDateRange(_event.startDate, _event.endDate);
 
     return Row(
       children: [
         if (location.isNotEmpty) ...[
-          const Icon(Icons.location_on_outlined,
+          Icon(Icons.location_on_outlined,
               size: 14, color: AppColors.textTertiary),
           const SizedBox(width: 2),
           Flexible(
@@ -377,7 +378,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
               location,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
               ),
@@ -388,15 +389,14 @@ class _ComicEventCardState extends State<ComicEventCard> {
           const SizedBox(width: 12),
         ],
         if (dateRange.isNotEmpty) ...[
-          const Icon(Icons.calendar_today,
-              size: 13, color: AppColors.textTertiary),
+          Icon(Icons.calendar_today, size: 13, color: AppColors.textTertiary),
           const SizedBox(width: 3),
           Flexible(
             child: Text(
               dateRange,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
               ),
@@ -406,7 +406,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
         // 票价信息
         if (_event.ticketInfo != null && _event.ticketInfo!.isNotEmpty) ...[
           const SizedBox(width: 12),
-          const Icon(Icons.confirmation_number_outlined,
+          Icon(Icons.confirmation_number_outlined,
               size: 13, color: AppColors.textTertiary),
           const SizedBox(width: 3),
           Flexible(
@@ -414,7 +414,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
               _event.ticketInfo!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
               ),
@@ -468,9 +468,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: _isFollowed
-                  ? Colors.transparent
-                  : AppColors.textPrimary,
+              color: _isFollowed ? Colors.transparent : AppColors.textPrimary,
               borderRadius: BorderRadius.circular(20),
               border: _isFollowed
                   ? Border.all(color: AppColors.borderDivider, width: 1.2)
@@ -481,9 +479,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: _isFollowed
-                    ? AppColors.textPrimary
-                    : Colors.white,
+                color: _isFollowed ? AppColors.textPrimary : Colors.white,
               ),
             ),
           ),

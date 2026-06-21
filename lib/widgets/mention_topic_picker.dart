@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/topic.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/services/api/friend_service.dart';
@@ -8,6 +8,7 @@ import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
+
 /// 底部弹出的 @好友 / #话题 选择器
 /// 当用户输入 @ 或 # 时触发，支持搜索和推荐
 class MentionTopicPicker extends StatefulWidget {
@@ -21,16 +22,19 @@ class MentionTopicPicker extends StatefulWidget {
   });
 
   /// Show a bottom sheet for picking a user to mention
-  static void showMentions(BuildContext context, {required void Function(String username) onSelected}) {
+  static void showMentions(BuildContext context,
+      {required void Function(String username) onSelected}) {
     _showPickerSheet(context, isTopic: false, onSelected: onSelected);
   }
 
   /// Show a bottom sheet for picking a topic to hashtag
-  static void showTopics(BuildContext context, {
+  static void showTopics(
+    BuildContext context, {
     required void Function(String topicName) onSelected,
     void Function(String searchText)? onCancel,
   }) {
-    _showPickerSheet(context, isTopic: true, onSelected: onSelected, onCancel: onCancel);
+    _showPickerSheet(context,
+        isTopic: true, onSelected: onSelected, onCancel: onCancel);
   }
 
   static void _showPickerSheet(
@@ -185,10 +189,15 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
           if (resp.success && resp.data != null) {
             final data = resp.data;
             List topicList = [];
-            if (data is List) { topicList = data; }
-            else if (data is Map) { topicList = data['topics'] ?? data['items'] ?? []; }
+            if (data is List) {
+              topicList = data;
+            } else if (data is Map) {
+              topicList = data['topics'] ?? data['items'] ?? [];
+            }
             setState(() {
-              _topics = topicList.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList();
+              _topics = topicList
+                  .map((e) => Topic.fromJson(e as Map<String, dynamic>))
+                  .toList();
             });
           }
         } else {
@@ -197,10 +206,15 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
           if (resp.success && resp.data != null) {
             final data = resp.data;
             List topicList = [];
-            if (data is List) { topicList = data; }
-            else if (data is Map) { topicList = data['topics'] ?? data['items'] ?? []; }
+            if (data is List) {
+              topicList = data;
+            } else if (data is Map) {
+              topicList = data['topics'] ?? data['items'] ?? [];
+            }
             setState(() {
-              _topics = topicList.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList();
+              _topics = topicList
+                  .map((e) => Topic.fromJson(e as Map<String, dynamic>))
+                  .toList();
             });
           }
         }
@@ -212,10 +226,16 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
           if (resp.success && resp.data != null) {
             final data = resp.data;
             List userList = [];
-            if (data is List) { userList = data; }
-            else if (data is Map) { userList = data['friends'] ?? data['users'] ?? data['items'] ?? []; }
+            if (data is List) {
+              userList = data;
+            } else if (data is Map) {
+              userList =
+                  data['friends'] ?? data['users'] ?? data['items'] ?? [];
+            }
             setState(() {
-              _users = userList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
+              _users = userList
+                  .map((e) => User.fromJson(e as Map<String, dynamic>))
+                  .toList();
             });
           }
         } else {
@@ -224,10 +244,15 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
           if (resp.success && resp.data != null) {
             final data = resp.data;
             List userList = [];
-            if (data is List) { userList = data; }
-            else if (data is Map) { userList = data['users'] ?? data['items'] ?? []; }
+            if (data is List) {
+              userList = data;
+            } else if (data is Map) {
+              userList = data['users'] ?? data['items'] ?? [];
+            }
             setState(() {
-              _users = userList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
+              _users = userList
+                  .map((e) => User.fromJson(e as Map<String, dynamic>))
+                  .toList();
             });
           }
         }
@@ -251,7 +276,8 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
       widget.controller.text = newText;
       // Move cursor after the inserted value + space
       final newCursorPos = _triggerPosition + value.length + 1;
-      widget.controller.selection = TextSelection.collapsed(offset: newCursorPos);
+      widget.controller.selection =
+          TextSelection.collapsed(offset: newCursorPos);
     }
     _hide();
     widget.focusNode?.requestFocus();
@@ -262,7 +288,7 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
     if (!_isVisible) return const SizedBox.shrink();
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: AppColors.borderLight)),
       ),
@@ -273,7 +299,7 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
           // Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.borderLight)),
             ),
             child: Row(
@@ -288,12 +314,16 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
                   _isTopicMode
                       ? (_query.isEmpty ? '热门话题' : '搜索话题')
                       : (_query.isEmpty ? '推荐好友' : '搜索用户'),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary),
                 ),
                 const Spacer(),
                 GestureDetector(
                   onTap: _hide,
-                  child: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                  child: Icon(Icons.close,
+                      size: 18, color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -301,7 +331,8 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary))
                 : _isTopicMode
                     ? _buildTopicList()
                     : _buildUserList(),
@@ -313,8 +344,9 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
 
   Widget _buildUserList() {
     if (_users.isEmpty) {
-      return const Center(
-        child: Text('没有找到相关用户', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+      return Center(
+        child: Text('没有找到相关用户',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
       );
     }
     return ListView.builder(
@@ -334,9 +366,13 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(user.displayName ?? user.username,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: AppColors.textPrimary)),
                       Text('@${user.username}',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -350,8 +386,9 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
 
   Widget _buildTopicList() {
     if (_topics.isEmpty) {
-      return const Center(
-        child: Text('没有找到相关话题', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+      return Center(
+        child: Text('没有找到相关话题',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
       );
     }
     return ListView.builder(
@@ -370,7 +407,8 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
                     color: AppColors.borderLight,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.tag, size: 16, color: AppColors.textSecondary),
+                  child:
+                      Icon(Icons.tag, size: 16, color: AppColors.textSecondary),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -378,10 +416,14 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('#${topic.name}',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: AppColors.textPrimary)),
                       if (topic.postCount > 0)
                         Text('${topic.postCount} 条帖子',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -441,11 +483,14 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
         if (resp.success && resp.data != null) {
           final data = resp.data as Map<String, dynamic>;
           final list = data['topics'] as List? ?? [];
-          setState(() => _topics = list.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList());
+          setState(() => _topics = list
+              .map((e) => Topic.fromJson(e as Map<String, dynamic>))
+              .toList());
         }
       } else {
         // 优先读缓存中的好友列表
-        final cached = await DataLayer().query(CacheKeys.friendList, () async => null);
+        final cached =
+            await DataLayer().query(CacheKeys.friendList, () async => null);
         if (cached.data is List && (cached.data as List).isNotEmpty) {
           final users = (cached.data as List)
               .map((e) => User.fromJson(e as Map<String, dynamic>))
@@ -459,26 +504,38 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
             final data = resp.data;
             List friendList = [];
             if (data is Map) {
-              friendList = data['friends'] as List? ?? data['users'] as List? ?? data['data'] as List? ?? [];
+              friendList = data['friends'] as List? ??
+                  data['users'] as List? ??
+                  data['data'] as List? ??
+                  [];
             } else if (data is List) {
               friendList = data;
             }
             if (friendList.isNotEmpty) {
-              final users = friendList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
-              DataLayer().write(CacheKeys.friendList, friendList, ttlSeconds: 300);
+              final users = friendList
+                  .map((e) => User.fromJson(e as Map<String, dynamic>))
+                  .toList();
+              DataLayer()
+                  .write(CacheKeys.friendList, friendList, ttlSeconds: 300);
               setState(() => _users = users);
             }
           }
         } catch (_) {}
         // 好友列表空时，走推荐兜底
         if (_users.isEmpty) {
-          final resp = await FriendService().getFriendRecommendations(limit: 10);
+          final resp =
+              await FriendService().getFriendRecommendations(limit: 10);
           if (resp.success && resp.data != null) {
             final data = resp.data;
             List userList = [];
-            if (data is List) { userList = data; }
-            else if (data is Map) { userList = data['users'] ?? data['items'] ?? []; }
-            setState(() => _users = userList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList());
+            if (data is List) {
+              userList = data;
+            } else if (data is Map) {
+              userList = data['users'] ?? data['items'] ?? [];
+            }
+            setState(() => _users = userList
+                .map((e) => User.fromJson(e as Map<String, dynamic>))
+                .toList());
           }
         }
       }
@@ -502,7 +559,9 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
         if (resp.success && resp.data != null) {
           final list = resp.data['topics'] ?? resp.data['results'] ?? resp.data;
           if (list is List) {
-            setState(() => _topics = list.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList());
+            setState(() => _topics = list
+                .map((e) => Topic.fromJson(e as Map<String, dynamic>))
+                .toList());
           }
         }
       } else {
@@ -510,7 +569,9 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
         if (resp.success && resp.data != null) {
           final list = resp.data['users'] ?? resp.data['results'] ?? resp.data;
           if (list is List) {
-            setState(() => _users = list.map((e) => User.fromJson(e as Map<String, dynamic>)).toList());
+            setState(() => _users = list
+                .map((e) => User.fromJson(e as Map<String, dynamic>))
+                .toList());
           }
         }
       }
@@ -530,7 +591,8 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
           margin: const EdgeInsets.only(top: 8, bottom: 4),
           width: 36,
           height: 4,
-          decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+          decoration: BoxDecoration(
+              color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
         ),
         // Header
         Padding(
@@ -538,10 +600,11 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
           child: Row(
             children: [
               Icon(widget.isTopic ? Icons.tag : Icons.alternate_email,
-                size: 20, color: AppColors.primary),
+                  size: 20, color: AppColors.primary),
               const SizedBox(width: 8),
               Text(widget.isTopic ? '选择话题' : '选择好友',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
         ),
@@ -556,8 +619,11 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
               prefixIcon: const Icon(Icons.search, size: 20),
               filled: true,
               fillColor: AppColors.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
         ),
@@ -575,18 +641,27 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
                       return ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.tag, size: 18, color: AppColors.primary),
+                          decoration: BoxDecoration(
+                              color: AppColors.borderLight,
+                              borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.tag,
+                              size: 18, color: AppColors.primary),
                         ),
-                        title: Text('#${topic.name}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: topic.postCount > 0 ? Text('${topic.postCount} 条帖子') : null,
+                        title: Text('#${topic.name}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: topic.postCount > 0
+                            ? Text('${topic.postCount} 条帖子')
+                            : null,
                         onTap: () => widget.onSelected(topic.name),
                       );
                     } else {
                       final user = _users[index];
                       return ListTile(
                         leading: ImageUtils.buildAvatar(user, radius: 20),
-                        title: Text(user.displayName ?? user.username, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(user.displayName ?? user.username,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text('@${user.username}'),
                         onTap: () => widget.onSelected(user.username),
                       );
@@ -598,4 +673,3 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
     );
   }
 }
-

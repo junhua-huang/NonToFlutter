@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/services/api/friend_service.dart';
@@ -73,17 +73,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
         surfaceTintColor: Colors.transparent,
         title: Text(
           widget.title,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        bottom: const PreferredSize(
+        bottom: PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, color: AppColors.borderLight),
         ),
@@ -126,7 +126,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ),
       child: ListView.separated(
         itemCount: _friends.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, indent: 76, color: AppColors.borderLight),
+        separatorBuilder: (_, __) =>
+            Divider(height: 1, indent: 76, color: AppColors.borderLight),
         itemBuilder: (context, index) {
           final user = _friends[index];
           return _FriendTile(user: user);
@@ -162,7 +163,7 @@ class _FriendTile extends StatelessWidget {
                 children: [
                   Text(
                     user.displayName ?? user.username,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,

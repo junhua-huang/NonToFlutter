@@ -159,8 +159,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
         actions: _event != null && _event!.isOwner
             ? [
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined,
-                      color: AppColors.textPrimary),
+                  icon: Icon(Icons.edit_outlined, color: AppColors.textPrimary),
                   onPressed: () async {
                     await Navigator.push(
                       context,
@@ -183,8 +182,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(_error!,
-                          style:
-                              const TextStyle(color: AppColors.textSecondary)),
+                          style: TextStyle(color: AppColors.textSecondary)),
                       const SizedBox(height: 12),
                       ElevatedButton(
                           onPressed: _loadDetail, child: const Text('重试')),
@@ -219,7 +217,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     aspectRatio: 16 / 9,
                     child: Container(
                       color: AppColors.backgroundSecondary,
-                      child: const Icon(Icons.event,
+                      child: Icon(Icons.event,
                           size: 48, color: AppColors.textTertiary),
                     ),
                   ),
@@ -229,7 +227,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                   width: double.infinity,
                   height: 200,
                   color: AppColors.backgroundSecondary,
-                  child: const Icon(Icons.event,
+                  child: Icon(Icons.event,
                       size: 48, color: AppColors.textTertiary),
                 ),
 
@@ -266,7 +264,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                         children: [
                           Text(
                             event.creatorName ?? '匿名用户',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: AppColors.textPrimary,
@@ -275,7 +273,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                           const SizedBox(height: 2),
                           Text(
                             _formatTimeAgo(),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13, color: AppColors.textSecondary),
                           ),
                         ],
@@ -313,7 +311,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
               ),
 
               const SizedBox(height: 16),
-              const Divider(height: 1, color: AppColors.borderLight),
+              Divider(height: 1, color: AppColors.borderLight),
 
               // 内容区
               Padding(
@@ -328,7 +326,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                         Expanded(
                           child: Text(
                             event.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
                               color: AppColors.textPrimary,
@@ -360,12 +358,12 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     // 城市
                     Row(
                       children: [
-                        const Icon(Icons.location_on_outlined,
+                        Icon(Icons.location_on_outlined,
                             size: 16, color: AppColors.textSecondary),
                         const SizedBox(width: 6),
                         Text(
                           event.cityName.isNotEmpty ? event.cityName : '未知城市',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 14, color: AppColors.textSecondary),
                         ),
                       ],
@@ -376,12 +374,12 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     if (event.startDate != null) ...[
                       Row(
                         children: [
-                          const Icon(Icons.calendar_today,
+                          Icon(Icons.calendar_today,
                               size: 15, color: AppColors.textSecondary),
                           const SizedBox(width: 6),
                           Text(
                             _formatDateRange(),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 14, color: AppColors.textSecondary),
                           ),
                         ],
@@ -393,13 +391,13 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     if (event.venue.isNotEmpty) ...[
                       Row(
                         children: [
-                          const Icon(Icons.place_outlined,
+                          Icon(Icons.place_outlined,
                               size: 15, color: AppColors.textSecondary),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               event.venue,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 14, color: AppColors.textSecondary),
                             ),
                           ),
@@ -438,9 +436,9 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     // 介绍
                     if (event.intro != null && event.intro!.isNotEmpty) ...[
                       const SizedBox(height: 20),
-                      const Divider(height: 1, color: AppColors.borderLight),
+                      Divider(height: 1, color: AppColors.borderLight),
                       const SizedBox(height: 16),
-                      const Text(
+                      Text(
                         '漫展介绍',
                         style: TextStyle(
                           fontSize: 16,
@@ -451,7 +449,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                       const SizedBox(height: 8),
                       Text(
                         event.intro!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           height: 1.6,
                           color: AppColors.textPrimary,
@@ -465,12 +463,12 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
               // 漫展图片列表（竖列排列）
               if (event.images.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Divider(height: 1, color: AppColors.borderLight),
                 ),
                 const SizedBox(height: 12),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     '漫展图片',
@@ -506,7 +504,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                           errorBuilder: (_, __, ___) => Container(
                             height: 200,
                             color: AppColors.backgroundSecondary,
-                            child: const Icon(Icons.broken_image,
+                            child: Icon(Icons.broken_image,
                                 color: AppColors.textTertiary),
                           ),
                         ),
@@ -517,7 +515,7 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
               ],
 
               const SizedBox(height: 8),
-              const Divider(height: 1, color: AppColors.borderLight),
+              Divider(height: 1, color: AppColors.borderLight),
               const SizedBox(height: 8),
             ],
           ),

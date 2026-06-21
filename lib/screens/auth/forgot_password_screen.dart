@@ -84,8 +84,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: AppColors.background,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        title: const Text('忘记密码', style: TextStyle(color: AppColors.textPrimary)),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
+        title: Text('忘记密码', style: TextStyle(color: AppColors.textPrimary)),
       ),
       body: SafeArea(
         child: Center(
@@ -96,7 +96,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.lock_reset, size: 64, color: AppColors.primary),
+                  const Icon(Icons.lock_reset,
+                      size: 64, color: AppColors.primary),
                   const SizedBox(height: 24),
                   Text(
                     '重置密码',
@@ -107,10 +108,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     '请输入注册邮箱，获取验证码后设置新密码',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    style:
+                        TextStyle(color: AppColors.textSecondary, fontSize: 14),
                   ),
                   const SizedBox(height: 32),
 
@@ -171,8 +173,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         icon: Icon(_obscureConfirm
                             ? Icons.visibility_off
                             : Icons.visibility),
-                        onPressed: () => setState(
-                            () => _obscureConfirm = !_obscureConfirm),
+                        onPressed: () =>
+                            setState(() => _obscureConfirm = !_obscureConfirm),
                       ),
                     ),
                     validator: (v) =>

@@ -218,12 +218,12 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text('搜索 "${widget.query}"',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 15,
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w500)),
                           ),
-                          const Icon(Icons.arrow_forward_ios,
+                          Icon(Icons.arrow_forward_ios,
                               size: 14, color: AppColors.textSecondary),
                         ],
                       ),
@@ -250,7 +250,7 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
                   ],
 
                   if (_topics.isEmpty && _users.isEmpty && _posts.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.all(24),
                       child: Center(
                         child: Text('暂无建议',
@@ -268,7 +268,7 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Text(title,
-          style: const TextStyle(
+          style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.textSecondary)),
@@ -296,12 +296,12 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(user.displayName ?? user.username,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
                           color: AppColors.textPrimary)),
                   Text('@${user.username}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
@@ -326,20 +326,20 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
-            const Icon(Icons.tag, size: 18, color: AppColors.textSecondary),
+            Icon(Icons.tag, size: 18, color: AppColors.textSecondary),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('#${topic.name}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
                           color: AppColors.textPrimary)),
                   if (topic.postCount > 0)
                     Text('${topic.postCount} 条帖子',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
@@ -371,14 +371,14 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(post.user?.displayName ?? '',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                           color: AppColors.textPrimary)),
                   Text(post.content ?? '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),

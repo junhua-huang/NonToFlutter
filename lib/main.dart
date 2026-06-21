@@ -96,6 +96,7 @@ class NonToApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
+    AppColors.syncThemeMode(themeMode);
 
     // 启动网络监听（幂等）
     ConnectivityService().start();
@@ -131,7 +132,10 @@ class NonToApp extends ConsumerWidget {
                             SizedBox(width: 8),
                             Text(
                               '当前无网络连接',
-                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -142,184 +146,184 @@ class NonToApp extends ConsumerWidget {
               );
             },
             theme: ThemeData(
-          platform: TargetPlatform.iOS,
-          useMaterial3: true,
-          colorSchemeSeed: AppColors.primary,
-          brightness: Brightness.light,
-          scaffoldBackgroundColor: AppColors.background,
-          appBarTheme: AppTheme.appBarTheme,
-          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-            backgroundColor: AppColors.background,
-            selectedItemColor: AppColors.textPrimary,
-            unselectedItemColor: AppColors.textSecondary,
-            type: BottomNavigationBarType.fixed,
-            selectedLabelStyle:
-                TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-            unselectedLabelStyle: TextStyle(fontSize: 11),
-          ),
-          dividerColor: AppColors.borderLight,
-          cardColor: AppColors.background,
-          splashColor: AppColors.primary.withValues(alpha: 0.08),
-          highlightColor: AppColors.primary.withValues(alpha: 0.04),
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
-            },
-          ),
-          textTheme: const TextTheme(
-            bodyLarge:
-                TextStyle(color: AppColors.textPrimary, fontSize: 15),
-            bodyMedium:
-                TextStyle(color: AppColors.textPrimary, fontSize: 14),
-            titleLarge: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w800),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.background,
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24)),
+              platform: TargetPlatform.iOS,
+              useMaterial3: true,
+              colorSchemeSeed: AppColors.primary,
+              brightness: Brightness.light,
+              scaffoldBackgroundColor: AppColors.background,
+              appBarTheme: AppTheme.appBarTheme,
+              bottomNavigationBarTheme: BottomNavigationBarThemeData(
+                backgroundColor: AppColors.background,
+                selectedItemColor: AppColors.textPrimary,
+                unselectedItemColor: AppColors.textSecondary,
+                type: BottomNavigationBarType.fixed,
+                selectedLabelStyle:
+                    TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+                unselectedLabelStyle: TextStyle(fontSize: 11),
+              ),
+              dividerColor: AppColors.borderLight,
+              cardColor: AppColors.background,
+              splashColor: AppColors.primary.withValues(alpha: 0.08),
+              highlightColor: AppColors.primary.withValues(alpha: 0.04),
+              pageTransitionsTheme: const PageTransitionsTheme(
+                builders: {
+                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+                },
+              ),
+              textTheme: TextTheme(
+                bodyLarge:
+                    TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                bodyMedium:
+                    TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                titleLarge: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800),
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.background,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: AppColors.borderLight),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: AppColors.borderLight),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: AppColors.primary),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              ),
+              snackBarTheme: SnackBarThemeData(
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              dialogTheme: DialogThemeData(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                titleTextStyle: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: BorderSide(color: AppColors.borderLight),
+            darkTheme: ThemeData(
+              platform: TargetPlatform.iOS,
+              useMaterial3: true,
+              colorSchemeSeed: AppColors.primary,
+              brightness: Brightness.dark,
+              scaffoldBackgroundColor: const Color(0xFF000000),
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFF000000),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                surfaceTintColor: Colors.transparent,
+                scrolledUnderElevation: 0.5,
+                shadowColor: Color(0xFF2A2A2A),
+                centerTitle: false,
+                titleTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              bottomNavigationBarTheme: BottomNavigationBarThemeData(
+                backgroundColor: Color(0xFF000000),
+                selectedItemColor: Colors.white,
+                unselectedItemColor: AppColors.textTertiary,
+                type: BottomNavigationBarType.fixed,
+                selectedLabelStyle:
+                    TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+                unselectedLabelStyle: TextStyle(fontSize: 11),
+              ),
+              dividerColor: const Color(0xFF2A2A2A),
+              cardColor: const Color(0xFF16181C),
+              splashColor: AppColors.primary.withValues(alpha: 0.08),
+              highlightColor: AppColors.primary.withValues(alpha: 0.04),
+              pageTransitionsTheme: const PageTransitionsTheme(
+                builders: {
+                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+                },
+              ),
+              textTheme: const TextTheme(
+                bodyLarge: TextStyle(color: Colors.white, fontSize: 15),
+                bodyMedium: TextStyle(color: Colors.white, fontSize: 14),
+                titleLarge: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800),
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: AppColors.primary),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              ),
+              snackBarTheme: SnackBarThemeData(
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              dialogTheme: DialogThemeData(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                titleTextStyle: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: BorderSide(color: AppColors.borderLight),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: BorderSide(color: AppColors.primary),
-            ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          ),
-          snackBarTheme: SnackBarThemeData(
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          dialogTheme: DialogThemeData(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            titleTextStyle: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-        darkTheme: ThemeData(
-          platform: TargetPlatform.iOS,
-          useMaterial3: true,
-          colorSchemeSeed: AppColors.primary,
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: const Color(0xFF000000),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF000000),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            scrolledUnderElevation: 0.5,
-            shadowColor: Color(0xFF2A2A2A),
-            centerTitle: false,
-            titleTextStyle: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-            backgroundColor: Color(0xFF000000),
-            selectedItemColor: Colors.white,
-            unselectedItemColor: AppColors.textTertiary,
-            type: BottomNavigationBarType.fixed,
-            selectedLabelStyle:
-                TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-            unselectedLabelStyle: TextStyle(fontSize: 11),
-          ),
-          dividerColor: const Color(0xFF2A2A2A),
-          cardColor: const Color(0xFF16181C),
-          splashColor: AppColors.primary.withValues(alpha: 0.08),
-          highlightColor: AppColors.primary.withValues(alpha: 0.04),
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
-            },
-          ),
-          textTheme: const TextTheme(
-            bodyLarge: TextStyle(color: Colors.white, fontSize: 15),
-            bodyMedium: TextStyle(color: Colors.white, fontSize: 14),
-            titleLarge: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24)),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: BorderSide(color: AppColors.primary),
-            ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          ),
-          snackBarTheme: SnackBarThemeData(
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          dialogTheme: DialogThemeData(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            titleTextStyle: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        themeMode: themeMode,
-        onGenerateRoute: RouteGenerator.generateRoute,
-        initialRoute: AppRoutes.splash,
-      );
-    },
-  ),
+            themeMode: themeMode,
+            onGenerateRoute: RouteGenerator.generateRoute,
+            initialRoute: AppRoutes.splash,
+          );
+        },
+      ),
     );
   }
 }

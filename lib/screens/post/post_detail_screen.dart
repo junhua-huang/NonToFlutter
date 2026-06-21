@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
@@ -52,7 +52,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   Color get _xBlue => AppColors.primary;
   Color get _xLightGrey => AppColors.borderLight;
   static const List<String> _reportReasons = [
-    '垃圾信息', '骚扰', '仇恨言论', '暴力内容', '其他'
+    '垃圾信息',
+    '骚扰',
+    '仇恨言论',
+    '暴力内容',
+    '其他'
   ];
 
   @override
@@ -111,7 +115,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
             setState(() {
               _post = _post!.copyWith(viewCount: _post!.viewCount + 1);
             });
-            PostInteractionNotifier().notifyViewChanged(widget.postId, _post!.viewCount);
+            PostInteractionNotifier()
+                .notifyViewChanged(widget.postId, _post!.viewCount);
           }
         } catch (e) {
           debugPrint('Record view error: $e');
@@ -135,7 +140,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     if (!auth.isLoggedIn || auth.user == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先登录后再点赞'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('请先登录后再点赞'), duration: Duration(seconds: 2)),
       );
       return;
     }
@@ -156,7 +162,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       } else {
         await PostService().likePost(_post!.id);
       }
-      PostInteractionNotifier().notifyLikeChanged(_post!.id, !wasLiked, _post!.likeCount);
+      PostInteractionNotifier()
+          .notifyLikeChanged(_post!.id, !wasLiked, _post!.likeCount);
     } catch (e) {
       setState(() => _post = oldPost);
     } finally {
@@ -173,7 +180,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Text('帖子统计',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             content: Column(
@@ -200,7 +208,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('获取统计失败'), duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('获取统计失败'), duration: Duration(seconds: 2)),
         );
       }
     } catch (e) {
@@ -212,9 +221,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 
   void _navigateToTopic(String topicName) {
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => TopicSearchResultsScreen(topicName: topicName),
-    ));
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TopicSearchResultsScreen(topicName: topicName),
+        ));
   }
 
   void _navigateToProfile(String username) {
@@ -234,14 +245,18 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         }
         if (userList.isNotEmpty) {
           final userJson = userList.firstWhere(
-            (u) => (u['username'] ?? '').toString().toLowerCase() == username.toLowerCase(),
+            (u) =>
+                (u['username'] ?? '').toString().toLowerCase() ==
+                username.toLowerCase(),
             orElse: () => userList.first,
           ) as Map<String, dynamic>;
           final user = User.fromJson(userJson);
           if (!mounted) return;
-          Navigator.push(context, MaterialPageRoute(
-            builder: (_) => UserProfileScreen(user: user),
-          ));
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => UserProfileScreen(user: user),
+              ));
         }
       }
     } catch (e) {
@@ -257,7 +272,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('删除帖子',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        content: const Text('确定要删除这条帖子吗？此操作不可撤销',
+        content: Text('确定要删除这条帖子吗？此操作不可撤销',
             style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
@@ -278,21 +293,25 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         if (resp.success) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('帖子已删除'), backgroundColor: Colors.green),
+              const SnackBar(
+                  content: Text('帖子已删除'), backgroundColor: Colors.green),
             );
             Navigator.of(context).pop();
           }
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(resp.message ?? '删除失败'), backgroundColor: Colors.red),
+              SnackBar(
+                  content: Text(resp.message ?? '删除失败'),
+                  backgroundColor: Colors.red),
             );
           }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('删除失败，请重试'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('删除失败，请重试'), backgroundColor: Colors.red),
           );
         }
       }
@@ -309,9 +328,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         children: [
           ..._reportReasons.map((r) => SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, r),
-            child: Text(r, style: const TextStyle(fontSize: 15)),
-          )),
+                onPressed: () => Navigator.pop(ctx, r),
+                child: Text(r, style: const TextStyle(fontSize: 15)),
+              )),
         ],
       ),
     );
@@ -321,20 +340,24 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         if (resp.success) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('举报已提交'), backgroundColor: Colors.green),
+              const SnackBar(
+                  content: Text('举报已提交'), backgroundColor: Colors.green),
             );
           }
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(resp.message ?? '举报失败'), backgroundColor: Colors.red),
+              SnackBar(
+                  content: Text(resp.message ?? '举报失败'),
+                  backgroundColor: Colors.red),
             );
           }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('举报失败，请重试'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('举报失败，请重试'), backgroundColor: Colors.red),
           );
         }
       }
@@ -353,14 +376,17 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           icon: Icon(Icons.arrow_back, color: _xBlack),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('帖子', style: TextStyle(color: _xBlack, fontSize: 18, fontWeight: FontWeight.w700)),
+        title: Text('帖子',
+            style: TextStyle(
+                color: _xBlack, fontSize: 18, fontWeight: FontWeight.w700)),
         centerTitle: false,
       ),
       body: _post != null
           ? _buildContent()
           : _isLoading
               ? Center(child: CircularProgressIndicator(color: _xBlue))
-              : Center(child: Text('帖子不存在', style: TextStyle(color: _xDarkGrey))),
+              : Center(
+                  child: Text('帖子不存在', style: TextStyle(color: _xDarkGrey))),
     );
   }
 
@@ -417,9 +443,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               GestureDetector(
                 onTap: () {
                   if (post.user != null) {
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => UserProfileScreen(user: post.user!),
-                    ));
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => UserProfileScreen(user: post.user!),
+                        ));
                   }
                 },
                 child: ImageUtils.buildAvatar(post.user, radius: 20),
@@ -432,25 +460,35 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     GestureDetector(
                       onTap: () {
                         if (post.user != null) {
-                          Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: post.user!),
-                          ));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    UserProfileScreen(user: post.user!),
+                              ));
                         }
                       },
                       child: Text(post.user?.displayName ?? '未知用户',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _xBlack)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: _xBlack)),
                     ),
                     SizedBox(height: 2),
                     GestureDetector(
                       onTap: () {
                         if (post.user != null) {
-                          Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: post.user!),
-                          ));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    UserProfileScreen(user: post.user!),
+                              ));
                         }
                       },
-                      child: Text('@${post.user?.username ?? ''}  ·  ${AppDateUtils.formatTimeAgo(post.createdAt)}',
-                        style: TextStyle(color: _xDarkGrey, fontSize: 13)),
+                      child: Text(
+                          '@${post.user?.username ?? ''}  ·  ${AppDateUtils.formatTimeAgo(post.createdAt)}',
+                          style: TextStyle(color: _xDarkGrey, fontSize: 13)),
                     ),
                   ],
                 ),
@@ -462,14 +500,23 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   return IconButton(
                     icon: Icon(Icons.more_horiz, size: 18, color: _xDarkGrey),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
                     onPressed: () async {
                       final options = <TwitterSheetOption<String>>[
                         if (isOwner)
-                          const TwitterSheetOption(icon: Icons.delete_outline, label: '删除', value: 'delete', isDestructive: true),
-                        const TwitterSheetOption(icon: Icons.flag_outlined, label: '举报', value: 'report'),
+                          const TwitterSheetOption(
+                              icon: Icons.delete_outline,
+                              label: '删除',
+                              value: 'delete',
+                              isDestructive: true),
+                        const TwitterSheetOption(
+                            icon: Icons.flag_outlined,
+                            label: '举报',
+                            value: 'report'),
                       ];
-                      final action = await TwitterBottomSheet.show<String>(ctx, options: options);
+                      final action = await TwitterBottomSheet.show<String>(ctx,
+                          options: options);
                       if (action == 'delete') {
                         _deletePost();
                       } else if (action == 'report') {
@@ -507,20 +554,23 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               if (allImages.isEmpty) return const SizedBox.shrink();
               if (allImages.length == 1) {
                 return GestureDetector(
-                  onTap: () => ImageViewerScreen.show(context, allImages, heroTag: 'detail_img_${post.id}_0'),
+                  onTap: () => ImageViewerScreen.show(context, allImages,
+                      heroTag: 'detail_img_${post.id}_0'),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Hero(
                       tag: 'detail_img_${post.id}_0',
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxHeight: 400),
-                        child: ImageUtils.buildPostImage(allImages[0], width: double.infinity),
+                        child: ImageUtils.buildPostImage(allImages[0],
+                            width: double.infinity),
                       ),
                     ),
                   ),
                 );
               }
-              return ImageGalleryGrid(imageUrls: allImages, maxHeight: 300, post: post);
+              return ImageGalleryGrid(
+                  imageUrls: allImages, maxHeight: 300, post: post);
             }(),
           ),
         // Video
@@ -530,15 +580,15 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
             child: kIsWeb
                 ? _WebVideoPlayer(
                     videoUrl: post.videoUrl!,
-                    coverUrl: post.thumbnailUrl
-                        ?? (post.images != null && post.images!.isNotEmpty
+                    coverUrl: post.thumbnailUrl ??
+                        (post.images != null && post.images!.isNotEmpty
                             ? post.images![0]
                             : null),
                   )
                 : InlineVideoPlayer(
                     videoUrl: post.videoUrl!,
-                    coverUrl: post.thumbnailUrl
-                        ?? (post.images != null && post.images!.isNotEmpty
+                    coverUrl: post.thumbnailUrl ??
+                        (post.images != null && post.images!.isNotEmpty
                             ? post.images![0]
                             : null),
                     aspectRatio: 16 / 9,

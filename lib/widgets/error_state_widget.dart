@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// 通用错误状态组件（图标 + 错误文字 + 重试按钮）
@@ -24,7 +24,8 @@ class ErrorStateWidget extends StatelessWidget {
         children: [
           Icon(icon, size: 48, color: AppColors.textSecondary),
           const SizedBox(height: 12),
-          Text(message, style: const TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+          Text(message,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
           if (onRetry != null) ...[
             const SizedBox(height: 16),
             ElevatedButton(

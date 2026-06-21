@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
@@ -58,16 +58,29 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
     final sentCached = await DataLayer().query(_cacheKeySent, () async => null);
     if (sentCached.data is List && (sentCached.data as List).isNotEmpty) {
       final list = (sentCached.data as List)
-          .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+          .map((e) => _RequestItem.fromJson(
+              e is Map<String, dynamic> ? e : <String, dynamic>{}))
           .toList();
-      if (mounted) setState(() { _sentRequests = list; _isLoadingSent = false; });
+      if (mounted) {
+        setState(() {
+          _sentRequests = list;
+          _isLoadingSent = false;
+        });
+      }
     }
-    final recvCached = await DataLayer().query(_cacheKeyReceived, () async => null);
+    final recvCached =
+        await DataLayer().query(_cacheKeyReceived, () async => null);
     if (recvCached.data is List && (recvCached.data as List).isNotEmpty) {
       final list = (recvCached.data as List)
-          .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+          .map((e) => _RequestItem.fromJson(
+              e is Map<String, dynamic> ? e : <String, dynamic>{}))
           .toList();
-      if (mounted) setState(() { _receivedRequests = list; _isLoadingReceived = false; });
+      if (mounted) {
+        setState(() {
+          _receivedRequests = list;
+          _isLoadingReceived = false;
+        });
+      }
     }
     _loadAll();
   }
@@ -81,10 +94,13 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
       final resp = await _friendService.getSentRequests();
       if (resp.success && resp.data != null) {
         final dynamic rawData = resp.data;
-        final data = rawData is Map ? rawData as Map<String, dynamic> : <String, dynamic>{};
+        final data = rawData is Map
+            ? rawData as Map<String, dynamic>
+            : <String, dynamic>{};
         final dynamic rawList = data['requests'];
         final list = (rawList is List ? rawList : const <dynamic>[])
-            .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+            .map((e) => _RequestItem.fromJson(
+                e is Map<String, dynamic> ? e : <String, dynamic>{}))
             .toList();
         setState(() {
           _sentRequests = list;
@@ -114,10 +130,13 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
       final resp = await _friendService.getReceivedRequests();
       if (resp.success && resp.data != null) {
         final dynamic rawData = resp.data;
-        final data = rawData is Map ? rawData as Map<String, dynamic> : <String, dynamic>{};
+        final data = rawData is Map
+            ? rawData as Map<String, dynamic>
+            : <String, dynamic>{};
         final dynamic rawList = data['requests'];
         final list = (rawList is List ? rawList : const <dynamic>[])
-            .map((e) => _RequestItem.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+            .map((e) => _RequestItem.fromJson(
+                e is Map<String, dynamic> ? e : <String, dynamic>{}))
             .toList();
         setState(() {
           _receivedRequests = list;
@@ -164,9 +183,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
           orElse: () => _RequestItem(
               id: requestId, senderId: 0, receiverId: 0, status: ''),
         );
-        final name = accepted.user?.displayName ??
-            accepted.user?.username ??
-            '对方';
+        final name =
+            accepted.user?.displayName ?? accepted.user?.username ?? '对方';
         setState(() {
           _receivedRequests.removeWhere((r) => r.id == requestId);
           _pendingRequestIds.remove(requestId);
@@ -259,7 +277,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
         backgroundColor: AppColors.background,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           '好友申请',
           style: TextStyle(
             color: AppColors.textPrimary,
@@ -268,7 +286,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
         bottom: PreferredSize(
@@ -280,7 +298,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
             indicatorColor: AppColors.primary,
             indicatorWeight: 3,
             indicatorSize: TabBarIndicatorSize.label,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            labelStyle:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             unselectedLabelStyle: const TextStyle(fontSize: 15),
             tabs: const [
               Tab(text: '向我请求的'),
@@ -296,8 +315,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
           _refreshController.refreshCompleted();
         },
         header: const WaterDropHeader(
-          complete:
-              Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+          complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
           waterDropColor: AppColors.primary,
         ),
         child: TabBarView(
@@ -331,7 +349,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
     }
     return ListView.separated(
       itemCount: _receivedRequests.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, indent: 76, color: AppColors.borderLight),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, indent: 76, color: AppColors.borderLight),
       itemBuilder: (_, i) => _buildReceivedTile(_receivedRequests[i]),
     );
   }
@@ -356,7 +375,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
     }
     return ListView.separated(
       itemCount: _sentRequests.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, indent: 76, color: AppColors.borderLight),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, indent: 76, color: AppColors.borderLight),
       itemBuilder: (_, i) => _buildSentTile(_sentRequests[i]),
     );
   }
@@ -369,8 +389,10 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
           ? null
           : () {
               if (user != null) {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)));
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => UserProfileScreen(user: user)));
               }
             },
       child: Padding(
@@ -385,7 +407,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
                 children: [
                   Text(
                     user?.displayName ?? user?.username ?? '未知用户',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -395,7 +417,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
                   const SizedBox(height: 2),
                   Text(
                     '@${user?.username ?? 'unknown'}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,
                     ),
@@ -404,7 +426,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
                     const SizedBox(height: 2),
                     Text(
                       AppDateUtils.formatTimeAgo(item.createdAt!),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 12,
                       ),
@@ -454,7 +476,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
                 children: [
                   Text(
                     user?.displayName ?? user?.username ?? '未知用户',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -464,7 +486,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
                   const SizedBox(height: 2),
                   Text(
                     '@${user?.username ?? 'unknown'}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,
                     ),
@@ -473,7 +495,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
                     const SizedBox(height: 2),
                     Text(
                       '${AppDateUtils.formatTimeAgo(item.createdAt!)} · 等待对方确认',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 12,
                       ),
@@ -525,8 +547,7 @@ class _ActionButton extends StatelessWidget {
             ? SizedBox(
                 width: 14,
                 height: 14,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: color),
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
               )
             : Text(
                 label,
@@ -560,7 +581,9 @@ class _RequestItem {
 
   factory _RequestItem.fromJson(Map<String, dynamic> json) {
     return _RequestItem(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id'].toString()) ?? 0,
       senderId: json['sender_id'] is int
           ? json['sender_id']
           : int.tryParse(json['sender_id'].toString()) ?? 0,

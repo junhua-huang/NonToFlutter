@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nonto/config/app_config.dart';
@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:video_player_ohos/video_player_ohos.dart';
+
 /// 将相对 URL 解析为完整的网络 URL
 String resolveUrl(String? url) {
   if (url == null || url.isEmpty) return '';
@@ -29,7 +30,8 @@ class ImageViewerScreen extends StatefulWidget {
     this.heroTag,
   });
 
-  static void show(BuildContext context, List<String> urls, {int initialIndex = 0, String? heroTag}) {
+  static void show(BuildContext context, List<String> urls,
+      {int initialIndex = 0, String? heroTag}) {
     if (urls.isEmpty) return;
     Navigator.push(
       context,
@@ -38,7 +40,8 @@ class ImageViewerScreen extends StatefulWidget {
         barrierColor: Colors.black,
         transitionDuration: const Duration(milliseconds: 300),
         reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, _, __) => ImageViewerScreen(imageUrls: urls, initialIndex: initialIndex, heroTag: heroTag),
+        pageBuilder: (context, _, __) => ImageViewerScreen(
+            imageUrls: urls, initialIndex: initialIndex, heroTag: heroTag),
         transitionsBuilder: (context, animation, _, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -73,9 +76,11 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = widget.imageUrls.map(resolveUrl).where((u) => u.isNotEmpty).toList();
+    final resolved =
+        widget.imageUrls.map(resolveUrl).where((u) => u.isNotEmpty).toList();
     if (resolved.isEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => Navigator.pop(context));
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => Navigator.pop(context));
       return const SizedBox.shrink();
     }
 
@@ -106,7 +111,9 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                     children: [
                       Icon(Icons.broken_image, color: Colors.white54, size: 48),
                       SizedBox(height: 8),
-                      Text('图片加载失败', style: TextStyle(color: Colors.white54, fontSize: 14)),
+                      Text('图片加载失败',
+                          style:
+                              TextStyle(color: Colors.white54, fontSize: 14)),
                     ],
                   ),
                 ),
@@ -120,17 +127,21 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     CircularProgressIndicator(
-                      value: chunkEvent != null && chunkEvent.expectedTotalBytes != null
-                          ? chunkEvent.cumulativeBytesLoaded / chunkEvent.expectedTotalBytes!
+                      value: chunkEvent != null &&
+                              chunkEvent.expectedTotalBytes != null
+                          ? chunkEvent.cumulativeBytesLoaded /
+                              chunkEvent.expectedTotalBytes!
                           : null,
                       color: Colors.white70,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      chunkEvent != null && chunkEvent.expectedTotalBytes != null
+                      chunkEvent != null &&
+                              chunkEvent.expectedTotalBytes != null
                           ? '${(chunkEvent.cumulativeBytesLoaded / 1024).toInt()} / ${(chunkEvent.expectedTotalBytes! / 1024).toInt()} KB'
                           : '加载中...',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 12),
                     ),
                   ],
                 ),
@@ -138,7 +149,8 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
             },
             pageController: _pageController,
             onPageChanged: _onPageChanged,
-            backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+            backgroundDecoration:
+                const BoxDecoration(color: Colors.transparent),
           ),
           // Close button
           SafeArea(
@@ -155,7 +167,8 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                       color: Colors.black45,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 22),
+                    child:
+                        const Icon(Icons.close, color: Colors.white, size: 22),
                   ),
                 ),
               ),
@@ -169,14 +182,18 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(
                       '${_currentIndex + 1} / ${resolved.length}',
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -276,7 +293,9 @@ class ImageGalleryGrid extends StatelessWidget {
             Expanded(
               child: Row(
                 children: [
-                  Expanded(child: _buildGridImage(imageUrls[2], 2, context, overlay: extraCount > 0 ? '+$extraCount' : null)),
+                  Expanded(
+                      child: _buildGridImage(imageUrls[2], 2, context,
+                          overlay: extraCount > 0 ? '+$extraCount' : null)),
                   if (displayCount >= 4) ...[
                     const SizedBox(width: 4),
                     Expanded(child: _buildGridImage(imageUrls[3], 3, context)),
@@ -296,8 +315,11 @@ class ImageGalleryGrid extends StatelessWidget {
       onTap: () {
         if (post != null) {
           final items = _buildMediaItems();
-          final initialPostIdx = items.indexWhere((it) => it.post.id == post!.id).clamp(0, items.length - 1);
-          EnhancedImageViewerScreen.show(context, items, initialPostIndex: initialPostIdx);
+          final initialPostIdx = items
+              .indexWhere((it) => it.post.id == post!.id)
+              .clamp(0, items.length - 1);
+          EnhancedImageViewerScreen.show(context, items,
+              initialPostIndex: initialPostIdx);
         } else {
           ImageViewerScreen.show(context, imageUrls);
         }
@@ -314,15 +336,17 @@ class ImageGalleryGrid extends StatelessWidget {
             aspectRatio: 4 / 3,
             child: Container(
               color: AppColors.surface,
-              child: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              child: const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary)),
             ),
           ),
           errorWidget: (_, __, ___) => AspectRatio(
             aspectRatio: 4 / 3,
             child: Container(
               color: AppColors.surface,
-              child: const Center(
-                child: Icon(Icons.broken_image, size: 40, color: AppColors.textSecondary),
+              child: Center(
+                child: Icon(Icons.broken_image,
+                    size: 40, color: AppColors.textSecondary),
               ),
             ),
           ),
@@ -331,13 +355,16 @@ class ImageGalleryGrid extends StatelessWidget {
     );
   }
 
-  Widget _buildGridImage(String url, int index, BuildContext context, {String? overlay}) {
+  Widget _buildGridImage(String url, int index, BuildContext context,
+      {String? overlay}) {
     final resolved = resolveUrl(url);
     return GestureDetector(
       onTap: () {
         if (post != null) {
           final items = _buildMediaItems();
-          final initialPostIdx = items.indexWhere((it) => it.post.id == post!.id).clamp(0, items.length - 1);
+          final initialPostIdx = items
+              .indexWhere((it) => it.post.id == post!.id)
+              .clamp(0, items.length - 1);
           EnhancedImageViewerScreen.show(context, items,
               initialMediaIndex: index, initialPostIndex: initialPostIdx);
         } else {
@@ -357,14 +384,20 @@ class ImageGalleryGrid extends StatelessWidget {
               placeholder: (_, __) => Container(color: AppColors.surface),
               errorWidget: (_, __, ___) => Container(
                 color: AppColors.surface,
-                child: const Center(child: Icon(Icons.broken_image, size: 24, color: AppColors.textSecondary)),
+                child: Center(
+                    child: Icon(Icons.broken_image,
+                        size: 24, color: AppColors.textSecondary)),
               ),
             ),
             if (overlay != null)
               Container(
                 color: Colors.black54,
                 child: Center(
-                  child: Text(overlay, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700)),
+                  child: Text(overlay,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700)),
                 ),
               ),
           ],
@@ -452,9 +485,13 @@ class _VideoPlayerPlaceholderState extends State<VideoPlayerPlaceholder> {
         barrierColor: Colors.black,
         transitionDuration: const Duration(milliseconds: 300),
         reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, _, __) => _VideoPlayerScreen(videoUrl: video, coverUrl: resolveUrl(widget.thumbnailUrl)),
+        pageBuilder: (context, _, __) => _VideoPlayerScreen(
+            videoUrl: video, coverUrl: resolveUrl(widget.thumbnailUrl)),
         transitionsBuilder: (context, animation, _, child) {
-          return ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)), child: child);
+          return ScaleTransition(
+              scale: Tween(begin: 0.9, end: 1.0).animate(
+                  CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+              child: child);
         },
       ),
     );
@@ -474,7 +511,8 @@ class _VideoPlayerPlaceholderState extends State<VideoPlayerPlaceholder> {
           color: AppColors.textPrimary,
           borderRadius: BorderRadius.circular(16),
           image: thumb.isNotEmpty
-              ? DecorationImage(image: CachedNetworkImageProvider(thumb), fit: BoxFit.contain)
+              ? DecorationImage(
+                  image: CachedNetworkImageProvider(thumb), fit: BoxFit.contain)
               : null,
         ),
         child: Stack(
@@ -488,7 +526,8 @@ class _VideoPlayerPlaceholderState extends State<VideoPlayerPlaceholder> {
                 children: [
                   Icon(Icons.videocam_off, size: 32, color: Colors.white54),
                   SizedBox(height: 4),
-                  Text('视频不可用', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  Text('视频不可用',
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                 ],
               ),
             if (!hasError)
@@ -499,7 +538,8 @@ class _VideoPlayerPlaceholderState extends State<VideoPlayerPlaceholder> {
                   color: Colors.black.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(28),
                 ),
-                child: const Icon(Icons.play_arrow, size: 32, color: Colors.white),
+                child:
+                    const Icon(Icons.play_arrow, size: 32, color: Colors.white),
               ),
           ],
         ),
@@ -520,7 +560,8 @@ class _VideoPlayerScreen extends StatefulWidget {
   State<_VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProviderStateMixin {
+class _VideoPlayerScreenState extends State<_VideoPlayerScreen>
+    with TickerProviderStateMixin {
   NontoVideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
@@ -548,7 +589,10 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
       _controller!.addListener(_onPlayerUpdate);
       _controller!.initialize().then((_) {
         if (mounted) {
-          setState(() { _isInitialized = true; _hasError = false; });
+          setState(() {
+            _isInitialized = true;
+            _hasError = false;
+          });
           _controller!.play();
           _fadeController.forward();
           _resetHideTimer();
@@ -557,11 +601,19 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
         if (mounted) {
           _controller?.dispose();
           _controller = null;
-          setState(() { _hasError = true; _errorMessage = '视频加载失败，可能格式不支持'; });
+          setState(() {
+            _hasError = true;
+            _errorMessage = '视频加载失败，可能格式不支持';
+          });
         }
       });
     } catch (_) {
-      if (mounted) setState(() { _hasError = true; _errorMessage = '视频格式不支持'; });
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = '视频格式不支持';
+        });
+      }
     }
   }
 
@@ -587,9 +639,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
 
   void _togglePlay() {
     setState(() {
-      _controller!.isPlaying
-          ? _controller!.pause()
-          : _controller!.play();
+      _controller!.isPlaying ? _controller!.pause() : _controller!.play();
     });
     _resetHideTimer();
   }
@@ -597,7 +647,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
   void _skipSeconds(int seconds) {
     final newPos = _controller!.position + Duration(seconds: seconds);
     final clamped = Duration(
-      milliseconds: newPos.inMilliseconds.clamp(0, _controller!.duration.inMilliseconds),
+      milliseconds:
+          newPos.inMilliseconds.clamp(0, _controller!.duration.inMilliseconds),
     );
     _controller!.seekTo(clamped);
   }
@@ -614,9 +665,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
   String _formatDuration(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return d.inHours > 0
-        ? '${d.inHours}:$m:$s'
-        : '$m:$s';
+    return d.inHours > 0 ? '${d.inHours}:$m:$s' : '$m:$s';
   }
 
   Widget _buildVideoLayout() {
@@ -682,7 +731,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
                 alignment: Alignment.topLeft,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: _controlButton(Icons.close, () => Navigator.pop(context)),
+                  child:
+                      _controlButton(Icons.close, () => Navigator.pop(context)),
                 ),
               ),
             ),
@@ -697,13 +747,15 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
                 opacity: (!_controller!.isPlaying) ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 200),
                 child: Container(
-                  width: 80, height: 80,
+                  width: 80,
+                  height: 80,
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(40),
                     border: Border.all(color: Colors.white24, width: 2),
                   ),
-                  child: const Icon(Icons.play_arrow, size: 42, color: Colors.white),
+                  child: const Icon(Icons.play_arrow,
+                      size: 42, color: Colors.white),
                 ),
               ),
             ),
@@ -711,7 +763,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
           // ── 底部控制栏 ──
           if (_showControls && _isInitialized)
             Positioned(
-              left: 16, right: 16,
+              left: 16,
+              right: 16,
               bottom: MediaQuery.of(context).padding.bottom + 12,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -724,7 +777,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
                       // 左侧: 时间
                       Text(
                         '${_formatDuration(_controller!.position)} / ${_formatDuration(_controller!.duration)}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12),
                       ),
                       // 右侧: 操作按钮
                       Row(
@@ -736,7 +790,9 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
                           GestureDetector(
                             onTap: _togglePlay,
                             child: Icon(
-                              _controller!.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                              _controller!.isPlaying
+                                  ? Icons.pause_circle_filled
+                                  : Icons.play_circle_filled,
                               color: Colors.white,
                               size: 32,
                             ),
@@ -767,14 +823,19 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
           children: [
             const Icon(Icons.error_outline, size: 48, color: Colors.white54),
             const SizedBox(height: 12),
-            Text(_errorMessage, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+            Text(_errorMessage,
+                style: const TextStyle(color: Colors.white70, fontSize: 16)),
             const SizedBox(height: 24),
             TextButton(
               onPressed: () {
-                setState(() { _hasError = false; _isInitialized = false; });
+                setState(() {
+                  _hasError = false;
+                  _isInitialized = false;
+                });
                 _initVideo();
               },
-              child: const Text('重试', style: TextStyle(color: AppColors.primary, fontSize: 16)),
+              child: const Text('重试',
+                  style: TextStyle(color: AppColors.primary, fontSize: 16)),
             ),
           ],
         ),
@@ -800,19 +861,24 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
     if (ctrl == null || ctrl.duration.inMilliseconds == 0) {
       return const SizedBox(height: 24);
     }
-    final progress = ctrl.position.inMilliseconds / ctrl.duration.inMilliseconds;
+    final progress =
+        ctrl.position.inMilliseconds / ctrl.duration.inMilliseconds;
     return LayoutBuilder(
       builder: (context, constraints) {
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (details) {
-            final ratio = (details.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
-            ctrl.seekTo(Duration(milliseconds: (ratio * ctrl.duration.inMilliseconds).round()));
+            final ratio = (details.localPosition.dx / constraints.maxWidth)
+                .clamp(0.0, 1.0);
+            ctrl.seekTo(Duration(
+                milliseconds: (ratio * ctrl.duration.inMilliseconds).round()));
             _resetHideTimer();
           },
           onHorizontalDragUpdate: (details) {
-            final ratio = (details.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
-            ctrl.seekTo(Duration(milliseconds: (ratio * ctrl.duration.inMilliseconds).round()));
+            final ratio = (details.localPosition.dx / constraints.maxWidth)
+                .clamp(0.0, 1.0);
+            ctrl.seekTo(Duration(
+                milliseconds: (ratio * ctrl.duration.inMilliseconds).round()));
           },
           child: SizedBox(
             height: 24,
@@ -837,7 +903,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.5),
           shape: BoxShape.circle,
@@ -849,7 +916,10 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> with TickerProvi
 
   Widget _iconButton(IconData icon, VoidCallback onTap) {
     return GestureDetector(
-      onTap: () { onTap(); _resetHideTimer(); },
+      onTap: () {
+        onTap();
+        _resetHideTimer();
+      },
       child: Icon(icon, color: Colors.white70, size: 24),
     );
   }

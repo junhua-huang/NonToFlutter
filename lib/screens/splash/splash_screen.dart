@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/providers/auth_notifier.dart';
@@ -155,11 +155,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Future<bool> _verifyWsConnection() async {
     try {
       final ws = WebSocketService();
-      debugPrint('[Splash] _verifyWsConnection: isConnected=${ws.isConnected}, token=${ApiClient.token?.substring(0, 12)}...');
+      debugPrint(
+          '[Splash] _verifyWsConnection: isConnected=${ws.isConnected}, token=${ApiClient.token?.substring(0, 12)}...');
       if (ws.isConnected) return true;
       debugPrint('[Splash] _verifyWsConnection: calling ws.connect()');
       await ws.connect();
-      debugPrint('[Splash] _verifyWsConnection: ws.connect() returned, isConnected=${ws.isConnected}');
+      debugPrint(
+          '[Splash] _verifyWsConnection: ws.connect() returned, isConnected=${ws.isConnected}');
       // connect() 返回后 auth 可能已经异步完成，先检查再监听
       if (ws.isConnected) return true;
       // 等待 connectionStream 变为 true
@@ -237,7 +239,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void _onCookieResult(bool accepted) {
     setState(() => _showCookieConsent = false);
     if (accepted) {
-      SharedPreferences.getInstance().then((p) => p.setBool('cookie_consent', true));
+      SharedPreferences.getInstance()
+          .then((p) => p.setBool('cookie_consent', true));
     }
     _doNavigate(true);
   }
@@ -251,7 +254,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -265,7 +268,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               const SizedBox(height: 12),
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: const BoxDecoration(
                     color: Color(0xFFCED5DC),
                     borderRadius: BorderRadius.all(Radius.circular(2)),
@@ -274,22 +278,31 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               ),
               const SizedBox(height: 24),
               Container(
-                width: 48, height: 48,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.cookie_outlined, size: 26, color: AppColors.primary),
+                child: const Icon(Icons.cookie_outlined,
+                    size: 26, color: AppColors.primary),
               ),
               const SizedBox(height: 16),
-              const Text('Cookie 偏好设置',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.3)),
+              Text('Cookie 偏好设置',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      letterSpacing: -0.3)),
               const SizedBox(height: 8),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 32),
                 child: Text('我们使用 Cookie 和类似技术来改善您的体验。继续使用即表示您同意。',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.6)),
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                        height: 1.6)),
               ),
               const SizedBox(height: 28),
               Padding(
@@ -304,20 +317,27 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         backgroundColor: AppColors.textPrimary,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: const Text('接受全部', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      child: const Text('接受全部',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
                     const SizedBox(height: 10),
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
                       style: TextButton.styleFrom(
                         minimumSize: const Size(double.infinity, 44),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22)),
                       ),
                       child: const Text('查看隐私政策',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary)),
                     ),
                   ],
                 ),
@@ -362,18 +382,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               children: [
                 // Logo: 蓝色圆底 + 大写 N
                 Transform.scale(
-                  scale: 0.5 + 0.5 * Curves.elasticOut.transform(progress.clamp(0.0, 0.6) / 0.6),
+                  scale: 0.5 +
+                      0.5 *
+                          Curves.elasticOut
+                              .transform(progress.clamp(0.0, 0.6) / 0.6),
                   child: Opacity(
                     opacity: (progress.clamp(0.0, 0.4) / 0.4),
                     child: Container(
-                      width: 88, height: 88,
+                      width: 88,
+                      height: 88,
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(22),
                       ),
                       child: const Center(
                         child: Text('N',
-                            style: TextStyle(fontSize: 46, fontWeight: FontWeight.w800, color: Colors.white, height: 1)),
+                            style: TextStyle(
+                                fontSize: 46,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                height: 1)),
                       ),
                     ),
                   ),
@@ -382,20 +410,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 // App name
                 Opacity(
                   opacity: ((progress - 0.35).clamp(0.0, 0.25) / 0.25),
-                  child: const Text('NonTo',
-                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -1)),
+                  child: Text('NonTo',
+                      style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -1)),
                 ),
                 const SizedBox(height: 10),
                 // Subtitle
                 Opacity(
                   opacity: ((progress - 0.5).clamp(0.0, 0.3) / 0.3),
-                  child: const Text('连接你的异次元世界',
-                      style: TextStyle(fontSize: 15, color: AppColors.textSecondary, letterSpacing: 0.5)),
+                  child: Text('连接你的异次元世界',
+                      style: TextStyle(
+                          fontSize: 15,
+                          color: AppColors.textSecondary,
+                          letterSpacing: 0.5)),
                 ),
                 const SizedBox(height: 32),
                 // 版本号
-                const Text('v0.2.8',
-                    style: TextStyle(fontSize: 11, color: AppColors.textTertiary, letterSpacing: 1)),
+                Text('v0.2.8',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textTertiary,
+                        letterSpacing: 1)),
               ],
             );
           },

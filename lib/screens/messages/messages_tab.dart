@@ -198,12 +198,10 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
       const SizedBox(height: 120),
       Center(
         child: Column(children: [
-          const Icon(Icons.error_outline,
-              size: 48, color: AppColors.textSecondary),
+          Icon(Icons.error_outline, size: 48, color: AppColors.textSecondary),
           const SizedBox(height: 12),
           Text(error,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 15)),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: _onRefresh, child: const Text('重试')),
         ]),
@@ -264,7 +262,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      const Text('通知消息',
+                      Text('通知消息',
                           style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -298,7 +296,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
                                 .withValues(alpha: 0.8))),
                   ]),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+            Icon(Icons.chevron_right, color: AppColors.textTertiary),
           ]),
         ),
       ),
@@ -347,7 +345,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   }
 
   Widget _buildSearchEmpty() {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.only(top: 72),
       child: Center(
         child: Column(children: [
@@ -364,7 +362,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   }
 
   Widget _buildEmpty() {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.only(top: 80),
       child: Center(
         child: Column(children: [

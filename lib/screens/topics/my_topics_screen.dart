@@ -114,7 +114,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
         backgroundColor: AppColors.background,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           '我的话题',
           style: TextStyle(
             color: AppColors.textPrimary,
@@ -123,7 +123,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
         bottom: PreferredSize(
@@ -176,7 +176,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
     return ListView.separated(
       itemCount: _followedTopics.length,
       separatorBuilder: (_, __) =>
-          const Divider(height: 1, indent: 72, color: AppColors.borderLight),
+          Divider(height: 1, indent: 72, color: AppColors.borderLight),
       itemBuilder: (_, i) => _buildTopicTile(_followedTopics[i]),
     );
   }
@@ -202,7 +202,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
     return ListView.separated(
       itemCount: _referencedTopics.length,
       separatorBuilder: (_, __) =>
-          const Divider(height: 1, indent: 72, color: AppColors.borderLight),
+          Divider(height: 1, indent: 72, color: AppColors.borderLight),
       itemBuilder: (_, i) => _buildTopicTile(_referencedTopics[i]),
     );
   }
@@ -236,7 +236,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
                 children: [
                   Text(
                     '#${topic.name}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -246,7 +246,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
                   const SizedBox(height: 3),
                   Text(
                     _buildTopicSubtitle(topic),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,
                     ),
@@ -254,7 +254,7 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right,
               color: AppColors.textTertiary,
               size: 20,

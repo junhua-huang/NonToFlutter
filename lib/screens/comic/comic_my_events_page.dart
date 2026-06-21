@@ -235,8 +235,7 @@ class _ComicTabListState extends State<_ComicTabList> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(_error!,
-                style: const TextStyle(color: AppColors.textSecondary)),
+            Text(_error!, style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 12),
             ElevatedButton(onPressed: _loadData, child: const Text('重试')),
           ],

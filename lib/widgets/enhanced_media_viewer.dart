@@ -1,4 +1,4 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
@@ -65,13 +65,15 @@ class EnhancedImageViewerScreen extends StatefulWidget {
           initialPostIndex: initialPostIndex,
           initialMediaIndex: initialMediaIndex,
         ),
-        transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
       ),
     );
   }
 
   @override
-  State<EnhancedImageViewerScreen> createState() => _EnhancedImageViewerScreenState();
+  State<EnhancedImageViewerScreen> createState() =>
+      _EnhancedImageViewerScreenState();
 }
 
 class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
@@ -94,14 +96,16 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
   @override
   void initState() {
     super.initState();
-    _currentPostIndex = widget.initialPostIndex.clamp(0, widget.items.length - 1);
+    _currentPostIndex =
+        widget.initialPostIndex.clamp(0, widget.items.length - 1);
     _currentMediaIndex = widget.initialMediaIndex;
     _postPageController = PageController(initialPage: _currentPostIndex);
     _postStates = {for (final item in widget.items) item.post.id: item.post};
 
     // Record view for initial post
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _recordViewIfNeeded(_postStates[widget.items[_currentPostIndex].post.id]!);
+      _recordViewIfNeeded(
+          _postStates[widget.items[_currentPostIndex].post.id]!);
     });
   }
 
@@ -208,11 +212,14 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
-                      width: 36, height: 36,
+                      width: 36,
+                      height: 36,
                       decoration: const BoxDecoration(
-                        color: Colors.black45, shape: BoxShape.circle,
+                        color: Colors.black45,
+                        shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.close, color: Colors.white, size: 22),
+                      child: const Icon(Icons.close,
+                          color: Colors.white, size: 22),
                     ),
                   ),
                   const Spacer(),
@@ -222,7 +229,6 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
               ),
             ),
           ),
-
         ],
       ),
     );
@@ -230,13 +236,17 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
 
   Widget _buildMediaIndicator() {
     final currentItem = widget.items[_currentPostIndex];
-    final mediaUrls = currentItem.mediaUrls.map(_resolveUrl).where((u) => u.isNotEmpty).toList();
+    final mediaUrls = currentItem.mediaUrls
+        .map(_resolveUrl)
+        .where((u) => u.isNotEmpty)
+        .toList();
     if (mediaUrls.length <= 1) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.black54, borderRadius: BorderRadius.circular(12),
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         '${_currentMediaIndex + 1} / ${mediaUrls.length}',
@@ -248,7 +258,8 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
   Widget _buildPostPage(PostMediaItem item, int postIdx) {
     final post = item.post;
     final currentPost = _postStates[post.id] ?? post;
-    final mediaUrls = item.mediaUrls.map(_resolveUrl).where((u) => u.isNotEmpty).toList();
+    final mediaUrls =
+        item.mediaUrls.map(_resolveUrl).where((u) => u.isNotEmpty).toList();
 
     if (!_galleryControllers.containsKey(postIdx)) {
       _galleryControllers[postIdx] = PageController(
@@ -269,14 +280,17 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
                 initialScale: PhotoViewComputedScale.contained,
                 minScale: PhotoViewComputedScale.contained * 0.5,
                 maxScale: PhotoViewComputedScale.covered * 4,
-                heroAttributes: PhotoViewHeroAttributes(tag: 'enhanced_media_${post.id}_$index'),
+                heroAttributes: PhotoViewHeroAttributes(
+                    tag: 'enhanced_media_${post.id}_$index'),
                 errorBuilder: (_, __, ___) => const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.broken_image, color: Colors.white54, size: 48),
                       SizedBox(height: 8),
-                      Text('图片加载失败', style: TextStyle(color: Colors.white54, fontSize: 14)),
+                      Text('图片加载失败',
+                          style:
+                              TextStyle(color: Colors.white54, fontSize: 14)),
                     ],
                   ),
                 ),
@@ -290,7 +304,8 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
             },
             pageController: _galleryControllers[postIdx],
             onPageChanged: (i) => _onMediaPageChanged(postIdx, i),
-            backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+            backgroundDecoration:
+                const BoxDecoration(color: Colors.transparent),
           )
         else
           const Center(
@@ -314,15 +329,20 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
                   if (u != null) _navigateToUser(u);
                 },
                 child: Text(
-                  currentPost.user?.displayName ?? currentPost.user?.username ?? '未知用户',
+                  currentPost.user?.displayName ??
+                      currentPost.user?.username ??
+                      '未知用户',
                   style: const TextStyle(
-                    color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               const SizedBox(height: 4),
               // Content text (rich text with #/@ highlights)
-              if (currentPost.content != null && currentPost.content!.isNotEmpty)
+              if (currentPost.content != null &&
+                  currentPost.content!.isNotEmpty)
                 _PostContentText(
                   content: currentPost.content!,
                   onTopicTap: _navigateToTopic,
@@ -421,7 +441,7 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
           maxChildSize: 0.95,
           builder: (ctx, scrollController) {
             return Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.background,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
@@ -440,7 +460,9 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
                   // Title
                   const Padding(
                     padding: EdgeInsets.only(bottom: 8),
-                    child: Text('评论', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    child: Text('评论',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                   const Divider(height: 1, thickness: 0.5),
                   // Comment section (takes remaining space)
@@ -451,7 +473,8 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
                       scrollController: scrollController,
                       onCommentCountChanged: (count) {
                         setState(() {
-                          _postStates[post.id] = _postStates[post.id]!.copyWith(commentCount: count);
+                          _postStates[post.id] = _postStates[post.id]!
+                              .copyWith(commentCount: count);
                         });
                       },
                     ),
@@ -464,6 +487,7 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
       },
     );
   }
+
   void _recordViewIfNeeded(Post post) async {
     if (_viewedPostIds.contains(post.id)) return;
     _viewedPostIds.add(post.id);
@@ -477,7 +501,8 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
           );
         });
         PostInteractionNotifier().notifyViewChanged(
-          post.id, _postStates[post.id]!.viewCount,
+          post.id,
+          _postStates[post.id]!.viewCount,
         );
       }
     } catch (e) {
@@ -492,7 +517,8 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
     if (!auth.isLoggedIn || auth.user == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先登录后再点赞'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('请先登录后再点赞'), duration: Duration(seconds: 2)),
       );
       return;
     }
@@ -515,7 +541,9 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
         await PostService().likePost(post.id);
       }
       PostInteractionNotifier().notifyLikeChanged(
-        post.id, !wasLiked, _postStates[post.id]!.likeCount,
+        post.id,
+        !wasLiked,
+        _postStates[post.id]!.likeCount,
       );
     } catch (e) {
       setState(() => _postStates[post.id] = oldPost); // Rollback
@@ -569,7 +597,9 @@ class _PostContentTextState extends State<_PostContentText> {
         children: [
           AnimatedCrossFade(
             duration: const Duration(milliseconds: 200),
-            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             firstChild: RichTextContent(
               text: widget.content,
               style: baseStyle,
@@ -629,7 +659,8 @@ class _VerticalStatButton extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             _formatCount(count),
-            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),

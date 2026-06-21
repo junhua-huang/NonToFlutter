@@ -294,7 +294,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
                     bottom:
                         BorderSide(color: AppColors.borderLight, width: 0.5)),
@@ -309,7 +309,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       children: [
                         Text(
                           user?.displayName ?? user?.username ?? '用户',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                               color: AppColors.textPrimary),
@@ -318,7 +318,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         const SizedBox(height: 2),
                         Text(
                           '@${user?.username ?? 'user'}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 14, color: AppColors.textSecondary),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -330,9 +330,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
             // Menu items
             ListTile(
-              leading:
-                  const Icon(Icons.edit_outlined, color: AppColors.textPrimary),
-              title: const Text('编辑个人资料',
+              leading: Icon(Icons.edit_outlined, color: AppColors.textPrimary),
+              title: Text('编辑个人资料',
                   style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
@@ -343,8 +342,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.person_add_outlined,
-                  color: AppColors.textPrimary),
+              leading:
+                  Icon(Icons.person_add_outlined, color: AppColors.textPrimary),
               title: Consumer(
                 builder: (context, ref, _) {
                   final notifs = ref.watch(notificationsProvider).notifications;
@@ -355,7 +354,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       .length;
                   return Row(
                     children: [
-                      const Text('好友申请',
+                      Text('好友申请',
                           style: TextStyle(
                               fontSize: 15, color: AppColors.textPrimary)),
                       if (friendCount > 0) ...[
@@ -390,8 +389,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.tag, color: AppColors.textPrimary),
-              title: const Text('我的话题',
+              leading: Icon(Icons.tag, color: AppColors.textPrimary),
+              title: Text('我的话题',
                   style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
@@ -402,9 +401,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.groups_outlined,
-                  color: AppColors.textPrimary),
-              title: const Text('社群',
+              leading:
+                  Icon(Icons.groups_outlined, color: AppColors.textPrimary),
+              title: Text('社群',
                   style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
@@ -416,8 +415,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.event, color: AppColors.textPrimary),
-              title: const Text('漫展时间线',
+              leading: Icon(Icons.event, color: AppColors.textPrimary),
+              title: Text('漫展时间线',
                   style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
@@ -428,9 +427,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.bookmark_border,
-                  color: AppColors.textPrimary),
-              title: const Text('我的漫展',
+              leading:
+                  Icon(Icons.bookmark_border, color: AppColors.textPrimary),
+              title: Text('我的漫展',
                   style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
@@ -441,11 +440,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               },
             ),
             const Spacer(),
-            const Divider(height: 1, color: AppColors.borderLight),
+            Divider(height: 1, color: AppColors.borderLight),
             ListTile(
-              leading: const Icon(Icons.settings_outlined,
-                  color: AppColors.textPrimary),
-              title: const Text('设置',
+              leading:
+                  Icon(Icons.settings_outlined, color: AppColors.textPrimary),
+              title: Text('设置',
                   style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);

@@ -212,7 +212,7 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -253,12 +253,11 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.done_all,
-                color: AppColors.textSecondary, size: 18),
+            Icon(Icons.done_all, color: AppColors.textSecondary, size: 18),
             const SizedBox(width: 8),
             Text(
               '稍早动态 ($count)',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textSecondary,
@@ -268,7 +267,7 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
             AnimatedRotation(
               turns: _showReadNotifications ? 0.5 : 0,
               duration: const Duration(milliseconds: 250),
-              child: const Icon(Icons.expand_more,
+              child: Icon(Icons.expand_more,
                   color: AppColors.textSecondary, size: 20),
             ),
           ],
@@ -364,7 +363,7 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
                     elevation: 0,
                     surfaceTintColor: Colors.transparent,
                     centerTitle: false,
-                    title: const Text('通知',
+                    title: Text('通知',
                         style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -489,7 +488,7 @@ class _NotificationTile extends StatelessWidget {
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     text: TextSpan(
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 14,
                           height: 1.4,
                           color: AppColors.textPrimary),
@@ -515,7 +514,7 @@ class _NotificationTile extends StatelessWidget {
                   ],
                   const SizedBox(height: 4),
                   Text(AppDateUtils.formatTimeAgo(notification.createdAt),
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),

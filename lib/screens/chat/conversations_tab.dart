@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
@@ -35,15 +35,15 @@ class _ConversationsTabState extends ConsumerState<ConversationsTab> {
         _refreshController.refreshCompleted();
       },
       header: const WaterDropHeader(
-        complete:
-            Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+        complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
         waterDropColor: AppColors.primary,
       ),
       child: _buildBody(state, conversations),
     );
   }
 
-  Widget _buildBody(ConversationsState state, List<Conversation> conversations) {
+  Widget _buildBody(
+      ConversationsState state, List<Conversation> conversations) {
     if (state.isLoading) {
       return const ConversationSkeleton();
     }
@@ -117,7 +117,7 @@ class _ConversationTile extends StatelessWidget {
           if (conversation.lastMessageAt != null)
             Text(
               AppDateUtils.formatTimeAgo(conversation.lastMessageAt),
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
         ],
       ),

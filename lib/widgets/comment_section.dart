@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/data/emoji_data.dart';
 import 'package:nonto/models/comment.dart';
 import 'package:nonto/models/user.dart';
@@ -79,7 +79,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     _hasText.value = _commentController.text.trim().isNotEmpty;
   }
 
-  CommentNotifier get _notifier => ref.read(commentProvider(_sectionKey).notifier);
+  CommentNotifier get _notifier =>
+      ref.read(commentProvider(_sectionKey).notifier);
   CommentState get _state => ref.watch(commentProvider(_sectionKey));
 
   @override
@@ -138,7 +139,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.chat_bubble_outline_rounded, size: 48, color: colors.outlineVariant),
+          Icon(Icons.chat_bubble_outline_rounded,
+              size: 48, color: colors.outlineVariant),
           const SizedBox(height: 12),
           Text(
             '还没有评论，来说两句吧',
@@ -204,24 +206,27 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                     child: Column(
                       children: [
                         ...comment.replies.map((r) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: _CommentItem(
-                            comment: r,
-                            targetType: widget.targetType,
-                            isOwner: false,
-                            onReply: () => _notifier.startReply(
-                              r.id.toString(),
-                              r.user?.displayName ?? r.user?.username ?? '用户',
-                              r.userId,
-                            ),
-                            onLike: () => _notifier.toggleLike(r.id),
-                            onDelete: () => _confirmDelete(r),
-                            isLiking: state.likingIds.contains(r.id),
-                          ),
-                        )),
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: _CommentItem(
+                                comment: r,
+                                targetType: widget.targetType,
+                                isOwner: false,
+                                onReply: () => _notifier.startReply(
+                                  r.id.toString(),
+                                  r.user?.displayName ??
+                                      r.user?.username ??
+                                      '用户',
+                                  r.userId,
+                                ),
+                                onLike: () => _notifier.toggleLike(r.id),
+                                onDelete: () => _confirmDelete(r),
+                                isLiking: state.likingIds.contains(r.id),
+                              ),
+                            )),
                         if (comment.repliesHasMore)
                           _AutoLoadMore(
-                            isLoading: state.loadingRepliesIds.contains(comment.id),
+                            isLoading:
+                                state.loadingRepliesIds.contains(comment.id),
                             key: ValueKey('reply_more_${comment.id}'),
                             onVisible: () {
                               _notifier.loadMoreReplies(comment.id);
@@ -263,7 +268,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('删除评论',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        content: const Text('确定要删除这条评论吗？',
+        content: Text('确定要删除这条评论吗？',
             style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
@@ -304,7 +309,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         top: 8,
         bottom: 8 + MediaQuery.of(context).viewInsets.bottom,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
         border: Border(
           top: BorderSide(color: AppColors.borderLight, width: 0.5),
@@ -344,8 +349,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                     behavior: HitTestBehavior.opaque,
                     child: const Padding(
                       padding: EdgeInsets.all(4),
-                      child: Icon(Icons.close,
-                          size: 16, color: AppColors.primary),
+                      child:
+                          Icon(Icons.close, size: 16, color: AppColors.primary),
                     ),
                   ),
                 ],
@@ -383,19 +388,19 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                     focusNode: _commentFocusNode,
                     maxLines: null,
                     minLines: 1,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       color: AppColors.textPrimary,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: '写评论...',
                       hintStyle: TextStyle(
                         fontSize: 15,
                         color: AppColors.textTertiary,
                       ),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
                     onSubmitted: _submitWithText,
                   ),
@@ -522,12 +527,15 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                               decoration: BoxDecoration(
                                 border: Border(
                                   bottom: BorderSide(
-                                    color: active ? colors.primary : Colors.transparent,
+                                    color: active
+                                        ? colors.primary
+                                        : Colors.transparent,
                                     width: 2,
                                   ),
                                 ),
                               ),
-                              child: Text(categories[i].key, style: const TextStyle(fontSize: 20)),
+                              child: Text(categories[i].key,
+                                  style: const TextStyle(fontSize: 20)),
                             ),
                           );
                         },
@@ -546,7 +554,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                     final emojis = categories[tabIndex].value;
                     return GridView.builder(
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 8,
                         childAspectRatio: 1.2,
                         crossAxisSpacing: 4,
@@ -560,7 +569,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                         },
                         borderRadius: BorderRadius.circular(20),
                         child: Center(
-                          child: Text(emojis[i], style: const TextStyle(fontSize: 22)),
+                          child: Text(emojis[i],
+                              style: const TextStyle(fontSize: 22)),
                         ),
                       ),
                     );
@@ -600,9 +610,11 @@ class _CommentItem extends ConsumerWidget {
 
   void _navigateToProfile(BuildContext context, User? user) {
     if (user == null) return;
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => UserProfileScreen(user: user),
-    ));
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => UserProfileScreen(user: user),
+        ));
   }
 
   @override
@@ -657,7 +669,8 @@ class _CommentItem extends ConsumerWidget {
                             ),
                             if (comment.replyToUser != null)
                               GestureDetector(
-                                onTap: () => _navigateToProfile(context, comment.replyToUser),
+                                onTap: () => _navigateToProfile(
+                                    context, comment.replyToUser),
                                 child: Text(
                                   '@${comment.replyToUser!.displayName ?? comment.replyToUser!.username}',
                                   style: TextStyle(
@@ -669,7 +682,8 @@ class _CommentItem extends ConsumerWidget {
                               ),
                             Text(
                               AppDateUtils.formatTimeAgo(comment.createdAt),
-                              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+                              style: TextStyle(
+                                  fontSize: 11, color: colors.onSurfaceVariant),
                             ),
                           ],
                         ),
@@ -690,9 +704,13 @@ class _CommentItem extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                comment.isLiked ? Icons.favorite : Icons.favorite_border,
+                                comment.isLiked
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
                                 size: 14,
-                                color: comment.isLiked ? AppColors.likeRed : colors.onSurfaceVariant,
+                                color: comment.isLiked
+                                    ? AppColors.likeRed
+                                    : colors.onSurfaceVariant,
                               ),
                               if (comment.likeCount > 0) ...[
                                 const SizedBox(width: 2),
@@ -700,7 +718,9 @@ class _CommentItem extends ConsumerWidget {
                                   '${comment.likeCount}',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: comment.isLiked ? AppColors.likeRed : colors.onSurfaceVariant,
+                                    color: comment.isLiked
+                                        ? AppColors.likeRed
+                                        : colors.onSurfaceVariant,
                                   ),
                                 ),
                               ],

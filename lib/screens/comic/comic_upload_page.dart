@@ -483,7 +483,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
           maxLength: maxLength,
           keyboardType: keyboardType,
           validator: validator,
-          style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: AppColors.textTertiary),

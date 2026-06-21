@@ -568,7 +568,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
     final user = auth.user;
 
     if (user == null) {
-      return const Center(
+      return Center(
           child:
               Text('请先登录', style: TextStyle(color: AppColors.textSecondary)));
     }
@@ -691,7 +691,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                             children: [
                               Text(
                                 user.displayName ?? user.username,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.textPrimary),
@@ -699,7 +699,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                               const SizedBox(height: 2),
                               Text(
                                 '@${user.username}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 15,
                                     color: AppColors.textSecondary),
                               ),
@@ -716,7 +716,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                       child: Text(
                         user.bio!,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 15,
                             height: 1.4,
                             color: AppColors.textPrimary),
@@ -728,14 +728,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.calendar_today,
+                        Icon(Icons.calendar_today,
                             size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 6),
                         Text(
                           user.createdAt != null
                               ? '${AppDateUtils.formatTimeAgo(user.createdAt)} 加入'
                               : '已加入',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 14, color: AppColors.textSecondary),
                         ),
                       ],
@@ -778,7 +778,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                                     onTap: _navigateToFriends,
                                     child: Text(
                                       '$_friendCount 位好友',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.textPrimary),
@@ -787,7 +787,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                                   const SizedBox(width: 16),
                                   Text(
                                     '$_likeCount 个喜欢',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
                                         color: AppColors.textPrimary),
@@ -801,7 +801,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(48),
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   border: Border(
                       bottom:
                           BorderSide(color: AppColors.borderLight, width: 0.5)),
@@ -1000,7 +1000,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
             const SizedBox(height: 12),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 15,
               ),
@@ -1009,7 +1009,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 13,
                 ),

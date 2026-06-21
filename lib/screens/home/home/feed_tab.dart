@@ -42,16 +42,16 @@ class _FeedTabState extends ConsumerState<FeedTab> {
 
   void _onPostLikeEvent(PostLikeEvent event) {
     ref.read(feedProvider.notifier).updatePost(
-      event.postId,
-      (p) => p.copyWith(isLiked: event.isLiked, likeCount: event.likeCount),
-    );
+          event.postId,
+          (p) => p.copyWith(isLiked: event.isLiked, likeCount: event.likeCount),
+        );
   }
 
   void _onPostViewEvent(PostViewEvent event) {
     ref.read(feedProvider.notifier).updatePost(
-      event.postId,
-      (p) => p.copyWith(viewCount: event.viewCount),
-    );
+          event.postId,
+          (p) => p.copyWith(viewCount: event.viewCount),
+        );
   }
 
   @override
@@ -215,7 +215,8 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                           padding: const EdgeInsets.only(left: 12),
                           child: GestureDetector(
                             onTap: () => Scaffold.of(context).openDrawer(),
-                            child: ImageUtils.buildAvatar(authState.user, radius: 10),
+                            child: ImageUtils.buildAvatar(authState.user,
+                                radius: 10),
                           ),
                         ),
                         title: Text(
@@ -247,67 +248,73 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                   return false;
                 },
                 child: SmartRefresher(
-              controller: _refreshController,
-              enablePullDown: true,
-              enablePullUp: feedState.hasMore,
-              onRefresh: _refreshPosts,
-              onLoading: _loadPosts,
-              header: const ClassicHeader(
-                refreshingText: '刷新中...',
-                completeText: '刷新成功',
-                failedText: '刷新失败',
-                idleText: '',
-                refreshingIcon: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
-                completeIcon: Icon(Icons.check_circle, color: AppColors.primary, size: 16),
-                failedIcon: Icon(Icons.error_outline, color: Colors.red, size: 16),
-                height: 44,
-              ),
-              footer: CustomFooter(
-                builder: (context, mode) {
-                  Widget body;
-                  if (mode == LoadStatus.idle) {
-                    body = const Text('上拉加载更多',
-                        style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13));
-                  } else if (mode == LoadStatus.loading) {
-                    body = const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary, strokeWidth: 2),
-                    );
-                  } else if (mode == LoadStatus.failed) {
-                    body = const Text('加载失败，点击重试',
-                        style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13));
-                  } else if (mode == LoadStatus.canLoading) {
-                    body = const Text('松开加载更多',
-                        style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13));
-                  } else {
-                    final doneText = feedState.feedStatus == 'fallback'
-                        ? '下面是更早一些的动态'
-                        : '你已经看完最近动态';
-                    body = Text(doneText,
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13));
-                  }
-                  return Container(
-                    height: 55,
-                    alignment: Alignment.center,
-                    child: body,
-                  );
-                },
-              ),
-              // SmartRefresher 的 child 必须始终是 ListView，
-              // 否则下拉刷新后 widget 树替换会导致 ScrollController 失联，
-              // 造成列表无法滑动。
-              child: _buildFeedContent(feedState),
-            ), // SmartRefresher
-          ), // NotificationListener
-        ); // return Expanded
-      }, // Consumer builder
-    ), // Consumer
+                  controller: _refreshController,
+                  enablePullDown: true,
+                  enablePullUp: feedState.hasMore,
+                  onRefresh: _refreshPosts,
+                  onLoading: _loadPosts,
+                  header: const ClassicHeader(
+                    refreshingText: '刷新中...',
+                    completeText: '刷新成功',
+                    failedText: '刷新失败',
+                    idleText: '',
+                    refreshingIcon: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary, strokeWidth: 2)),
+                    completeIcon: Icon(Icons.check_circle,
+                        color: AppColors.primary, size: 16),
+                    failedIcon:
+                        Icon(Icons.error_outline, color: Colors.red, size: 16),
+                    height: 44,
+                  ),
+                  footer: CustomFooter(
+                    builder: (context, mode) {
+                      Widget body;
+                      if (mode == LoadStatus.idle) {
+                        body = Text('上拉加载更多',
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 13));
+                      } else if (mode == LoadStatus.loading) {
+                        body = const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: AppColors.primary, strokeWidth: 2),
+                        );
+                      } else if (mode == LoadStatus.failed) {
+                        body = Text('加载失败，点击重试',
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 13));
+                      } else if (mode == LoadStatus.canLoading) {
+                        body = Text('松开加载更多',
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 13));
+                      } else {
+                        final doneText = feedState.feedStatus == 'fallback'
+                            ? '下面是更早一些的动态'
+                            : '你已经看完最近动态';
+                        body = Text(doneText,
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 13));
+                      }
+                      return Container(
+                        height: 55,
+                        alignment: Alignment.center,
+                        child: body,
+                      );
+                    },
+                  ),
+                  // SmartRefresher 的 child 必须始终是 ListView，
+                  // 否则下拉刷新后 widget 树替换会导致 ScrollController 失联，
+                  // 造成列表无法滑动。
+                  child: _buildFeedContent(feedState),
+                ), // SmartRefresher
+              ), // NotificationListener
+            ); // return Expanded
+          }, // Consumer builder
+        ), // Consumer
       ], // Column children
     ); // Column
   } // build

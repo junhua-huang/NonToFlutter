@@ -13,7 +13,6 @@ import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/api/topic_service.dart';
 import 'package:nonto/providers/explore_notifier.dart';
 import 'package:nonto/providers/core_providers.dart';
-import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/add_friend_button.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
@@ -293,7 +292,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
                 child: hideHeader
                     ? const SizedBox.shrink()
                     : AppBar(
-                        title: const Text('发现',
+                        title: Text('发现',
                             style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
@@ -321,15 +320,15 @@ class _SearchTabState extends ConsumerState<SearchTab>
                   style: const TextStyle(fontSize: 15),
                   decoration: InputDecoration(
                     hintText: '搜索',
-                    hintStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.search,
+                    hintStyle: TextStyle(color: AppColors.textSecondary),
+                    prefixIcon: Icon(Icons.search,
                         color: AppColors.textSecondary, size: 20),
                     suffixIcon: ValueListenableBuilder<bool>(
                       valueListenable: _textNotEmpty,
                       builder: (_, notEmpty, __) {
                         if (!notEmpty) return const SizedBox.shrink();
                         return IconButton(
-                          icon: const Icon(Icons.close,
+                          icon: Icon(Icons.close,
                               size: 18, color: AppColors.textSecondary),
                           onPressed: () {
                             _controller.clear();
@@ -524,7 +523,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
               color: AppColors.textTertiary.withValues(alpha: 0.55),
             ),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               '暂时没有发现内容',
               style: TextStyle(
                 color: AppColors.textPrimary,
@@ -533,7 +532,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               '下拉刷新，或试试搜索你感兴趣的话题、帖子和漫展。',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -558,7 +557,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
             Icon(Icons.history,
                 size: 48, color: AppColors.textTertiary.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
-            const Text('暂无搜索记录',
+            Text('暂无搜索记录',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
           ],
         ),
@@ -571,7 +570,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
           padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
           child: Row(
             children: [
-              const Text('最近搜索',
+              Text('最近搜索',
                   style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 15,
@@ -588,7 +587,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
             ],
           ),
         ),
-        const Divider(height: 1, color: AppColors.borderLight),
+        Divider(height: 1, color: AppColors.borderLight),
         // 记录列表占满剩余空间
         Expanded(
           child: ListView.builder(
@@ -680,7 +679,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
               child: Row(
                 children: [
                   Text(item.label!,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
                           color: AppColors.textPrimary)),
@@ -706,7 +705,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
               ),
             );
           case _DefaultItemType.divider:
-            return const Padding(
+            return Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Divider(height: 1, color: AppColors.borderLight),
             );
@@ -750,13 +749,12 @@ class _SearchTabState extends ConsumerState<SearchTab>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              const Icon(Icons.history,
-                  size: 18, color: AppColors.textSecondary),
+              Icon(Icons.history, size: 18, color: AppColors.textSecondary),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(_searchHistory[index],
-                    style: const TextStyle(
-                        fontSize: 14, color: AppColors.textPrimary)),
+                    style:
+                        TextStyle(fontSize: 14, color: AppColors.textPrimary)),
               ),
             ],
           ),
@@ -783,7 +781,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('#${topic.name}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                           color: AppColors.textPrimary)),
@@ -791,12 +789,12 @@ class _SearchTabState extends ConsumerState<SearchTab>
                       topic.description!.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(topic.description!,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppColors.textSecondary, fontSize: 13)),
                   ],
                   const SizedBox(height: 2),
                   Text('${topic.postCount} 条帖子 · ${topic.followerCount} 人关注',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textTertiary, fontSize: 12)),
                 ],
               ),
@@ -878,13 +876,12 @@ class _SearchTabState extends ConsumerState<SearchTab>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.search_off,
-                size: 56, color: AppColors.borderLight),
+            Icon(Icons.search_off, size: 56, color: AppColors.borderLight),
             const SizedBox(height: 16),
             Text('未找到相关结果',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
             const SizedBox(height: 6),
-            const Text('试试其他关键词',
+            Text('试试其他关键词',
                 style: TextStyle(color: AppColors.textTertiary, fontSize: 14)),
           ],
         ),
@@ -895,7 +892,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
       children: [
         // Tabs
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
                 bottom: BorderSide(color: AppColors.borderLight, width: 0.5)),
           ),
@@ -937,7 +934,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
       padding: EdgeInsets.zero,
       children: [
         if (_userResults.isNotEmpty) ...[
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text('用户',
                 style: TextStyle(
@@ -946,10 +943,10 @@ class _SearchTabState extends ConsumerState<SearchTab>
                     color: AppColors.textPrimary)),
           ),
           ..._userResults.map((u) => _buildUserTile(u)),
-          const Divider(height: 1, color: AppColors.borderLight),
+          Divider(height: 1, color: AppColors.borderLight),
         ],
         if (_postResults.isNotEmpty) ...[
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text('帖子',
                 style: TextStyle(
@@ -960,7 +957,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
           ..._postResults.map((p) => _buildPostTile(p)),
         ],
         if (_comicEventResults.isNotEmpty) ...[
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text('漫展',
                 style: TextStyle(
@@ -976,7 +973,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildUsersList() {
     if (_userResults.isEmpty) {
-      return const Center(
+      return Center(
           child: Text('没有匹配的用户',
               style: TextStyle(color: AppColors.textSecondary)));
     }
@@ -988,7 +985,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildPostsList() {
     if (_postResults.isEmpty) {
-      return const Center(
+      return Center(
           child: Text('没有匹配的帖子',
               style: TextStyle(color: AppColors.textSecondary)));
     }
@@ -1000,7 +997,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildComicEventsList() {
     if (_comicEventResults.isEmpty) {
-      return const Center(
+      return Center(
           child: Text('没有匹配的漫展',
               style: TextStyle(color: AppColors.textSecondary)));
     }
@@ -1015,75 +1012,13 @@ class _SearchTabState extends ConsumerState<SearchTab>
   }
 
   Widget _buildPostTile(Post post) {
-    return InkWell(
+    return PostCard(
+      post: post,
+      feedPosts: _postResults,
       onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                PostDetailScreen(postId: post.id, initialPost: post),
-          )),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Author row
-            Row(
-              children: [
-                ImageUtils.buildAvatar(post.user, radius: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(post.user?.displayName ?? '未知用户',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: AppColors.textPrimary)),
-                      Text(AppDateUtils.formatTimeAgo(post.createdAt),
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(post.content ?? '',
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 14, height: 1.4, color: AppColors.textPrimary)),
-            if (post.hasImage) ...[
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 180),
-                  child: ImageUtils.buildPostImage(
-                      post.images != null && post.images!.isNotEmpty
-                          ? post.images![0]
-                          : null,
-                      width: double.infinity),
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _SmallIcon(
-                    icon: Icons.comment_outlined, count: post.commentCount),
-                const SizedBox(width: 28),
-                _SmallIcon(icon: Icons.favorite_border, count: post.likeCount),
-                const SizedBox(width: 28),
-              ],
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Divider(height: 1, color: AppColors.borderLight),
-            ),
-          ],
+        context,
+        MaterialPageRoute(
+          builder: (_) => PostDetailScreen(postId: post.id, initialPost: post),
         ),
       ),
     );
@@ -1114,7 +1049,7 @@ class _FriendCard extends StatelessWidget {
               user.displayName ?? user.username,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                   color: AppColors.textPrimary),
@@ -1127,8 +1062,7 @@ class _FriendCard extends StatelessWidget {
               '@${user.username}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
             ),
           ),
           const SizedBox(height: 8),
@@ -1168,20 +1102,20 @@ class _UserTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(user.displayName ?? user.username,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                           color: AppColors.textPrimary)),
                   const SizedBox(height: 2),
                   Text('@${user.username}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 13)),
                   if (user.bio != null && user.bio!.isNotEmpty) ...[
                     const SizedBox(height: 3),
                     Text(user.bio!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppColors.textSecondary, fontSize: 13)),
                   ],
                 ],
@@ -1191,29 +1125,6 @@ class _UserTile extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _SmallIcon extends StatelessWidget {
-  final IconData icon;
-  final int count;
-
-  const _SmallIcon({required this.icon, this.count = 0});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: AppColors.textSecondary),
-        if (count > 0) ...[
-          const SizedBox(width: 3),
-          Text('$count',
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 12)),
-        ],
-      ],
     );
   }
 }

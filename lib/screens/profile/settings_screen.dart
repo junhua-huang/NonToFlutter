@@ -29,7 +29,7 @@ Widget _buildSettingsSection(
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textSecondary,
@@ -39,7 +39,7 @@ Widget _buildSettingsSection(
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textTertiary,
                 ),
@@ -62,7 +62,7 @@ Widget _buildSettingsSection(
 }
 
 Widget _buildSettingsDivider() {
-  return const Divider(
+  return Divider(
       height: 1, indent: 16, endIndent: 16, color: AppColors.borderLight);
 }
 
@@ -174,7 +174,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -189,13 +189,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Container(
                   width: 36,
                   height: 4,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                       color: AppColors.dragHandle,
                       borderRadius: BorderRadius.all(Radius.circular(2))),
                 ),
               ),
               const SizedBox(height: 20),
-              const Text('外观模式',
+              Text('外观模式',
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -263,7 +263,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final authState = ref.watch(authProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           '设置',
           style: TextStyle(
             fontSize: 20,
@@ -372,7 +372,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children: [
                     Text(
                       _themeLabel(ref.watch(themeProvider)),
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 14),
                     ),
                     const SizedBox(width: 4),
@@ -394,7 +394,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.info_outline,
                 trailing: Text(
                   'v${AppConfig.appVersion}',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
                 onTap: null,
               ),
@@ -460,8 +460,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ? null
           : Text(
               subtitle,
-              style:
-                  const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
       trailing: trailing,
       onTap: onTap,
@@ -485,8 +484,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ? null
           : Text(
               subtitle,
-              style:
-                  const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
       trailing: Switch.adaptive(
         value: value,
@@ -652,7 +650,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       child: Center(
                           child: CircularProgressIndicator(color: Colors.red)),
                     )
-                  : const Text(
+                  : Text(
                       '此操作将永久删除您的账号、所有帖子、评论和私信。此操作不可撤销。',
                       style: TextStyle(
                           fontSize: 15, color: AppColors.textSecondary),
@@ -662,7 +660,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   : [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('我再想想',
+                        child: Text('我再想想',
                             style: TextStyle(color: AppColors.textSecondary)),
                       ),
                       TextButton(
@@ -716,7 +714,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('退出登录',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        content: const Text('确定要退出登录吗？',
+        content: Text('确定要退出登录吗？',
             style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
           TextButton(
@@ -827,7 +825,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('隐私设置',
+        title: Text('隐私设置',
             style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -946,7 +944,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -961,14 +959,14 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
                 child: Container(
                   width: 36,
                   height: 4,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                       color: AppColors.dragHandle,
                       borderRadius: BorderRadius.all(Radius.circular(2))),
                 ),
               ),
               const SizedBox(height: 20),
               Text(title,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary)),
@@ -1011,7 +1009,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
                                           : AppColors.textPrimary)),
                               const SizedBox(height: 2),
                               Text(opt.description,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary)),
                             ],
@@ -1067,7 +1065,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       leading: Icon(icon, color: AppColors.textPrimary),
       title: Text(title, style: const TextStyle(fontSize: 16)),
       subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
       trailing: const Icon(Icons.chevron_right, size: 20),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1086,7 +1084,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       leading: Icon(icon, color: AppColors.textPrimary),
       title: Text(title, style: const TextStyle(fontSize: 16)),
       subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
       trailing: Switch.adaptive(
         value: value,
         onChanged: onChanged,
