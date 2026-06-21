@@ -7,6 +7,7 @@ import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/notifications/notifications_tab.dart';
 import 'package:nonto/services/api/notification_service.dart';
 import 'package:nonto/services/cache_keys.dart';
@@ -128,6 +129,18 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   }
 
   void _openConversation(Conversation conv) {
+    if (conv.isCommunity && conv.communityId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CommunityChatScreen(
+            communityId: conv.communityId!,
+            communityName: conv.communityName,
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.push(context,
         MaterialPageRoute(builder: (_) => ChatRoomScreen(conversation: conv)));
   }

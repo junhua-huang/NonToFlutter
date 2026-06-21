@@ -12,6 +12,7 @@ List<Conversation> filterNontoConversations(
     final fields = <String?>[
       other?.displayName,
       other?.username,
+      conversation.communityName,
       conversation.lastMessage?.content,
     ];
 
@@ -26,6 +27,7 @@ String nontoConversationPreview(Conversation conversation) {
   if (lastMessage?.isRecalled == true) return '消息已撤回';
 
   final content = lastMessage?.content?.trim() ?? '';
+  if (conversation.isCommunity && content.isEmpty) return '社群群聊';
   if (content.isEmpty) return '暂无消息';
 
   return content;

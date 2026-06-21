@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -95,9 +95,11 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     _loadInProgress = true;
     debugPrint('[Conv] _loadData START');
     // 先读缓存快速展示
-    final cached = await DataLayer().query(CacheKeys.convFullList, () async => null);
+    final cached =
+        await DataLayer().query(CacheKeys.convFullList, () async => null);
     if (cached.data is List && (cached.data as List).isNotEmpty) {
-      debugPrint('[Conv] _loadData: loaded from CACHE, ${(cached.data as List).length} items');
+      debugPrint(
+          '[Conv] _loadData: loaded from CACHE, ${(cached.data as List).length} items');
       state = state.copyWith(
         conversations: (cached.data as List)
             .whereType<Map>()
@@ -106,7 +108,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         isLoading: false,
       );
     } else {
-      debugPrint('[Conv] _loadData: cache empty or miss, source=${cached.source}');
+      debugPrint(
+          '[Conv] _loadData: cache empty or miss, source=${cached.source}');
     }
     // 后台网络请求，静默更新
     unawaited(loadConversations().whenComplete(() => _loadInProgress = false));
@@ -114,7 +117,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
 
   void _onSessionList(List<Map<String, dynamic>> sessions) {
     // WS 推送的字段名是 partner，统一转成 other_user 对齐 Conversation.fromJson
-    final normalized = sessions.map((e) => Map<String, dynamic>.from(e)).map((s) {
+    final normalized =
+        sessions.map((e) => Map<String, dynamic>.from(e)).map((s) {
       if (s['partner'] != null && s['other_user'] == null) {
         s['other_user'] = s['partner'];
         s['partner_id'] ??= s['partner']?['id'];
@@ -122,8 +126,10 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       }
       return s;
     }).toList();
-    final conversations = normalized.map((e) => Conversation.fromJson(e)).toList();
-    debugPrint('[Conv] _onSessionList: ${conversations.length} sessions from WS');
+    final conversations =
+        normalized.map((e) => Conversation.fromJson(e)).toList();
+    debugPrint(
+        '[Conv] _onSessionList: ${conversations.length} sessions from WS');
     state = state.copyWith(conversations: conversations, isLoading: false);
     DataLayer().persistConversations(conversations);
     DataLayer().write(CacheKeys.convFullList, normalized);
@@ -178,7 +184,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   void _onWsMessage(Map<String, dynamic> data) {
     final event = data['event'] as String?;
     // #region agent log
-    debugPrint('[Conv] _onWsMessage event=$event keys=${data.keys} convId=${data['conversation_id']}');
+    debugPrint(
+        '[Conv] _onWsMessage event=$event keys=${data.keys} convId=${data['conversation_id']}');
     // #endregion
     if (event == 'friend_accepted_chat') {
       // 好友通过 → 服务端推送新会话 + Hi 消息，直接插入会话列表并显示 Hi 预览
@@ -252,7 +259,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
           otherUser: newConv.otherUser,
           lastMessage: msg,
           lastMessageAt: msg.createdAt,
-          unreadCount: _currentUserId == null || msg.senderId != _currentUserId ? 1 : 0,
+          unreadCount:
+              _currentUserId == null || msg.senderId != _currentUserId ? 1 : 0,
         );
       } catch (_) {}
     }
@@ -266,8 +274,10 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     if (existingIdx >= 0) {
       updated = List.from(state.conversations)
         ..[existingIdx] = newConv
-        ..sort((a, b) => (b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-            .compareTo(a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+        ..sort((a, b) =>
+            (b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(
+                    a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
     } else {
       updated = [newConv, ...state.conversations];
     }
@@ -282,7 +292,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     if (msgId != null) {
       if (_processedMessageIds.length >= _maxProcessedIds) {
         // 清理前半部分旧 ID，防止无限增长
-        final idsToRemove = _processedMessageIds.take(_maxProcessedIds ~/ 2).toSet();
+        final idsToRemove =
+            _processedMessageIds.take(_maxProcessedIds ~/ 2).toSet();
         _processedMessageIds.removeAll(idsToRemove);
       }
       _processedMessageIds.add(msgId);
@@ -293,7 +304,9 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     final msgType = data['message_type'] as String? ?? 'text';
     final preview = _formatPreview(content, msgType);
     final rawUnread = data['unread_count'];
-    final serverUnread = rawUnread is int ? rawUnread : int.tryParse(rawUnread?.toString() ?? '');
+    final serverUnread = rawUnread is int
+        ? rawUnread
+        : int.tryParse(rawUnread?.toString() ?? '');
 
     final lastMsg = Message(
       id: msgId ?? 0,
@@ -313,18 +326,28 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     // 是否本人发送。本人发的消息回显绝不应计入未读——之前若服务端回传的
     // unread_count 包含本人消息，会被错误地设到会话上，表现为「自己发的消息
     // 也算未读」。这里强制以本地判断为准：本人消息 → 未读清零。
-    final isOwnMessage = _currentUserId != null && lastMsg.senderId == _currentUserId;
+    final isOwnMessage =
+        _currentUserId != null && lastMsg.senderId == _currentUserId;
     // 当前会话正打开时（用户在该聊天室），任何新消息都不应产生未读红点。
     final isCurrentOpenConv = ChatRoomState.isOpen(convId);
-    final shouldIncreaseUnread =
-        !isOwnMessage && !isCurrentOpenConv &&
+    final shouldIncreaseUnread = !isOwnMessage &&
+        !isCurrentOpenConv &&
         (_currentUserId == null || lastMsg.senderId != _currentUserId);
     // 最终未读数：本人消息 / 当前打开会话 → 0；否则优先服务端值，服务端无值时本地自增。
     final int effectiveUnread;
     if (isOwnMessage || isCurrentOpenConv) {
       effectiveUnread = 0;
     } else {
-      effectiveUnread = serverUnread ?? (shouldIncreaseUnread ? (state.conversations.isEmpty ? 0 : (state.conversations[existingIdx >= 0 ? existingIdx : 0].unreadCount) + 1) : (existingIdx >= 0 ? state.conversations[existingIdx].unreadCount : 0));
+      effectiveUnread = serverUnread ??
+          (shouldIncreaseUnread
+              ? (state.conversations.isEmpty
+                  ? 0
+                  : (state.conversations[existingIdx >= 0 ? existingIdx : 0]
+                          .unreadCount) +
+                      1)
+              : (existingIdx >= 0
+                  ? state.conversations[existingIdx].unreadCount
+                  : 0));
     }
     List<Conversation> updated;
     if (existingIdx >= 0) {
@@ -337,6 +360,10 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         lastMessage: lastMsg,
         lastMessageAt: lastMsg.createdAt,
         unreadCount: effectiveUnread,
+        type: conv.type,
+        communityId: conv.communityId,
+        communityName: conv.communityName,
+        communityAvatar: conv.communityAvatar,
       );
       updated = List.from(state.conversations)
         ..removeAt(existingIdx)
@@ -349,20 +376,28 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     // 本人消息 / 当前打开会话：把本地 DB 未读同步置 0；否则按 shouldIncreaseUnread 自增。
     if (isOwnMessage || isCurrentOpenConv) {
       DataLayer().updateConvLastMessage(
-        convId, preview, lastMsg.createdAt!, unreadIncrement: 0,
+        convId,
+        preview,
+        lastMsg.createdAt!,
+        unreadIncrement: 0,
       );
       // 确保本地未读被清零（updateConvLastMessage 增量为 0 时不会改 unread_count）
       LocalDbService().clearConversationUnread(convId);
     } else {
       DataLayer().updateConvLastMessage(
-        convId, preview, lastMsg.createdAt!, unreadIncrement: shouldIncreaseUnread ? 1 : 0,
+        convId,
+        preview,
+        lastMsg.createdAt!,
+        unreadIncrement: shouldIncreaseUnread ? 1 : 0,
       );
     }
     DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   void _handleBatchMessages(int conversationId, List<dynamic> messages) {
-    final msgs = messages.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
+    final msgs = messages
+        .map((e) => Message.fromJson(e as Map<String, dynamic>))
+        .toList();
     DataLayer().persistMessages(msgs);
     // 排除本人发送的消息，再排除「当前正打开的会话」——后者不应产生未读。
     final isCurrentOpenConv = ChatRoomState.isOpen(conversationId);
@@ -373,12 +408,15 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
             : msgs.where((m) => m.senderId != _currentUserId).length);
 
     final lastMsg = msgs.last;
-    final preview = _formatPreview(lastMsg.content ?? '', lastMsg.messageType.name);
-    final existingIdx = state.conversations.indexWhere((c) => c.id == conversationId);
+    final preview =
+        _formatPreview(lastMsg.content ?? '', lastMsg.messageType.name);
+    final existingIdx =
+        state.conversations.indexWhere((c) => c.id == conversationId);
     if (existingIdx >= 0) {
       final conv = state.conversations[existingIdx];
       // 当前会话打开时，强制未读为 0，避免批量回放把本人/已读消息算成未读。
-      final newUnread = isCurrentOpenConv ? 0 : conv.unreadCount + unreadIncoming;
+      final newUnread =
+          isCurrentOpenConv ? 0 : conv.unreadCount + unreadIncoming;
       final updatedConv = Conversation(
         id: conv.id,
         user1Id: conv.user1Id,
@@ -387,6 +425,10 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         lastMessage: lastMsg,
         lastMessageAt: lastMsg.createdAt,
         unreadCount: newUnread,
+        type: conv.type,
+        communityId: conv.communityId,
+        communityName: conv.communityName,
+        communityAvatar: conv.communityAvatar,
       );
       final updated = List<Conversation>.from(state.conversations)
         ..removeAt(existingIdx)
@@ -394,12 +436,18 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       state = state.copyWith(conversations: updated);
       if (isCurrentOpenConv) {
         DataLayer().updateConvLastMessage(
-          conversationId, preview, lastMsg.createdAt!, unreadIncrement: 0,
+          conversationId,
+          preview,
+          lastMsg.createdAt!,
+          unreadIncrement: 0,
         );
         LocalDbService().clearConversationUnread(conversationId);
       } else {
         DataLayer().updateConvLastMessage(
-          conversationId, preview, lastMsg.createdAt!, unreadIncrement: unreadIncoming,
+          conversationId,
+          preview,
+          lastMsg.createdAt!,
+          unreadIncrement: unreadIncoming,
         );
       }
     } else {
@@ -428,12 +476,17 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         lastMessage: conv.lastMessage?.copyWith(isRecalled: true),
         lastMessageAt: conv.lastMessageAt,
         unreadCount: conv.unreadCount,
+        type: conv.type,
+        communityId: conv.communityId,
+        communityName: conv.communityName,
+        communityAvatar: conv.communityAvatar,
       );
       final updated = List<Conversation>.from(state.conversations)
         ..removeAt(existingIdx)
         ..insert(existingIdx, updatedConv);
       state = state.copyWith(conversations: updated);
-      DataLayer().updateConvLastMessage(convId, '消息已撤回', conv.lastMessageAt ?? DateTime.now());
+      DataLayer().updateConvLastMessage(
+          convId, '消息已撤回', conv.lastMessageAt ?? DateTime.now());
     }
   }
 
@@ -463,13 +516,20 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         lastMessage: lastMsg,
         lastMessageAt: now,
         unreadCount: conv.unreadCount, // 不增加未读数
+        type: conv.type,
+        communityId: conv.communityId,
+        communityName: conv.communityName,
+        communityAvatar: conv.communityAvatar,
       );
       final updated = List<Conversation>.from(state.conversations)
         ..removeAt(existingIdx)
         ..insert(0, updatedConv);
       state = state.copyWith(conversations: updated);
       DataLayer().updateConvLastMessage(
-        convId, preview, now, unreadIncrement: 0,
+        convId,
+        preview,
+        now,
+        unreadIncrement: 0,
       );
       DataLayer().invalidate(CacheKeys.convPattern);
     } else {
@@ -480,11 +540,16 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
 
   String _formatPreview(String content, String msgType) {
     switch (msgType) {
-      case 'image': return '图片';
-      case 'video': return '视频';
-      case 'file': return '文件';
-      case 'post': return '帖子';
-      case 'comment': return '评论';
+      case 'image':
+        return '图片';
+      case 'video':
+        return '视频';
+      case 'file':
+        return '文件';
+      case 'post':
+        return '帖子';
+      case 'comment':
+        return '评论';
       default:
         return content.length > 30 ? '${content.substring(0, 30)}...' : content;
     }
@@ -499,10 +564,12 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     try {
       // 并发请求：会话列表 + 未读数量（各自独立超时，不互相影响）
       final results = await Future.wait([
-        _chatService.getConversations()
+        _chatService
+            .getConversations()
             .timeout(const Duration(seconds: 25))
             .catchError((_) => null as dynamic),
-        NotificationService().getUnreadCount()
+        NotificationService()
+            .getUnreadCount()
             .timeout(const Duration(seconds: 10))
             .catchError((_) => null as dynamic),
       ]);
@@ -519,9 +586,11 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         );
         return;
       }
-      debugPrint('[Conv] getConversations success=${response.success}, statusCode=${response.statusCode}, msg=${response.message}, dataType=${response.data?.runtimeType}');
+      debugPrint(
+          '[Conv] getConversations success=${response.success}, statusCode=${response.statusCode}, msg=${response.message}, dataType=${response.data?.runtimeType}');
       if (response.success) {
-        debugPrint('[Conv] raw response.data type=${response.data?.runtimeType}');
+        debugPrint(
+            '[Conv] raw response.data type=${response.data?.runtimeType}');
         final data = response.data != null
             ? (response.data is String
                 ? jsonDecode(response.data as String)
@@ -536,25 +605,31 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         } else {
           conversationList = [];
         }
-        debugPrint('[Conv] parsed conversationList.length=${conversationList.length}, data is ${data.runtimeType}');
-        debugPrint('[Conv] first item type=${conversationList.isNotEmpty ? conversationList[0].runtimeType : "empty"}');
-        debugPrint('[Conv] first item keys=${conversationList.isNotEmpty && conversationList[0] is Map ? (conversationList[0] as Map).keys : "n/a"}');
+        debugPrint(
+            '[Conv] parsed conversationList.length=${conversationList.length}, data is ${data.runtimeType}');
+        debugPrint(
+            '[Conv] first item type=${conversationList.isNotEmpty ? conversationList[0].runtimeType : "empty"}');
+        debugPrint(
+            '[Conv] first item keys=${conversationList.isNotEmpty && conversationList[0] is Map ? (conversationList[0] as Map).keys : "n/a"}');
         final conversations = conversationList
             .whereType<Map>()
-            .map((item) => Conversation.fromJson(Map<String, dynamic>.from(item)))
+            .map((item) =>
+                Conversation.fromJson(Map<String, dynamic>.from(item)))
             .toList();
 
         debugPrint('[Conv] conversations.length=${conversations.length}');
         if (conversations.isNotEmpty) {
           final c = conversations[0];
-          debugPrint('[Conv] conv[0] otherUser=${c.otherUser?.username} displayName=${c.otherUser?.displayName} avatar=${c.otherUser?.avatarUrl}');
+          debugPrint(
+              '[Conv] conv[0] otherUser=${c.otherUser?.username} displayName=${c.otherUser?.displayName} avatar=${c.otherUser?.avatarUrl}');
         }
 
         // 提取未读通知数量（独立 try/catch，单个超时不影响会话列表）
         int unread = state.unreadCount;
         final unreadResp = results[1];
         try {
-          debugPrint('[Conv] getUnreadCount success=${unreadResp.success}, data=${unreadResp.data}');
+          debugPrint(
+              '[Conv] getUnreadCount success=${unreadResp.success}, data=${unreadResp.data}');
           if (unreadResp.success && unreadResp.data != null) {
             final unreadData = unreadResp.data;
             if (unreadData is Map) {
@@ -571,20 +646,23 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
           isLoading: false,
           error: null,
         );
-        debugPrint('[Conv] STATE SET: conversations=${conversations.length}, unread=$unread, isLoading=false, error=null');
+        debugPrint(
+            '[Conv] STATE SET: conversations=${conversations.length}, unread=$unread, isLoading=false, error=null');
         // 持久化操作独立 try/catch：数据库异常不影响内存中的会话列表
         try {
           await DataLayer().persistConversations(conversations);
           DataLayer().write(CacheKeys.convFullList, conversationList);
         } catch (dbError) {
-          debugPrint('[Conv] persistConversations failed (non-fatal): $dbError');
+          debugPrint(
+              '[Conv] persistConversations failed (non-fatal): $dbError');
         }
       } else {
         state = state.copyWith(
           error: response.message ?? '加载失败',
           isLoading: false,
         );
-        debugPrint('[Conv] STATE SET: error="${response.message ?? "加载失败"}", isLoading=false');
+        debugPrint(
+            '[Conv] STATE SET: error="${response.message ?? "加载失败"}", isLoading=false');
       }
     } catch (e, stack) {
       state = state.copyWith(error: '网络错误，请稍后重试', isLoading: false);
@@ -715,10 +793,14 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   int? _currentUserId;
   bool _initialized = false;
 
-  final void Function(int convId, String content, String msgType, DateTime now)? _onMessageSent;
+  final void Function(int convId, String content, String msgType, DateTime now)?
+      _onMessageSent;
 
-  MessagesNotifier(this.conversationId, {void Function(int convId, String content, String msgType, DateTime now)? onMessageSent})
-      : _onMessageSent = onMessageSent, super(const MessagesState()) {
+  MessagesNotifier(this.conversationId,
+      {void Function(int convId, String content, String msgType, DateTime now)?
+          onMessageSent})
+      : _onMessageSent = onMessageSent,
+        super(const MessagesState()) {
     _wsMsgSub = _ws.messageStream.listen(_onWsMessage);
     _wsTypingSub = _ws.typingStream.listen(_onWsTyping);
     _wsConnSub = _ws.connectionStream.listen((connected) {
@@ -747,11 +829,13 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final msg = state.messages[idx];
     if (msg.id < 1000000000000) return; // 已被服务端回显替换
     final updated = List<Message>.from(state.messages);
-    updated[idx] = msg.copyWith(id: messageId, clientMsgId: clientMsgId, status: 'sent');
+    updated[idx] =
+        msg.copyWith(id: messageId, clientMsgId: clientMsgId, status: 'sent');
     state = state.copyWith(messages: updated, isSending: false);
     DataLayer().persistMessage(updated[idx]);
     _syncL1();
-    debugPrint('[Chat] ack message_id: ${msg.id} → $messageId (clientMsgId=$clientMsgId)');
+    debugPrint(
+        '[Chat] ack message_id: ${msg.id} → $messageId (clientMsgId=$clientMsgId)');
   }
 
   /// 由 ChatRoomScreen 在 initState 中调用，传入当前用户 ID 和对方用户 ID 并启动加载。
@@ -823,18 +907,19 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     // 逐个 key 尝试 DataLayer 读取（不触发网络）
     for (final key in [cacheKey, altKey1, altKey2]) {
       if (key.isEmpty) continue;
-      final snapshot = await DataLayer().query(key, () async => null,
-          forceRefresh: false);
+      final snapshot =
+          await DataLayer().query(key, () async => null, forceRefresh: false);
       final cached = snapshot.data;
-      debugPrint('[Messages]   DataLayer key="$key" → ${cached is List ? '${cached.length} msgs' : cached == null ? 'MISS' : 'type=${cached.runtimeType}'}');
+      debugPrint(
+          '[Messages]   DataLayer key="$key" → ${cached is List ? '${cached.length} msgs' : cached == null ? 'MISS' : 'type=${cached.runtimeType}'}');
     }
 
     // Step 1: 优先从 warmup 缓存加载（msg:$convId:1, 预热时写入）
     // 因为通过 dump 已知 warmup 是否有数据，优先用缓存而不是等待 SQLite
     try {
       final warmupKey = CacheKeys.msgWarmup(conversationId);
-      final warmupSnapshot = await DataLayer().query(warmupKey, () async => null,
-          forceRefresh: false);
+      final warmupSnapshot = await DataLayer()
+          .query(warmupKey, () async => null, forceRefresh: false);
       if (warmupSnapshot.data is List &&
           (warmupSnapshot.data as List).isNotEmpty) {
         final messages = (warmupSnapshot.data as List<dynamic>)
@@ -856,7 +941,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       if (localMessages.isNotEmpty) {
         // SQLite 有数据但 warmup 没命中 → 用 SQLite
         if (state.messages.isEmpty) {
-          debugPrint('[Messages] Step2 → SQLite fallback, ${localMessages.length} msgs');
+          debugPrint(
+              '[Messages] Step2 → SQLite fallback, ${localMessages.length} msgs');
           state = state.copyWith(
             messages: localMessages.reversed.toList(),
             isLoading: false,
@@ -864,14 +950,13 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         }
         // warmup 有数据但 SQLite 没有 → 补充写入 SQLite
         if (state.messages.isNotEmpty) {
-          final localIds =
-              localMessages.map((m) => m.id).toSet();
-          final toInsert = state.messages
-              .where((m) => !localIds.contains(m.id))
-              .toList();
+          final localIds = localMessages.map((m) => m.id).toSet();
+          final toInsert =
+              state.messages.where((m) => !localIds.contains(m.id)).toList();
           if (toInsert.isNotEmpty) {
             await DataLayer().persistMessages(toInsert);
-            debugPrint('[Messages] Step2 → wrote ${toInsert.length} new msgs to SQLite');
+            debugPrint(
+                '[Messages] Step2 → wrote ${toInsert.length} new msgs to SQLite');
           }
         }
       } else {
@@ -890,11 +975,12 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         debugPrint('[Messages] Step3 HTTP fetch conv=$conversationId');
         final resp = await _chatService.getMessages(conversationId);
         if (resp.success && resp.data != null) {
-          final data =
-              resp.data is String ? jsonDecode(resp.data) : resp.data;
+          final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
           final list = data['messages'] as List<dynamic>? ?? [];
-          final hasMoreFromServer = data['has_more'] == true || (list.length >= 50);
-          debugPrint('[Messages] Step3 HTTP got ${list.length} msgs has_more=$hasMoreFromServer');
+          final hasMoreFromServer =
+              data['has_more'] == true || (list.length >= 50);
+          debugPrint(
+              '[Messages] Step3 HTTP got ${list.length} msgs has_more=$hasMoreFromServer');
           // 将 has_more 信息嵌入返回数据，供外层读取
           return {'messages': list, 'has_more': hasMoreFromServer};
         }
@@ -934,7 +1020,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           state = state.copyWith(
               messages: merged, isLoading: false, hasMore: hasMoreFromLoad);
           await DataLayer().persistMessages(serverMessages);
-          debugPrint('[Messages] Step3 → updated: ${serverMessages.length} server msgs'
+          debugPrint(
+              '[Messages] Step3 → updated: ${serverMessages.length} server msgs'
               '${pendingOptimistic.isNotEmpty ? " + ${pendingOptimistic.length} pending optimistic" : ""}'
               ' (source=${result.source.name}) hasMore=$hasMoreFromLoad');
         }
@@ -949,7 +1036,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       }
     }
 
-    debugPrint('[Messages] _loadMessages DONE: ${state.messages.length} msgs in state');
+    debugPrint(
+        '[Messages] _loadMessages DONE: ${state.messages.length} msgs in state');
 
     // 增量同步（填补离线期间的消息间隙）
     if (state.messages.isNotEmpty) {
@@ -964,8 +1052,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   Future<void> retry() async {
     // WS 发送失败 → 重发最后一条失败消息
     if ((state.error ?? '').startsWith('发送失败')) {
-      final failedIdx = state.messages.lastIndexWhere(
-          (m) => m.id >= 1000000000000);
+      final failedIdx =
+          state.messages.lastIndexWhere((m) => m.id >= 1000000000000);
       if (failedIdx < 0) {
         state = state.copyWith(error: null);
         return;
@@ -978,8 +1066,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       DataLayer().deletePersistedMessage(failed.id);
 
       sendMessage(failed.content ?? '',
-          messageType: failed.messageType.name,
-          mediaUrl: failed.mediaUrl);
+          messageType: failed.messageType.name, mediaUrl: failed.mediaUrl);
     } else {
       // 加载失败 → 重新加载消息
       state = state.copyWith(error: null);
@@ -1001,8 +1088,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     if (lastMessageId == null) return;
 
     try {
-      final resp = await _chatService.getMessagesAfter(
-          conversationId, lastMessageId);
+      final resp =
+          await _chatService.getMessagesAfter(conversationId, lastMessageId);
       if (!resp.success || resp.data == null) return;
       final data = resp.data;
       final msgList =
@@ -1062,12 +1149,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
     // Step 2: 本地不够 → HTTP 分页
     try {
-      final resp = await _chatService.getMessages(
-          conversationId,
-          page: state.page + 1);
+      final resp =
+          await _chatService.getMessages(conversationId, page: state.page + 1);
       if (resp.success && resp.data != null) {
-        final data =
-            resp.data is String ? jsonDecode(resp.data) : resp.data;
+        final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
         List<dynamic> msgList = [];
         bool hasMoreFlag = false;
         if (data is Map) {
@@ -1118,13 +1203,16 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   /// 发送文本消息（经发送队列保序串行）
   void sendMessage(String content,
-      {String messageType = 'text', String? mediaUrl,
-       int? quoteMessageId, String? quotePreview}) {
+      {String messageType = 'text',
+      String? mediaUrl,
+      int? quoteMessageId,
+      String? quotePreview}) {
     if (_currentUserId == null) return;
     final requestId = _generateRequestId();
     final now = DateTime.now();
 
-    debugPrint('[Chat] sendMessage conv=$conversationId content="$content" type=$messageType qDepth=${_sendQueue.pendingCount}');
+    debugPrint(
+        '[Chat] sendMessage conv=$conversationId content="$content" type=$messageType qDepth=${_sendQueue.pendingCount}');
 
     // 乐观消息（先落本地再入队）
     final optimisticMsg = Message(
@@ -1292,14 +1380,14 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             uploadProgress: 1.0,
             clearTempBytes: true,
           );
-          final finalUpdated = state.messages
-              .map((m) => m.id == msgId ? queuedMsg : m)
-              .toList();
+          final finalUpdated =
+              state.messages.map((m) => m.id == msgId ? queuedMsg : m).toList();
           state = state.copyWith(messages: finalUpdated, isSending: true);
           await DataLayer().persistMessage(queuedMsg);
           _syncL1();
           SoundService().playSendSound();
-          _onMessageSent?.call(conversationId, '图片', 'image', msg.createdAt ?? DateTime.now());
+          _onMessageSent?.call(
+              conversationId, '图片', 'image', msg.createdAt ?? DateTime.now());
           _sendQueue.enqueue(queuedMsg);
         }
       } else {
@@ -1323,9 +1411,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   String? _extractUrl(dynamic data) {
     if (data == null) return null;
     if (data is Map) {
-      return data['url']?.toString()
-          ?? data['image_url']?.toString()
-          ?? data['media_url']?.toString();
+      return data['url']?.toString() ??
+          data['image_url']?.toString() ??
+          data['media_url']?.toString();
     }
     return data.toString();
   }
@@ -1336,39 +1424,48 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final event = data['event'] as String?;
     final msgConvId = data['conversation_id'];
     // #region agent log
-    debugPrint('[Chat] _onWsMessage event=$event conv=$msgConvId target=$conversationId');
+    debugPrint(
+        '[Chat] _onWsMessage event=$event conv=$msgConvId target=$conversationId');
     // #endregion
     if (event == 'ack') {
-      final ackClientMsgId = data['clientMsgId'] as String? ?? data['client_msg_id'] as String?;
+      final ackClientMsgId =
+          data['clientMsgId'] as String? ?? data['client_msg_id'] as String?;
       final ackMessageId = data['message_id'] is int
           ? data['message_id'] as int
           : int.tryParse(data['message_id']?.toString() ?? '');
       if (ackClientMsgId != null && ackMessageId != null) {
-        _onAckMessageId({'clientMsgId': ackClientMsgId, 'message_id': ackMessageId});
+        _onAckMessageId(
+            {'clientMsgId': ackClientMsgId, 'message_id': ackMessageId});
       }
       return;
     }
 
     // 类型安全比较：WS JSON 可能返回 String 或 int
-    final msgConvIdInt = msgConvId is int ? msgConvId : int.tryParse(msgConvId?.toString() ?? '');
+    final msgConvIdInt = msgConvId is int
+        ? msgConvId
+        : int.tryParse(msgConvId?.toString() ?? '');
     if (msgConvIdInt != conversationId) return;
 
     switch (event) {
       case 'new_message':
         final msgData = data['data'];
         if (msgData is Map<String, dynamic>) {
-          debugPrint('[Chat] _onWsMessage new_message: conv=$conversationId, keys=${msgData.keys}');
+          debugPrint(
+              '[Chat] _onWsMessage new_message: conv=$conversationId, keys=${msgData.keys}');
           _handleNewMessage(Message.fromJson(msgData));
           _syncL1();
         } else {
-          debugPrint('[Chat] _onWsMessage new_message: data is ${msgData.runtimeType}, raw=${data.keys}');
+          debugPrint(
+              '[Chat] _onWsMessage new_message: data is ${msgData.runtimeType}, raw=${data.keys}');
         }
         break;
       case 'ack':
-        final ackClientMsgId = data['clientMsgId'] as String? ?? data['client_msg_id'] as String?;
+        final ackClientMsgId =
+            data['clientMsgId'] as String? ?? data['client_msg_id'] as String?;
         final ackMessageId = data['message_id'] as int?;
         if (ackClientMsgId != null && ackMessageId != null) {
-          _onAckMessageId({'clientMsgId': ackClientMsgId, 'message_id': ackMessageId});
+          _onAckMessageId(
+              {'clientMsgId': ackClientMsgId, 'message_id': ackMessageId});
         }
         break;
       case 'message_read':
@@ -1400,7 +1497,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   void _onQueueAck(int optimisticMsgId, Message serverMsg) {
     if (!mounted) return;
     // 替换乐观消息为服务端回显
-    final filtered = state.messages.where((m) => m.id != optimisticMsgId).toList();
+    final filtered =
+        state.messages.where((m) => m.id != optimisticMsgId).toList();
     // 避免重复（_handleNewMessage 可能已添加）
     if (!filtered.any((m) => m.id == serverMsg.id)) {
       filtered.add(serverMsg);
@@ -1586,8 +1684,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _typingTimer?.cancel();
     _sendQueue.dispose();
     // 清理旧消息（保留最近 500 条或 30 天内）
-    DataLayer()
-        .pruneMessages(conversationId, maxCount: 500, maxDays: 30);
+    DataLayer().pruneMessages(conversationId, maxCount: 500, maxDays: 30);
     super.dispose();
   }
 }
@@ -1598,7 +1695,9 @@ final messagesProvider =
     return MessagesNotifier(
       conversationId,
       onMessageSent: (convId, content, msgType, now) {
-        ref.read(conversationsProvider.notifier).onMessageSent(convId, content, msgType, now);
+        ref
+            .read(conversationsProvider.notifier)
+            .onMessageSent(convId, content, msgType, now);
       },
     );
   },

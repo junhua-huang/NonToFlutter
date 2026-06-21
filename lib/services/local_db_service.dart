@@ -139,8 +139,12 @@ class LocalDbService {
   Future<void> insertConversations(List<Conversation> conversations) async {
     final db = _db;
     if (db == null) return;
+    final persistableConversations = conversations
+        .where((conversation) => !conversation.isCommunity)
+        .toList();
+    if (persistableConversations.isEmpty) return;
     await db.insertConversations(
-        conversations.map(_conversationToCompanion).toList());
+        persistableConversations.map(_conversationToCompanion).toList());
   }
 
   Future<List<Conversation>> getConversations() async {

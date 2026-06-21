@@ -76,6 +76,32 @@ class ImageUtils {
     );
   }
 
+  static Widget buildCircularRemoteImage(
+    String url, {
+    double radius = 20,
+    Widget? fallback,
+    Color? backgroundColor,
+  }) {
+    final displayPx = (radius * 2 * 2).round().clamp(64, 512);
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: backgroundColor ?? Colors.grey[200]!,
+      child: ClipOval(
+        child: CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.cover,
+          width: radius * 2,
+          height: radius * 2,
+          memCacheWidth: displayPx,
+          memCacheHeight: displayPx,
+          errorWidget: (_, __, ___) =>
+              fallback ?? const Icon(Icons.broken_image),
+          fadeInDuration: const Duration(milliseconds: 200),
+        ),
+      ),
+    );
+  }
+
   /// 为 URL 追加 ?t=xxx 缓存破坏参数，确保上传新图后 CachedNetworkImage 视为不同 URL
   static String _cacheBustUrl(String url, int? cacheTs) {
     if (cacheTs == null) return url;

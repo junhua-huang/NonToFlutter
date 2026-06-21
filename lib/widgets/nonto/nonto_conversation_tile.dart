@@ -18,12 +18,18 @@ class NontoConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final other = conversation.otherUser;
+    final isCommunity = conversation.isCommunity;
     final hasUnread = conversation.unreadCount > 0;
+    final communityName = conversation.communityName?.trim();
     final displayName = other?.displayName?.trim();
     final username = other?.username.trim();
-    final name = displayName != null && displayName.isNotEmpty
-        ? displayName
-        : (username != null && username.isNotEmpty ? username : '未知用户');
+    final name = isCommunity
+        ? (communityName != null && communityName.isNotEmpty
+            ? communityName
+            : '社群群聊')
+        : (displayName != null && displayName.isNotEmpty
+            ? displayName
+            : (username != null && username.isNotEmpty ? username : '未知用户'));
 
     return Material(
       color: hasUnread
@@ -35,7 +41,7 @@ class NontoConversationTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              ImageUtils.buildAvatar(other, radius: 24),
+              _buildConversationAvatar(conversation),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -97,6 +103,32 @@ class NontoConversationTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildConversationAvatar(Conversation conversation) {
+    if (!conversation.isCommunity) {
+      return ImageUtils.buildAvatar(conversation.otherUser, radius: 24);
+    }
+
+    final avatar = conversation.communityAvatar;
+    if (avatar != null && avatar.isNotEmpty) {
+      final url = ImageUtils.resolveUrl(conversation.communityAvatar);
+      return ImageUtils.buildCircularRemoteImage(
+        url,
+        radius: 24,
+        backgroundColor: AppColors.backgroundSecondary,
+        fallback: Icon(
+          Icons.groups_3_outlined,
+          color: AppColors.textSecondary,
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+      child: const Icon(Icons.groups_3_outlined, color: AppColors.primary),
     );
   }
 }

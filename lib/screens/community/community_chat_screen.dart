@@ -1,10 +1,17 @@
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/utils/image_utils.dart';
 
 /// 社群群聊页
 /// 支持：发送消息、@提及、撤回与管理员删除。
-class CommunityChatScreen extends StatefulWidget {
+class CommunityChatScreen extends ConsumerStatefulWidget {
   final int communityId;
   final String? communityName;
   const CommunityChatScreen({
@@ -14,19 +21,24 @@ class CommunityChatScreen extends StatefulWidget {
   });
 
   @override
-  State<CommunityChatScreen> createState() => _CommunityChatScreenState();
+  ConsumerState<CommunityChatScreen> createState() =>
+      _CommunityChatScreenState();
 }
 
-class _CommunityChatScreenState extends State<CommunityChatScreen> {
+class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
+  StreamSubscription<Map<String, dynamic>>? _messageSub;
+  int? _conversationId;
   bool _isLoading = true;
   bool _isSending = false;
 
   @override
   void initState() {
     super.initState();
+    _messageSub =
+        WebSocketService().messageStream.listen(_appendRealtimeMessage);
     _loadMessages();
   }
 
@@ -35,13 +47,27 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     try {
       final api = CommunityApiService();
       final resp = await api.getChat(widget.communityId, limit: 50);
-      if (resp.data is Map && resp.data['messages'] is List) {
-        _messages.clear();
-        _messages.addAll(
-          (resp.data['messages'] as List).map(
-            (message) => Map<String, dynamic>.from(message),
-          ),
-        );
+      if (resp.data is Map) {
+        final data = Map<String, dynamic>.from(resp.data as Map);
+        final conversation = data['conversation'];
+        if (conversation is Map) {
+          final conversationId =
+              conversation['conversation_id'] ?? conversation['id'];
+          _conversationId = conversationId is int
+              ? conversationId
+              : int.tryParse(conversationId?.toString() ?? '');
+          if (_conversationId != null) {
+            WebSocketService().joinConversation(_conversationId!);
+          }
+        }
+        if (data['messages'] is List) {
+          _messages.clear();
+          _messages.addAll(
+            (data['messages'] as List).map(
+              (message) => Map<String, dynamic>.from(message),
+            ),
+          );
+        }
       }
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
@@ -49,6 +75,11 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   @override
   void dispose() {
+    final conversationId = _conversationId;
+    if (conversationId != null) {
+      WebSocketService().leaveConversation(conversationId);
+    }
+    _messageSub?.cancel();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -88,6 +119,34 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             .showSnackBar(SnackBar(content: Text('撤回失败: $e')));
       }
     }
+  }
+
+  void _appendRealtimeMessage(Map<String, dynamic> payload) {
+    if (payload['event'] != 'new_message') return;
+    final message = payload['message'];
+    if (message is! Map) return;
+
+    final messageMap = Map<String, dynamic>.from(message);
+    final rawConversationId =
+        payload['conversation_id'] ?? messageMap['conversation_id'];
+    final conversationId = rawConversationId is int
+        ? rawConversationId
+        : int.tryParse(rawConversationId?.toString() ?? '');
+    final rawCommunityId =
+        payload['community_id'] ?? messageMap['community_id'];
+    final communityId = rawCommunityId is int
+        ? rawCommunityId
+        : int.tryParse(rawCommunityId?.toString() ?? '');
+
+    if (_conversationId != null && conversationId != _conversationId) return;
+    if (_conversationId == null && communityId != widget.communityId) return;
+
+    final messageId = messageMap['id'];
+    final alreadyAdded = messageId != null &&
+        _messages.any((existing) => existing['id'] == messageId);
+    if (alreadyAdded || !mounted) return;
+
+    setState(() => _messages.add(messageMap));
   }
 
   void _showMentionPicker() {
@@ -144,6 +203,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     if (_messages.isEmpty) {
       return _buildEmptyMessagesState();
     }
+    final currentUserId = ref.watch(authProvider).user?.id;
     return ListView.builder(
       controller: _scrollCtrl,
       reverse: true,
@@ -151,7 +211,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
       itemCount: _messages.length,
       itemBuilder: (_, index) {
         final message = _messages[_messages.length - 1 - index];
-        final isMine = message['sender_id'] == 0;
+        final isMine = message['sender_id'] == currentUserId;
         return _MessageBubble(
           message: message,
           isMine: isMine,
@@ -261,7 +321,18 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final recalled = message['is_recalled'] == true;
     final content = message['content'] ?? '';
-    final senderName = message['sender_name'] ?? '用户';
+    final sender = message['sender'] is Map
+        ? Map<String, dynamic>.from(message['sender'] as Map)
+        : <String, dynamic>{};
+    final senderName =
+        sender['display_name']?.toString().trim().isNotEmpty == true
+            ? sender['display_name'].toString()
+            : (message['sender_name']?.toString().trim().isNotEmpty == true
+                ? message['sender_name'].toString()
+                : (sender['username']?.toString().trim().isNotEmpty == true
+                    ? sender['username'].toString()
+                    : '用户'));
+    final senderAvatar = sender['avatar_url']?.toString();
     final time =
         message['created_at'] != null ? _formatTime(message['created_at']) : '';
 
@@ -289,10 +360,7 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMine) ...[
-            CircleAvatar(
-              radius: 16,
-              child: Text(senderName[0], style: const TextStyle(fontSize: 12)),
-            ),
+            _buildSenderAvatar(senderName, senderAvatar),
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -348,6 +416,34 @@ class _MessageBubble extends StatelessWidget {
           if (isMine) const SizedBox(width: 8),
         ],
       ),
+    );
+  }
+
+  Widget _buildSenderAvatar(String senderName, String? avatarUrl) {
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      final url = ImageUtils.resolveUrl(avatarUrl);
+      return CircleAvatar(
+        radius: 16,
+        backgroundColor: AppColors.backgroundSecondary,
+        child: ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: url,
+            width: 32,
+            height: 32,
+            fit: BoxFit.cover,
+            errorWidget: (_, __, ___) => Text(
+              senderName.isNotEmpty ? senderName[0] : '?',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: 16,
+      child: Text(senderName.isNotEmpty ? senderName[0] : '?',
+          style: const TextStyle(fontSize: 12)),
     );
   }
 
