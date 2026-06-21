@@ -302,7 +302,7 @@ class _MessageBubble extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isMine ? AppColors.primary : Colors.grey[200],
+                  color: isMine ? AppColors.primary : AppColors.surface,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(16),
                     topRight: const Radius.circular(16),
@@ -329,7 +329,7 @@ class _MessageBubble extends StatelessWidget {
                     Text(
                       content.toString(),
                       style: TextStyle(
-                        color: isMine ? Colors.white : Colors.black87,
+                        color: isMine ? Colors.white : AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),

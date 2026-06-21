@@ -270,9 +270,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 child: Container(
                   width: 36,
                   height: 4,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFCED5DC),
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  decoration: BoxDecoration(
+                    color: AppColors.dragHandle,
+                    borderRadius: const BorderRadius.all(Radius.circular(2)),
                   ),
                 ),
               ),
@@ -315,7 +315,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 50),
                         backgroundColor: AppColors.textPrimary,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.background,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25)),

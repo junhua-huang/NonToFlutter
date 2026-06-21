@@ -36,5 +36,35 @@ void main() {
       expect(topicResults, contains('feedPosts: _posts'));
       expect(topicResults, isNot(contains('class _PostTile')));
     });
+
+    test('high-impact normal surfaces avoid light-only hardcoded colors', () {
+      final login = read('lib/screens/auth/login_screen.dart');
+      final communityChat = read('lib/screens/community/community_chat_screen.dart');
+      final splash = read('lib/screens/splash/splash_screen.dart');
+      final mentionPicker = read('lib/widgets/mention_topic_picker.dart');
+      final comicEventCard = read('lib/widgets/comic_event_card.dart');
+
+      expect(login, contains('backgroundColor: AppColors.background'));
+      expect(login, isNot(contains('backgroundColor: Colors.white')));
+      expect(login, isNot(contains('Color(0xFF0F1419)')));
+      expect(login, isNot(contains('Color(0xFF536471)')));
+      expect(login, isNot(contains('Color(0xFFEFF3F4)')));
+      expect(login, isNot(contains('Color(0xFF8899A6)')));
+
+      expect(communityChat, contains('AppColors.surface'));
+      expect(communityChat, isNot(contains('Colors.grey[200]')));
+      expect(communityChat, isNot(contains('Colors.black87')));
+
+      expect(splash, contains('foregroundColor: AppColors.background'));
+      expect(splash, contains('color: AppColors.dragHandle'));
+
+      expect(mentionPicker, isNot(contains('color: Colors.white')));
+      expect(mentionPicker, contains('color: AppColors.background'));
+
+      expect(
+        comicEventCard,
+        contains('_isFollowed ? AppColors.textPrimary : AppColors.background'),
+      );
+    });
   });
 }

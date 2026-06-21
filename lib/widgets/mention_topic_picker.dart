@@ -289,7 +289,7 @@ class _MentionTopicPickerState extends State<MentionTopicPicker> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.borderLight)),
       ),
       constraints: const BoxConstraints(maxHeight: 280),
@@ -592,7 +592,7 @@ class _PickerSheetContentState extends State<_PickerSheetContent> {
           width: 36,
           height: 4,
           decoration: BoxDecoration(
-              color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              color: AppColors.dragHandle, borderRadius: BorderRadius.circular(2)),
         ),
         // Header
         Padding(

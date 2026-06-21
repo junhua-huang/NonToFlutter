@@ -124,7 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -134,7 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Twitter-style: big centered logo
+                  // Nonto logo
                   Center(
                     child: Container(
                       width: 56,
@@ -154,13 +154,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 40),
 
                   // Title
-                  const Text(
+                  Text(
                     '登录 NonTo',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F1419),
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -169,12 +169,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(fontSize: 16, color: Color(0xFF0F1419)),
+                    style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
                     decoration: InputDecoration(
                       hintText: '邮箱',
-                      hintStyle: TextStyle(color: Color(0xFF536471)),
+                      hintStyle: TextStyle(color: AppColors.textSecondary),
                       filled: true,
-                      fillColor: const Color(0xFFEFF3F4),
+                      fillColor: AppColors.surface,
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       border: OutlineInputBorder(
@@ -195,12 +195,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: const TextStyle(fontSize: 16, color: Color(0xFF0F1419)),
+                    style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
                     decoration: InputDecoration(
                       hintText: '密码',
-                      hintStyle: const TextStyle(color: Color(0xFF536471)),
+                      hintStyle: TextStyle(color: AppColors.textSecondary),
                       filled: true,
-                      fillColor: const Color(0xFFEFF3F4),
+                      fillColor: AppColors.surface,
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       border: OutlineInputBorder(
@@ -217,7 +217,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           _obscurePassword
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
-                          color: const Color(0xFF536471),
+                          color: AppColors.textSecondary,
                           size: 20,
                         ),
                         onPressed: () =>
@@ -304,9 +304,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   RichText(
                     textAlign: TextAlign.center,
                     text: TextSpan(
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF536471),
+                          color: AppColors.textSecondary,
                           height: 1.4),
                       children: [
                         const TextSpan(text: '登录即表示您同意我们的'),
@@ -346,9 +346,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('还没有账号？',
+                      Text('还没有账号？',
                           style: TextStyle(
-                              color: Color(0xFF536471), fontSize: 14)),
+                              color: AppColors.textSecondary, fontSize: 14)),
                       TextButton(
                         onPressed: () => Navigator.push(context,
                             MaterialPageRoute(
@@ -364,9 +364,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Text('v0.2.2',
+                  Text('v0.2.2',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 10, color: Color(0xFF8899A6))),
+                      style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
                 ],
               ),
             ),

@@ -479,7 +479,7 @@ class _ComicEventCardState extends State<ComicEventCard> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: _isFollowed ? AppColors.textPrimary : Colors.white,
+                color: _isFollowed ? AppColors.textPrimary : AppColors.background,
               ),
             ),
           ),
