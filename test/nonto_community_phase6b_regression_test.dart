@@ -49,5 +49,21 @@ void main() {
       expect(chat, contains('_buildComposer'));
       expect(chat, contains('_buildEmptyMessagesState'));
     });
+
+    test('community plaza first paint is not blocked by all startup requests',
+        () {
+      final list = read('lib/screens/community/community_list_screen.dart');
+      final notifier = read('lib/providers/community_notifier.dart');
+
+      expect(
+        list,
+        isNot(contains(
+          'state.isLoading && state.discovered.isEmpty) {\n'
+          '      return const Center(child: CircularProgressIndicator())',
+        )),
+      );
+      expect(list, contains('_buildDiscoverySkeleton'));
+      expect(notifier, contains('Future.wait'));
+    });
   });
 }

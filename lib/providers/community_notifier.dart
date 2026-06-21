@@ -52,8 +52,12 @@ class CommunityListNotifier extends StateNotifier<CommunityListState> {
   Future<void> loadInitial() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final myResp = await _api.getMy();
-      final discoverResp = await _api.list(limit: 20, offset: 0);
+      final responses = await Future.wait([
+        _api.getMy(),
+        _api.list(limit: 20, offset: 0),
+      ]);
+      final myResp = responses[0];
+      final discoverResp = responses[1];
       final myList = (myResp.data is List)
           ? (myResp.data as List).map((e) => Community.fromJson(e)).toList()
           : <Community>[];

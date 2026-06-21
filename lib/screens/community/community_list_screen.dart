@@ -85,9 +85,6 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
   }
 
   Widget _buildBody(CommunityListState state) {
-    if (state.isLoading && state.discovered.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
     if (state.error != null && state.discovered.isEmpty) {
       return Center(
         child: Padding(
@@ -111,7 +108,7 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
     }
 
     final discoveredCount = state.discovered.length;
-    final itemCount = discoveredCount == 0 ? 3 : discoveredCount + 3;
+    final itemCount = discoveredCount == 0 ? 4 : discoveredCount + 3;
 
     return RefreshIndicator(
       onRefresh: () => ref.read(communityListProvider.notifier).loadInitial(),
@@ -128,6 +125,9 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
           }
           if (index == 2) {
             return _buildDiscoveryHeader();
+          }
+          if (state.isLoading && discoveredCount == 0) {
+            return _buildDiscoverySkeleton();
           }
           if (discoveredCount == 0) {
             return _buildEmptyDiscoveryState();
@@ -267,6 +267,72 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
             style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDiscoverySkeleton() {
+    return Column(
+      children: List.generate(
+        3,
+        (index) => Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: AppColors.textTertiary.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                height: 60,
+                width: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.textTertiary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 14,
+                      width: 140,
+                      decoration: BoxDecoration(
+                        color: AppColors.textTertiary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: AppColors.textTertiary.withValues(alpha: 0.09),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FractionallySizedBox(
+                      widthFactor: 0.58,
+                      child: Container(
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: AppColors.textTertiary.withValues(alpha: 0.09),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
