@@ -23,21 +23,19 @@ import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
 // ── Nonto 聊天颜色常量 ──
 class _NontoChatColors {
-  // 浅色
-  static const bg = Color(0xFFFFFFFF);
-  static const otherBubble = Color(0xFFEFF3F4);
+  static Color get bg => AppColors.background;
+  static Color get otherBubble => AppColors.surface;
   static const selfBubble = Color(0xFF1D9BF0);
-  static const text = Color(0xFF0F1419);
+  static Color get text => AppColors.textPrimary;
   static const timestamp = Color(0xFF68757A);
-  static const divider = Color(0xFFEFF3F4);
-  static const inputBg = Color(0xFFF7F9F9);
-  // 暗色
-  static const darkBg = Color(0xFF15202B);
-  static const darkOtherBubble = Color(0xFF1E2732);
-  static const darkText = Color(0xFFE7E9EA);
-  static const darkTimestamp = Color(0xFF71767A);
-  static const darkDivider = Color(0xFF2F3336);
-  static const darkInputBg = Color(0xFF202327);
+  static Color get divider => AppColors.borderLight;
+  static Color get inputBg => AppColors.surface;
+  static Color get darkBg => AppColors.background;
+  static Color get darkOtherBubble => AppColors.surface;
+  static Color get darkText => AppColors.textPrimary;
+  static Color get darkTimestamp => AppColors.textSecondary;
+  static Color get darkDivider => AppColors.borderLight;
+  static Color get darkInputBg => AppColors.surface;
 }
 
 /// Nonto 聊天室页面
@@ -72,6 +70,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   // 用「末尾消息 id」作为单调变化的指纹，撤回（id 不变）不会误判，
   // 新消息到达（id 变大）或乐观消息（id 极大）始终能触发一次滚动。
   int _lastScrolledLastMsgId = 0;
+  bool _didInitialScrollToLatest = false;
 
   @override
   void initState() {
@@ -118,7 +117,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   // ── 发送 ──
 
-  void _scrollToBottom({bool animate = true}) {
+  void _scrollToBottom({bool animate = true, bool force = false}) {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     final maxExtent = position.maxScrollExtent;
@@ -130,7 +129,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     // 仅当当前已接近底部时才动画滚动到底部，
     // 否则用户正在翻看历史消息，自动滚动会打断阅读。
     final distance = (maxExtent - position.pixels).abs();
-    if (distance > 800) return;
+    if (!force && distance > 800) return;
     _scrollController.animateTo(
       maxExtent,
       duration: const Duration(milliseconds: 180),
@@ -318,7 +317,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final msgCount = msgState.messages.length;
     final lastMsgId =
         msgState.messages.isNotEmpty ? msgState.messages.last.id : 0;
-    if (msgCount > 0 &&
+    if (msgCount > 0 && !_didInitialScrollToLatest) {
+      _didInitialScrollToLatest = true;
+      _lastScrolledMsgCount = msgCount;
+      _lastScrolledLastMsgId = lastMsgId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // 首次进入聊天必须定位到最新消息；后续新消息仍由近底部保护避免打断看历史。
+        _scrollToBottom(animate: false, force: true);
+      });
+    } else if (msgCount > 0 &&
         (msgCount > _lastScrolledMsgCount ||
             lastMsgId != _lastScrolledLastMsgId)) {
       _lastScrolledMsgCount = msgCount;
