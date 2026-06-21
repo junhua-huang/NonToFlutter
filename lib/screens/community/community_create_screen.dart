@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:nonto/config/app_theme.dart';
-import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
+import 'package:nonto/services/api/community_service.dart';
 
 /// 创建社群 — 两步表单
-/// Step 1: 名称 + 简介 + 头像 + 规则 + 封面
-/// Step 2: 加群方式（审核制/开放/邀请，默认审核制）
+/// Step 1: 名称、简介、规则与视觉资料。
+/// Step 2: 加群方式，默认审核制。
 class CommunityCreateScreen extends StatefulWidget {
   const CommunityCreateScreen({super.key});
 
@@ -27,17 +27,30 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
     {'value': 'invite', 'label': '仅邀请', 'desc': '只能通过邀请链接加入'},
   ];
 
+  bool get _canContinue => _nameCtrl.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl.addListener(_refreshNameState);
+  }
+
   @override
   void dispose() {
+    _nameCtrl.removeListener(_refreshNameState);
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _rulesCtrl.dispose();
     super.dispose();
   }
 
+  void _refreshNameState() => setState(() {});
+
   Future<void> _submit() async {
-    if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入社群名称')));
+    if (!_canContinue) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入社群名称')),
+      );
       return;
     }
     setState(() => _isSubmitting = true);
@@ -50,17 +63,22 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
         'join_policy': _joinPolicy,
       });
       if (resp.data is Map && resp.data['community'] != null) {
-        final c = resp.data['community'];
-        final id = c is Map ? c['id'] : null;
+        final community = resp.data['community'];
+        final id = community is Map ? community['id'] : null;
         if (id != null && mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => CommunityDetailScreen(communityId: id)),
+            MaterialPageRoute(
+              builder: (_) => CommunityDetailScreen(communityId: id),
+            ),
           );
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建失败: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('创建失败: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -70,33 +88,122 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_step == 1 ? '创建社群' : '加群设置'),
+        title: Text(_step == 1 ? '创建一个有温度的社群' : '加群设置'),
         actions: [
           if (_step == 1)
             TextButton(
-              onPressed: () => setState(() => _step = 2),
+              onPressed: _canContinue ? () => setState(() => _step = 2) : null,
               child: const Text('下一步'),
+            )
+          else
+            TextButton(
+              onPressed: _isSubmitting ? null : () => setState(() => _step = 1),
+              child: const Text('上一步'),
             ),
         ],
       ),
-      body: _step == 1 ? _buildStep1() : _buildStep2(),
+      body: Column(
+        children: [
+          _buildStepProgress(),
+          Expanded(child: _step == 1 ? _buildStep1() : _buildStep2()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepProgress() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+      child: Row(
+        children: [
+          _buildStepDot(1, '基础资料'),
+          Expanded(
+            child: Container(
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              color: _step == 2
+                  ? AppColors.primary
+                  : AppColors.textTertiary.withValues(alpha: 0.22),
+            ),
+          ),
+          _buildStepDot(2, '加入方式'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepDot(int step, String label) {
+    final active = _step >= step;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 28,
+          width: 28,
+          decoration: BoxDecoration(
+            color: active ? AppColors.primary : Colors.transparent,
+            border: Border.all(
+              color: active ? AppColors.primary : AppColors.textTertiary,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              '$step',
+              style: TextStyle(
+                color: active ? Colors.white : AppColors.textSecondary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            color: active ? AppColors.primary : AppColors.textSecondary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildStep1() {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
-        // 头像
+        const Text(
+          '创建一个有温度的社群',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '清晰的主题和友好的规则，会让第一批成员更愿意留下来。',
+          style: TextStyle(color: AppColors.textSecondary, height: 1.35),
+        ),
+        const SizedBox(height: 24),
         Center(
           child: Stack(
             children: [
-              CircleAvatar(radius: 48, child: Icon(Icons.camera_alt, size: 32, color: AppColors.textTertiary)),
+              CircleAvatar(
+                radius: 48,
+                child: Icon(
+                  Icons.camera_alt,
+                  size: 32,
+                  color: AppColors.textTertiary,
+                ),
+              ),
               Positioned(
-                bottom: 0, right: 0,
+                bottom: 0,
+                right: 0,
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
                   child: const Icon(Icons.add, size: 16, color: Colors.white),
                 ),
               ),
@@ -104,61 +211,80 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
           ),
         ),
         const SizedBox(height: 4),
-        Center(child: Text('上传头像', style: TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+        Center(
+          child: Text(
+            '上传头像',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+        ),
         const SizedBox(height: 24),
-
         TextField(
           controller: _nameCtrl,
           decoration: const InputDecoration(
             labelText: '社群名称 *',
-            hintText: '请输入社群名称',
+            hintText: '例如：独立开发者咖啡馆',
             border: OutlineInputBorder(),
           ),
           maxLength: 64,
         ),
         const SizedBox(height: 16),
-
         TextField(
           controller: _descCtrl,
           decoration: const InputDecoration(
             labelText: '社群简介',
-            hintText: '请介绍你的社群（最多200字）',
+            hintText: '用一两句话说明这里适合谁、讨论什么',
             border: OutlineInputBorder(),
           ),
           maxLines: 3,
           maxLength: 200,
         ),
         const SizedBox(height: 16),
-
         TextField(
           controller: _rulesCtrl,
           decoration: const InputDecoration(
             labelText: '社群规则（可选）',
-            hintText: '1. 原创优先 2. 尊重他人...',
+            hintText: '例如：真诚交流、尊重差异、原创优先',
             border: OutlineInputBorder(),
           ),
           maxLines: 4,
         ),
         const SizedBox(height: 24),
-
-        Text('封面图（可选）',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(
+          '封面图（可选）',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
         const SizedBox(height: 8),
         Container(
-          height: 100,
+          height: 112,
           decoration: BoxDecoration(
             color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.grey[300]!),
           ),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.add_photo_alternate, color: AppColors.textTertiary, size: 32),
-                Text('上传封面图', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                Icon(
+                  Icons.add_photo_alternate,
+                  color: AppColors.textTertiary,
+                  size: 32,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '上传封面图',
+                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                ),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _canContinue ? () => setState(() => _step = 2) : null,
+            child: const Text('继续设置加入方式'),
           ),
         ),
       ],
@@ -166,37 +292,71 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
   }
 
   Widget _buildStep2() {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const Text('加群方式', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        ..._joinOptions.map((opt) {
-          final selected = _joinPolicy == opt['value'];
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+      itemCount: _joinOptions.length + 3,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '选择成员加入方式',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '先保证交流质量，再逐步扩大规模。默认推荐审核制。',
+                style: TextStyle(color: AppColors.textSecondary, height: 1.35),
+              ),
+              const SizedBox(height: 18),
+            ],
+          );
+        }
+        if (index <= _joinOptions.length) {
+          final option = _joinOptions[index - 1];
+          final selected = _joinPolicy == option['value'];
           return Card(
-            margin: const EdgeInsets.only(bottom: 8),
+            margin: const EdgeInsets.only(bottom: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: selected
+                    ? AppColors.primary
+                    : AppColors.textTertiary.withValues(alpha: 0.16),
+              ),
+            ),
             child: ListTile(
               leading: Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
                 color: selected ? AppColors.primary : AppColors.textTertiary,
               ),
-              title: Text(opt['label']!),
-              subtitle: Text(opt['desc']!, style: TextStyle(fontSize: 13)),
-              onTap: () => setState(() => _joinPolicy = opt['value']!),
+              title: Text(option['label']!),
+              subtitle:
+                  Text(option['desc']!, style: const TextStyle(fontSize: 13)),
+              onTap: () => setState(() => _joinPolicy = option['value']!),
             ),
           );
-        }),
-        const SizedBox(height: 32),
-        SizedBox(
+        }
+        if (index == _joinOptions.length + 1) {
+          return const SizedBox(height: 24);
+        }
+        return SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _isSubmitting ? null : _submit,
             child: _isSubmitting
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('创建社群'),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

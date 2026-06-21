@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/services/api/community_service.dart';
 
-/// 社群群聊页 — 类似 Telegram/微信群聊
-/// 支持：发送消息、@提及、撤回、管理员删除
+/// 社群群聊页
+/// 支持：发送消息、@提及、撤回与管理员删除。
 class CommunityChatScreen extends StatefulWidget {
   final int communityId;
   final String? communityName;
-  const CommunityChatScreen(
-      {super.key, required this.communityId, this.communityName});
+  const CommunityChatScreen({
+    super.key,
+    required this.communityId,
+    this.communityName,
+  });
 
   @override
   State<CommunityChatScreen> createState() => _CommunityChatScreenState();
@@ -19,6 +22,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = true;
+  bool _isSending = false;
 
   @override
   void initState() {
@@ -27,15 +31,17 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   Future<void> _loadMessages() async {
-    // Phase 1: 刷新即加载（WS 实时在 Phase 2 做）
     setState(() => _isLoading = true);
     try {
       final api = CommunityApiService();
       final resp = await api.getChat(widget.communityId, limit: 50);
       if (resp.data is Map && resp.data['messages'] is List) {
         _messages.clear();
-        _messages.addAll((resp.data['messages'] as List)
-            .map((e) => Map<String, dynamic>.from(e)));
+        _messages.addAll(
+          (resp.data['messages'] as List).map(
+            (message) => Map<String, dynamic>.from(message),
+          ),
+        );
       }
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
@@ -50,14 +56,25 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   Future<void> _sendMessage() async {
     final content = _msgCtrl.text.trim();
-    if (content.isEmpty) return;
+    if (content.isEmpty || _isSending) return;
     _msgCtrl.clear();
+    setState(() => _isSending = true);
 
     try {
-      await CommunityApiService()
-          .sendMessage(widget.communityId, content: content);
-      _loadMessages();
-    } catch (_) {}
+      await CommunityApiService().sendMessage(
+        widget.communityId,
+        content: content,
+      );
+      await _loadMessages();
+    } catch (e) {
+      if (mounted) {
+        _msgCtrl.text = content;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('发送失败: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   Future<void> _recallMessage(int messageId, bool isMine) async {
@@ -74,27 +91,31 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   void _showMentionPicker() {
-    // @提及选择器（简化版：显示一个输入框让用户手动输入 @用户名）
-    final ctrl = TextEditingController();
+    final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Text('@ 提及'),
         content: TextField(
-          controller: ctrl,
+          controller: controller,
           decoration: const InputDecoration(
-              hintText: '输入用户名...', border: OutlineInputBorder()),
+            hintText: '输入用户名...',
+            border: OutlineInputBorder(),
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(ctx);
+              Navigator.pop(context);
               final text = _msgCtrl.text;
-              _msgCtrl.text = '$text@${ctrl.text} ';
+              _msgCtrl.text = '$text@${controller.text} ';
               _msgCtrl.selection = TextSelection.fromPosition(
-                  TextPosition(offset: _msgCtrl.text.length));
+                TextPosition(offset: _msgCtrl.text.length),
+              );
             },
             child: const Text('添加'),
           ),
@@ -106,73 +127,120 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.communityName ?? '群聊')),
+      appBar: AppBar(title: Text(widget.communityName ?? '社群交流')),
       body: Column(
         children: [
-          // 消息列表
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
-                    ? const Center(child: Text('暂无消息'))
-                    : ListView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _messages.length,
-                        itemBuilder: (_, i) {
-                          final msg = _messages[i];
-                          final isMine =
-                              msg['sender_id'] == 0; // 简化判断，真实需对比当前用户 ID
-                          return _MessageBubble(
-                            message: msg,
-                            isMine: isMine,
-                            onRecall: () => _recallMessage(msg['id'], isMine),
-                          );
-                        },
-                      ),
-          ),
+          Expanded(child: _buildMessages()),
+          _buildComposer(),
+        ],
+      ),
+    );
+  }
 
-          // 输入栏
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black12, blurRadius: 4, offset: Offset(0, -1))
-              ],
+  Widget _buildMessages() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_messages.isEmpty) {
+      return _buildEmptyMessagesState();
+    }
+    return ListView.builder(
+      controller: _scrollCtrl,
+      reverse: true,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+      itemCount: _messages.length,
+      itemBuilder: (_, index) {
+        final message = _messages[_messages.length - 1 - index];
+        final isMine = message['sender_id'] == 0;
+        return _MessageBubble(
+          message: message,
+          isMine: isMine,
+          onRecall: () => _recallMessage(message['id'], isMine),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyMessagesState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.forum_outlined, size: 46, color: AppColors.textTertiary),
+            const SizedBox(height: 12),
+            const Text(
+              '在社群里开始第一句交流',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.alternate_email, size: 24),
-                    onPressed: _showMentionPicker,
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _msgCtrl,
-                      decoration: InputDecoration(
-                        hintText: '输入消息...',
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24)),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                      ),
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.send, color: AppColors.primary),
-                    onPressed: _sendMessage,
-                  ),
-                ],
-              ),
+            const SizedBox(height: 6),
+            Text(
+              '问一个问题、分享一个进展，或欢迎刚加入的伙伴。',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, height: 1.35),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComposer() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: Offset(0, -1),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: '@ 提及',
+              icon: const Icon(Icons.alternate_email, size: 24),
+              onPressed: _showMentionPicker,
+            ),
+            Expanded(
+              child: TextField(
+                controller: _msgCtrl,
+                minLines: 1,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: '说点有用、有温度的话...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              icon: _isSending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send),
+              color: Colors.white,
+              style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: _isSending ? null : _sendMessage,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -183,8 +251,11 @@ class _MessageBubble extends StatelessWidget {
   final bool isMine;
   final VoidCallback? onRecall;
 
-  const _MessageBubble(
-      {required this.message, this.isMine = false, this.onRecall});
+  const _MessageBubble({
+    required this.message,
+    this.isMine = false,
+    this.onRecall,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -198,11 +269,14 @@ class _MessageBubble extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Center(
-          child: Text('消息已撤回',
-              style: TextStyle(
-                  color: AppColors.textTertiary,
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic)),
+          child: Text(
+            '消息已撤回',
+            style: TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
         ),
       );
     }
@@ -244,20 +318,28 @@ class _MessageBubble extends StatelessWidget {
                     if (!isMine)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(senderName,
-                            style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)),
+                        child: Text(
+                          senderName,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    Text(content.toString(),
-                        style: TextStyle(
-                            color: isMine ? Colors.white : Colors.black87)),
+                    Text(
+                      content.toString(),
+                      style: TextStyle(
+                        color: isMine ? Colors.white : Colors.black87,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(time,
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: isMine
-                                ? Colors.white70
-                                : AppColors.textTertiary)),
+                    Text(
+                      time,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isMine ? Colors.white70 : AppColors.textTertiary,
+                      ),
+                    ),
                   ],
                 ),
               ),
