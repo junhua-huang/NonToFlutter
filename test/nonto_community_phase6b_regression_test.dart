@@ -65,5 +65,21 @@ void main() {
       expect(list, contains('_buildDiscoverySkeleton'));
       expect(notifier, contains('Future.wait'));
     });
+
+    test('community detail post cards wire real like actions and sync state',
+        () {
+      final detail = read('lib/screens/community/community_detail_screen.dart');
+      final notifier = read('lib/providers/community_notifier.dart');
+
+      expect(detail,
+          contains("import 'package:nonto/services/api/post_service.dart';"));
+      expect(
+          detail,
+          contains(
+              "import 'package:nonto/services/post_interaction_notifier.dart';"));
+      expect(detail, contains('Future<void> _togglePostLike'));
+      expect(detail, contains('onLike: () => _togglePostLike(post)'));
+      expect(notifier, contains('void updatePostLike'));
+    });
   });
 }

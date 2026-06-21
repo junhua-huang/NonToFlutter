@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/community.dart';
+import 'package:nonto/models/post.dart';
 import 'package:nonto/providers/community_notifier.dart';
 import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/widgets/post_card.dart';
 
 /// 社群详情页
@@ -20,12 +25,27 @@ class CommunityDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
+  StreamSubscription<PostLikeEvent>? _likeSub;
+
   @override
   void initState() {
     super.initState();
+    _likeSub = PostInteractionNotifier().onLikeChanged.listen((event) {
+      ref.read(communityDetailProvider.notifier).updatePostLike(
+            event.postId,
+            event.isLiked,
+            event.likeCount,
+          );
+    });
     Future.microtask(
       () => ref.read(communityDetailProvider.notifier).load(widget.communityId),
     );
+  }
+
+  @override
+  void dispose() {
+    _likeSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -81,12 +101,41 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                 return PostCard(
                   post: post,
                   onTap: () => Navigator.pushNamed(context, '/post/${post.id}'),
+                  onLike: () => _togglePostLike(post),
                 );
               },
             ),
         ],
       ),
     );
+  }
+
+  Future<void> _togglePostLike(Post post) async {
+    final wasLiked = post.isLiked == true;
+    final originalCount = post.likeCount;
+    final nextCount = wasLiked ? originalCount - 1 : originalCount + 1;
+
+    ref
+        .read(communityDetailProvider.notifier)
+        .updatePostLike(post.id, !wasLiked, nextCount);
+
+    try {
+      if (wasLiked) {
+        await PostService().unlikePost(post.id);
+      } else {
+        await PostService().likePost(post.id);
+      }
+      PostInteractionNotifier()
+          .notifyLikeChanged(post.id, !wasLiked, nextCount);
+    } catch (_) {
+      if (!mounted) return;
+      ref
+          .read(communityDetailProvider.notifier)
+          .updatePostLike(post.id, wasLiked, originalCount);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+      );
+    }
   }
 
   Widget _buildCommunityHeader(Community community, ThemeData theme) {

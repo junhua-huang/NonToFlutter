@@ -214,6 +214,16 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
     }
     return [];
   }
+
+  void updatePostLike(int postId, bool isLiked, int likeCount) {
+    state = state.copyWith(
+      posts: state.posts
+          .map((post) => post.id == postId
+              ? post.copyWith(isLiked: isLiked, likeCount: likeCount)
+              : post)
+          .toList(),
+    );
+  }
 }
 
 // ── Provider 定义 ──
