@@ -9,8 +9,10 @@ import 'package:nonto/screens/comic/comic_my_events_page.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
+import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/api/topic_service.dart';
+import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/explore_notifier.dart';
 import 'package:nonto/providers/core_providers.dart';
@@ -261,6 +263,43 @@ class _SearchTabState extends ConsumerState<SearchTab>
       if (mounted && generation == _searchGeneration) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _togglePostLike(Post post) async {
+    final wasLiked = post.isLiked == true;
+    final originalCount = post.likeCount;
+    final nextCount = wasLiked ? originalCount - 1 : originalCount + 1;
+
+    void apply(bool isLiked, int likeCount) {
+      final idx = _postResults.indexWhere((item) => item.id == post.id);
+      if (idx != -1) {
+        _postResults[idx] = _postResults[idx].copyWith(
+          isLiked: isLiked,
+          likeCount: likeCount,
+        );
+      }
+      ref
+          .read(exploreProvider.notifier)
+          .updatePostLike(post.id, isLiked, likeCount);
+    }
+
+    setState(() => apply(!wasLiked, nextCount));
+
+    try {
+      if (wasLiked) {
+        await PostService().unlikePost(post.id);
+      } else {
+        await PostService().likePost(post.id);
+      }
+      PostInteractionNotifier()
+          .notifyLikeChanged(post.id, !wasLiked, nextCount);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => apply(wasLiked, originalCount));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+      );
     }
   }
 
@@ -678,6 +717,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
           case _DefaultItemType.postItem:
             return PostCard(
               post: item.post!,
+              onLike: () => _togglePostLike(item.post!),
               onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -981,6 +1021,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
     return PostCard(
       post: post,
       feedPosts: _postResults,
+      onLike: () => _togglePostLike(post),
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(

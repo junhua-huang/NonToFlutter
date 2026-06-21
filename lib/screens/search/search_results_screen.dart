@@ -1,7 +1,9 @@
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/search_service.dart';
+import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/post_card.dart';
@@ -86,6 +88,38 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
     }
   }
 
+  Future<void> _togglePostLike(Post post) async {
+    final index = _posts.indexWhere((item) => item.id == post.id);
+    if (index == -1) return;
+
+    final wasLiked = post.isLiked == true;
+    final originalCount = post.likeCount;
+    final nextCount = wasLiked ? originalCount - 1 : originalCount + 1;
+
+    setState(() {
+      _posts[index] = post.copyWith(isLiked: !wasLiked, likeCount: nextCount);
+    });
+
+    try {
+      if (wasLiked) {
+        await PostService().unlikePost(post.id);
+      } else {
+        await PostService().likePost(post.id);
+      }
+      PostInteractionNotifier()
+          .notifyLikeChanged(post.id, !wasLiked, nextCount);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _posts[index] =
+            post.copyWith(isLiked: wasLiked, likeCount: originalCount);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _refreshController.dispose();
@@ -163,6 +197,7 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
                         itemBuilder: (_, i) => PostCard(
                           post: _posts[i],
                           feedPosts: _posts,
+                          onLike: () => _togglePostLike(_posts[i]),
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(

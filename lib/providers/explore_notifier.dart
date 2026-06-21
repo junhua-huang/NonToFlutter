@@ -403,6 +403,16 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
     }
   }
 
+  void updatePostLike(int postId, bool isLiked, int likeCount) {
+    state = state.copyWith(
+      trendingPosts: state.trendingPosts
+          .map((post) => post.id == postId
+              ? post.copyWith(isLiked: isLiked, likeCount: likeCount)
+              : post)
+          .toList(),
+    );
+  }
+
   void _reset() {
     _loadInProgress = false;
     _cachedInProgress = false;
