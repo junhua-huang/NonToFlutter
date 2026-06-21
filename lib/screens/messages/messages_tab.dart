@@ -15,6 +15,7 @@ import 'package:nonto/services/local_db_service.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_helpers.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_tile.dart';
+import 'package:nonto/widgets/nonto_header_search_bar.dart';
 import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,6 +40,7 @@ class MessagesTab extends ConsumerStatefulWidget {
 class _MessagesTabState extends ConsumerState<MessagesTab> {
   final RefreshController _refreshController = RefreshController();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final WebSocketService _wsService = WebSocketService();
   final NotificationService _notifService = NotificationService();
 
@@ -77,6 +79,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
     _wsNotifSub?.cancel();
     _refreshController.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -149,13 +152,26 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
                     ? (kToolbarHeight + MediaQuery.of(context).padding.top)
                     : 0,
                 child: barVisible
-                    ? AppBar(
-                        title: const Text('消息',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                        elevation: 0,
-                        backgroundColor:
-                            Theme.of(context).scaffoldBackgroundColor,
-                        surfaceTintColor: Colors.transparent,
+                    ? Material(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        child: NontoHeaderSearchBar(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          user: ref.watch(authProvider).user,
+                          hintText: '搜索会话',
+                          onChanged: (value) =>
+                              setState(() => _searchQuery = value),
+                          suffixIcon: _searchQuery.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: Icon(Icons.close,
+                                      size: 18, color: AppColors.textSecondary),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                ),
+                        ),
                       )
                     : const SizedBox.shrink(),
               ),
@@ -163,31 +179,35 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
           },
         ),
       ),
-      body: NotificationListener<ScrollUpdateNotification>(
-        onNotification: (notif) {
-          handleBarScrollNotification(notif, ref);
-          return false;
-        },
-        child: Consumer(
-          builder: (context, ref, _) {
-            final convState = ref.watch(conversationsProvider);
-            final conversations = convState.conversations;
-            return SmartRefresher(
-              controller: _refreshController,
-              enablePullDown: true,
-              onRefresh: _onRefresh,
-              header: const WaterDropHeader(
-                complete:
-                    Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-                waterDropColor: AppColors.primary,
-              ),
-              child: convState.isLoading && conversations.isEmpty
-                  ? const ConversationSkeleton()
-                  : convState.error != null && conversations.isEmpty
-                      ? _buildError(convState.error!)
-                      : _buildContent(conversations),
-            );
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => _searchFocusNode.unfocus(),
+        child: NotificationListener<ScrollUpdateNotification>(
+          onNotification: (notif) {
+            handleBarScrollNotification(notif, ref);
+            return false;
           },
+          child: Consumer(
+            builder: (context, ref, _) {
+              final convState = ref.watch(conversationsProvider);
+              final conversations = convState.conversations;
+              return SmartRefresher(
+                controller: _refreshController,
+                enablePullDown: true,
+                onRefresh: _onRefresh,
+                header: const WaterDropHeader(
+                  complete:
+                      Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+                  waterDropColor: AppColors.primary,
+                ),
+                child: convState.isLoading && conversations.isEmpty
+                    ? const ConversationSkeleton()
+                    : convState.error != null && conversations.isEmpty
+                        ? _buildError(convState.error!)
+                        : _buildContent(conversations),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -216,7 +236,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
     final showSearchEmpty =
         conversations.isNotEmpty && visibleConversations.isEmpty;
     final itemCount =
-        3 + (showEmpty || showSearchEmpty ? 1 : visibleConversations.length);
+        2 + (showEmpty || showSearchEmpty ? 1 : visibleConversations.length);
 
     return ListView.builder(
       padding: EdgeInsets.zero,
@@ -224,12 +244,11 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
       itemBuilder: (context, index) {
         if (index == 0) return _buildNotificationEntry();
         if (index == 1) return const Divider(height: 1, indent: 72);
-        if (index == 2) return _buildSearchBox();
 
         if (showEmpty) return _buildEmpty();
         if (showSearchEmpty) return _buildSearchEmpty();
 
-        final conversation = visibleConversations[index - 3];
+        final conversation = visibleConversations[index - 2];
         return NontoConversationTile(
           conversation: conversation,
           onTap: () => _openConversation(conversation),
@@ -298,47 +317,6 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
             ),
             Icon(Icons.chevron_right, color: AppColors.textTertiary),
           ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchBox() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: TextField(
-        controller: _searchController,
-        textInputAction: TextInputAction.search,
-        onChanged: (value) => setState(() => _searchQuery = value),
-        decoration: InputDecoration(
-          hintText: '搜索会话',
-          prefixIcon: const Icon(Icons.search, size: 20),
-          suffixIcon: _searchQuery.isEmpty
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                  },
-                ),
-          filled: true,
-          fillColor: AppColors.backgroundSecondary,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          border: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(20)),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(20)),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: const BorderRadius.all(Radius.circular(20)),
-            borderSide:
-                BorderSide(color: AppColors.primary.withValues(alpha: 0.35)),
-          ),
         ),
       ),
     );

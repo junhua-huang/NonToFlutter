@@ -11,11 +11,13 @@ import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/api/topic_service.dart';
+import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/explore_notifier.dart';
 import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/add_friend_button.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/nonto_header_search_bar.dart';
 import 'package:nonto/widgets/post_card.dart';
 import 'package:nonto/widgets/search_suggestions.dart';
 import 'package:flutter/material.dart';
@@ -274,124 +276,88 @@ class _SearchTabState extends ConsumerState<SearchTab>
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
-    return Column(
-      children: [
-        // (a) 标题栏：以下三种情况都隐藏，否则显示 'Explore'：
-        //     1) _inSearchMode：进入搜索态（焦点在搜索框）
-        //     2) !barVisible：用户在默认推荐内容里下滑，与其他 Tab 行为一致
-        //   仅 AnimatedSize 依赖 barVisible，局部 Consumer 避免全树重建。
-        Consumer(
-          builder: (context, ref, _) {
-            final barVisible = ref.watch(barVisibleProvider);
-            final hideHeader = _inSearchMode || !barVisible;
-            return AnimatedSize(
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        if (_focusNode.hasFocus) _focusNode.unfocus();
+      },
+      child: Column(
+        children: [
+          // 标题栏：头像 + 搜索框。搜索框聚焦时头像收起，输入框向左扩展。
+          Consumer(
+            builder: (context, ref, _) {
+              final barVisible = ref.watch(barVisibleProvider);
+              final hideHeader = !_inSearchMode && !barVisible;
+              return AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: SizedBox(
+                  height:
+                      hideHeader ? topPadding : (kToolbarHeight + topPadding),
+                  child: hideHeader
+                      ? const SizedBox.shrink()
+                      : Material(
+                          color: AppColors.background,
+                          child: NontoHeaderSearchBar(
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            user: ref.watch(authProvider).user,
+                            hintText: '搜索',
+                            onChanged: (_) => _onTextChanged(),
+                            onSubmitted: _doSearch,
+                            suffixIcon: ValueListenableBuilder<bool>(
+                              valueListenable: _textNotEmpty,
+                              builder: (_, notEmpty, __) {
+                                if (!notEmpty) return const SizedBox.shrink();
+                                return IconButton(
+                                  icon: Icon(Icons.close,
+                                      size: 18, color: AppColors.textSecondary),
+                                  onPressed: () {
+                                    _controller.clear();
+                                    _textNotEmpty.value = false;
+                                  },
+                                );
+                              },
+                            ),
+                            trailing: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(
+                                opacity: anim,
+                                child: SizeTransition(
+                                  sizeFactor: anim,
+                                  axisAlignment: -1,
+                                  child: child,
+                                ),
+                              ),
+                              child: _buildRightButton(),
+                            ),
+                          ),
+                        ),
+                ),
+              );
+            },
+          ),
+          // 内容区：默认视图 / 搜索记录 / 实时建议 / 结果，淡入淡出切换
+          Expanded(
+            child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              child: SizedBox(
-                height: hideHeader ? topPadding : (kToolbarHeight + topPadding),
-                child: hideHeader
-                    ? const SizedBox.shrink()
-                    : AppBar(
-                        title: Text('发现',
-                            style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        backgroundColor: AppColors.background,
-                        elevation: 0,
-                        surfaceTintColor: Colors.transparent,
-                      ),
+              // 默认 layoutBuilder 用 Stack(alignment: center)，会把不撑满
+              // 的子组件（如 SearchSuggestions 的 shrinkWrap ListView、结果页
+              // 的 Center loading）垂直居中，导致搜索框下方出现一大段空白、
+              // "搜索 xxx" 行被推到屏幕中间。改用 topCenter 让所有子态顶端对齐。
+              layoutBuilder: (currentChild, previousChildren) => Stack(
+                alignment: Alignment.topCenter,
+                children: <Widget>[
+                  ...previousChildren,
+                  if (currentChild != null) currentChild,
+                ],
               ),
-            );
-          },
-        ),
-        // (b) 搜索框行 + 右侧按钮（AnimatedSwitcher 切换形态）
-        Padding(
-          // 搜索态下 bottom 收为 0，让搜索建议紧贴搜索框下方；
-          // 非搜索态保留 4px，避免与 TabBar/内容区贴死。
-          padding: EdgeInsets.fromLTRB(
-              12, _inSearchMode ? 6 : 12, 4, _inSearchMode ? 0 : 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  style: const TextStyle(fontSize: 15),
-                  decoration: InputDecoration(
-                    hintText: '搜索',
-                    hintStyle: TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: Icon(Icons.search,
-                        color: AppColors.textSecondary, size: 20),
-                    suffixIcon: ValueListenableBuilder<bool>(
-                      valueListenable: _textNotEmpty,
-                      builder: (_, notEmpty, __) {
-                        if (!notEmpty) return const SizedBox.shrink();
-                        return IconButton(
-                          icon: Icon(Icons.close,
-                              size: 18, color: AppColors.textSecondary),
-                          onPressed: () {
-                            _controller.clear();
-                            _textNotEmpty.value = false;
-                          },
-                        );
-                      },
-                    ),
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onSubmitted: _doSearch,
-                ),
-              ),
-              // 右侧按钮：无按钮 / 取消 / 搜索，淡入淡出切换
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: SizeTransition(
-                    sizeFactor: anim,
-                    axisAlignment: -1,
-                    child: child,
-                  ),
-                ),
-                child: _buildRightButton(),
-              ),
-            ],
-          ),
-        ),
-        // (c) 内容区：默认视图 / 搜索记录 / 实时建议 / 结果，淡入淡出切换
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            // 默认 layoutBuilder 用 Stack(alignment: center)，会把不撑满
-            // 的子组件（如 SearchSuggestions 的 shrinkWrap ListView、结果页
-            // 的 Center loading）垂直居中，导致搜索框下方出现一大段空白、
-            // "搜索 xxx" 行被推到屏幕中间。改用 topCenter 让所有子态顶端对齐。
-            layoutBuilder: (currentChild, previousChildren) => Stack(
-              alignment: Alignment.topCenter,
-              children: <Widget>[
-                ...previousChildren,
-                if (currentChild != null) currentChild,
-              ],
+              child: _buildContentArea(),
             ),
-            child: _buildContentArea(),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

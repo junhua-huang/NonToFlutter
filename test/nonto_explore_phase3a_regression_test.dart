@@ -13,7 +13,9 @@ void main() {
     test('uses Nonto-owned discovery language instead of Twitter/X labels', () {
       expect(source, isNot(contains('Twitter/X Explore')));
       expect(source, contains('Nonto 发现'));
-      expect(source, contains("title: Text('发现'"));
+      expect(source, contains('NontoHeaderSearchBar('));
+      expect(source, contains("hintText: '搜索'"));
+      expect(source, isNot(contains("title: Text('发现'")));
     });
 
     test('default discovery state has explicit loading and empty helpers', () {
