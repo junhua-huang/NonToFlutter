@@ -42,5 +42,27 @@ void main() {
       expect(topicResults, contains('Future<void> _togglePostLike'));
       expect(topicResults, contains('onLike: () => _togglePostLike'));
     });
+
+    test('comment and media viewer like actions use the shared animated heart',
+        () {
+      final actionBar = read('lib/widgets/nonto/nonto_post_action_bar.dart');
+      final commentSection = read('lib/widgets/comment_section.dart');
+      final mediaViewer = read('lib/widgets/enhanced_media_viewer.dart');
+
+      expect(actionBar, contains('class NontoAnimatedLikeIcon'));
+      expect(actionBar, contains('NontoAnimatedLikeIcon('));
+      expect(
+          commentSection,
+          contains(
+              "import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';"));
+      expect(commentSection, contains('NontoAnimatedLikeIcon('));
+      expect(commentSection, isNot(contains('Icons.favorite')));
+      expect(
+          mediaViewer,
+          contains(
+              "import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';"));
+      expect(mediaViewer, contains('NontoAnimatedLikeIcon('));
+      expect(mediaViewer, isNot(contains('Icons.favorite')));
+    });
   });
 }

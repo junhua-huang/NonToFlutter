@@ -87,7 +87,7 @@ class NontoPostActionBar extends StatelessWidget {
   }
 }
 
-class NontoLikeButton extends StatefulWidget {
+class NontoLikeButton extends StatelessWidget {
   final bool isLiked;
   final int count;
   final VoidCallback onTap;
@@ -100,10 +100,42 @@ class NontoLikeButton extends StatefulWidget {
   });
 
   @override
-  State<NontoLikeButton> createState() => _NontoLikeButtonState();
+  Widget build(BuildContext context) {
+    final color = isLiked ? AppColors.likeRed : AppColors.textSecondary;
+    return NontoPostActionButton(
+      iconPath: isLiked ? _heartFilledIconPath : _heartOutlineIconPath,
+      count: count,
+      color: color,
+      onTap: onTap,
+      iconBuilder: (_) => NontoAnimatedLikeIcon(
+        isLiked: isLiked,
+        size: 18,
+        likedColor: AppColors.likeRed,
+        unlikedColor: AppColors.textSecondary,
+      ),
+    );
+  }
 }
 
-class _NontoLikeButtonState extends State<NontoLikeButton>
+class NontoAnimatedLikeIcon extends StatefulWidget {
+  final bool isLiked;
+  final double size;
+  final Color likedColor;
+  final Color unlikedColor;
+
+  const NontoAnimatedLikeIcon({
+    super.key,
+    required this.isLiked,
+    required this.size,
+    required this.likedColor,
+    required this.unlikedColor,
+  });
+
+  @override
+  State<NontoAnimatedLikeIcon> createState() => _NontoAnimatedLikeIconState();
+}
+
+class _NontoAnimatedLikeIconState extends State<NontoAnimatedLikeIcon>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
@@ -120,11 +152,12 @@ class _NontoLikeButtonState extends State<NontoLikeButton>
       TweenSequenceItem(tween: Tween(begin: 0.72, end: 1.28), weight: 38),
       TweenSequenceItem(tween: Tween(begin: 1.28, end: 1), weight: 38),
     ]).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
   }
 
   @override
-  void didUpdateWidget(covariant NontoLikeButton oldWidget) {
+  void didUpdateWidget(covariant NontoAnimatedLikeIcon oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.isLiked && widget.isLiked) {
       _controller.forward(from: 0);
@@ -139,13 +172,13 @@ class _NontoLikeButtonState extends State<NontoLikeButton>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isLiked ? AppColors.likeRed : AppColors.textSecondary;
-    return NontoPostActionButton(
-      iconPath: widget.isLiked ? _heartFilledIconPath : _heartOutlineIconPath,
-      count: widget.count,
-      color: color,
-      onTap: widget.onTap,
-      iconBuilder: (icon) => ScaleTransition(scale: _scale, child: icon),
+    return ScaleTransition(
+      scale: _scale,
+      child: NontoSvgIcon(
+        widget.isLiked ? _heartFilledIconPath : _heartOutlineIconPath,
+        size: widget.size,
+        color: widget.isLiked ? widget.likedColor : widget.unlikedColor,
+      ),
     );
   }
 }

@@ -8,6 +8,7 @@ import 'package:nonto/providers/comment_state.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -703,14 +704,11 @@ class _CommentItem extends ConsumerWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                comment.isLiked
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
+                              NontoAnimatedLikeIcon(
+                                isLiked: comment.isLiked,
                                 size: 14,
-                                color: comment.isLiked
-                                    ? AppColors.likeRed
-                                    : colors.onSurfaceVariant,
+                                likedColor: AppColors.likeRed,
+                                unlikedColor: colors.onSurfaceVariant,
                               ),
                               if (comment.likeCount > 0) ...[
                                 const SizedBox(width: 2),

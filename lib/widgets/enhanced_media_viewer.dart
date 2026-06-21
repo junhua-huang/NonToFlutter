@@ -11,6 +11,7 @@ import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/widgets/comment_section.dart';
+import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
@@ -402,8 +403,13 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
         const SizedBox(height: 18),
         // Like button
         _VerticalStatButton(
-          icon: post.isLiked == true ? Icons.favorite : Icons.favorite_border,
-          iconColor: post.isLiked == true ? Colors.red : Colors.white,
+          iconWidget: NontoAnimatedLikeIcon(
+            isLiked: post.isLiked == true,
+            size: 28,
+            likedColor: AppColors.likeRed,
+            unlikedColor: Colors.white,
+          ),
+          iconColor: post.isLiked == true ? AppColors.likeRed : Colors.white,
           count: post.likeCount,
           onTap: () => _toggleLike(post),
         ),
@@ -635,13 +641,15 @@ class _PostContentTextState extends State<_PostContentText> {
 
 /// Vertical stat button (Instagram style) – icon on top, count below
 class _VerticalStatButton extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? iconWidget;
   final Color iconColor;
   final int count;
   final VoidCallback? onTap;
 
   const _VerticalStatButton({
-    required this.icon,
+    this.icon,
+    this.iconWidget,
     required this.iconColor,
     required this.count,
     this.onTap,
@@ -655,7 +663,7 @@ class _VerticalStatButton extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: iconColor, size: 28),
+          iconWidget ?? Icon(icon, color: iconColor, size: 28),
           const SizedBox(height: 2),
           Text(
             _formatCount(count),
