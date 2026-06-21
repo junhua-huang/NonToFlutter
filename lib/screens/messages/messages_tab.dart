@@ -134,6 +134,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final homeScaffoldContext = context;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: PreferredSize(
@@ -159,6 +160,8 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
                           focusNode: _searchFocusNode,
                           user: ref.watch(authProvider).user,
                           hintText: '搜索会话',
+                          onAvatarTap: () =>
+                              Scaffold.of(homeScaffoldContext).openDrawer(),
                           onChanged: (value) =>
                               setState(() => _searchQuery = value),
                           suffixIcon: _searchQuery.isEmpty

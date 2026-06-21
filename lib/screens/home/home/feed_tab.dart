@@ -6,7 +6,7 @@ import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/providers/feed_notifier.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
-import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/nonto_header_search_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -213,10 +213,10 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                     ? AppBar(
                         leading: Padding(
                           padding: const EdgeInsets.only(left: 12),
-                          child: GestureDetector(
+                          child: NontoHeaderAvatar(
+                            user: authState.user,
+                            radius: 10,
                             onTap: () => Scaffold.of(context).openDrawer(),
-                            child: ImageUtils.buildAvatar(authState.user,
-                                radius: 10),
                           ),
                         ),
                         title: Text(

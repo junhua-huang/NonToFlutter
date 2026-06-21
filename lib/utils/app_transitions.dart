@@ -45,13 +45,17 @@ class AppTransitions {
       opaque: true,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved =
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
         return AnimatedBuilder(
           animation: curved,
           builder: (context, _) {
             return Transform.translate(
-              offset: Offset(0, (1.0 - curved.value) * 60),
+              offset: Offset(
+                  0, (1.0 - curved.value) * MediaQuery.of(context).size.height),
               child: child,
             );
           },

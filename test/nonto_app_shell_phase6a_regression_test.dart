@@ -20,7 +20,7 @@ void main() {
       expect(source, contains('ProfileTab()'));
     });
 
-    test('bottom navigation chrome is extracted and keeps stable labels', () {
+    test('bottom navigation chrome is extracted and keeps icons only', () {
       final source = read('lib/screens/home/home_screen.dart');
 
       expect(source, contains('Widget _buildBottomNavigationBar'));
@@ -28,10 +28,13 @@ void main() {
           contains('List<BottomNavigationBarItem> _buildNavigationItems'));
       expect(source, contains('BottomNavigationBarItem _buildNavItem'));
       expect(source, contains('Widget _buildNavIcon'));
-      expect(source, contains("label: '首页'"));
-      expect(source, contains("label: '发现'"));
-      expect(source, contains("label: '消息'"));
-      expect(source, contains("label: '我的'"));
+      expect(source, contains('showSelectedLabels: false'));
+      expect(source, contains('showUnselectedLabels: false'));
+      expect(source, contains("label: ''"));
+      expect(source, isNot(contains("label: '首页'")));
+      expect(source, isNot(contains("label: '发现'")));
+      expect(source, isNot(contains("label: '消息'")));
+      expect(source, isNot(contains("label: '我的'")));
     });
 
     test('compose action remains feed-only and opens create post screen', () {

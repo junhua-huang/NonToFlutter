@@ -11,8 +11,10 @@ class User {
   final String? coverPhotoUrl;
   final DateTime? createdAt;
   final bool? isOnline;
+
   /// 头像缓存破坏标记（上传后更新，防止 CachedNetworkImage 使用旧缓存）
   final int? avatarCacheTs;
+
   /// 背景图缓存破坏标记
   final int? coverCacheTs;
 
@@ -36,7 +38,9 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id'].toString()) ?? 0,
       username: json['username'] ?? '',
       email: json['email'] ?? '',
       displayName: json['display_name'],
@@ -61,6 +65,8 @@ class User {
       'bio': bio,
       'avatar_url': avatarUrl,
       'cover_photo_url': coverPhotoUrl,
+      'avatar_cache_ts': avatarCacheTs,
+      'cover_cache_ts': coverCacheTs,
       'is_online': isOnline,
     };
   }

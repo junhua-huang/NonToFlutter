@@ -342,6 +342,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
                             focusNode: _focusNode,
                             user: ref.watch(authProvider).user,
                             hintText: '搜索',
+                            onAvatarTap: () =>
+                                Scaffold.of(context).openDrawer(),
                             onChanged: (_) => _onTextChanged(),
                             onSubmitted: _doSearch,
                             suffixIcon: ValueListenableBuilder<bool>(

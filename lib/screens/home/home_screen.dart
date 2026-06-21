@@ -11,6 +11,7 @@ import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/screens/community/community_list_screen.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/utils/app_transitions.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -155,10 +156,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         opacity: barVisible ? 1.0 : 0.0,
         child: FloatingActionButton(
           onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-            );
+            await AppTransitions.pushBottom(context, const CreatePostScreen());
           },
           backgroundColor: AppColors.primary,
           elevation: 4,
@@ -192,8 +190,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ref.read(currentTabIndexProvider.notifier).state = index;
             },
             type: BottomNavigationBarType.fixed,
-            showSelectedLabels: true,
-            showUnselectedLabels: true,
+            showSelectedLabels: false,
+            showUnselectedLabels: false,
             selectedFontSize: 0,
             unselectedFontSize: 0,
             items: _buildNavigationItems(
@@ -212,26 +210,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }) {
     return [
       _buildNavItem(
-        label: '首页',
         asset: 'assets/icons/未选中首页.svg',
         activeAsset: 'assets/icons/选中首页.svg',
         selected: currentIndex == 0,
       ),
       _buildNavItem(
-        label: '发现',
         asset: 'assets/icons/未选中搜索.svg',
         activeAsset: 'assets/icons/选中搜索.svg',
         selected: currentIndex == 1,
       ),
       _buildNavItem(
-        label: '消息',
         asset: 'assets/icons/未选中消息.svg',
         activeAsset: 'assets/icons/选中消息.svg',
         selected: currentIndex == 2,
         badgeCount: totalBadge,
       ),
       _buildNavItem(
-        label: '我的',
         asset: 'assets/icons/未选中个人.svg',
         activeAsset: 'assets/icons/选中个人.svg',
         selected: currentIndex == 3,
@@ -240,7 +234,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   BottomNavigationBarItem _buildNavItem({
-    required String label,
     required String asset,
     required String activeAsset,
     required bool selected,
@@ -257,7 +250,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         selected: selected,
         badgeCount: badgeCount,
       ),
-      label: label,
+      label: '',
     );
   }
 
@@ -266,10 +259,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     required bool selected,
     int badgeCount = 0,
   }) {
-    final icon = _NavIcon(
-      asset: asset,
-      isSelected: selected,
-      size: 26,
+    final icon = ExcludeSemantics(
+      child: _NavIcon(
+        asset: asset,
+        isSelected: selected,
+        size: 26,
+      ),
     );
 
     if (badgeCount <= 0) return icon;

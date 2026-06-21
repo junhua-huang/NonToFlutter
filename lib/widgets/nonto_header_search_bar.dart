@@ -10,6 +10,7 @@ class NontoHeaderSearchBar extends StatefulWidget {
   final String hintText;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+  final VoidCallback? onAvatarTap;
   final Widget? suffixIcon;
   final Widget? trailing;
   final bool keepExpandedWhenNotEmpty;
@@ -22,6 +23,7 @@ class NontoHeaderSearchBar extends StatefulWidget {
     this.user,
     this.onChanged,
     this.onSubmitted,
+    this.onAvatarTap,
     this.suffixIcon,
     this.trailing,
     this.keepExpandedWhenNotEmpty = true,
@@ -86,7 +88,11 @@ class _NontoHeaderSearchBarState extends State<NontoHeaderSearchBar> {
                       child: AnimatedOpacity(
                         duration: const Duration(milliseconds: 180),
                         opacity: showAvatar ? 1 : 0,
-                        child: ImageUtils.buildAvatar(widget.user, radius: 18),
+                        child: NontoHeaderAvatar(
+                          user: widget.user,
+                          radius: 18,
+                          onTap: widget.onAvatarTap,
+                        ),
                       ),
                     )
                   : const SizedBox.shrink(),
@@ -140,6 +146,31 @@ class _NontoHeaderSearchBarState extends State<NontoHeaderSearchBar> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class NontoHeaderAvatar extends StatelessWidget {
+  final User? user;
+  final double radius;
+  final VoidCallback? onTap;
+
+  const NontoHeaderAvatar({
+    super.key,
+    required this.user,
+    this.radius = 18,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = ImageUtils.buildAvatar(user, radius: radius);
+    if (onTap == null) return avatar;
+
+    return InkWell(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      child: avatar,
     );
   }
 }

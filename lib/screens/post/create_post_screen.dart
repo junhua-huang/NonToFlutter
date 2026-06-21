@@ -843,11 +843,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     return TextButton(
       onPressed: _canSubmitPost ? _submitPost : null,
       style: TextButton.styleFrom(
-        backgroundColor: _canSubmitPost ? _accentColor : Colors.grey[300],
+        backgroundColor:
+            _canSubmitPost ? _accentColor : AppColors.backgroundSecondary,
         foregroundColor: Colors.white,
+        disabledForegroundColor: AppColors.textTertiary,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        disabledBackgroundColor: Colors.grey[300],
+        disabledBackgroundColor: AppColors.backgroundSecondary,
       ),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 160),
@@ -948,7 +950,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             Navigator.of(context).pop();
           },
         ),
-        actions: [_buildSubmitButton()],
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _buildSubmitButton(),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(0.5),
           child: Container(height: 0.5, color: AppColors.borderLight),
@@ -1143,7 +1150,7 @@ class _EmojiPickerPanelState extends State<_EmojiPickerPanel> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: AppColors.borderLight,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

@@ -1,4 +1,4 @@
-﻿import 'package:nonto/models/user.dart';
+import 'package:nonto/models/user.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
@@ -17,6 +17,7 @@ import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/screens/community/community_create_screen.dart';
 import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/community/community_manage_screen.dart';
+import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/screens/profile/edit_profile_screen.dart';
 import 'package:nonto/screens/profile/open_source_screen.dart';
@@ -28,7 +29,6 @@ import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/screens/splash/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -57,7 +57,7 @@ class RouteGenerator {
       case AppRoutes.friends:
         return _authGuard(builder: (_) => const FriendsScreen());
       case AppRoutes.createPost:
-        return _authGuard(builder: (_) => const HomeScreen(initialTab: 0));
+        return _authGuard(builder: (_) => const CreatePostScreen());
       case AppRoutes.editProfile:
         return _authGuard(builder: (_) => const EditProfileScreen());
       case AppRoutes.settings:
@@ -89,14 +89,16 @@ class RouteGenerator {
 
       if (segments.length == 2 && segments[0] == 'profile') {
         if (args is User) {
-          return MaterialPageRoute(builder: (_) => UserProfileScreen(user: args));
+          return MaterialPageRoute(
+              builder: (_) => UserProfileScreen(user: args));
         }
         return _errorRoute('User argument is required for profile view');
       }
 
       if (segments.length == 2 && segments[0] == 'post') {
         final postId = int.parse(segments[1]);
-        return MaterialPageRoute(builder: (_) => PostDetailScreen(postId: postId));
+        return MaterialPageRoute(
+            builder: (_) => PostDetailScreen(postId: postId));
       }
 
       if (segments.length == 2 && segments[0] == 'chat') {
@@ -118,12 +120,16 @@ class RouteGenerator {
         );
       }
 
-      if (segments.length == 3 && segments[0] == 'comic' && segments[1] == 'detail') {
+      if (segments.length == 3 &&
+          segments[0] == 'comic' &&
+          segments[1] == 'detail') {
         final eventId = int.parse(segments[2]);
         return _authGuard(builder: (_) => ComicDetailPage(eventId: eventId));
       }
 
-      if (segments.length == 3 && segments[0] == 'comic' && segments[1] == 'edit') {
+      if (segments.length == 3 &&
+          segments[0] == 'comic' &&
+          segments[1] == 'edit') {
         final eventId = int.parse(segments[2]);
         return _authGuard(builder: (_) => ComicUploadPage(eventId: eventId));
       }
@@ -131,15 +137,22 @@ class RouteGenerator {
       // ── 社群参数路由 ──
       if (segments.length == 2 && segments[0] == 'communities') {
         final communityId = int.parse(segments[1]);
-        return _authGuard(builder: (_) => CommunityDetailScreen(communityId: communityId));
+        return _authGuard(
+            builder: (_) => CommunityDetailScreen(communityId: communityId));
       }
-      if (segments.length == 4 && segments[0] == 'communities' && segments[2] == 'chat') {
+      if (segments.length == 4 &&
+          segments[0] == 'communities' &&
+          segments[2] == 'chat') {
         final communityId = int.parse(segments[1]);
-        return _authGuard(builder: (_) => CommunityChatScreen(communityId: communityId));
+        return _authGuard(
+            builder: (_) => CommunityChatScreen(communityId: communityId));
       }
-      if (segments.length == 4 && segments[0] == 'communities' && segments[2] == 'manage') {
+      if (segments.length == 4 &&
+          segments[0] == 'communities' &&
+          segments[2] == 'manage') {
         final communityId = int.parse(segments[1]);
-        return _authGuard(builder: (_) => CommunityManageScreen(communityId: communityId));
+        return _authGuard(
+            builder: (_) => CommunityManageScreen(communityId: communityId));
       }
     }
 
