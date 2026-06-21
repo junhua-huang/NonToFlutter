@@ -542,192 +542,211 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: AppColors.textPrimary),
-        title: Text(user.displayName ?? user.username,
-            style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.more_horiz, color: AppColors.textPrimary),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            onPressed: () async {
-              final action = await TwitterBottomSheet.show<String>(
-                context,
-                options: const [
-                  TwitterSheetOption(
-                      icon: Icons.flag_outlined,
-                      label: '举报用户',
-                      value: 'report'),
-                  TwitterSheetOption(
-                      icon: Icons.block_outlined, label: '屏蔽', value: 'block'),
-                ],
-              );
-              if (action == 'report') {
-                _reportUser();
-              } else if (action == 'block') {
-                _blockUser();
-              }
-            },
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(0.5),
-          child: Container(height: 0.5, color: AppColors.borderLight),
-        ),
-      ),
-      body: SmartRefresher(
-        controller: _refreshController,
-        enablePullDown: true,
-        onRefresh: _onRefresh,
-        header: const WaterDropHeader(
-            complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
-            waterDropColor: AppColors.primary),
-        child: CustomScrollView(slivers: [
-          // ===== Cover + Avatar Section =====
-          SliverToBoxAdapter(child: _buildCoverSection(user)),
+      extendBodyBehindAppBar: true,
+      appBar: null,
+      body: Stack(
+        children: [
+          SmartRefresher(
+            controller: _refreshController,
+            enablePullDown: true,
+            onRefresh: _onRefresh,
+            header: const WaterDropHeader(
+                complete:
+                    Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+                waterDropColor: AppColors.primary),
+            child: CustomScrollView(slivers: [
+              // ===== Cover + Avatar Section =====
+              SliverToBoxAdapter(child: _buildCoverSection(user)),
 
-          // Spacer for avatar overlap
-          const SliverToBoxAdapter(child: SizedBox(height: 56)),
+              // Spacer for avatar overlap
+              const SliverToBoxAdapter(child: SizedBox(height: 56)),
 
-          // ===== Info + Action Row =====
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name
-                  Text(user.displayName ?? user.username,
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.textPrimary,
-                          height: 1.2)),
-                  const SizedBox(height: 4),
-                  // Username
-                  Text('@${user.username}',
-                      style: TextStyle(
-                          fontSize: 15, color: AppColors.textSecondary)),
-                  const SizedBox(height: 8),
-                  // Bio
-                  if (user.bio != null && user.bio!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(user.bio!,
-                          style: TextStyle(
-                              fontSize: 15,
-                              height: 1.4,
-                              color: AppColors.textPrimary)),
-                    ),
-                  // Join date + stats row
-                  Row(
+              // ===== Info + Action Row =====
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.calendar_today,
-                          size: 14, color: AppColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text(
-                          user.createdAt != null
-                              ? '${AppDateUtils.formatTimeAgo(user.createdAt)} 加入'
-                              : '已加入',
+                      // Name
+                      Text(user.displayName ?? user.username,
                           style: TextStyle(
-                              fontSize: 13, color: AppColors.textSecondary)),
-                      const SizedBox(width: 16),
-                      if (_isLoadingStats)
-                        const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppColors.primary))
-                      else if (_error != null)
-                        ErrorStateWidget(
-                          message: _error!,
-                          onRetry: () {
-                            setState(() {
-                              _error = null;
-                              _isLoadingStats = true;
-                            });
-                            _loadInitialUserProfileData();
-                          },
-                        )
-                      else
-                        Text('$_friendCount 位好友',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary)),
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textPrimary,
+                              height: 1.2)),
+                      const SizedBox(height: 4),
+                      // Username
+                      Text('@${user.username}',
+                          style: TextStyle(
+                              fontSize: 15, color: AppColors.textSecondary)),
+                      const SizedBox(height: 8),
+                      // Bio
+                      if (user.bio != null && user.bio!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(user.bio!,
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  height: 1.4,
+                                  color: AppColors.textPrimary)),
+                        ),
+                      // Join date + stats row
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today,
+                              size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                              user.createdAt != null
+                                  ? '${AppDateUtils.formatTimeAgo(user.createdAt)} 加入'
+                                  : '已加入',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary)),
+                          const SizedBox(width: 16),
+                          if (_isLoadingStats)
+                            const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: AppColors.primary))
+                          else if (_error != null)
+                            ErrorStateWidget(
+                              message: _error!,
+                              onRetry: () {
+                                setState(() {
+                                  _error = null;
+                                  _isLoadingStats = true;
+                                });
+                                _loadInitialUserProfileData();
+                              },
+                            )
+                          else
+                            Text('$_friendCount 位好友',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary)),
+                        ],
+                      ),
+
+                      // Action buttons row
+                      const SizedBox(height: 12),
+                      _buildActionButtons(),
+
+                      const SizedBox(height: 12),
                     ],
                   ),
-
-                  // Action buttons row
-                  const SizedBox(height: 12),
-                  _buildActionButtons(),
-
-                  const SizedBox(height: 12),
-                ],
-              ),
-            ),
-          ),
-
-          // ===== Tabs =====
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _TabDelegate(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                      bottom:
-                          BorderSide(color: AppColors.borderLight, width: 0.5)),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: AppColors.textPrimary,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorColor: AppColors.primary,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  indicatorWeight: 3,
-                  labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15),
-                  unselectedLabelStyle: const TextStyle(
-                      fontWeight: FontWeight.w500, fontSize: 15),
-                  tabs: const [Tab(text: '帖子'), Tab(text: '喜欢')],
                 ),
               ),
-            ),
-          ),
-          // Tab content
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height - 200,
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildPostsList(
-                    _userPosts,
-                    _isLoadingPosts,
-                    icon: Icons.article_outlined,
-                    emptyTitle: '还没有发布帖子',
-                    emptySubtitle: 'TA 的新动态会出现在这里',
+
+              // ===== Tabs =====
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _TabDelegate(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                          bottom: BorderSide(
+                              color: AppColors.borderLight, width: 0.5)),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      labelColor: AppColors.textPrimary,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      indicatorColor: AppColors.primary,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      indicatorWeight: 3,
+                      labelStyle: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 15),
+                      unselectedLabelStyle: const TextStyle(
+                          fontWeight: FontWeight.w500, fontSize: 15),
+                      tabs: const [Tab(text: '帖子'), Tab(text: '喜欢')],
+                    ),
                   ),
-                  _buildPostsList(
-                    _likedPosts,
-                    _isLoadingLikes,
-                    icon: Icons.favorite_border,
-                    emptyTitle: '还没有喜欢的帖子',
-                  ),
-                ],
+                ),
               ),
-            ),
+              // Tab content
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height - 200,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildPostsList(
+                        _userPosts,
+                        _isLoadingPosts,
+                        icon: Icons.article_outlined,
+                        emptyTitle: '还没有发布帖子',
+                        emptySubtitle: 'TA 的新动态会出现在这里',
+                      ),
+                      _buildPostsList(
+                        _likedPosts,
+                        _isLoadingLikes,
+                        icon: Icons.favorite_border,
+                        emptyTitle: '还没有喜欢的帖子',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ]),
           ),
-        ]),
+          _buildProfileOverlayControls(),
+        ],
       ),
     );
+  }
+
+  Widget _buildProfileOverlayControls() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+        child: Row(
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.background.withValues(alpha: 0.82),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+            const Spacer(),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.background.withValues(alpha: 0.82),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: Icon(Icons.more_horiz, color: AppColors.textPrimary),
+                onPressed: _showProfileActions,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showProfileActions() async {
+    final action = await TwitterBottomSheet.show<String>(
+      context,
+      options: const [
+        TwitterSheetOption(
+            icon: Icons.flag_outlined, label: '举报用户', value: 'report'),
+        TwitterSheetOption(
+            icon: Icons.block_outlined, label: '屏蔽', value: 'block'),
+      ],
+    );
+    if (action == 'report') {
+      _reportUser();
+    } else if (action == 'block') {
+      _blockUser();
+    }
   }
 
   Widget _buildCoverSection(User user) {

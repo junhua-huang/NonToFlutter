@@ -55,23 +55,60 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(community?.name ?? '社群'),
-        actions: [
-          if (community != null && (community.isManager || community.isMember))
-            PopupMenuButton<String>(
-              onSelected: (value) => _handleMenuAction(value, community),
-              itemBuilder: (context) => _buildMenuItems(community),
-            ),
+      extendBodyBehindAppBar: true,
+      appBar: null,
+      body: Stack(
+        children: [
+          state.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : state.error != null
+                  ? Center(child: Text('加载失败: ${state.error}'))
+                  : community == null
+                      ? const Center(child: Text('社群不存在'))
+                      : _buildContent(community, state, theme),
+          if (community != null) _buildCoverOverlayControls(community),
         ],
       ),
-      body: state.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : state.error != null
-              ? Center(child: Text('加载失败: ${state.error}'))
-              : community == null
-                  ? const Center(child: Text('社群不存在'))
-                  : _buildContent(community, state, theme),
+    );
+  }
+
+  Widget _buildCoverOverlayControls(Community community) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+        child: Row(
+          children: [
+            _coverChromeButton(
+              icon: Icons.arrow_back,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            const Spacer(),
+            if (community.isManager || community.isMember)
+              PopupMenuButton<String>(
+                onSelected: (value) => _handleMenuAction(value, community),
+                itemBuilder: (context) => _buildMenuItems(community),
+                icon: Icon(Icons.more_horiz, color: AppColors.textPrimary),
+                color: AppColors.background,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _coverChromeButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.background.withValues(alpha: 0.82),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: AppColors.textPrimary),
+        onPressed: onPressed,
+      ),
     );
   }
 

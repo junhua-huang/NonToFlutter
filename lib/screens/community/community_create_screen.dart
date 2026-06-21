@@ -1,7 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/api/upload_service.dart';
 
 /// 创建社群 — 两步表单
 /// Step 1: 名称、简介、规则与视觉资料。
@@ -19,7 +23,14 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
   final _rulesCtrl = TextEditingController();
   String _joinPolicy = 'approval';
   bool _isSubmitting = false;
+  bool _isUploadingAvatar = false;
+  bool _isUploadingCover = false;
   int _step = 1;
+  final ImagePicker _picker = ImagePicker();
+  Uint8List? _avatarBytes;
+  Uint8List? _coverBytes;
+  String? _avatarUrl;
+  String? _bannerUrl;
 
   final List<Map<String, String>> _joinOptions = [
     {'value': 'approval', 'label': '需要审核', 'desc': '申请后由管理员审核通过才能加入'},
@@ -46,6 +57,68 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
 
   void _refreshNameState() => setState(() {});
 
+  Future<void> _pickCommunityAvatar() async {
+    await _pickCommunityImage(isAvatar: true);
+  }
+
+  Future<void> _pickCommunityCover() async {
+    await _pickCommunityImage(isAvatar: false);
+  }
+
+  Future<void> _pickCommunityImage({required bool isAvatar}) async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: isAvatar ? 720 : 1600,
+      imageQuality: 90,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      if (isAvatar) {
+        _isUploadingAvatar = true;
+        _avatarBytes = bytes;
+      } else {
+        _isUploadingCover = true;
+        _coverBytes = bytes;
+      }
+    });
+    try {
+      final resp = await UploadService().uploadImage(picked);
+      final data = resp.data;
+      final url = data is Map ? data['url'] ?? data['avatar_url'] : null;
+      if (!mounted) return;
+      if (resp.success && url != null) {
+        setState(() {
+          if (isAvatar) {
+            _avatarUrl = url.toString();
+          } else {
+            _bannerUrl = url.toString();
+          }
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(resp.message ?? '上传失败')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('上传失败: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (isAvatar) {
+            _isUploadingAvatar = false;
+          } else {
+            _isUploadingCover = false;
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (!_canContinue) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,6 +134,8 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
         'description': _descCtrl.text.trim(),
         'rules': _rulesCtrl.text.trim(),
         'join_policy': _joinPolicy,
+        'avatar_url': _avatarUrl,
+        'banner_url': _bannerUrl,
       });
       if (resp.data is Map && resp.data['community'] != null) {
         final community = resp.data['community'];
@@ -185,29 +260,40 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
         ),
         const SizedBox(height: 24),
         Center(
-          child: Stack(
-            children: [
-              CircleAvatar(
-                radius: 48,
-                child: Icon(
-                  Icons.camera_alt,
-                  size: 32,
-                  color: AppColors.textTertiary,
+          child: InkWell(
+            onTap: _isUploadingAvatar ? null : _pickCommunityAvatar,
+            customBorder: const CircleBorder(),
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 48,
+                  backgroundColor: AppColors.surface,
+                  backgroundImage:
+                      _avatarBytes != null ? MemoryImage(_avatarBytes!) : null,
+                  child: _isUploadingAvatar
+                      ? const CircularProgressIndicator(strokeWidth: 2)
+                      : _avatarBytes == null
+                          ? Icon(
+                              Icons.camera_alt,
+                              size: 32,
+                              color: AppColors.textTertiary,
+                            )
+                          : null,
                 ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.add, size: 16, color: Colors.white),
                   ),
-                  child: const Icon(Icons.add, size: 16, color: Colors.white),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 4),
@@ -254,28 +340,43 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
         const SizedBox(height: 8),
-        Container(
-          height: 112,
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.add_photo_alternate,
-                  color: AppColors.textTertiary,
-                  size: 32,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '上传封面图',
-                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                ),
-              ],
+        InkWell(
+          onTap: _isUploadingCover ? null : _pickCommunityCover,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 112,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderLight),
+              image: _coverBytes != null
+                  ? DecorationImage(
+                      image: MemoryImage(_coverBytes!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            child: Center(
+              child: _isUploadingCover
+                  ? const CircularProgressIndicator(strokeWidth: 2)
+                  : _coverBytes == null
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.add_photo_alternate,
+                              color: AppColors.textTertiary,
+                              size: 32,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '上传封面图',
+                              style: TextStyle(
+                                  color: AppColors.textTertiary, fontSize: 12),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
             ),
           ),
         ),

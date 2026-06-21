@@ -70,17 +70,17 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
               });
             },
           ),
+          IconButton(
+            tooltip: '创建社群',
+            icon: const Icon(Icons.group_add_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CommunityCreateScreen()),
+            ),
+          ),
         ],
       ),
       body: _buildBody(state),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const CommunityCreateScreen()),
-        ),
-        icon: const Icon(Icons.group_add),
-        label: const Text('创建社群'),
-      ),
     );
   }
 
