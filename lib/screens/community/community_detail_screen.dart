@@ -128,7 +128,9 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
           ),
           const SliverToBoxAdapter(child: Divider(height: 1)),
           SliverToBoxAdapter(child: _buildDynamicToolbar(state)),
-          if (state.posts.isEmpty)
+          if (state.isPostsLoading)
+            SliverToBoxAdapter(child: _buildPostsLoadingIndicator()),
+          if (state.posts.isEmpty && !state.isPostsLoading)
             SliverToBoxAdapter(child: _buildPostEmptyState())
           else
             SliverList.builder(
@@ -327,6 +329,17 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                 .loadPosts(widget.communityId, hot: true);
           }),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPostsLoadingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: LinearProgressIndicator(
+        minHeight: 2,
+        backgroundColor: AppColors.borderLight,
+        valueColor: AlwaysStoppedAnimation(AppColors.primary),
       ),
     );
   }
@@ -569,15 +582,18 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
     );
   }
 
-  void _navigateToCreatePost(Community community) {
-    Navigator.pushNamed(
+  Future<void> _navigateToCreatePost(Community community) async {
+    final didPublish = await Navigator.pushNamed(
       context,
       '/create-post',
       arguments: {
         'community_id': community.id,
-        'community_name': community.name
+        'community_name': community.name,
       },
     );
+    if (didPublish == true) {
+      ref.read(communityDetailProvider.notifier).loadPosts(widget.communityId);
+    }
   }
 }
 

@@ -24,7 +24,10 @@ import 'package:video_thumbnail_ohos/video_thumbnail_ohos.dart';
 
 /// Nonto 创作页：文本、图片、视频、话题与草稿的一体化发布入口。
 class CreatePostScreen extends ConsumerStatefulWidget {
-  const CreatePostScreen({super.key});
+  final int? communityId;
+  final String? communityName;
+
+  const CreatePostScreen({super.key, this.communityId, this.communityName});
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -386,6 +389,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
         videoPath: videoUrl,
         thumbnailUrl: thumbnailUrl,
+        communityId: widget.communityId,
       );
 
       if (resp.success) {
@@ -998,6 +1002,39 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ),
                     ],
                   ),
+                  if (widget.communityName != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.backgroundSecondary,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.borderLight),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.groups_3_outlined,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '发布到 ${widget.communityName}',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   // Text field
                   TextField(

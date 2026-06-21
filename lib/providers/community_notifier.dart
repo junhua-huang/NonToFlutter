@@ -109,6 +109,7 @@ class CommunityDetailState {
   final List<CommunityMember> members;
   final List<Post> posts;
   final bool isLoading;
+  final bool isPostsLoading;
   final String? error;
   final String sortBy; // 'latest' or 'hot'
 
@@ -117,6 +118,7 @@ class CommunityDetailState {
     this.members = const [],
     this.posts = const [],
     this.isLoading = false,
+    this.isPostsLoading = false,
     this.error,
     this.sortBy = 'latest',
   });
@@ -126,6 +128,7 @@ class CommunityDetailState {
     List<CommunityMember>? members,
     List<Post>? posts,
     bool? isLoading,
+    bool? isPostsLoading,
     String? error,
     String? sortBy,
   }) {
@@ -134,6 +137,7 @@ class CommunityDetailState {
       members: members ?? this.members,
       posts: posts ?? this.posts,
       isLoading: isLoading ?? this.isLoading,
+      isPostsLoading: isPostsLoading ?? this.isPostsLoading,
       error: error,
       sortBy: sortBy ?? this.sortBy,
     );
@@ -161,15 +165,14 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
                   .toList()
               : <CommunityMember>[];
 
-      // 加载帖子
-      await _loadPosts(communityId);
-
-      state = CommunityDetailState(
+      final currentSortBy = state.sortBy;
+      state = state.copyWith(
         community: community,
         members: members,
         isLoading: false,
-        sortBy: state.sortBy,
+        sortBy: currentSortBy,
       );
+      await loadPosts(communityId, hot: currentSortBy == 'hot');
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
@@ -177,7 +180,11 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
 
   Future<void> loadPosts(int communityId, {bool hot = false}) async {
     final sortBy = hot ? 'hot' : 'latest';
-    state = state.copyWith(isLoading: true, sortBy: sortBy);
+    state = state.copyWith(
+      isPostsLoading: true,
+      sortBy: sortBy,
+      error: null,
+    );
     await _loadPosts(communityId);
   }
 
@@ -185,17 +192,21 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
     try {
       if (state.sortBy == 'hot') {
         final resp = await _api.getHotPosts(communityId);
-        state =
-            state.copyWith(posts: _extractPosts(resp.data), isLoading: false);
+        state = state.copyWith(
+          posts: _extractPosts(resp.data),
+          isPostsLoading: false,
+        );
       } else {
         // 社群帖子流：用 _api.get (来自 ApiClient)
         final resp = await ApiClient().get('/posts/',
             params: {'community_id': communityId, 'page': 1, 'per_page': 20});
-        state =
-            state.copyWith(posts: _extractPosts(resp.data), isLoading: false);
+        state = state.copyWith(
+          posts: _extractPosts(resp.data),
+          isPostsLoading: false,
+        );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isPostsLoading: false, error: e.toString());
     }
   }
 

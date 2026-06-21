@@ -57,7 +57,13 @@ class RouteGenerator {
       case AppRoutes.friends:
         return _authGuard(builder: (_) => const FriendsScreen());
       case AppRoutes.createPost:
-        return _authGuard(builder: (_) => const CreatePostScreen());
+        final createPostArgs = args is Map ? args : null;
+        return _authGuard(
+          builder: (_) => CreatePostScreen(
+            communityId: createPostArgs?['community_id'] as int?,
+            communityName: createPostArgs?['community_name'] as String?,
+          ),
+        );
       case AppRoutes.editProfile:
         return _authGuard(builder: (_) => const EditProfileScreen());
       case AppRoutes.settings:

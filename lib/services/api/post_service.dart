@@ -20,10 +20,13 @@ class PostService {
     String? videoPath,
     String? thumbnailUrl,
     List<int>? visibleUserIds,
+    int? communityId,
   }) async {
     ApiResponse resp;
     // If local file path provided (mobile), use upload
-    if (imagePath != null && imagePath.isNotEmpty && !imagePath.startsWith('http')) {
+    if (imagePath != null &&
+        imagePath.isNotEmpty &&
+        !imagePath.startsWith('http')) {
       // Upload image first, then create post with URL
       final file = XFile(imagePath);
       final uploadResp = await _api.upload('/upload/post/image', file);
@@ -37,6 +40,7 @@ class PostService {
           if (uploadedUrl != null) 'image_url': uploadedUrl.toString(),
           if (visibleUserIds != null && visibleUserIds.isNotEmpty)
             'visible_user_ids': visibleUserIds.join(','),
+          if (communityId != null) 'community_id': communityId,
         });
         resp = await _api.post('/posts', data: formData);
         if (resp.success) SoundService().playSendSound();
@@ -51,9 +55,11 @@ class PostService {
       if (imageUrls != null && imageUrls.isNotEmpty)
         'image_urls': jsonEncode(imageUrls),
       if (videoPath != null && videoPath.isNotEmpty) 'video_url': videoPath,
-      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) 'thumbnail_url': thumbnailUrl,
+      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+        'thumbnail_url': thumbnailUrl,
       if (visibleUserIds != null && visibleUserIds.isNotEmpty)
         'visible_user_ids': visibleUserIds.join(','),
+      if (communityId != null) 'community_id': communityId,
     });
     resp = await _api.post('/posts', data: formData);
     if (resp.success) SoundService().playSendSound();
@@ -61,11 +67,14 @@ class PostService {
   }
 
   Future<ApiResponse> getFeed({int page = 1, int perPage = 20}) {
-    return _api.getDeduped('/posts/', params: {'page': page, 'per_page': perPage});
+    return _api
+        .getDeduped('/posts/', params: {'page': page, 'per_page': perPage});
   }
 
-  Future<ApiResponse> getUserPosts(int userId, {int page = 1, int perPage = 20}) {
-    return _api.getDeduped('/posts/user/$userId', params: {'page': page, 'per_page': perPage});
+  Future<ApiResponse> getUserPosts(int userId,
+      {int page = 1, int perPage = 20}) {
+    return _api.getDeduped('/posts/user/$userId',
+        params: {'page': page, 'per_page': perPage});
   }
 
   Future<ApiResponse> getPost(int postId) => _api.getDeduped('/posts/$postId');
@@ -77,14 +86,20 @@ class PostService {
 
   Future<ApiResponse> likePost(int postId) => _api.post('/posts/$postId/like');
 
-  Future<ApiResponse> unlikePost(int postId) => _api.delete('/posts/$postId/like');
+  Future<ApiResponse> unlikePost(int postId) =>
+      _api.delete('/posts/$postId/like');
 
-  Future<ApiResponse> getLikes(int postId) => _api.getDeduped('/posts/$postId/likes');
+  Future<ApiResponse> getLikes(int postId) =>
+      _api.getDeduped('/posts/$postId/likes');
 
-  Future<ApiResponse> getUserLikedPosts(int userId, {int page = 1, int perPage = 20}) =>
-      _api.getDeduped('/posts/user/$userId/liked', params: {'page': page, 'per_page': perPage});
+  Future<ApiResponse> getUserLikedPosts(int userId,
+          {int page = 1, int perPage = 20}) =>
+      _api.getDeduped('/posts/user/$userId/liked',
+          params: {'page': page, 'per_page': perPage});
 
-  Future<ApiResponse> recordView(int postId) => _api.post('/posts/$postId/view');
+  Future<ApiResponse> recordView(int postId) =>
+      _api.post('/posts/$postId/view');
 
-  Future<ApiResponse> getPostStats(int postId) => _api.getDeduped('/posts/$postId/stats');
+  Future<ApiResponse> getPostStats(int postId) =>
+      _api.getDeduped('/posts/$postId/stats');
 }
