@@ -1,5 +1,3 @@
-﻿import 'dart:typed_data';
-
 import 'package:cross_file/cross_file.dart';
 import 'package:nonto/utils/image_compressor.dart';
 
@@ -13,7 +11,8 @@ class UploadService {
 
   /// 压缩 XFile 图片（如果为图片格式），返回压缩后的 XFile
   static Future<XFile> _compressIfImage(XFile file) async {
-    final ext = (file.name.contains('.') ? file.name.split('.').last : '').toLowerCase();
+    final ext = (file.name.contains('.') ? file.name.split('.').last : '')
+        .toLowerCase();
     const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'heic', 'heif'];
     if (!imageExts.contains(ext)) return file;
 
@@ -35,39 +34,48 @@ class UploadService {
   }
 
   /// 上传通用图片（压缩后上传）
-  Future<ApiResponse> uploadImage(XFile file, {void Function(int sent, int total)? onProgress}) async {
+  Future<ApiResponse> uploadImage(XFile file,
+      {void Function(int sent, int total)? onProgress}) async {
     final compressed = await _compressIfImage(file);
     return _api.upload('/upload/image', compressed, onSendProgress: onProgress);
   }
 
   /// 上传通用视频
-  Future<ApiResponse> uploadVideo(XFile file, {void Function(int sent, int total)? onProgress}) =>
+  Future<ApiResponse> uploadVideo(XFile file,
+          {void Function(int sent, int total)? onProgress}) =>
       _api.upload('/upload/video', file, onSendProgress: onProgress);
 
   /// 上传帖子图片（压缩后上传）
-  Future<ApiResponse> uploadPostImage(XFile file, {void Function(int sent, int total)? onProgress}) async {
+  Future<ApiResponse> uploadPostImage(XFile file,
+      {void Function(int sent, int total)? onProgress}) async {
     final compressed = await _compressIfImage(file);
-    return _api.upload('/upload/post/image', compressed, onSendProgress: onProgress);
+    return _api.upload('/upload/post/image', compressed,
+        onSendProgress: onProgress);
   }
 
   /// 上传帖子视频
-  Future<ApiResponse> uploadPostVideo(XFile file, {void Function(int sent, int total)? onProgress}) =>
+  Future<ApiResponse> uploadPostVideo(XFile file,
+          {void Function(int sent, int total)? onProgress}) =>
       _api.upload('/upload/post/video', file, onSendProgress: onProgress);
 
   /// 上传头像（压缩后上传）
-  Future<ApiResponse> uploadAvatar(XFile file, {void Function(int sent, int total)? onProgress}) async {
+  Future<ApiResponse> uploadAvatar(XFile file,
+      {void Function(int sent, int total)? onProgress}) async {
     final compressed = await _compressIfImage(file);
-    return _api.upload('/upload/avatar', compressed, onSendProgress: onProgress);
+    return _api.upload('/upload/avatar', compressed,
+        onSendProgress: onProgress);
   }
 
   /// 上传封面图（压缩后上传）
-  Future<ApiResponse> uploadCover(XFile file, {void Function(int sent, int total)? onProgress}) async {
+  Future<ApiResponse> uploadCover(XFile file,
+      {void Function(int sent, int total)? onProgress}) async {
     final compressed = await _compressIfImage(file);
     return _api.upload('/upload/cover', compressed, onSendProgress: onProgress);
   }
 
   /// 上传封面图别名（用于 profile_tab）
-  Future<ApiResponse> uploadCoverPhoto(XFile file, {void Function(int sent, int total)? onProgress}) =>
+  Future<ApiResponse> uploadCoverPhoto(XFile file,
+          {void Function(int sent, int total)? onProgress}) =>
       uploadCover(file, onProgress: onProgress);
 
   /// 批量上传文件（逐个通过 COS 直传，压缩后上传）
@@ -75,8 +83,8 @@ class UploadService {
     final uploadedUrls = <String>[];
     for (final file in files) {
       final compressed = await _compressIfImage(file);
-      final resp = await _api.upload('/upload/multiple', compressed,
-          extraData: {'type': type});
+      final resp = await _api
+          .upload('/upload/multiple', compressed, extraData: {'type': type});
       if (resp.success && resp.data != null) {
         final url = resp.data is Map
             ? (resp.data as Map)['url']?.toString()

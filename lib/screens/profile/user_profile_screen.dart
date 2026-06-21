@@ -1,9 +1,11 @@
-﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/block_service.dart';
@@ -21,7 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
-/// 查看其他用户的个人资料页（Facebook 风格）
+/// Nonto 他人资料页：资料、关系操作、内容列表与安全操作入口。
 class UserProfileScreen extends ConsumerStatefulWidget {
   final User user;
   const UserProfileScreen({super.key, required this.user});
@@ -67,11 +69,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
-      if (_tabController.index == 1 && _likedPosts.isEmpty && !_isLoadingLikes) {
+      if (_tabController.index == 1 &&
+          _likedPosts.isEmpty &&
+          !_isLoadingLikes) {
         _loadLikedPosts();
       }
     });
-    _loadData();
+    _loadInitialUserProfileData();
   }
 
   @override
@@ -81,12 +85,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadInitialUserProfileData() async {
     await Future.wait([
       _loadStats(),
       _checkFriendStatus(),
       _loadUserPosts(),
-    ]);
+    ], eagerError: false);
   }
 
   Future<void> _loadStats() async {
@@ -187,7 +191,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   }
 
   Future<void> _onRefresh() async {
-    await _loadData();
+    await _loadInitialUserProfileData();
     _refreshController.refreshCompleted();
   }
 
@@ -199,20 +203,24 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     try {
       final resp = await FriendService().sendRequest(_user!.id);
       if (resp.success) {
-        final friendship = (resp.data as Map<String, dynamic>?)?['friendship'] as Map<String, dynamic>?;
+        final friendship = (resp.data as Map<String, dynamic>?)?['friendship']
+            as Map<String, dynamic>?;
         setState(() {
           _friendStatus = _FriendStatus.pending;
           _pendingRequestId = friendship?['id'] as int?;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('好友请求已发送'), duration: Duration(seconds: 2)),
+            const SnackBar(
+                content: Text('好友请求已发送'), duration: Duration(seconds: 2)),
           );
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(resp.message ?? '发送失败'), duration: const Duration(seconds: 2)),
+            SnackBar(
+                content: Text(resp.message ?? '发送失败'),
+                duration: const Duration(seconds: 2)),
           );
         }
       }
@@ -240,7 +248,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       debugPrint('Cancel request error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('撤销请求失败，请重试'), duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('撤销请求失败，请重试'), duration: Duration(seconds: 2)),
         );
       }
     } finally {
@@ -259,9 +268,25 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           _pendingRequestId = null;
           _friendCount++;
         });
+        // 与 friend_requests_screen._accept 保持一致：接受好友后主动刷新会话列表，
+        // 让本端（点接受的人）本地立即出现新会话 + Hi 消息，不依赖 WS 推送
+        // （WS 的 friend_accepted_chat 推送给对方）。之前从这里接受好友后
+        // 会话列表没有新会话，就是因为缺这两步。
+        try {
+          ref.read(conversationsProvider.notifier).loadConversations();
+        } catch (_) {}
+        // 清除通知列表中的好友请求通知
+        try {
+          ref
+              .read(notificationsProvider.notifier)
+              .removeByType('friend_request');
+        } catch (_) {}
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('你们已成为好友！'), backgroundColor: Colors.green, duration: Duration(seconds: 2)),
+            const SnackBar(
+                content: Text('你们已成为好友！'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2)),
           );
         }
       }
@@ -285,7 +310,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       debugPrint('Reject request error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
         );
       }
     } finally {
@@ -301,9 +327,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         title: const Text('取消好友关系',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         content: Text('确定要取消与 ${_user!.displayName} 的好友关系吗？',
-            style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+            style:
+                const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -325,7 +354,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         debugPrint('Unfriend error: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
+            const SnackBar(
+                content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
           );
         }
       } finally {
@@ -344,19 +374,31 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     '其他'
   ];
 
-  /// 统一更多选项菜单
+  /// Nonto 资料页更多操作菜单
   Future<void> _showMoreOptions({bool includeUnfriend = false}) async {
     final options = <TwitterSheetOption<String>>[
-      const TwitterSheetOption(icon: Icons.flag_outlined, label: '举报用户', value: 'report'),
-      const TwitterSheetOption(icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+      const TwitterSheetOption(
+          icon: Icons.flag_outlined, label: '举报用户', value: 'report'),
+      const TwitterSheetOption(
+          icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
       if (includeUnfriend)
-        const TwitterSheetOption(icon: Icons.person_remove_outlined, label: '取消关注', value: 'unfriend'),
+        const TwitterSheetOption(
+            icon: Icons.person_remove_outlined,
+            label: '取消关注',
+            value: 'unfriend'),
     ];
-    final action = await TwitterBottomSheet.show<String>(context, options: options);
+    final action =
+        await TwitterBottomSheet.show<String>(context, options: options);
     switch (action) {
-      case 'report': _reportUser(); break;
-      case 'block': _blockUser(); break;
-      case 'unfriend': _unfriend(); break;
+      case 'report':
+        _reportUser();
+        break;
+      case 'block':
+        _blockUser();
+        break;
+      case 'unfriend':
+        _unfriend();
+        break;
     }
   }
 
@@ -382,20 +424,25 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         if (resp.success) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('举报已提交，我们会尽快处理'), backgroundColor: Colors.green),
+              const SnackBar(
+                  content: Text('举报已提交，我们会尽快处理'),
+                  backgroundColor: Colors.green),
             );
           }
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(resp.message ?? '举报失败'), backgroundColor: Colors.red),
+              SnackBar(
+                  content: Text(resp.message ?? '举报失败'),
+                  backgroundColor: Colors.red),
             );
           }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('操作失败，请重试'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('操作失败，请重试'), backgroundColor: Colors.red),
           );
         }
       }
@@ -410,9 +457,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         title: const Text('屏蔽用户',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         content: Text('确定要屏蔽 ${_user!.displayName} 吗？屏蔽后你将无法看到对方的内容。',
-            style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+            style:
+                const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -427,20 +477,24 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         if (resp.success) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('已屏蔽该用户'), backgroundColor: Colors.green),
+              const SnackBar(
+                  content: Text('已屏蔽该用户'), backgroundColor: Colors.green),
             );
           }
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(resp.message ?? '操作失败'), backgroundColor: Colors.red),
+              SnackBar(
+                  content: Text(resp.message ?? '操作失败'),
+                  backgroundColor: Colors.red),
             );
           }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('操作失败，请重试'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('操作失败，请重试'), backgroundColor: Colors.red),
           );
         }
       }
@@ -453,15 +507,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       if (resp.success && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
         final convJson = data['conversation'] ?? data;
-        final conversation = Conversation.fromJson(convJson as Map<String, dynamic>);
+        final conversation =
+            Conversation.fromJson(convJson as Map<String, dynamic>);
         if (!mounted) return;
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ChatRoomScreen(conversation: conversation),
-        ));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatRoomScreen(conversation: conversation),
+            ));
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(resp.message ?? '无法创建聊天'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text(resp.message ?? '无法创建聊天'),
+                backgroundColor: Colors.red),
           );
         }
       }
@@ -491,7 +550,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         surfaceTintColor: Colors.transparent,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         title: Text(user.displayName ?? user.username,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary)),
         actions: [
           IconButton(
             icon: const Icon(Icons.more_horiz, color: AppColors.textPrimary),
@@ -501,8 +563,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
               final action = await TwitterBottomSheet.show<String>(
                 context,
                 options: const [
-                  TwitterSheetOption(icon: Icons.flag_outlined, label: '举报用户', value: 'report'),
-                  TwitterSheetOption(icon: Icons.block_outlined, label: '屏蔽', value: 'block'),
+                  TwitterSheetOption(
+                      icon: Icons.flag_outlined,
+                      label: '举报用户',
+                      value: 'report'),
+                  TwitterSheetOption(
+                      icon: Icons.block_outlined, label: '屏蔽', value: 'block'),
                 ],
               );
               if (action == 'report') {
@@ -522,7 +588,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         controller: _refreshController,
         enablePullDown: true,
         onRefresh: _onRefresh,
-        header: const WaterDropHeader(complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)), waterDropColor: AppColors.primary),
+        header: const WaterDropHeader(
+            complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+            waterDropColor: AppColors.primary),
         child: CustomScrollView(slivers: [
           // ===== Cover + Avatar Section =====
           SliverToBoxAdapter(child: _buildCoverSection(user)),
@@ -539,42 +607,63 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 children: [
                   // Name
                   Text(user.displayName ?? user.username,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary, height: 1.2)),
+                      style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textPrimary,
+                          height: 1.2)),
                   const SizedBox(height: 4),
                   // Username
                   Text('@${user.username}',
-                    style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+                      style: const TextStyle(
+                          fontSize: 15, color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
                   // Bio
                   if (user.bio != null && user.bio!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(user.bio!,
-                        style: const TextStyle(fontSize: 15, height: 1.4, color: AppColors.textPrimary)),
+                          style: const TextStyle(
+                              fontSize: 15,
+                              height: 1.4,
+                              color: AppColors.textPrimary)),
                     ),
                   // Join date + stats row
                   Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 14, color: AppColors.textSecondary),
+                      Icon(Icons.calendar_today,
+                          size: 14, color: AppColors.textSecondary),
                       const SizedBox(width: 4),
-                      Text(user.createdAt != null
-                        ? '${AppDateUtils.formatTimeAgo(user.createdAt)} 加入'
-                        : '已加入',
-                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                      Text(
+                          user.createdAt != null
+                              ? '${AppDateUtils.formatTimeAgo(user.createdAt)} 加入'
+                              : '已加入',
+                          style: const TextStyle(
+                              fontSize: 13, color: AppColors.textSecondary)),
                       const SizedBox(width: 16),
                       if (_isLoadingStats)
-                        const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                        const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.primary))
                       else if (_error != null)
                         ErrorStateWidget(
                           message: _error!,
                           onRetry: () {
-                            setState(() { _error = null; _isLoadingStats = true; });
-                            _loadData();
+                            setState(() {
+                              _error = null;
+                              _isLoadingStats = true;
+                            });
+                            _loadInitialUserProfileData();
                           },
                         )
                       else
                         Text('$_friendCount 位好友',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary)),
                     ],
                   ),
 
@@ -594,7 +683,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             delegate: _TabDelegate(
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: AppColors.borderLight, width: 0.5)),
+                  border: Border(
+                      bottom:
+                          BorderSide(color: AppColors.borderLight, width: 0.5)),
                 ),
                 child: TabBar(
                   controller: _tabController,
@@ -603,8 +694,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                   indicatorColor: AppColors.primary,
                   indicatorSize: TabBarIndicatorSize.label,
                   indicatorWeight: 3,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                  labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15),
+                  unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w500, fontSize: 15),
                   tabs: const [Tab(text: '帖子'), Tab(text: '喜欢')],
                 ),
               ),
@@ -617,8 +710,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildPostsList(_userPosts, _isLoadingPosts, '暂无帖子'),
-                  _buildPostsList(_likedPosts, _isLoadingLikes, '暂无喜欢的帖子'),
+                  _buildPostsList(
+                    _userPosts,
+                    _isLoadingPosts,
+                    icon: Icons.article_outlined,
+                    emptyTitle: '还没有发布帖子',
+                    emptySubtitle: 'TA 的新动态会出现在这里',
+                  ),
+                  _buildPostsList(
+                    _likedPosts,
+                    _isLoadingLikes,
+                    icon: Icons.favorite_border,
+                    emptyTitle: '还没有喜欢的帖子',
+                  ),
                 ],
               ),
             ),
@@ -636,10 +740,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           onTap: () {
             final url = user.coverPhotoUrl;
             if (url != null && url.isNotEmpty) {
-              final fullUrl = url.startsWith('http') ? url : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
-              Navigator.push(context, MaterialPageRoute(
-                builder: (_) => ImageViewerScreen(imageUrls: [fullUrl], initialIndex: 0),
-              ));
+              final fullUrl = url.startsWith('http')
+                  ? url
+                  : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ImageViewerScreen(
+                        imageUrls: [fullUrl], initialIndex: 0),
+                  ));
             }
           },
           child: _buildCoverPhoto(user),
@@ -651,10 +760,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             onTap: () {
               final avatarUrl = user.avatarUrl;
               if (avatarUrl != null && avatarUrl.isNotEmpty) {
-                final fullUrl = avatarUrl.startsWith('http') ? avatarUrl : '${AppConfig.baseUrl.replaceFirst('/api', '')}$avatarUrl';
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => ImageViewerScreen(imageUrls: [fullUrl], initialIndex: 0),
-                ));
+                final fullUrl = avatarUrl.startsWith('http')
+                    ? avatarUrl
+                    : '${AppConfig.baseUrl.replaceFirst('/api', '')}$avatarUrl';
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ImageViewerScreen(
+                          imageUrls: [fullUrl], initialIndex: 0),
+                    ));
               }
             },
             child: Stack(
@@ -664,7 +778,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                     border: Border.all(color: Colors.white, width: 4),
                     borderRadius: BorderRadius.circular(44),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 2)),
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2)),
                     ],
                   ),
                   child: ImageUtils.buildAvatar(user, radius: 44),
@@ -679,7 +796,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                       height: 16,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: (user.isOnline == true) ? Colors.green : Colors.grey,
+                        color: (user.isOnline == true)
+                            ? Colors.green
+                            : Colors.grey,
                         border: Border.all(color: Colors.white, width: 2.5),
                       ),
                     ),
@@ -695,8 +814,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   Widget _buildCoverPhoto(User user) {
     final url = user.coverPhotoUrl;
     if (url != null && url.isNotEmpty) {
-      final fullUrl = url.startsWith('http') ? url : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
-      return ImageUtils.buildPostImage(fullUrl, width: double.infinity, height: 180);
+      final fullUrl = url.startsWith('http')
+          ? url
+          : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
+      return ImageUtils.buildPostImage(fullUrl,
+          width: double.infinity, height: 180);
     }
     return Container(
       height: 180,
@@ -713,11 +835,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   Widget _buildActionButtons() {
     if (!_statusLoaded || _isActionLoading) {
       return Row(children: [
-        Expanded(child: Container(
+        Expanded(
+            child: Container(
           height: 36,
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20)),
           alignment: Alignment.center,
-          child: const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+          child: const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.primary)),
         )),
       ]);
     }
@@ -731,12 +860,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
               height: 36,
               child: OutlinedButton.icon(
                 onPressed: _startChat,
-                icon: const Icon(Icons.chat_bubble_rounded, size: 18, color: AppColors.primary),
-                label: const Text('发消息', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                icon: const Icon(Icons.chat_bubble_rounded,
+                    size: 18, color: AppColors.primary),
+                label: const Text('发消息',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textPrimary,
                   side: const BorderSide(color: Color(0xFFC4CDD4)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
               ),
             ),
@@ -750,10 +883,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textPrimary,
                   side: const BorderSide(color: Color(0xFFC4CDD4)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                   padding: EdgeInsets.zero,
                 ),
-                child: const Text('已互为好友', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                child: const Text('已互为好友',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               ),
             ),
           ),
@@ -778,9 +914,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
                   side: const BorderSide(color: Color(0xFFC4CDD4)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
-                child: const Text('撤销请求', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                child: const Text('撤销请求',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
               ),
             ),
           ),
@@ -796,9 +935,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.access_time, size: 14, color: AppColors.textSecondary),
+                  Icon(Icons.access_time,
+                      size: 14, color: AppColors.textSecondary),
                   const SizedBox(width: 4),
-                  const Text('等待回应', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary)),
+                  const Text('等待回应',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: AppColors.textSecondary)),
                 ],
               ),
             ),
@@ -824,13 +968,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
-                child: const Text('接受', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                child: const Text('接受',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
               ),
             ),
           ),
-          const SizedBox(width:8),
+          const SizedBox(width: 8),
           Expanded(
             child: SizedBox(
               height: 36,
@@ -839,9 +986,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textPrimary,
                   side: const BorderSide(color: Color(0xFFC4CDD4)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
-                child: const Text('拒绝', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                child: const Text('拒绝',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
               ),
             ),
           ),
@@ -864,11 +1014,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
                 child: _isActionLoading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('添加好友', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('添加好友',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
               ),
             ),
           ),
@@ -883,12 +1040,68 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     }
   }
 
-  Widget _buildPostsList(List<Post> posts, bool isLoading, String emptyText) {
+  Widget _buildProfileLoadingState() {
+    return const Center(
+      child: CircularProgressIndicator(color: AppColors.primary),
+    );
+  }
+
+  Widget _buildProfileEmptyState({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 48, color: AppColors.textSecondary),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostsList(
+    List<Post> posts,
+    bool isLoading, {
+    required IconData icon,
+    required String emptyTitle,
+    String? emptySubtitle,
+  }) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+      return _buildProfileLoadingState();
     }
     if (posts.isEmpty) {
-      return Center(child: Text(emptyText, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)));
+      return _buildProfileEmptyState(
+        icon: icon,
+        title: emptyTitle,
+        subtitle: emptySubtitle,
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.only(top: 8),
@@ -898,15 +1111,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         return PostCard(
           post: post,
           onLike: () => _togglePostLike(post, i, posts),
-          onTap: () => Navigator.push(context, MaterialPageRoute(
-            builder: (_) => PostDetailScreen(postId: post.id),
-          )),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PostDetailScreen(postId: post.id),
+            ),
+          ),
         );
       },
     );
   }
 
-  Future<void> _togglePostLike(Post post, int index, List<Post> postList) async {
+  Future<void> _togglePostLike(
+      Post post, int index, List<Post> postList) async {
     final currentIsLiked = post.isLiked ?? false;
     final currentCount = post.likeCount;
     setState(() {
@@ -940,9 +1157,16 @@ class _TabDelegate extends SliverPersistentHeaderDelegate {
   final Widget child;
   _TabDelegate({required this.child});
 
-  @override double get minExtent => 48;
-  @override double get maxExtent => 48;
+  @override
+  double get minExtent => 48;
+  @override
+  double get maxExtent => 48;
 
-  @override Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => child;
-  @override bool shouldRebuild(covariant _TabDelegate oldDelegate) => child != oldDelegate.child;
+  @override
+  Widget build(
+          BuildContext context, double shrinkOffset, bool overlapsContent) =>
+      child;
+  @override
+  bool shouldRebuild(covariant _TabDelegate oldDelegate) =>
+      child != oldDelegate.child;
 }

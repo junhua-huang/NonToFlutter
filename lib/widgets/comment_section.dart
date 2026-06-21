@@ -51,6 +51,10 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
 
   bool _initialCountReported = false;
 
+  /// 输入框是否有内容（去除首尾空白后）
+  /// 用于驱动发送按钮的禁用/激活状态切换，与 chat_room_screen 保持一致
+  final ValueNotifier<bool> _hasText = ValueNotifier(false);
+
   @override
   void initState() {
     super.initState();
@@ -58,14 +62,21 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       targetType: widget.targetType,
       targetId: widget.targetId,
     );
+    _commentController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _commentController.removeListener(_onTextChanged);
     _commentController.dispose();
     _commentFocusNode.dispose();
     _inputScrollController.dispose();
+    _hasText.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    _hasText.value = _commentController.text.trim().isNotEmpty;
   }
 
   CommentNotifier get _notifier => ref.read(commentProvider(_sectionKey).notifier);
@@ -277,49 +288,64 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  Comment Input
+  //  Comment Input — Twitter/X 风格，与聊天室 (chat_room_screen) 输入栏一致
+  //  • 顶部细分割线 (AppColors.borderLight)
+  //  • 输入框：AppColors.surface (#F7F9F9) 圆角药丸 + 极淡边框
+  //  • Emoji 按钮使用主蓝色平铺图标，无背景方块
+  //  • 发送按钮：仅在有内容时显示蓝色图标，无内容时占位防止高度抖动
+  //  • 回复 chip 改用 AppColors.selectionHighlight (淡蓝)，与 X 风格回复气泡一致
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildCommentInput(ColorScheme colors, CommentState state) {
     return Container(
       padding: EdgeInsets.only(
         left: 12,
-        right: 6,
+        right: 12,
         top: 8,
         bottom: 8 + MediaQuery.of(context).viewInsets.bottom,
       ),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(
+          top: BorderSide(color: AppColors.borderLight, width: 0.5),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Reply chip
+          // Reply chip — Twitter 风格淡蓝底
           if (state.replyingToName != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
-                color: colors.secondaryContainer,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                color: AppColors.selectionHighlight,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.reply_rounded, size: 14, color: colors.onSecondaryContainer),
+                  const Icon(Icons.reply_rounded,
+                      size: 14, color: AppColors.primary),
                   const SizedBox(width: 6),
-                  Text(
-                    '回复 ${state.replyingToName}',
-                    style: TextStyle(fontSize: 13, color: colors.onSecondaryContainer),
+                  Expanded(
+                    child: Text(
+                      '回复 ${state.replyingToName}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const Spacer(),
-                  SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(Icons.close, size: 16, color: colors.onSecondaryContainer),
-                      onPressed: _notifier.cancelReply,
+                  GestureDetector(
+                    onTap: _notifier.cancelReply,
+                    behavior: HitTestBehavior.opaque,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close,
+                          size: 16, color: AppColors.primary),
                     ),
                   ),
                 ],
@@ -329,60 +355,86 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Emoji button
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: IconButton(
-                  onPressed: () => _showEmojiPicker(context, colors),
-                  icon: Icon(Icons.emoji_emotions_outlined, color: colors.onSurfaceVariant),
-                  style: IconButton.styleFrom(
-                    backgroundColor: colors.surfaceContainerLow,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
+              // Emoji button — 与 chat_room_screen 一致：纯图标，无背景方块
+              IconButton(
+                onPressed: () => _showEmojiPicker(context, colors),
+                icon: const Icon(
+                  Icons.emoji_emotions_outlined,
+                  color: AppColors.primary,
+                  size: 22,
                 ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               Expanded(
-                child: TextField(
-                  controller: _commentController,
-                  focusNode: _commentFocusNode,
-                  maxLines: 4,
-                  minLines: 1,
-                  style: TextStyle(fontSize: 14, color: colors.onSurface),
-                  decoration: InputDecoration(
-                    hintText: '写评论...',
-                    hintStyle: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
-                    filled: true,
-                    fillColor: colors.surfaceContainerLow,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.borderLight,
+                      width: 0.8,
                     ),
                   ),
-                  onSubmitted: (value) => _submitWithText(value),
-                ),
-              ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: IconButton(
-                  onPressed: state.isSending ? null : () => _submitWithText(_commentController.text),
-                  icon: state.isSending
-                      ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
-                        )
-                      : Icon(Icons.send_rounded, color: colors.primary),
-                  style: IconButton.styleFrom(
-                    backgroundColor: colors.primaryContainer.withValues(alpha: 0.3),
+                  child: TextField(
+                    controller: _commentController,
+                    focusNode: _commentFocusNode,
+                    maxLines: null,
+                    minLines: 1,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: AppColors.textPrimary,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: '写评论...',
+                      hintStyle: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textTertiary,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                    ),
+                    onSubmitted: _submitWithText,
                   ),
                 ),
+              ),
+              const SizedBox(width: 4),
+              // Send button — 仅在有文字 / 发送中时显示，与聊天室一致
+              ValueListenableBuilder<bool>(
+                valueListenable: _hasText,
+                builder: (_, hasText, __) {
+                  if (!hasText && !state.isSending) {
+                    // 占位，避免高度抖动
+                    return const SizedBox(width: 36, height: 36);
+                  }
+                  if (state.isSending) {
+                    return const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    );
+                  }
+                  return IconButton(
+                    onPressed: () => _submitWithText(_commentController.text),
+                    icon: const Icon(
+                      Icons.send_rounded,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 36, minHeight: 36),
+                  );
+                },
               ),
             ],
           ),
@@ -458,7 +510,6 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                 height: 44,
                 child: Row(
                   children: List.generate(categories.length, (i) {
-                    final isSelected = i == 0;
                     return Expanded(
                       child: ValueListenableBuilder<int>(
                         valueListenable: currentIndexNotifier,

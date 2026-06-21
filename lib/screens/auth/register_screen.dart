@@ -1,7 +1,7 @@
 ﻿import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
-import 'package:nonto/screens/home/home_screen.dart';
+import 'package:nonto/screens/auth/otp_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,6 +18,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _codeController = TextEditingController();
   bool _obscure = true;
   bool _privacyAccepted = false;
 
@@ -27,6 +28,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
@@ -42,11 +44,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         const SnackBar(content: Text('两次密码不一致'), backgroundColor: Colors.red));
       return;
     }
+    final email = _emailController.text.trim();
+    final code = _codeController.text.trim();
+    // 本地预校验通过后再提交注册，避免注册请求带无效 code。
+    final okPre = await preVerifyOtp(context, email: email, code: code, purpose: 'register');
+    if (!okPre) return;
+    if (!mounted) return;
+
     final authNotifier = ref.read(authProvider.notifier);
     final ok = await authNotifier.register(
       username: _usernameController.text.trim(),
-      email: _emailController.text.trim(),
+      email: email,
       password: _passwordController.text,
+      emailCode: code,
     );
     if (!mounted) return;
     if (ok) {
@@ -82,6 +92,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(labelText: '邮箱', prefixIcon: Icon(Icons.email_outlined)),
                 validator: (v) => v?.contains('@') != true ? '请输入有效邮箱' : null),
+              const SizedBox(height: 16),
+              OtpFieldRow(
+                codeController: _codeController,
+                emailController: _emailController,
+                purpose: 'register',
+              ),
               const SizedBox(height: 16),
               TextFormField(controller: _passwordController, obscureText: _obscure,
                 decoration: InputDecoration(labelText: '密码', prefixIcon: Icon(Icons.lock_outline),

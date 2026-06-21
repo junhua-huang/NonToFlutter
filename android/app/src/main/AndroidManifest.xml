@@ -1,8 +1,41 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 网络权限 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- ── 极光推送所需权限 ── -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Android 13+ 通知权限：运行时还需在 Dart 侧申请 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="南图"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <!-- ── 极光推送 AppKey（与 build.gradle.kts 的 manifestPlaceholders 对应） ── -->
+        <meta-data
+            android:name="JPUSH_APPKEY"
+            android:value="${JPUSH_APPKEY}"/>
+        <meta-data
+            android:name="JPUSH_CHANNEL"
+            android:value="${JPUSH_CHANNEL}"/>
+        <!-- 厂商通道占位：真实证书在极光控制台「厂商通道」配置，此处仅需占位 -->
+        <meta-data android:name="com.huawei.hms.client.appid" android:value="${HUAWEI_APPID}"/>
+        <meta-data android:name="XIAOMI_APPID" android:value="${XIAOMI_APPID}"/>
+        <meta-data android:name="XIAOMI_APPKEY" android:value="${XIAOMI_APPKEY}"/>
+        <meta-data android:name="OPPO_APPKEY" android:value="${OPPO_APPKEY}"/>
+        <meta-data android:name="OPPO_APPID" android:value="${OPPO_APPID}"/>
+        <meta-data android:name="OPPO_APPSECRET" android:value="${OPPO_APPSECRET}"/>
+        <meta-data android:name="VIVO_APPKEY" android:value="${VIVO_APPKEY}"/>
+        <meta-data android:name="VIVO_APPID" android:value="${VIVO_APPID}"/>
+        <meta-data android:name="MEIZU_APPID" android:value="${MEIZU_APPID}"/>
+        <meta-data android:name="MEIZU_APPKEY" android:value="${MEIZU_APPKEY}"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

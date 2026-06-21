@@ -1,7 +1,5 @@
-import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/user.dart';
@@ -15,11 +13,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// 个人资料编辑页面 —— 按需编辑模式
+/// Nonto 个人资料编辑页：头像、封面、昵称与简介的轻量编辑入口。
 ///
-/// 每个字段（头像、背景、名字、简介）独立编辑、独立保存。
-/// 头像/背景：点击 → 选择图片 → 裁剪 → 立即上传
-/// 名字/简介：点击进入编辑态 → 修改 → 保存/取消
+/// 每个字段独立编辑、独立保存：图片选择后裁剪并上传，文字字段支持保存/取消。
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -50,9 +46,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late final TextEditingController _bioController;
   final FocusNode _bioFocus = FocusNode();
 
-  Color get _xBlack => AppColors.textPrimary;
-  Color get _xDarkGrey => AppColors.textSecondary;
-  Color get _xBlue => AppColors.primary;
+  Color get _primaryTextColor => AppColors.textPrimary;
+  Color get _secondaryTextColor => AppColors.textSecondary;
+  Color get _accentColor => AppColors.primary;
 
   @override
   void initState() {
@@ -93,6 +89,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (picked == null) return;
 
       final originalBytes = await picked.readAsBytes();
+      if (!mounted) return;
 
       // 裁剪
       final croppedBytes = await Navigator.of(context).push<Uint8List>(
@@ -117,7 +114,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       });
 
       // 上传
-      final xfile = XFile.fromData(finalBytes, name: 'avatar.png', mimeType: 'image/png');
+      final xfile =
+          XFile.fromData(finalBytes, name: 'avatar.png', mimeType: 'image/png');
       final resp = await UploadService().uploadAvatar(xfile);
       if (!mounted) return;
 
@@ -134,14 +132,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('头像更新成功'), backgroundColor: Colors.green),
+              const SnackBar(
+                  content: Text('头像更新成功'), backgroundColor: Colors.green),
             );
           }
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(resp.message ?? '头像上传失败'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text(resp.message ?? '头像上传失败'),
+                backgroundColor: Colors.red),
           );
         }
       }
@@ -178,6 +179,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (picked == null) return;
 
       final originalBytes = await picked.readAsBytes();
+      if (!mounted) return;
 
       // 裁剪（16:9）
       final croppedBytes = await Navigator.of(context).push<Uint8List>(
@@ -203,7 +205,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       });
 
       // 上传
-      final xfile = XFile.fromData(finalBytes, name: 'cover.png', mimeType: 'image/png');
+      final xfile =
+          XFile.fromData(finalBytes, name: 'cover.png', mimeType: 'image/png');
       final resp = await UploadService().uploadCoverPhoto(xfile);
       if (!mounted) return;
 
@@ -214,20 +217,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           final user = ref.read(authProvider).user;
           if (user != null) {
             final now = DateTime.now().millisecondsSinceEpoch;
-            final updated = user.copyWith(coverPhotoUrl: url, coverCacheTs: now);
+            final updated =
+                user.copyWith(coverPhotoUrl: url, coverCacheTs: now);
             ref.read(authProvider.notifier).updateUser(updated);
             _writeUserToCache(updated);
           }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('背景图更新成功'), backgroundColor: Colors.green),
+              const SnackBar(
+                  content: Text('背景图更新成功'), backgroundColor: Colors.green),
             );
           }
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(resp.message ?? '背景图上传失败'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text(resp.message ?? '背景图上传失败'),
+                backgroundColor: Colors.red),
           );
         }
       }
@@ -305,22 +312,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _nameFocus.unfocus();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('名称已更新'), backgroundColor: Colors.green),
+            const SnackBar(
+                content: Text('名称已更新'), backgroundColor: Colors.green),
           );
         }
       } else {
         // 回滚
-        ref.read(authProvider.notifier).updateUser(user.copyWith(displayName: originalName));
+        ref
+            .read(authProvider.notifier)
+            .updateUser(user.copyWith(displayName: originalName));
         _writeUserToCache(user.copyWith(displayName: originalName));
         setState(() => _isSavingName = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(resp.message ?? '名称更新失败'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text(resp.message ?? '名称更新失败'),
+                backgroundColor: Colors.red),
           );
         }
       }
     } catch (e) {
-      ref.read(authProvider.notifier).updateUser(user.copyWith(displayName: originalName));
+      ref
+          .read(authProvider.notifier)
+          .updateUser(user.copyWith(displayName: originalName));
       _writeUserToCache(user.copyWith(displayName: originalName));
       setState(() => _isSavingName = false);
       if (mounted) {
@@ -386,21 +400,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _bioFocus.unfocus();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('简介已更新'), backgroundColor: Colors.green),
+            const SnackBar(
+                content: Text('简介已更新'), backgroundColor: Colors.green),
           );
         }
       } else {
-        ref.read(authProvider.notifier).updateUser(user.copyWith(bio: originalBio));
+        ref
+            .read(authProvider.notifier)
+            .updateUser(user.copyWith(bio: originalBio));
         _writeUserToCache(user.copyWith(bio: originalBio));
         setState(() => _isSavingBio = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(resp.message ?? '简介更新失败'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text(resp.message ?? '简介更新失败'),
+                backgroundColor: Colors.red),
           );
         }
       }
     } catch (e) {
-      ref.read(authProvider.notifier).updateUser(user.copyWith(bio: originalBio));
+      ref
+          .read(authProvider.notifier)
+          .updateUser(user.copyWith(bio: originalBio));
       _writeUserToCache(user.copyWith(bio: originalBio));
       setState(() => _isSavingBio = false);
       if (mounted) {
@@ -424,14 +445,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _xBlack, size: 22),
+          icon: Icon(Icons.arrow_back, color: _primaryTextColor, size: 22),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: false,
         title: Text(
           '编辑个人资料',
           style: TextStyle(
-              fontSize: 17, fontWeight: FontWeight.w700, color: _xBlack),
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: _primaryTextColor),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(0.5),
@@ -500,7 +523,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       ),
                     ),
                     SizedBox(height: 8),
-                    Text('上传中...', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    Text('上传中...',
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
                   ],
                 ),
               ),
@@ -511,7 +535,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               right: 12,
               bottom: 12,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(16),
@@ -521,7 +546,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   children: [
                     Icon(Icons.camera_alt, size: 14, color: Colors.white70),
                     SizedBox(width: 4),
-                    Text('更换', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text('更换',
+                        style: TextStyle(color: Colors.white70, fontSize: 12)),
                   ],
                 ),
               ),
@@ -617,7 +643,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: _xBlue,
+                        color: _accentColor,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
@@ -632,7 +658,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           Expanded(
             child: Text(
               '点击更换头像',
-              style: TextStyle(fontSize: 14, color: _xDarkGrey),
+              style: TextStyle(fontSize: 14, color: _secondaryTextColor),
             ),
           ),
         ],
@@ -670,7 +696,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               Text(
                 '名称',
                 style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600, color: _xDarkGrey),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _secondaryTextColor),
               ),
               const Spacer(),
               if (!_isEditingName)
@@ -679,7 +707,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   child: Text(
                     '编辑',
                     style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600, color: _xBlue),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _accentColor),
                   ),
                 ),
             ],
@@ -690,10 +720,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               controller: _nameController,
               focusNode: _nameFocus,
               maxLength: 50,
-              style: TextStyle(fontSize: 16, color: _xBlack, height: 1.3),
+              style: TextStyle(
+                  fontSize: 16, color: _primaryTextColor, height: 1.3),
               decoration: InputDecoration(
                 hintText: '输入显示名称',
-                hintStyle: TextStyle(color: _xDarkGrey, fontSize: 16),
+                hintStyle: TextStyle(color: _secondaryTextColor, fontSize: 16),
                 filled: true,
                 fillColor: AppColors.surface,
                 border: OutlineInputBorder(
@@ -706,11 +737,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _xBlue, width: 1),
+                  borderSide: BorderSide(color: _accentColor, width: 1),
                 ),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                counterStyle: TextStyle(color: _xDarkGrey, fontSize: 12),
+                counterStyle:
+                    TextStyle(color: _secondaryTextColor, fontSize: 12),
               ),
             ),
             const SizedBox(height: 12),
@@ -720,15 +752,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 TextButton(
                   onPressed: _isSavingName ? null : _cancelEditName,
                   child: Text('取消',
-                      style: TextStyle(color: _xDarkGrey, fontSize: 14)),
+                      style:
+                          TextStyle(color: _secondaryTextColor, fontSize: 14)),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _isSavingName ? null : _saveName,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _xBlue,
+                    backgroundColor: _accentColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20)),
                     minimumSize: Size.zero,
@@ -751,7 +785,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             Text(
               user?.displayName ?? user?.username ?? '',
               style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w600, color: _xBlack),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: _primaryTextColor),
             ),
           ],
         ],
@@ -772,7 +808,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               Text(
                 '个人简介',
                 style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600, color: _xDarkGrey),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _secondaryTextColor),
               ),
               const Spacer(),
               if (!_isEditingBio)
@@ -781,7 +819,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   child: Text(
                     '编辑',
                     style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600, color: _xBlue),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _accentColor),
                   ),
                 ),
             ],
@@ -793,10 +833,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               focusNode: _bioFocus,
               maxLines: 4,
               maxLength: 160,
-              style: TextStyle(fontSize: 15, color: _xBlack, height: 1.4),
+              style: TextStyle(
+                  fontSize: 15, color: _primaryTextColor, height: 1.4),
               decoration: InputDecoration(
                 hintText: '介绍一下你自己',
-                hintStyle: TextStyle(color: _xDarkGrey, fontSize: 15),
+                hintStyle: TextStyle(color: _secondaryTextColor, fontSize: 15),
                 filled: true,
                 fillColor: AppColors.surface,
                 border: OutlineInputBorder(
@@ -809,11 +850,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _xBlue, width: 1),
+                  borderSide: BorderSide(color: _accentColor, width: 1),
                 ),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                counterStyle: TextStyle(color: _xDarkGrey, fontSize: 12),
+                counterStyle:
+                    TextStyle(color: _secondaryTextColor, fontSize: 12),
               ),
             ),
             const SizedBox(height: 12),
@@ -823,15 +865,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 TextButton(
                   onPressed: _isSavingBio ? null : _cancelEditBio,
                   child: Text('取消',
-                      style: TextStyle(color: _xDarkGrey, fontSize: 14)),
+                      style:
+                          TextStyle(color: _secondaryTextColor, fontSize: 14)),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _isSavingBio ? null : _saveBio,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _xBlue,
+                    backgroundColor: _accentColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20)),
                     minimumSize: Size.zero,
@@ -854,12 +898,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             if (user?.bio != null && user!.bio!.isNotEmpty)
               Text(
                 user.bio!,
-                style: TextStyle(fontSize: 15, color: _xBlack, height: 1.4),
+                style: TextStyle(
+                    fontSize: 15, color: _primaryTextColor, height: 1.4),
               )
             else
               Text(
                 '未填写',
-                style: TextStyle(fontSize: 15, color: _xDarkGrey),
+                style: TextStyle(fontSize: 15, color: _secondaryTextColor),
               ),
           ],
         ],

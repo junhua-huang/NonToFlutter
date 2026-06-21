@@ -4,6 +4,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
 import 'package:nonto/config/app_config.dart';
 import 'package:nonto/services/websocket_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'request_manager.dart';
@@ -35,6 +36,15 @@ class ApiClient {
 
   /// token 刷新失败回调（供 auth_notifier 注册，触发跳转登录页）
   static VoidCallback? onTokenExpired;
+
+  /// 检测到新 token 中的用户身份时回调。
+  ///
+  /// 触发时机：每次 [setToken] 写入非空 token 时，从 JWT payload 中解出 `sub` 后调用。
+  /// 业务层（AuthNotifier）应在此回调内做"token 用户 ↔ LocalDbService 用户"
+  /// 一致性断言，必要时强制 reset DB，防止跨账号读到上一个用户的本地缓存。
+  ///
+  /// 参数 `userId` 已转为字符串（与 LocalDbService.currentUserId 同类型）。
+  static void Function(String userId)? onUserIdDetected;
 
   late final Dio _dio = _createDio();
 
@@ -135,6 +145,9 @@ class ApiClient {
 
   /// 打印 token 完整信息（JWT 解码 header + payload）
   static void printToken(String source, String? t) {
+    // 安全：生产环境（kReleaseMode）不打印任何 token 信息，避免日志泄露。
+    // debug 包保留用于开发调试。
+    if (kReleaseMode) return;
     if (t == null || t.isEmpty) {
       debugPrint('═══════════════════════════════════════');
       debugPrint('[TOKEN] $source → NULL/EMPTY');
@@ -184,6 +197,17 @@ class ApiClient {
     token = t;
     if (t != null && t.isNotEmpty) {
       printToken('ApiClient.setToken (内存写入)', t);
+      // 解出 token 中的用户 ID 并通知业务层做一致性校验
+      final uid = _extractUserIdFromToken(t);
+      if (uid != null) {
+        try {
+          onUserIdDetected?.call(uid);
+        } catch (e) {
+          debugPrint('[ApiClient] onUserIdDetected callback threw: $e');
+        }
+      } else {
+        debugPrint('[ApiClient] setToken: failed to extract user id from token');
+      }
       if (connectWs) {
         // Async connect WS whenever token is available
         WebSocketService().connect().catchError((e, stack) {
@@ -193,6 +217,23 @@ class ApiClient {
       }
     } else {
       WebSocketService().disconnect();
+    }
+  }
+
+  /// 从 JWT 中解出 `sub` 字段（即用户 ID），失败返回 null。
+  /// 与 [printToken] 保持一致的 base64-url 解码逻辑。
+  static String? _extractUserIdFromToken(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      final decoded = _tryBase64Decode(parts[1]);
+      final payload = jsonDecode(decoded);
+      if (payload is! Map) return null;
+      final sub = payload['sub'];
+      if (sub == null) return null;
+      return sub.toString();
+    } catch (_) {
+      return null;
     }
   }
 

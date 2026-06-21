@@ -56,11 +56,16 @@ class ChatSendQueue {
     WebSocketService? ws,
   }) : _ws = ws ?? WebSocketService() {
     _ws.connectionStream.listen((connected) {
-      if (connected && !_draining && (_waiting.isNotEmpty || _current != null)) {
-        debugPrint('[SendQ] WS reconnected, wait 2s for sync then drain ${_waiting.length + (_current != null ? 1 : 0)} pending');
+      if (connected &&
+          !_draining &&
+          (_waiting.isNotEmpty || _current != null)) {
+        debugPrint(
+            '[SendQ] WS reconnected, wait 2s for sync then drain ${_waiting.length + (_current != null ? 1 : 0)} pending');
         // 延迟 2s 让 sync 先走完，避免阻塞服务端消息循环
         Future.delayed(const Duration(seconds: 2), () {
-          if (!_disposed && !_draining && (_waiting.isNotEmpty || _current != null)) {
+          if (!_disposed &&
+              !_draining &&
+              (_waiting.isNotEmpty || _current != null)) {
             _drain();
           }
         });
@@ -72,7 +77,8 @@ class ChatSendQueue {
   void enqueue(Message msg) {
     if (_disposed) return;
     _waiting.add(_SendEntry(msg, DateTime.now()));
-    debugPrint('[SendQ] enqueue msgId=${msg.id}, depth=${_waiting.length + (_current != null ? 1 : 0)}');
+    debugPrint(
+        '[SendQ] enqueue msgId=${msg.id}, depth=${_waiting.length + (_current != null ? 1 : 0)}');
     if (!_draining) _drain();
   }
 
@@ -91,14 +97,16 @@ class ChatSendQueue {
   bool handleAck(Message serverMsg) {
     // 检查当前任务
     if (_current != null && _matches(_current!.message, serverMsg)) {
-      debugPrint('[SendQ] ACK current msgId=${_current!.message.id} → serverId=${serverMsg.id}');
+      debugPrint(
+          '[SendQ] ACK current msgId=${_current!.message.id} → serverId=${serverMsg.id}');
       _completeCurrent(serverMsg);
       return true;
     }
     // 检查等待队列
     for (final entry in _waiting) {
       if (_matches(entry.message, serverMsg)) {
-        debugPrint('[SendQ] ACK waiting msgId=${entry.message.id} → serverId=${serverMsg.id}');
+        debugPrint(
+            '[SendQ] ACK waiting msgId=${entry.message.id} → serverId=${serverMsg.id}');
         _waiting.remove(entry);
         onAck?.call(entry.message.id, serverMsg.copyWith(status: 'sent'));
         return true;
@@ -118,7 +126,8 @@ class ChatSendQueue {
         clientMsgId: clientMsgId,
         status: 'sent',
       );
-      debugPrint('[SendQ] protocol ACK current msgId=${msg.id} → serverId=$messageId');
+      debugPrint(
+          '[SendQ] protocol ACK current msgId=${msg.id} → serverId=$messageId');
       _completeCurrent(serverMsg);
       return true;
     }
@@ -131,7 +140,8 @@ class ChatSendQueue {
           clientMsgId: clientMsgId,
           status: 'sent',
         );
-        debugPrint('[SendQ] protocol ACK waiting msgId=${msg.id} → serverId=$messageId');
+        debugPrint(
+            '[SendQ] protocol ACK waiting msgId=${msg.id} → serverId=$messageId');
         _waiting.remove(entry);
         onAck?.call(msg.id, serverMsg);
         return true;
@@ -141,7 +151,8 @@ class ChatSendQueue {
     // 当前消息的 clientMsgId 可能还未设置（ACK 在 _processNext 的 await 期间到达），
     // 暂存到 _earlyAcks，等 _processNext 设置 clientMsgId 后消费。
     if (_current != null && _current!.message.clientMsgId == null) {
-      debugPrint('[SendQ] early ACK buffered clientMsgId=$clientMsgId messageId=$messageId');
+      debugPrint(
+          '[SendQ] early ACK buffered clientMsgId=$clientMsgId messageId=$messageId');
       _earlyAcks[clientMsgId] = messageId;
       return true; // 标记已处理，防止上层走 fallback 重复更新
     }
@@ -155,7 +166,8 @@ class ChatSendQueue {
     if (clientMsgId == null) return;
     final messageId = _earlyAcks.remove(clientMsgId);
     if (messageId != null) {
-      debugPrint('[SendQ] consuming early ACK clientMsgId=$clientMsgId → serverId=$messageId');
+      debugPrint(
+          '[SendQ] consuming early ACK clientMsgId=$clientMsgId → serverId=$messageId');
       final serverMsg = entry.message.copyWith(
         id: messageId,
         clientMsgId: clientMsgId,
@@ -169,14 +181,16 @@ class ChatSendQueue {
   /// 返回 true 表示匹配到了队列中的消息
   bool handleSendError(String clientMsgId, String error) {
     if (_current != null && _current!.message.clientMsgId == clientMsgId) {
-      debugPrint('[SendQ] server error for current msgId=${_current!.message.id}: $error');
+      debugPrint(
+          '[SendQ] server error for current msgId=${_current!.message.id}: $error');
       _failCurrent(error);
       return true;
     }
 
     for (final entry in _waiting) {
       if (entry.message.clientMsgId == clientMsgId) {
-        debugPrint('[SendQ] server error for waiting msgId=${entry.message.id}: $error');
+        debugPrint(
+            '[SendQ] server error for waiting msgId=${entry.message.id}: $error');
         _waiting.remove(entry);
         final msg = entry.message;
         msg.status = 'failed';
@@ -212,8 +226,14 @@ class ChatSendQueue {
 
   /// 匹配乐观消息与服务器回显
   bool _matches(Message optimistic, Message server) {
-    if (optimistic.clientMsgId != null && optimistic.clientMsgId == server.clientMsgId) return true;
-    if (optimistic.requestId != null && optimistic.requestId == server.requestId) return true;
+    if (optimistic.clientMsgId != null &&
+        optimistic.clientMsgId == server.clientMsgId) {
+      return true;
+    }
+    if (optimistic.requestId != null &&
+        optimistic.requestId == server.requestId) {
+      return true;
+    }
     if (optimistic.id > 1000000000000 &&
         optimistic.senderId == server.senderId &&
         optimistic.content == server.content) {
@@ -248,7 +268,8 @@ class ChatSendQueue {
 
       // WS 断线 → 暂停，不把消息标失败；重连后继续 drain。
       if (!_ws.isConnected) {
-        debugPrint('[SendQ] WS disconnected, pause (${_waiting.length + 1} pending)');
+        debugPrint(
+            '[SendQ] WS disconnected, pause (${_waiting.length + 1} pending)');
         _draining = false;
         return;
       }
@@ -256,27 +277,32 @@ class ChatSendQueue {
       // 发送
       final entry = _current!;
       final msg = entry.message;
-      debugPrint('[SendQ] → send msgId=${msg.id} retry=${entry.retries}/${maxRetries}');
+      debugPrint(
+          '[SendQ] → send msgId=${msg.id} retry=${entry.retries}/$maxRetries');
 
       try {
-        final clientMsgId = await _ws.sendMessage(
-          conversationId,
-          msg.content ?? '',
-          messageType: msg.messageType.name,
-          mediaUrl: msg.mediaUrl,
-          quoteMessageId: msg.quoteMessageId,
-          quotePreview: msg.quotePreview,
-        ).timeout(ackTimeout);
+        final clientMsgId = await _ws
+            .sendMessage(
+              conversationId,
+              msg.content ?? '',
+              messageType: msg.messageType.name,
+              mediaUrl: msg.mediaUrl,
+              quoteMessageId: msg.quoteMessageId,
+              quotePreview: msg.quotePreview,
+            )
+            .timeout(ackTimeout);
         if (clientMsgId.isEmpty) {
           // WebSocketService 在断线/未认证时会返回空 ID。不要启动 ACK 计时器，
           // 保持 current，等待重连后继续发送，避免消息卡在 loading 或误判失败。
-          debugPrint('[SendQ] send skipped because WS not ready, pause msgId=${msg.id}');
+          debugPrint(
+              '[SendQ] send skipped because WS not ready, pause msgId=${msg.id}');
           _draining = false;
           return;
         }
         msg.clientMsgId = clientMsgId;
         await DataLayer().persistMessage(msg);
-        onAck?.call(msg.id, msg.copyWith(clientMsgId: clientMsgId, status: 'sending'));
+        onAck?.call(
+            msg.id, msg.copyWith(clientMsgId: clientMsgId, status: 'sending'));
 
         // 检查是否有早到的 ACK 在 clientMsgId 设置前就已缓存
         _consumeEarlyAck(entry);
@@ -300,22 +326,28 @@ class ChatSendQueue {
   void _startAckTimer(_SendEntry entry) {
     _ackTimer?.cancel();
     _ackTimer = Timer(ackTimeout, () {
-      debugPrint('[SendQ] ACK timeout msgId=${entry.message.id}');
-      _retryOrFail(entry);
+      // ReliableSender owns protocol retransmission and must keep the same
+      // clientMsgId. Do not call _ws.sendMessage() again from this queue timer,
+      // otherwise the same logical message can be resent with a new clientMsgId.
+      debugPrint(
+          '[SendQ] still waiting for ReliableSender ACK msgId=${entry.message.id}');
     });
   }
 
   Future<void> _retryOrFail(_SendEntry entry) async {
     if (_disposed) return;
     if (!_ws.isConnected) {
-      debugPrint('[SendQ] retry paused because WS disconnected msgId=${entry.message.id}');
+      debugPrint(
+          '[SendQ] retry paused because WS disconnected msgId=${entry.message.id}');
       _draining = false;
       return;
     }
     if (entry.retries < maxRetries) {
       entry.retries++;
-      final delay = Duration(seconds: retryBaseDelay.inSeconds * (1 << (entry.retries - 1)));
-      debugPrint('[SendQ] retry msgId=${entry.message.id} in ${delay.inSeconds}s');
+      final delay = Duration(
+          seconds: retryBaseDelay.inSeconds * (1 << (entry.retries - 1)));
+      debugPrint(
+          '[SendQ] retry msgId=${entry.message.id} in ${delay.inSeconds}s');
       await Future.delayed(delay);
       if (_disposed) return;
       // _current 不变，继续循环
@@ -324,7 +356,9 @@ class ChatSendQueue {
       debugPrint('[SendQ] msgId=${entry.message.id} FAILED');
       final msg = entry.message;
       msg.status = 'failed';
-      try { await DataLayer().persistMessage(msg); } catch (_) {}
+      try {
+        await DataLayer().persistMessage(msg);
+      } catch (_) {}
       onFailed?.call(msg.id, '发送失败：已达最大重试次数');
       _current = null;
       _processNext();
@@ -344,7 +378,7 @@ class ChatSendQueue {
 class _SendEntry {
   final Message message;
   final DateTime enqueuedAt;
-  int retries;
+  int retries = 0;
 
-  _SendEntry(this.message, this.enqueuedAt, {this.retries = 0});
+  _SendEntry(this.message, this.enqueuedAt);
 }

@@ -33,6 +33,10 @@ class _FeedTabState extends ConsumerState<FeedTab> {
   final RefreshController _refreshController =
       RefreshController(initialRefresh: false);
 
+  /// 刷新节流锁：防止连续下拉触发多次 refreshPosts()，
+  /// 否则 SmartRefresher 状态机会错乱，表现为列表无法滑动。
+  bool _isRefreshing = false;
+
   StreamSubscription<PostLikeEvent>? _likeSub;
   StreamSubscription<PostViewEvent>? _viewSub;
 
@@ -81,7 +85,7 @@ class _FeedTabState extends ConsumerState<FeedTab> {
   /// 构建帖子列表内容 —— 始终返回 ListView.builder，避免 SmartRefresher ScrollController 失联
   ListView _buildFeedContent(FeedState feedState) {
     // 首次加载 + 无数据 → 显示骨架屏
-    if (feedState.isLoading && feedState.posts.isEmpty) {
+    if (feedState.isInitialLoading && feedState.posts.isEmpty) {
       return ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: 1,
@@ -154,12 +158,22 @@ class _FeedTabState extends ConsumerState<FeedTab> {
   }
 
   Future<void> _refreshPosts() async {
-    await ref.read(feedProvider.notifier).refreshPosts();
-    // 立即完成刷新：不要等到 postFrameCallback。
-    // 之前延后到下一帧才 refreshCompleted()，会赶上 child 重建出新高度，
-    // SmartRefresher 收起动画与内容高度变化错开，导致列表做一次补偿性
-    // 回弹（表现为"自动上拉一下"）。同帧完成可避免这个高度差。
-    if (mounted) _refreshController.refreshCompleted();
+    // 节流：上一次刷新还没结束就不再触发，避免连续下拉导致状态机卡死
+    if (_isRefreshing) {
+      if (mounted) _refreshController.refreshCompleted();
+      return;
+    }
+    _isRefreshing = true;
+    try {
+      await ref.read(feedProvider.notifier).refreshPosts();
+      // 立即完成刷新：不要等到 postFrameCallback。
+      // 之前延后到下一帧才 refreshCompleted()，会赶上 child 重建出新高度，
+      // SmartRefresher 收起动画与内容高度变化错开，导致列表做一次补偿性
+      // 回弹（表现为"自动上拉一下"）。同帧完成可避免这个高度差。
+    } finally {
+      if (mounted) _refreshController.refreshCompleted();
+      _isRefreshing = false;
+    }
   }
 
   Future<void> _toggleLike(Post post) async {
@@ -271,8 +285,11 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                         style: TextStyle(
                             color: AppColors.textSecondary, fontSize: 13));
                   } else {
-                    body = const Text('没有更多了',
-                        style: TextStyle(
+                    final doneText = feedState.feedStatus == 'fallback'
+                        ? '下面是更早一些的动态'
+                        : '你已经看完最近动态';
+                    body = Text(doneText,
+                        style: const TextStyle(
                             color: AppColors.textSecondary, fontSize: 13));
                   }
                   return Container(

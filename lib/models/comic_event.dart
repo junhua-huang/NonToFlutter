@@ -226,6 +226,56 @@ class ComicEvent {
       createdAt: createdAt,
     );
   }
+
+  // ─────────────────────────────────────────────────────────
+  //  实时状态计算（前端兜底）
+  // ─────────────────────────────────────────────────────────
+  //
+  // 服务端的 status / statusText 在创建漫展时就固化进数据库，理论上
+  // 应该由后端在响应前实时重算，但历史上有多个端点遗漏了这一步
+  // （例如 search/comic events、缓存中的旧响应）。
+  //
+  // 为了端到端兜底，UI 层不直接读 [status] / [statusText]，而是用
+  // [effectiveStatus] / [effectiveStatusText] —— 优先按日期实时算，
+  // 算不出来才回落到服务端字段。
+
+  /// 把 'YYYY-MM-DD' 或 ISO8601 字符串解析为日期（只保留年月日）。
+  static DateTime? _parseDate(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      // 支持 'YYYY-MM-DD' 与 'YYYY-MM-DDTHH:mm:ss' 两种格式
+      final dt = DateTime.parse(raw);
+      return DateTime(dt.year, dt.month, dt.day);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 根据当前本地日期重算的状态码：0=即将开始, 1=进行中, 2=已结束。
+  /// 解析失败时回落到服务端的 [status]。
+  int get effectiveStatus {
+    final sd = _parseDate(startDate);
+    final ed = _parseDate(endDate);
+    if (sd == null || ed == null) return status;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (today.isBefore(sd)) return 0;
+    if (!today.isAfter(ed)) return 1; // sd <= today <= ed
+    return 2;
+  }
+
+  /// 与 [effectiveStatus] 对应的中文文案。
+  String get effectiveStatusText {
+    switch (effectiveStatus) {
+      case 1:
+        return '进行中';
+      case 2:
+        return '已结束';
+      case 0:
+      default:
+        return '即将开始';
+    }
+  }
 }
 
 class ComicEventsPage {

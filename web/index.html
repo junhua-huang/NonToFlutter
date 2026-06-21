@@ -14,7 +14,7 @@
     This is a placeholder for base href that will be replaced by the value of
     the `--base-href` argument provided to `flutter build`.
   -->
-  <base href="/">
+  <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
@@ -40,8 +40,8 @@
   <link rel="preload" href="main.dart.js" as="script">
 
   <!-- Cropper.js for image_cropper_for_web -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+  <link rel="stylesheet" href="cropper.min.css">
+  <script src="cropper.min.js"></script>
 
   <style>
     /* ── Reset ── */
@@ -53,7 +53,14 @@
       height: 100%;
       overflow: hidden;
       overscroll-behavior: none;
-      touch-action: manipulation;
+      /* 关键：把垂直手势让给 Flutter，禁止浏览器原生橡皮筋滚动。
+         之前用 manipulation 会与 Flutter 的 SmartRefresher 抢手势，
+         导致连续刷新后列表无法滑动。*/
+      touch-action: pan-y;
+    }
+    /* Flutter Web 渲染层：同样禁止默认手势拦截，避免与 ListView 抢事件 */
+    flt-glass-pane {
+      touch-action: pan-y !important;
     }
     /* iPhone notch / home indicator → 交给 Flutter 的 SafeArea widget 处理，
        这里只保证 html/body 不被系统栏遮挡 */
@@ -289,8 +296,11 @@
       _waitCount++;
       if (window._flutter && _flutter.loader) {
         clearInterval(_initTimer);
-        // Desktop → canvaskit (better quality), Mobile/Tablet → html (better performance)
-        var renderer = (window.__nontoDevice === 'desktop') ? 'canvaskit' : 'html';
+        // 统一使用 CanvasKit 渲染器。
+        // 之前 mobile/tablet 走 html 渲染器，会与 SmartRefresher 的
+        // ScrollController 抢手势，连续下拉刷新后列表无法滑动。
+        // CanvasKit 用 Skia 直接合成，手势由 Flutter 全权接管，更稳定。
+        var renderer = 'canvaskit';
         _flutter.loader.loadEntrypoint({
           renderer: renderer
         }).then(function(engineInitializer) {

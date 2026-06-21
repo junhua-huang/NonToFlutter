@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/topic.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/topic_service.dart';
@@ -135,7 +135,8 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
             indicatorColor: AppColors.primary,
             indicatorWeight: 3,
             indicatorSize: TabBarIndicatorSize.label,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            labelStyle:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             unselectedLabelStyle: const TextStyle(fontSize: 15),
             tabs: const [
               Tab(text: '我关注的'),
@@ -266,10 +267,10 @@ class _MyTopicsScreenState extends State<MyTopicsScreen>
 
   String _buildTopicSubtitle(Topic topic) {
     final parts = <String>[];
-    if ((topic.postCount ?? 0) > 0) {
+    if (topic.postCount > 0) {
       parts.add('${topic.postCount} 篇帖子');
     }
-    if ((topic.followerCount ?? 0) > 0) {
+    if (topic.followerCount > 0) {
       parts.add('${topic.followerCount} 人关注');
     }
     if (parts.isEmpty) {

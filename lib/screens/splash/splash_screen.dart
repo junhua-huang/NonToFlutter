@@ -188,6 +188,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     await prefs.remove('current_user_json');
     // 清除 DataLayer 和数据库，防止下次同用户登录复用脏 DB
     DataLayer().clearAll();
+    // 取消所有在途 / 排队中的 HTTP 请求，避免旧 token 的请求结果在
+    // RequestManager TTL 内被新账号复用（典型表现：登录后看到上一个账号的列表）
+    ApiClient.requestManager.clearAll();
     await DataLayer().closeDb();
   }
 

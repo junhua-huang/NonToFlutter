@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -36,7 +35,8 @@ class ImageCompressor {
       codec.dispose();
 
       if (byteData == null) {
-        debugPrint('ImageCompressor: re-encode returned null, returning original');
+        debugPrint(
+            'ImageCompressor: re-encode returned null, returning original');
         return originalBytes;
       }
 
@@ -58,7 +58,8 @@ class ImageCompressor {
 
       return compressed;
     } catch (e) {
-      debugPrint('ImageCompressor: compression failed ($e), returning original');
+      debugPrint(
+          'ImageCompressor: compression failed ($e), returning original');
       return originalBytes;
     }
   }
@@ -74,12 +75,11 @@ class ImageCompressor {
     final List<Uint8List> results = [];
     for (final bytes in bytesList) {
       try {
-        final compressed = await compressImage(
-          bytes, quality: quality, maxWidth: maxWidth);
+        final compressed =
+            await compressImage(bytes, quality: quality, maxWidth: maxWidth);
         results.add(compressed);
       } catch (e) {
-        debugPrint(
-          'ImageCompressor: batch compression failed, using original');
+        debugPrint('ImageCompressor: batch compression failed, using original');
         results.add(bytes);
       }
     }

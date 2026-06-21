@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/models/post.dart';
@@ -61,8 +61,8 @@ class ExploreState {
 
 class ExploreNotifier extends StateNotifier<ExploreState> {
   StreamSubscription? _sub;
-  bool _loadInProgress = false;    // guards loadDefault()
-  bool _cachedInProgress = false;  // guards _loadCached() cache-read phase
+  bool _loadInProgress = false; // guards loadDefault()
+  bool _cachedInProgress = false; // guards _loadCached() cache-read phase
 
   ExploreNotifier() : super(const ExploreState()) {
     _loadCached();
@@ -81,13 +81,19 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
   /// 构造时先读缓存，无论是否命中都触发网络全量加载
   Future<void> _loadCached() async {
     // 防重入：已有数据，或 loadDefault 正在跑，或自身正在缓存读取
-    if (state.trendingPosts.isNotEmpty || _loadInProgress || _cachedInProgress) return;
+    if (state.trendingPosts.isNotEmpty ||
+        _loadInProgress ||
+        _cachedInProgress) {
+      return;
+    }
     _cachedInProgress = true;
     try {
-
-      final topicResult = await DataLayer().query('explore:trending_topics', () async => null);
-      final postResult = await DataLayer().query('explore:trending_posts', () async => null);
-      final userResult = await DataLayer().query('explore:suggested_users', () async => null);
+      final topicResult =
+          await DataLayer().query('explore:trending_topics', () async => null);
+      final postResult =
+          await DataLayer().query('explore:trending_posts', () async => null);
+      final userResult =
+          await DataLayer().query('explore:suggested_users', () async => null);
 
       final topics = _parseTopics(topicResult.data);
       final posts = _parsePosts(postResult.data);
@@ -110,7 +116,9 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
   List<Topic> _parseTopics(dynamic data) {
     try {
       if (data is List) {
-        return data.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList();
+        return data
+            .map((e) => Topic.fromJson(e as Map<String, dynamic>))
+            .toList();
       }
     } catch (_) {}
     return [];
@@ -119,7 +127,9 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
   List<Post> _parsePosts(dynamic data) {
     try {
       if (data is List) {
-        return data.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+        return data
+            .map((e) => Post.fromJson(e as Map<String, dynamic>))
+            .toList();
       }
     } catch (_) {}
     return [];
@@ -128,16 +138,9 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
   List<User> _parseUsers(dynamic data) {
     try {
       if (data is List) {
-        return data.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
-      }
-    } catch (_) {}
-    return [];
-  }
-
-  List<ComicEvent> _parseComicEvents(dynamic data) {
-    try {
-      if (data is List) {
-        return data.map((e) => ComicEvent.fromJson(e as Map<String, dynamic>)).toList();
+        return data
+            .map((e) => User.fromJson(e as Map<String, dynamic>))
+            .toList();
       }
     } catch (_) {}
     return [];
@@ -148,212 +151,255 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
     if (_loadInProgress) return;
     _loadInProgress = true;
     try {
-    // Try cache first (isolated try-catch: cache failure must not break network fallback)
-    if (!forceRefresh) {
-      try {
-        final topicResult =
-            await DataLayer().query('explore:trending_topics', () async => null);
-        final postResult =
-            await DataLayer().query('explore:trending_posts', () async => null);
-        final userResult =
-            await DataLayer().query('explore:suggested_users', () async => null);
+      // Try cache first (isolated try-catch: cache failure must not break network fallback)
+      if (!forceRefresh) {
+        try {
+          final topicResult = await DataLayer()
+              .query('explore:trending_topics', () async => null);
+          final postResult = await DataLayer()
+              .query('explore:trending_posts', () async => null);
+          final userResult = await DataLayer()
+              .query('explore:suggested_users', () async => null);
 
-        List<Topic>? cachedTopics;
-        List<Post>? cachedPosts;
-        List<User>? cachedUsers;
+          List<Topic>? cachedTopics;
+          List<Post>? cachedPosts;
+          List<User>? cachedUsers;
 
-        if (topicResult.data is List && (topicResult.data as List).isNotEmpty) {
-          cachedTopics = _parseTopics(topicResult.data);
-        }
-        if (postResult.data is List && (postResult.data as List).isNotEmpty) {
-          cachedPosts = _parsePosts(postResult.data);
-        }
-        if (userResult.data is List && (userResult.data as List).isNotEmpty) {
-          cachedUsers = _parseUsers(userResult.data);
-        }
-
-        if (cachedTopics != null || cachedPosts != null || cachedUsers != null) {
-          state = state.copyWith(
-            trendingTopics: cachedTopics ?? state.trendingTopics,
-            trendingPosts: cachedPosts ?? state.trendingPosts,
-            suggestedUsers: cachedUsers ?? state.suggestedUsers,
-            isLoading: false,
-          );
-        }
-      } catch (e) {
-        debugPrint('ExploreNotifier cache read error: $e');
-      }
-    }
-
-    // forceRefresh 时保留已有数据、不切 loading 态，避免下拉刷新期间
-    // child widget 类型切换（ListView ↔ 转圈）导致 SmartRefresher 抖动。
-    // 首次加载（无数据）才设 isLoading=true 显示骨架。
-    if (!forceRefresh || (state.trendingTopics.isEmpty && state.trendingPosts.isEmpty && state.suggestedUsers.isEmpty && state.recentComicEvents.isEmpty && state.followedComicEvents.isEmpty)) {
-      state = state.copyWith(isLoading: true, clearError: true);
-    }
-
-    try {
-      final results = await Future.wait([
-        SearchService().getHistory(),
-        TopicService().getTrending(limit: 8),
-        RecommendationService().getTrending(limit: 5, hours: 720),
-        RecommendationService().suggestUsers(limit: 5),
-        ComicService().getEvents(size: 4),
-        ComicService().getMyFollowed(size: 4),
-      ]).timeout(const Duration(seconds: 15));
-
-      // History (isolated try-catch: 单个 API 失败不影响其他)
-      List<String> history = [];
-      try {
-        final histResp = results[0] as dynamic;
-        if (histResp is ApiResponse && histResp.success && histResp.data != null) {
-          final data = histResp.data;
-          List items = [];
-          if (data is List) {
-            items = data;
-          } else if (data is Map) {
-            items = data['history'] ?? data['items'] ?? [];
+          if (topicResult.data is List &&
+              (topicResult.data as List).isNotEmpty) {
+            cachedTopics = _parseTopics(topicResult.data);
           }
-          history = items
-              .map((e) =>
-                  e is Map ? e['query']?.toString() ?? '' : e.toString())
-              .where((s) => s.isNotEmpty)
-              .take(3)
-              .toList();
-        }
-      } catch (e) {
-        debugPrint('ExploreNotifier history parse error: $e');
-      }
-
-      // Trending topics
-      List<Topic> topics = state.trendingTopics;
-      try {
-        final topicResp = results[1] as dynamic;
-        if (topicResp is ApiResponse && topicResp.success && topicResp.data != null) {
-          final data = topicResp.data;
-          List topicList = [];
-          if (data is List) {
-            topicList = data;
-          } else if (data is Map) {
-            topicList = data['topics'] ?? data['items'] ?? [];
+          if (postResult.data is List && (postResult.data as List).isNotEmpty) {
+            cachedPosts = _parsePosts(postResult.data);
           }
-          topics = topicList
-              .map((e) => Topic.fromJson(e as Map<String, dynamic>))
-              .toList();
-          try {
-            DataLayer().write('explore:trending_topics', topicList, ttlSeconds: 600);
-          } catch (_) {}
-        }
-      } catch (e) {
-        debugPrint('ExploreNotifier topics parse error: $e');
-      }
-
-      // Trending posts
-      List<Post> posts = state.trendingPosts;
-      try {
-        final postResp = results[2] as dynamic;
-        if (postResp is ApiResponse && postResp.success && postResp.data != null) {
-          final data = postResp.data;
-          List list = [];
-          if (data is Map) {
-            list = data['posts'] as List? ?? [];
-          } else if (data is List) {
-            list = data;
+          if (userResult.data is List && (userResult.data as List).isNotEmpty) {
+            cachedUsers = _parseUsers(userResult.data);
           }
-          posts = list
-              .map((e) => Post.fromJson(e as Map<String, dynamic>))
-              .toList();
-          try {
-            DataLayer().write('explore:trending_posts', list, ttlSeconds: 300);
-          } catch (_) {}
-        }
-      } catch (e) {
-        debugPrint('ExploreNotifier posts parse error: $e');
-      }
 
-      // Suggested users
-      List<User> users = state.suggestedUsers;
-      try {
-        final userResp = results[3] as dynamic;
-        if (userResp is ApiResponse && userResp.success && userResp.data != null) {
-          final data = userResp.data;
-          List userList = [];
-          if (data is List) {
-            userList = data;
-          } else if (data is Map) {
-            userList = data['users'] ?? data['items'] ?? data['suggested_users'] ?? [];
+          if (cachedTopics != null ||
+              cachedPosts != null ||
+              cachedUsers != null) {
+            state = state.copyWith(
+              trendingTopics: cachedTopics ?? state.trendingTopics,
+              trendingPosts: cachedPosts ?? state.trendingPosts,
+              suggestedUsers: cachedUsers ?? state.suggestedUsers,
+              isLoading: false,
+            );
           }
-          users = userList
-              .map((e) => User.fromJson(e as Map<String, dynamic>))
-              .toList();
-          try {
-            DataLayer().write('explore:suggested_users', userList, ttlSeconds: 600);
-          } catch (_) {}
+        } catch (e) {
+          debugPrint('ExploreNotifier cache read error: $e');
         }
-      } catch (e) {
-        debugPrint('ExploreNotifier users parse error: $e');
       }
 
-      // Comic events
-      List<ComicEvent> recentComics = state.recentComicEvents;
+      // forceRefresh 时保留已有数据、不切 loading 态，避免下拉刷新期间
+      // child widget 类型切换（ListView ↔ 转圈）导致 SmartRefresher 抖动。
+      // 首次加载（无数据）才设 isLoading=true 显示骨架。
+      if (!forceRefresh ||
+          (state.trendingTopics.isEmpty &&
+              state.trendingPosts.isEmpty &&
+              state.suggestedUsers.isEmpty &&
+              state.recentComicEvents.isEmpty &&
+              state.followedComicEvents.isEmpty)) {
+        state = state.copyWith(isLoading: true, clearError: true);
+      }
+
       try {
-        final comicResp = results[4] as dynamic;
-        if (comicResp is ApiResponse && comicResp.success && comicResp.data != null) {
-          if (comicResp.data is ComicEventsPage) {
-            recentComics = (comicResp.data as ComicEventsPage).records;
-          } else if (comicResp.data is Map) {
-            final map = comicResp.data as Map;
+        final results = await Future.wait([
+          SearchService()
+              .getHistory()
+              .catchError((_) => ApiResponse(success: false)),
+          TopicService()
+              .getTrending(limit: 8)
+              .catchError((_) => ApiResponse(success: false)),
+          RecommendationService()
+              .getTrending(limit: 5, hours: 720)
+              .catchError((_) => ApiResponse(success: false)),
+          RecommendationService()
+              .suggestUsers(limit: 5)
+              .catchError((_) => ApiResponse(success: false)),
+          ComicService()
+              .getEvents(size: 4)
+              .catchError((_) => ApiResponse<ComicEventsPage>(success: false)),
+          ComicService()
+              .getMyFollowed(size: 4)
+              .catchError((_) => ApiResponse<ComicEventsPage>(success: false)),
+        ], eagerError: false)
+            .timeout(const Duration(seconds: 15));
+
+        // History (isolated try-catch: 单个 API 失败不影响其他)
+        List<String> history = [];
+        try {
+          final histResp = results[0] as dynamic;
+          if (histResp is ApiResponse &&
+              histResp.success &&
+              histResp.data != null) {
+            final data = histResp.data;
+            List items = [];
+            if (data is List) {
+              items = data;
+            } else if (data is Map) {
+              items = data['history'] ?? data['items'] ?? [];
+            }
+            history = items
+                .map((e) =>
+                    e is Map ? e['query']?.toString() ?? '' : e.toString())
+                .where((s) => s.isNotEmpty)
+                .take(3)
+                .toList();
+          }
+        } catch (e) {
+          debugPrint('ExploreNotifier history parse error: $e');
+        }
+
+        // Trending topics
+        List<Topic> topics = state.trendingTopics;
+        try {
+          final topicResp = results[1] as dynamic;
+          if (topicResp is ApiResponse &&
+              topicResp.success &&
+              topicResp.data != null) {
+            final data = topicResp.data;
+            List topicList = [];
+            if (data is List) {
+              topicList = data;
+            } else if (data is Map) {
+              topicList = data['topics'] ?? data['items'] ?? [];
+            }
+            topics = topicList
+                .map((e) => Topic.fromJson(e as Map<String, dynamic>))
+                .toList();
             try {
-              final records = (map['records'] as List<dynamic>?) ?? [];
-              recentComics = records
-                  .map((e) => ComicEvent.fromJson(e is Map<String, dynamic> ? e : {}))
-                  .toList();
-            } catch (parseErr) {
-              debugPrint('ExploreNotifier comic records parse error: $parseErr');
+              DataLayer()
+                  .write('explore:trending_topics', topicList, ttlSeconds: 600);
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint('ExploreNotifier topics parse error: $e');
+        }
+
+        // Trending posts
+        List<Post> posts = state.trendingPosts;
+        try {
+          final postResp = results[2] as dynamic;
+          if (postResp is ApiResponse &&
+              postResp.success &&
+              postResp.data != null) {
+            final data = postResp.data;
+            List list = [];
+            if (data is Map) {
+              list = data['posts'] as List? ?? [];
+            } else if (data is List) {
+              list = data;
+            }
+            posts = list
+                .map((e) => Post.fromJson(e as Map<String, dynamic>))
+                .toList();
+            try {
+              DataLayer()
+                  .write('explore:trending_posts', list, ttlSeconds: 300);
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint('ExploreNotifier posts parse error: $e');
+        }
+
+        // Suggested users
+        List<User> users = state.suggestedUsers;
+        try {
+          final userResp = results[3] as dynamic;
+          if (userResp is ApiResponse &&
+              userResp.success &&
+              userResp.data != null) {
+            final data = userResp.data;
+            List userList = [];
+            if (data is List) {
+              userList = data;
+            } else if (data is Map) {
+              userList = data['users'] ??
+                  data['items'] ??
+                  data['suggested_users'] ??
+                  [];
+            }
+            users = userList
+                .map((e) => User.fromJson(e as Map<String, dynamic>))
+                .toList();
+            try {
+              DataLayer()
+                  .write('explore:suggested_users', userList, ttlSeconds: 600);
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint('ExploreNotifier users parse error: $e');
+        }
+
+        // Comic events
+        List<ComicEvent> recentComics = state.recentComicEvents;
+        try {
+          final comicResp = results[4] as dynamic;
+          if (comicResp is ApiResponse &&
+              comicResp.success &&
+              comicResp.data != null) {
+            if (comicResp.data is ComicEventsPage) {
+              recentComics = (comicResp.data as ComicEventsPage).records;
+            } else if (comicResp.data is Map) {
+              final map = comicResp.data as Map;
+              try {
+                final records = (map['records'] as List<dynamic>?) ?? [];
+                recentComics = records
+                    .map((e) =>
+                        ComicEvent.fromJson(e is Map<String, dynamic> ? e : {}))
+                    .toList();
+              } catch (parseErr) {
+                debugPrint(
+                    'ExploreNotifier comic records parse error: $parseErr');
+              }
             }
           }
+        } catch (e) {
+          debugPrint('ExploreNotifier comic events parse error: $e');
         }
-      } catch (e) {
-        debugPrint('ExploreNotifier comic events parse error: $e');
-      }
 
-      List<ComicEvent> followedComics = state.followedComicEvents;
-      try {
-        final followedResp = results[5] as dynamic;
-        if (followedResp is ApiResponse && followedResp.success && followedResp.data != null) {
-          if (followedResp.data is ComicEventsPage) {
-            followedComics = (followedResp.data as ComicEventsPage).records;
-          } else if (followedResp.data is Map) {
-            final map = followedResp.data as Map;
-            try {
-              final records = (map['records'] as List<dynamic>?) ?? [];
-              followedComics = records
-                  .map((e) => ComicEvent.fromJson(e is Map<String, dynamic> ? e : {}))
-                  .toList();
-            } catch (parseErr) {
-              debugPrint('ExploreNotifier followed records parse error: $parseErr');
+        List<ComicEvent> followedComics = state.followedComicEvents;
+        try {
+          final followedResp = results[5] as dynamic;
+          if (followedResp is ApiResponse &&
+              followedResp.success &&
+              followedResp.data != null) {
+            if (followedResp.data is ComicEventsPage) {
+              followedComics = (followedResp.data as ComicEventsPage).records;
+            } else if (followedResp.data is Map) {
+              final map = followedResp.data as Map;
+              try {
+                final records = (map['records'] as List<dynamic>?) ?? [];
+                followedComics = records
+                    .map((e) =>
+                        ComicEvent.fromJson(e is Map<String, dynamic> ? e : {}))
+                    .toList();
+              } catch (parseErr) {
+                debugPrint(
+                    'ExploreNotifier followed records parse error: $parseErr');
+              }
             }
           }
+        } catch (e) {
+          debugPrint('ExploreNotifier followed comics parse error: $e');
         }
-      } catch (e) {
-        debugPrint('ExploreNotifier followed comics parse error: $e');
-      }
 
-      state = state.copyWith(
-        searchHistory: history,
-        trendingTopics: topics,
-        trendingPosts: posts,
-        suggestedUsers: users,
-        recentComicEvents: recentComics,
-        followedComicEvents: followedComics,
-        isLoading: false,
-      );
-    } catch (e) {
-      debugPrint('ExploreNotifier error: $e');
-      state = state.copyWith(isLoading: false, error: e.toString());
-    }
+        state = state.copyWith(
+          searchHistory: history,
+          trendingTopics: topics,
+          trendingPosts: posts,
+          suggestedUsers: users,
+          recentComicEvents: recentComics,
+          followedComicEvents: followedComics,
+          isLoading: false,
+        );
+      } catch (e) {
+        debugPrint('ExploreNotifier error: $e');
+        state = state.copyWith(isLoading: false, error: e.toString());
+      }
     } finally {
-    _loadInProgress = false;
+      _loadInProgress = false;
     }
   }
 

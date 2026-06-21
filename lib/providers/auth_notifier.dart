@@ -8,6 +8,8 @@ import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/local_db_service.dart';
+import 'package:nonto/services/push_service.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
@@ -37,6 +39,37 @@ class AuthNotifier extends StateNotifier<AuthState> {
       debugPrint('[AuthNotifier] HTTP token refresh failed — logging out');
       _clearSession();
     };
+    // 监听 token 用户身份变化：每次 setToken 都会触发，保证 LocalDbService
+    // 的当前 user ↔ token sub 始终一致，防止跨账号读到上一个用户的本地缓存。
+    ApiClient.onUserIdDetected = _onTokenUserIdDetected;
+  }
+
+  /// token 中的 sub 与 LocalDbService.currentUserId 不一致时的兜底。
+  ///
+  /// 触发场景：
+  /// - 切换账号过程中，新 token 已经写入但旧 DB 还没来得及关闭/重开
+  /// - 冷启动恢复时，prefs 里的 access_token 与 current_user_id 错位
+  /// - 任何"setToken 早于 initDb"的并发竞态
+  ///
+  /// 一致性破坏后，业务请求会带着新 token 但读旧 DB 的 conv_ids，
+  /// 服务端必然返回 403。此处的策略是：
+  ///   1. 立即 `resetIdentity()` 切断旧 DB 引用（同步），
+  ///      让后续 `getConversations()` 等读操作返回空而不是脏数据；
+  ///   2. 异步 `initDb(uid)` 把新 user 的库挂上，并清掉 DataLayer 的内存缓存。
+  void _onTokenUserIdDetected(String uid) {
+    final current = LocalDbService().currentUserId;
+    if (current == uid) return; // 一致，无需处理
+    debugPrint(
+        '[AuthNotifier] token user mismatch: token.sub=$uid, db.user=$current — resetting DB');
+    // 1. 同步切断旧 DB 引用，立即生效
+    unawaited(LocalDbService().resetIdentity());
+    // 2. 清掉跨账号污染的内存缓存（L1 + 在途请求）
+    DataLayer().clearAll();
+    ApiClient.requestManager.clearAll();
+    // 3. 异步挂载新 user 的库
+    unawaited(DataLayer().initDb(uid).catchError((e) {
+      debugPrint('[AuthNotifier] initDb($uid) after mismatch failed: $e');
+    }));
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -72,6 +105,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       state = AuthState(token: token, user: user, isLoading: false);
+
+      // 冷启动恢复登录后，上报极光 registrationId（让服务端能向离线设备推送）。
+      // 后台执行，失败静默，不阻塞启动。
+      if (user != null) {
+        PushService().registerAfterLogin();
+      }
 
       // Defer DB init + DataLayer write to background
       if (user != null) {
@@ -206,9 +245,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _clearSession() async {
     state = AuthState.initial;
+    // 先注销极光推送（此时 token 还在，/push/unregister 需要鉴权），
+    // 再清 token。失败静默——推送注销不阻塞登出流程。
+    await PushService().unregisterOnLogout();
     ApiClient.setToken(null);
     await WebSocketService().disconnect();
     DataLayer().clearAll();
+    ApiClient.requestManager.clearAll();
     await DataLayer().closeDb();
     await _prefs.remove('access_token');
     await _prefs.remove('current_user_id');
@@ -229,10 +272,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   //  Public auth actions
   // ═══════════════════════════════════════════════════════════
 
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(String email, String password, {String? emailCode}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final resp = await _authService.login(email, password);
+      final resp = await _authService.login(email, password, emailCode: emailCode);
       if (resp.success && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
         final token = data['access_token'] as String?;
@@ -244,6 +287,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         User? user = _extractUser(data);
         ApiClient.printToken('HTTP POST /auth/login (网络登录)', token);
+        // 在新 token 落地前，先清旧账号的痕迹：
+        //   - 旧 WS（避免 duplicate_connection）
+        //   - DataLayer 内存缓存 + L2 引用
+        //   - RequestManager 队列/TTL（旧 token 的 GET 结果不应被新账号复用）
+        //   - LocalDbService 旧 DB 引用（防止 onUserIdDetected 触发前的瞬态读到旧库）
+        await WebSocketService().disconnect();
+        DataLayer().clearAll();
+        ApiClient.requestManager.clearAll();
+        await LocalDbService().resetIdentity();
         state = state.copyWith(token: token, user: user, isLoading: true);
         await _prefs.setString('access_token', token);
         // 延迟 WS 连接，由调用方（如 LoginScreen._verifyWsConnection）显式控制
@@ -265,11 +317,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         // 预热会话数据已在闪屏页通过 DataLayer.initDb 完成，此处不再触发网络
 
-        state = state.copyWith(isLoading: false, clearError: true);
+        state = state.copyWith(
+            isLoading: false, clearError: true, clearRequiresEmailCode: true);
+        // 登录/注册成功后上报极光 registrationId（后台执行，不阻塞返回）。
+        PushService().registerAfterLogin();
         return true;
       }
+      // 后端在连续登录失败 ≥ 5 次后返回 429，要求邮箱验证码。
+      // 通过 statusCode + 关键词双重判定，避免与其它 429 语义混淆。
+      final requiresOtp = resp.statusCode == 429 &&
+          (resp.message ?? '').contains('登录失败次数过多');
       state = state.copyWith(
-          isLoading: false, error: resp.message ?? 'Login failed');
+        isLoading: false,
+        error: resp.message ?? 'Login failed',
+        requiresEmailCode: requiresOtp,
+        // 一旦进入验证码流程，清掉历史 requiresEmailCode=false 的兜底
+        clearRequiresEmailCode: !requiresOtp,
+      );
       return false;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: _userFriendlyError(e));
@@ -281,6 +345,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String username,
     required String email,
     required String password,
+    required String emailCode,
     String? bio,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -289,6 +354,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'username': username,
         'email': email,
         'password': password,
+        'email_code': emailCode,
         if (bio != null) 'bio': bio,
       });
       if (resp.success && resp.data != null) {
@@ -321,7 +387,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         // 预热会话数据已在闪屏页通过 DataLayer.initDb 完成，此处不再触发网络
 
-        state = state.copyWith(isLoading: false, clearError: true);
+        state = state.copyWith(
+            isLoading: false, clearError: true, clearRequiresEmailCode: true);
+        // 登录/注册成功后上报极光 registrationId（后台执行，不阻塞返回）。
+        PushService().registerAfterLogin();
         return true;
       }
       state = state.copyWith(
@@ -373,9 +442,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    // 先注销极光推送（token 还在，/push/unregister 需要鉴权）
+    await PushService().unregisterOnLogout();
     await WebSocketService().disconnect();
     ApiClient.setToken(null);
     DataLayer().clearAll();
+    ApiClient.requestManager.clearAll();
     await DataLayer().closeDb();
     await _prefs.remove('access_token');
     await _prefs.remove('current_user_id');

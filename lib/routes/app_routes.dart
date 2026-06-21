@@ -25,6 +25,16 @@ class AppRoutes {
   static const String comicEdit = '/comic/edit/:id';
   static const String comicMyEvents = '/comic/my-events';
 
+  // ── 社群 ──
+  static const String communityList = '/communities';
+  static const String communityDetail = '/communities/:id';
+  static const String communityCreate = '/communities/create';
+  static const String communityChat = '/communities/:id/chat';
+  static const String communityManage = '/communities/:id/manage';
+
+  /// Build a concrete /communities/:id route path
+  static String communityDetailId(String id) => '/communities/$id';
+
   /// Build a concrete /profile/:id route path
   static String profileViewId(String id) => '/profile/$id';
 

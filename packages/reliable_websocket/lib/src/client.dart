@@ -126,8 +126,11 @@ class ReliableWebSocketConfig {
     this.onAckMessageId,
     this.connectTimeout = const Duration(seconds: 15),
     this.ackTimeout = const Duration(seconds: 15),
-    this.heartbeatInterval = const Duration(seconds: 30),
-    this.maxPingMissCount = 2,
+    // 心跳 20s + 容忍 3 次未响应（~60s 判定死连接）。
+    // 之前 30s/2 次：移动网络抖动时单次 pong 延迟即触发重连，造成「经常断开重连」。
+    // 放宽到 3 次能吸收偶发延迟，同时 20s 间隔更快发现真死连接。
+    this.heartbeatInterval = const Duration(seconds: 20),
+    this.maxPingMissCount = 3,
     this.maxRetries = 3,
     this.maxOutboxSize = 1000,
     this.syncTimeout = const Duration(seconds: 30),
@@ -175,8 +178,8 @@ class ReliableWebSocketClient {
     AppDatabase? database,
     Duration connectTimeout = const Duration(seconds: 15),
     Duration ackTimeout = const Duration(seconds: 15),
-    Duration heartbeatInterval = const Duration(seconds: 30),
-    int maxPingMissCount = 2,
+    Duration heartbeatInterval = const Duration(seconds: 20),
+    int maxPingMissCount = 3,
     int maxRetries = 3,
     int maxOutboxSize = 1000,
     Duration syncTimeout = const Duration(seconds: 30),
@@ -297,6 +300,18 @@ class ReliableWebSocketClient {
     _receiver.dispose();
     _sync.dispose();
     await _connection.disconnect();
+  }
+
+  /// 强制重连：无视当前状态，断开现有连接并立即重建。
+  ///
+  /// 用于网络恢复、App 回前台等场景——旧连接可能已僵死（系统挂起 socket），
+  /// 必须强制重建才能恢复实时通信。与 disconnect() 不同，这里不会进入
+  /// disconnected 终态，而是直接重新连接，保证「有网就不断」。
+  Future<void> forceReconnect() async {
+    _log.info('Force reconnect');
+    _sender.cancelAllTimers();
+    await _connection.forceReconnect();
+    // 重连成功后 onAuthenticated 会重新启动心跳；同步恢复由 _onAuthResult 触发。
   }
 
   /// 发送业务消息

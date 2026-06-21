@@ -2,8 +2,12 @@
 import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
+import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/widgets/comment_section.dart';
@@ -120,6 +124,64 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
 
   void _onMediaPageChanged(int postIdx, int mediaIdx) {
     setState(() => _currentMediaIndex = mediaIdx);
+  }
+
+  // ── 导航 helper：与 PostDetailScreen / PostCard 行为一致 ──────────
+
+  /// 跳到用户个人主页（要求 [user] 非空）。
+  void _navigateToUser(User user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
+    );
+  }
+
+  /// 跳到话题搜索结果页。
+  void _navigateToTopic(String topicName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TopicSearchResultsScreen(topicName: topicName),
+      ),
+    );
+  }
+
+  /// 通过用户名搜索后跳到个人主页（@提及点击使用，没有现成 user 对象时的兜底）。
+  Future<void> _navigateToProfileByUsername(String username) async {
+    try {
+      final resp = await SearchService().searchUsers(username, page: 1);
+      if (!mounted) return;
+      if (resp.success && resp.data != null) {
+        final data = resp.data;
+        List userList = [];
+        if (data is List) {
+          userList = data;
+        } else if (data is Map) {
+          userList = data['users'] ?? data['items'] ?? [];
+        }
+        if (userList.isNotEmpty) {
+          final userJson = userList.firstWhere(
+            (u) =>
+                (u['username'] ?? '').toString().toLowerCase() ==
+                username.toLowerCase(),
+            orElse: () => userList.first,
+          ) as Map<String, dynamic>;
+          final user = User.fromJson(userJson);
+          if (!mounted) return;
+          _navigateToUser(user);
+          return;
+        }
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('未找到用户 @$username'),
+              duration: const Duration(seconds: 2)),
+        );
+      }
+    } catch (e) {
+      debugPrint('Search user error: $e');
+    }
   }
 
   @override
@@ -244,17 +306,28 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Author name
-              Text(
-                currentPost.user?.displayName ?? currentPost.user?.username ?? '未知用户',
-                style: const TextStyle(
-                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700,
+              // Author name — 点击跳转到个人主页
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  final u = currentPost.user;
+                  if (u != null) _navigateToUser(u);
+                },
+                child: Text(
+                  currentPost.user?.displayName ?? currentPost.user?.username ?? '未知用户',
+                  style: const TextStyle(
+                    color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
               // Content text (rich text with #/@ highlights)
               if (currentPost.content != null && currentPost.content!.isNotEmpty)
-                _PostContentText(content: currentPost.content!),
+                _PostContentText(
+                  content: currentPost.content!,
+                  onTopicTap: _navigateToTopic,
+                  onMentionTap: _navigateToProfileByUsername,
+                ),
               if (currentPost.createdAt != null) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -284,12 +357,10 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Author avatar
+        // Author avatar — 点击跳转到个人主页
         GestureDetector(
           onTap: () {
-            if (user != null) {
-              // Could navigate to user profile
-            }
+            if (user != null) _navigateToUser(user);
           },
           child: Container(
             decoration: BoxDecoration(
@@ -455,9 +526,22 @@ class _EnhancedImageViewerScreenState extends State<EnhancedImageViewerScreen> {
 }
 
 /// Collapsible post content text with rich text (#话题 / @用户) support
+///
+/// 点击行为按区域分发：
+///   - 命中 `#话题` → 调用 [onTopicTap]
+///   - 命中 `@用户` → 调用 [onMentionTap]
+///   - 命中纯文本 → 切换展开/收起（依赖 RichTextContent 内部 TapGestureRecognizer
+///     仅命中高亮区域，外层 GestureDetector 处理剩余区域）
 class _PostContentText extends StatefulWidget {
   final String content;
-  const _PostContentText({required this.content});
+  final void Function(String topic)? onTopicTap;
+  final void Function(String username)? onMentionTap;
+
+  const _PostContentText({
+    required this.content,
+    this.onTopicTap,
+    this.onMentionTap,
+  });
 
   @override
   State<_PostContentText> createState() => _PostContentTextState();
@@ -469,6 +553,14 @@ class _PostContentTextState extends State<_PostContentText> {
 
   @override
   Widget build(BuildContext context) {
+    const baseStyle = TextStyle(color: Colors.white, fontSize: 13, height: 1.4);
+    const linkStyle = TextStyle(
+      color: Color(0xFF4FC3F7),
+      fontSize: 13,
+      height: 1.4,
+      fontWeight: FontWeight.w500,
+    );
+
     return GestureDetector(
       onTap: () => setState(() => _expanded = !_expanded),
       child: Column(
@@ -480,19 +572,19 @@ class _PostContentTextState extends State<_PostContentText> {
             crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             firstChild: RichTextContent(
               text: widget.content,
-              style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
-              highlightStyle: const TextStyle(
-                color: Color(0xFF4FC3F7), fontSize: 13, height: 1.4, fontWeight: FontWeight.w500,
-              ),
+              style: baseStyle,
+              highlightStyle: linkStyle,
               maxLines: _maxLines,
               overflow: TextOverflow.ellipsis,
+              onTopicTap: widget.onTopicTap,
+              onMentionTap: widget.onMentionTap,
             ),
             secondChild: RichTextContent(
               text: widget.content,
-              style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
-              highlightStyle: const TextStyle(
-                color: Color(0xFF4FC3F7), fontSize: 13, height: 1.4, fontWeight: FontWeight.w500,
-              ),
+              style: baseStyle,
+              highlightStyle: linkStyle,
+              onTopicTap: widget.onTopicTap,
+              onMentionTap: widget.onMentionTap,
             ),
           ),
           if (_needsExpand)

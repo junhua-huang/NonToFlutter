@@ -1,14 +1,14 @@
-﻿import 'dart:async';
+import 'dart:async';
 
-import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/models/notification.dart';
 import 'package:nonto/providers/auth_notifier.dart';
-import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/screens/community/community_list_screen.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
@@ -28,6 +28,9 @@ import '../search/search_tab.dart';
 import '../topics/my_topics_screen.dart';
 import 'home/feed_tab.dart';
 
+/// Nonto 主框架页：承载首页、发现、消息与我的四个核心入口。
+///
+/// 保留 IndexedStack 以维持各 Tab 状态，底部导航和发布入口只做轻量重组。
 class HomeScreen extends ConsumerStatefulWidget {
   final int? initialTab;
 
@@ -37,7 +40,8 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
   late final List<Widget> _tabs = const [
     FeedTab(),
     SearchTab(),
@@ -48,21 +52,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.initialTab != null) {
       ref.read(currentTabIndexProvider.notifier).state = widget.initialTab!;
     }
     _listenFriendOnline();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 应用回到前台时，WS socket 多半已被系统挂起（看似 authenticated 实则僵死）。
+    // 用 forceReconnect 强制重建，绕过 connect() 的「已连接」短路——
+    // 这是「有网就不断 WS」的关键：回前台必须立即恢复实时通道。
+    if (state == AppLifecycleState.resumed) {
+      final ws = WebSocketService();
+      if (ApiClient.token != null && ApiClient.token!.isNotEmpty) {
+        debugPrint('[Home] app resumed, force reconnecting WebSocket');
+        ws.forceReconnect();
+      }
+    }
+  }
+
   StreamSubscription? _friendOnlineSub;
 
   void _listenFriendOnline() {
-    _friendOnlineSub = WebSocketService().friendOnlineStream.listen((payload) async {
+    _friendOnlineSub =
+        WebSocketService().friendOnlineStream.listen((payload) async {
       final userId = payload['user_id'];
       if (userId == null || !mounted) return;
       String? name;
       try {
-        final cached = await DataLayer().query(CacheKeys.friendList, () async => null);
+        final cached =
+            await DataLayer().query(CacheKeys.friendList, () async => null);
         if (cached.data is List) {
           for (final item in cached.data as List) {
             if (item is Map && item['id'] == userId) {
@@ -93,15 +114,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _friendOnlineSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
     final barVisible = ref.watch(barVisibleProvider);
-    final totalBadge = (ref.watch(unreadNotificationsCountProvider) + ref.watch(unreadMessagesCountProvider)).toInt();
+    final totalBadge = (ref.watch(unreadNotificationsCountProvider) +
+            ref.watch(unreadMessagesCountProvider))
+        .toInt();
     final currentIndex = ref.watch(currentTabIndexProvider);
 
     return Scaffold(
@@ -111,134 +134,153 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: _tabs,
       ),
       drawer: _buildDrawer(context),
-      floatingActionButton: currentIndex == 0
-          ? AnimatedSlide(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              offset: barVisible ? Offset.zero : const Offset(0, 2),
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 250),
-                opacity: barVisible ? 1.0 : 0.0,
-                child: FloatingActionButton(
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                    );
-                    if (result == true) {}
-                  },
-                  backgroundColor: AppColors.primary,
-                  elevation: 4,
-                  shape: const CircleBorder(),
-                  child: const Icon(Icons.edit, color: Colors.white, size: 26),
-                ),
-              ),
-            )
-          : null,
-      bottomNavigationBar: AnimatedSlide(
+      floatingActionButton: _buildComposeButton(barVisible, currentIndex),
+      bottomNavigationBar: _buildBottomNavigationBar(
+        barVisible: barVisible,
+        currentIndex: currentIndex,
+        totalBadge: totalBadge,
+      ),
+    );
+  }
+
+  Widget? _buildComposeButton(bool barVisible, int currentIndex) {
+    if (currentIndex != 0) return null;
+
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      offset: barVisible ? Offset.zero : const Offset(0, 2),
+      child: AnimatedOpacity(
         duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        offset: barVisible ? Offset.zero : const Offset(0, 1),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 250),
-          opacity: barVisible ? 1.0 : 0.0,
-          child: Theme(
+        opacity: barVisible ? 1.0 : 0.0,
+        child: FloatingActionButton(
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+            );
+          },
+          backgroundColor: AppColors.primary,
+          elevation: 4,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.edit, color: Colors.white, size: 26),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationBar({
+    required bool barVisible,
+    required int currentIndex,
+    required int totalBadge,
+  }) {
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      offset: barVisible ? Offset.zero : const Offset(0, 1),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: barVisible ? 1.0 : 0.0,
+        child: Theme(
           data: Theme.of(context).copyWith(
             splashColor: Colors.transparent,
             highlightColor: Colors.transparent,
           ),
           child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          onTap: (i) {
-            ref.read(currentTabIndexProvider.notifier).state = i;
-            // 切换到消息 Tab 时清除会话未读
-            if (i == 2) {
-              ref.read(conversationsProvider.notifier).clearAllUnreadCounts();
-            }
-          },
-          type: BottomNavigationBarType.fixed,
-          showSelectedLabels: true,
-          showUnselectedLabels: true,
-          selectedFontSize: 0,
-          unselectedFontSize: 0,
-          items: [
-            BottomNavigationBarItem(
-              icon: _NavIcon(
-                asset: 'assets/icons/未选中首页.svg',
-                isSelected: currentIndex == 0,
-                size: 26,
-              ),
-              activeIcon: _NavIcon(
-                asset: 'assets/icons/选中首页.svg',
-                isSelected: currentIndex == 0,
-                size: 26,
-              ),
-              label: '',
+            currentIndex: currentIndex,
+            onTap: (index) {
+              ref.read(currentTabIndexProvider.notifier).state = index;
+            },
+            type: BottomNavigationBarType.fixed,
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+            selectedFontSize: 0,
+            unselectedFontSize: 0,
+            items: _buildNavigationItems(
+              currentIndex: currentIndex,
+              totalBadge: totalBadge,
             ),
-            BottomNavigationBarItem(
-              icon: _NavIcon(
-                asset: 'assets/icons/未选中搜索.svg',
-                isSelected: currentIndex == 1,
-                size: 26,
-              ),
-              activeIcon: _NavIcon(
-                asset: 'assets/icons/选中搜索.svg',
-                isSelected: currentIndex == 1,
-                size: 26,
-              ),
-              label: '',
-            ),
-            BottomNavigationBarItem(
-              icon: totalBadge > 0
-                  ? Badge(
-                      label: Text(totalBadge > 99 ? '99+' : '$totalBadge'),
-                      child: _NavIcon(
-                        asset: 'assets/icons/未选中消息.svg',
-                        isSelected: currentIndex == 2,
-                        size: 26,
-                      ),
-                    )
-                  : _NavIcon(
-                      asset: 'assets/icons/未选中消息.svg',
-                      isSelected: currentIndex == 2,
-                      size: 26,
-                    ),
-              activeIcon: totalBadge > 0
-                  ? Badge(
-                      label: Text(totalBadge > 99 ? '99+' : '$totalBadge'),
-                      child: _NavIcon(
-                        asset: 'assets/icons/选中消息.svg',
-                        isSelected: currentIndex == 2,
-                        size: 26,
-                      ),
-                    )
-                  : _NavIcon(
-                      asset: 'assets/icons/选中消息.svg',
-                      isSelected: currentIndex == 2,
-                      size: 26,
-                    ),
-              label: '',
-            ),
-            BottomNavigationBarItem(
-              icon: _NavIcon(
-                asset: 'assets/icons/未选中个人.svg',
-                isSelected: currentIndex == 3,
-                size: 26,
-              ),
-              activeIcon: _NavIcon(
-                asset: 'assets/icons/选中个人.svg',
-                isSelected: currentIndex == 3,
-                size: 26,
-              ),
-              label: '',
-            ),
-          ],
+          ),
         ),
       ),
-    ),
-  ),
-);
+    );
   }
+
+  List<BottomNavigationBarItem> _buildNavigationItems({
+    required int currentIndex,
+    required int totalBadge,
+  }) {
+    return [
+      _buildNavItem(
+        label: '首页',
+        asset: 'assets/icons/未选中首页.svg',
+        activeAsset: 'assets/icons/选中首页.svg',
+        selected: currentIndex == 0,
+      ),
+      _buildNavItem(
+        label: '发现',
+        asset: 'assets/icons/未选中搜索.svg',
+        activeAsset: 'assets/icons/选中搜索.svg',
+        selected: currentIndex == 1,
+      ),
+      _buildNavItem(
+        label: '消息',
+        asset: 'assets/icons/未选中消息.svg',
+        activeAsset: 'assets/icons/选中消息.svg',
+        selected: currentIndex == 2,
+        badgeCount: totalBadge,
+      ),
+      _buildNavItem(
+        label: '我的',
+        asset: 'assets/icons/未选中个人.svg',
+        activeAsset: 'assets/icons/选中个人.svg',
+        selected: currentIndex == 3,
+      ),
+    ];
+  }
+
+  BottomNavigationBarItem _buildNavItem({
+    required String label,
+    required String asset,
+    required String activeAsset,
+    required bool selected,
+    int badgeCount = 0,
+  }) {
+    return BottomNavigationBarItem(
+      icon: _buildNavIcon(
+        asset: asset,
+        selected: selected,
+        badgeCount: badgeCount,
+      ),
+      activeIcon: _buildNavIcon(
+        asset: activeAsset,
+        selected: selected,
+        badgeCount: badgeCount,
+      ),
+      label: label,
+    );
+  }
+
+  Widget _buildNavIcon({
+    required String asset,
+    required bool selected,
+    int badgeCount = 0,
+  }) {
+    final icon = _NavIcon(
+      asset: asset,
+      isSelected: selected,
+      size: 26,
+    );
+
+    if (badgeCount <= 0) return icon;
+
+    return Badge(
+      label: Text(_formatBadgeCount(badgeCount)),
+      child: icon,
+    );
+  }
+
+  String _formatBadgeCount(int count) => count > 99 ? '99+' : '$count';
 
   Widget _buildDrawer(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -253,7 +295,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.borderLight, width: 0.5)),
+                border: Border(
+                    bottom:
+                        BorderSide(color: AppColors.borderLight, width: 0.5)),
               ),
               child: Row(
                 children: [
@@ -265,13 +309,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         Text(
                           user?.displayName ?? user?.username ?? '用户',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary),
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '@${user?.username ?? 'user'}',
-                          style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          style: const TextStyle(
+                              fontSize: 14, color: AppColors.textSecondary),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -282,8 +330,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             // Menu items
             ListTile(
-              leading: const Icon(Icons.edit_outlined, color: AppColors.textPrimary),
-              title: const Text('编辑个人资料', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              leading:
+                  const Icon(Icons.edit_outlined, color: AppColors.textPrimary),
+              title: const Text('编辑个人资料',
+                  style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -293,25 +343,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.person_add_outlined, color: AppColors.textPrimary),
+              leading: const Icon(Icons.person_add_outlined,
+                  color: AppColors.textPrimary),
               title: Consumer(
                 builder: (context, ref, _) {
                   final notifs = ref.watch(notificationsProvider).notifications;
-                  final friendCount = notifs.where((n) => n.parsedType == NotificationType.friendRequest).length;
+                  final friendCount = notifs
+                      .where((n) =>
+                          n.parsedType == NotificationType.friendRequest &&
+                          !n.isRead)
+                      .length;
                   return Row(
                     children: [
-                      const Text('好友申请', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+                      const Text('好友申请',
+                          style: TextStyle(
+                              fontSize: 15, color: AppColors.textPrimary)),
                       if (friendCount > 0) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
                           decoration: BoxDecoration(
                             color: AppColors.likeRed,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '$friendCount',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700),
                           ),
                         ),
                       ],
@@ -323,13 +384,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const FriendRequestsScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const FriendRequestsScreen()),
                 );
               },
             ),
             ListTile(
               leading: const Icon(Icons.tag, color: AppColors.textPrimary),
-              title: const Text('我的话题', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              title: const Text('我的话题',
+                  style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -339,8 +402,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.groups_outlined,
+                  color: AppColors.textPrimary),
+              title: const Text('社群',
+                  style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const CommunityListScreen()),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.event, color: AppColors.textPrimary),
-              title: const Text('漫展时间线', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              title: const Text('漫展时间线',
+                  style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -350,8 +428,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.bookmark_border, color: AppColors.textPrimary),
-              title: const Text('我的漫展', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              leading: const Icon(Icons.bookmark_border,
+                  color: AppColors.textPrimary),
+              title: const Text('我的漫展',
+                  style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -363,8 +443,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const Spacer(),
             const Divider(height: 1, color: AppColors.borderLight),
             ListTile(
-              leading: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
-              title: const Text('设置', style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              leading: const Icon(Icons.settings_outlined,
+                  color: AppColors.textPrimary),
+              title: const Text('设置',
+                  style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -375,7 +457,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.logout, color: AppColors.likeRed),
-              title: const Text('退出登录', style: TextStyle(fontSize: 15, color: AppColors.likeRed)),
+              title: const Text('退出登录',
+                  style: TextStyle(fontSize: 15, color: AppColors.likeRed)),
               onTap: () {
                 Navigator.pop(context);
                 ref.read(authProvider.notifier).logout();
@@ -385,65 +468,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildBadgeIcon({
-    required IconData icon,
-    required IconData activeIcon,
-    required int count,
-    bool isActive = false,
-  }) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(icon, size: 26),
-        if (count > 0)
-          Positioned(
-            right: -6,
-            top: -2,
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-              child: Center(
-                child: Text(
-                  count > 99 ? '99+' : '$count',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildAvatar() {
-    final authState = ref.watch(authProvider);
-    final url = authState.user?.avatarUrl;
-    if (url != null && url.isNotEmpty) {
-      final fullUrl = url.startsWith('http') ? url : '${AppConfig.baseUrl.replaceFirst('/api', '')}$url';
-      return Image.network(fullUrl, fit: BoxFit.cover,
-        errorBuilder: (ctx, err, st) => CircleAvatar(
-          radius: 16,
-          backgroundColor: AppColors.primary,
-          child: Text(authState.user?.initials ?? '?',
-            style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
-        ),
-      );
-    }
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: AppColors.primary,
-      child: Text(authState.user?.initials ?? '?',
-        style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }
 }
@@ -467,7 +491,9 @@ class _NavIcon extends StatelessWidget {
       width: size,
       height: size,
       colorFilter: ColorFilter.mode(
-        isSelected ? AppColors.primary : AppColors.textSecondary.withValues(alpha: 0.6),
+        isSelected
+            ? AppColors.primary
+            : AppColors.textSecondary.withValues(alpha: 0.6),
         BlendMode.srcIn,
       ),
     );

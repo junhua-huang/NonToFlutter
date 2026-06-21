@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
+import 'package:nonto/services/cache_envelope.dart';
+import 'package:nonto/services/cache_manifest.dart';
 import 'package:nonto/services/database/app_database.dart';
 import 'package:nonto/services/local_db_service.dart';
 
@@ -80,15 +82,38 @@ class DataLayer {
       // Web 端 skip L2：drift WASM worker 通信延迟累加会导致 UI 明显卡顿
       if (!kIsWeb) {
         try {
-          final l2Raw = await _db?.cacheGet(cacheKey).timeout(
+          final l2Row = await _db?.cacheGet(cacheKey).timeout(
             const Duration(seconds: 2),
           );
-          if (l2Raw != null) {
-            try {
-              final decoded = jsonDecode(l2Raw);
-              _addL1(cacheKey, decoded);
-              return QueryResult(data: decoded, source: CacheSource.local);
-            } catch (_) {}
+          if (l2Row != null) {
+            final decoded = CacheEnvelope.decode(l2Row.data);
+            if (decoded != null) {
+              final entry = CacheManifest.byKey(cacheKey) ??
+                  CacheManifest.byDomainMatch(cacheKey);
+              final expected = entry?.dataVersion ?? CacheEnvelope.defaultVersion;
+              if (decoded.version == expected) {
+                // 版本一致，直接命中
+                _addL1(cacheKey, decoded.payload);
+                return QueryResult(
+                    data: decoded.payload, source: CacheSource.local);
+              }
+              // 版本不一致：尝试 migrate
+              if (entry?.migrate != null) {
+                final upgraded = entry!.migrate!(decoded.version, decoded.payload);
+                if (upgraded != null) {
+                  _addL1(cacheKey, upgraded);
+                  // 回写升级后的 payload（异步，不阻塞读取）
+                  write(cacheKey, upgraded);
+                  return QueryResult(
+                      data: upgraded, source: CacheSource.local);
+                }
+              }
+              // 无 migrate 或 migrate 返回 null：丢弃旧缓存，走 L3
+              await invalidate(cacheKey);
+            } else {
+              // 非 envelope 格式（历史裸 JSON）：直接丢弃走 L3
+              await invalidate(cacheKey);
+            }
           }
         } catch (_) {
           // DB not ready, schema error, or IndexedDB hang → fall through to L3
@@ -121,8 +146,16 @@ class DataLayer {
     _addL1(cacheKey, data);
     if (!kIsWeb) {
       try {
-        await _db?.cacheSet(cacheKey, jsonEncode(data),
-            ttlSeconds: ttlSeconds ?? _ttlFor(cacheKey));
+        final entry = CacheManifest.byKey(cacheKey) ??
+            CacheManifest.byDomainMatch(cacheKey);
+        final dataVersion =
+            entry?.dataVersion ?? CacheEnvelope.defaultVersion;
+        await _db?.cacheSet(
+          cacheKey,
+          CacheEnvelope.encode(data, version: dataVersion),
+          ttlSeconds: ttlSeconds ?? _ttlFor(cacheKey),
+          dataVersion: dataVersion,
+        );
       } catch (_) {}
     }
   }

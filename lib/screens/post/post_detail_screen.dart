@@ -16,6 +16,7 @@ import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/comment_section.dart';
 import 'package:nonto/widgets/media_viewer.dart';
+import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -50,8 +51,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   Color get _xDarkGrey => AppColors.textSecondary;
   Color get _xBlue => AppColors.primary;
   Color get _xLightGrey => AppColors.borderLight;
-  static const Color _xLikeRed = Color(0xFFF91880);
-
   static const List<String> _reportReasons = [
     '垃圾信息', '骚扰', '仇恨言论', '暴力内容', '其他'
   ];
@@ -547,64 +546,26 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   ),
           ),
         // Actions
-        Padding(
-          padding: const EdgeInsets.fromLTRB(0, 4, 16, 12),
-          child: Row(
-            children: [
-              _Action(icon: Icons.comment_outlined, count: post.commentCount, onTap: () {
-                // Scroll to comment section
-                if (_scrollController.hasClients) {
-                  _scrollController.animateTo(
-                    _scrollController.position.maxScrollExtent,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-                }
-              }),
-              const SizedBox(width: 8),
-              _Action(
-                icon: post.isLiked == true ? Icons.favorite : Icons.favorite_border,
-                count: post.likeCount,
-                color: post.isLiked == true ? _xLikeRed : null,
-                onTap: _toggleLike,
-              ),
-              const SizedBox(width: 8),
-              _Action(icon: Icons.bar_chart, count: post.viewCount, onTap: () => _showPostStatsDetail(post)),
-            ],
-          ),
+        NontoPostActionBar(
+          padding: const EdgeInsets.fromLTRB(8, 4, 16, 12),
+          commentCount: post.commentCount,
+          likeCount: post.likeCount,
+          viewCount: post.viewCount,
+          isLiked: post.isLiked == true,
+          onComment: () {
+            // Scroll to comment section
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          },
+          onLike: _toggleLike,
+          onView: () => _showPostStatsDetail(post),
         ),
       ],
-    );
-  }
-}
-
-class _Action extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const _Action({required this.icon, this.count = 0, this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: color ?? AppColors.textSecondary),
-            if (count > 0) ...[
-              const SizedBox(width: 4),
-              Text(count >= 1000 ? '${(count / 1000).toStringAsFixed(1)}K' : '$count',
-                style: TextStyle(color: color ?? AppColors.textSecondary, fontSize: 13)),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

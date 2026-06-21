@@ -21,6 +21,8 @@ class Post {
   final DateTime? updatedAt;
   final List<String> topics;
   final List<String>? images;
+  final int? communityId;
+  final bool? communityOnly;
 
   Post({
     required this.id,
@@ -40,6 +42,8 @@ class Post {
     this.updatedAt,
     this.topics = const [],
     this.images,
+    this.communityId,
+    this.communityOnly,
   });
 
   bool get hasImage => images != null && images!.isNotEmpty;
@@ -59,9 +63,9 @@ class Post {
       visibility: json['visibility'],
       isPublic: json['is_public'],
       user: userJson != null
-          ? User.fromJson(userJson is Map<String, dynamic>
-              ? userJson as Map<String, dynamic>
-              : <String, dynamic>{})
+          ? User.fromJson(
+              userJson is Map<String, dynamic> ? userJson : <String, dynamic>{},
+            )
           : null,
       likeCount: _parseInt(json['like_count']),
       commentCount: _parseInt(json['comment_count']),
@@ -90,6 +94,8 @@ class Post {
         }
         return null;
       }(),
+      communityId: json['community_id'],
+      communityOnly: json['community_only'] ?? false,
     );
   }
 
@@ -100,31 +106,60 @@ class Post {
       value != null ? AppDateUtils.parseBeijingTime(value.toString()) : null;
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'content': content,
-    'video_url': videoUrl, 'thumbnail_url': thumbnailUrl, 'post_type': postType, 'user_id': userId,
-    'visibility': visibility, 'is_public': isPublic, 'author': user?.toJson(),
-    'like_count': likeCount, 'comment_count': commentCount,
-    'is_liked': isLiked, 'created_at': createdAt?.toIso8601String(),
-    'updated_at': updatedAt?.toIso8601String(), 'topics': topics,
-    'images': images, 'image_urls': images,
-  };
+        'id': id,
+        'content': content,
+        'video_url': videoUrl,
+        'thumbnail_url': thumbnailUrl,
+        'post_type': postType,
+        'user_id': userId,
+        'visibility': visibility,
+        'is_public': isPublic,
+        'author': user?.toJson(),
+        'like_count': likeCount,
+        'comment_count': commentCount,
+        'is_liked': isLiked,
+        'created_at': createdAt?.toIso8601String(),
+        'updated_at': updatedAt?.toIso8601String(),
+        'topics': topics,
+        'images': images,
+        'image_urls': images,
+      };
 
-  Post copyWith({String? content, String? visibility, bool? isLiked,
-    int? likeCount, int? commentCount, int? viewCount, List<String>? topics,
-    String? videoUrl, String? thumbnailUrl, bool? isPublic, DateTime? updatedAt,
-    List<String>? images}) {
-    return Post(id: id, content: content ?? this.content,
+  Post copyWith(
+      {String? content,
+      String? visibility,
+      bool? isLiked,
+      int? likeCount,
+      int? commentCount,
+      int? viewCount,
+      List<String>? topics,
+      String? videoUrl,
+      String? thumbnailUrl,
+      bool? isPublic,
+      DateTime? updatedAt,
+      List<String>? images,
+      int? communityId,
+      bool? communityOnly}) {
+    return Post(
+      id: id,
+      content: content ?? this.content,
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       postType: postType,
-      userId: userId, visibility: visibility ?? this.visibility,
-      isPublic: isPublic ?? this.isPublic, user: user,
+      userId: userId,
+      visibility: visibility ?? this.visibility,
+      isPublic: isPublic ?? this.isPublic,
+      user: user,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
       viewCount: viewCount ?? this.viewCount,
       isLiked: isLiked ?? this.isLiked,
-      createdAt: createdAt, updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       topics: topics ?? this.topics,
-      images: images ?? this.images);
+      images: images ?? this.images,
+      communityId: communityId ?? this.communityId,
+      communityOnly: communityOnly ?? this.communityOnly,
+    );
   }
 }

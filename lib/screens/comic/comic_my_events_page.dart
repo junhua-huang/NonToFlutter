@@ -1,4 +1,3 @@
-﻿import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/widgets/comic_event_card.dart';

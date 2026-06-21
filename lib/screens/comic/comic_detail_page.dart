@@ -1,7 +1,6 @@
-﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
-import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/screens/comic/comic_upload_page.dart';
 import 'package:nonto/screens/post/image_viewer_screen.dart';
 import 'package:nonto/services/api/api_client.dart';
@@ -11,7 +10,6 @@ import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/widgets/comment_section.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ComicDetailPage extends StatefulWidget {
   final int eventId;
@@ -60,11 +58,15 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
       );
       if (result.data != null && mounted) {
         setState(() {
-          _event = ComicEvent.fromDetailJson(result.data as Map<String, dynamic>);
+          _event =
+              ComicEvent.fromDetailJson(result.data as Map<String, dynamic>);
           _isLoading = false;
         });
       } else if (mounted) {
-        setState(() { _error = '加载失败'; _isLoading = false; });
+        setState(() {
+          _error = '加载失败';
+          _isLoading = false;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -82,7 +84,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
     setState(() {
       _event = _event!.copyWith(
         isFollowed: !wasFollowed,
-        followCount: wasFollowed ? _event!.followCount - 1 : _event!.followCount + 1,
+        followCount:
+            wasFollowed ? _event!.followCount - 1 : _event!.followCount + 1,
       );
     });
     try {
@@ -91,7 +94,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
         setState(() {
           _event = _event!.copyWith(
             isFollowed: wasFollowed,
-            followCount: wasFollowed ? _event!.followCount + 1 : _event!.followCount - 1,
+            followCount:
+                wasFollowed ? _event!.followCount + 1 : _event!.followCount - 1,
           );
         });
       }
@@ -100,7 +104,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
         setState(() {
           _event = _event!.copyWith(
             isFollowed: wasFollowed,
-            followCount: wasFollowed ? _event!.followCount + 1 : _event!.followCount - 1,
+            followCount:
+                wasFollowed ? _event!.followCount + 1 : _event!.followCount - 1,
           );
         });
       }
@@ -154,7 +159,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
         actions: _event != null && _event!.isOwner
             ? [
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: AppColors.textPrimary),
+                  icon: const Icon(Icons.edit_outlined,
+                      color: AppColors.textPrimary),
                   onPressed: () async {
                     await Navigator.push(
                       context,
@@ -169,15 +175,19 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
             : null,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : _error != null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
+                      Text(_error!,
+                          style:
+                              const TextStyle(color: AppColors.textSecondary)),
                       const SizedBox(height: 12),
-                      ElevatedButton(onPressed: _loadDetail, child: const Text('重试')),
+                      ElevatedButton(
+                          onPressed: _loadDetail, child: const Text('重试')),
                     ],
                   ),
                 )
@@ -209,7 +219,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     aspectRatio: 16 / 9,
                     child: Container(
                       color: AppColors.backgroundSecondary,
-                      child: const Icon(Icons.event, size: 48, color: AppColors.textTertiary),
+                      child: const Icon(Icons.event,
+                          size: 48, color: AppColors.textTertiary),
                     ),
                   ),
                 )
@@ -218,7 +229,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                   width: double.infinity,
                   height: 200,
                   color: AppColors.backgroundSecondary,
-                  child: const Icon(Icons.event, size: 48, color: AppColors.textTertiary),
+                  child: const Icon(Icons.event,
+                      size: 48, color: AppColors.textTertiary),
                 ),
 
               // 发布者行（头像 + 用户名 + 时间 + 关注按钮）
@@ -230,14 +242,20 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     CircleAvatar(
                       radius: 20,
                       backgroundColor: AppColors.primary,
-                      backgroundImage: event.creatorAvatar != null && event.creatorAvatar!.isNotEmpty
+                      backgroundImage: event.creatorAvatar != null &&
+                              event.creatorAvatar!.isNotEmpty
                           ? NetworkImage(_fullUrl(event.creatorAvatar!))
                           : null,
-                      child: event.creatorAvatar == null || event.creatorAvatar!.isEmpty
+                      child: event.creatorAvatar == null ||
+                              event.creatorAvatar!.isEmpty
                           ? Text(
-                              (event.creatorName ?? '?').substring(0, 1).toUpperCase(),
+                              (event.creatorName ?? '?')
+                                  .substring(0, 1)
+                                  .toUpperCase(),
                               style: const TextStyle(
-                                  fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
                             )
                           : null,
                     ),
@@ -257,7 +275,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                           const SizedBox(height: 2),
                           Text(
                             _formatTimeAgo(),
-                            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                            style: const TextStyle(
+                                fontSize: 13, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -266,9 +285,12 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                       GestureDetector(
                         onTap: _toggleFollow,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            color: event.isFollowed ? Colors.transparent : AppColors.textPrimary,
+                            color: event.isFollowed
+                                ? Colors.transparent
+                                : AppColors.textPrimary,
                             borderRadius: BorderRadius.circular(20),
                             border: event.isFollowed
                                 ? Border.all(color: AppColors.borderDivider)
@@ -279,7 +301,9 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: event.isFollowed ? AppColors.textPrimary : Colors.white,
+                              color: event.isFollowed
+                                  ? AppColors.textPrimary
+                                  : Colors.white,
                             ),
                           ),
                         ),
@@ -313,9 +337,11 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: _statusColor(event.status).withValues(alpha: 0.12),
+                            color: _statusColor(event.status)
+                                .withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -339,7 +365,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                         const SizedBox(width: 6),
                         Text(
                           event.cityName.isNotEmpty ? event.cityName : '未知城市',
-                          style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          style: const TextStyle(
+                              fontSize: 14, color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -354,7 +381,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                           const SizedBox(width: 6),
                           Text(
                             _formatDateRange(),
-                            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                            style: const TextStyle(
+                                fontSize: 14, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -371,7 +399,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                           Expanded(
                             child: Text(
                               event.venue,
-                              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                              style: const TextStyle(
+                                  fontSize: 14, color: AppColors.textSecondary),
                             ),
                           ),
                         ],
@@ -387,7 +416,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                         runSpacing: 6,
                         children: event.tags.map((tag) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
@@ -458,12 +488,15 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                     onTap: () {
                       ImageViewerScreen.show(
                         context,
-                        event.images.map((img) => _fullUrl(img.imageUrl)).toList(),
+                        event.images
+                            .map((img) => _fullUrl(img.imageUrl))
+                            .toList(),
                         initialIndex: i,
                       );
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
@@ -473,7 +506,8 @@ class _ComicDetailPageState extends State<ComicDetailPage> {
                           errorBuilder: (_, __, ___) => Container(
                             height: 200,
                             color: AppColors.backgroundSecondary,
-                            child: const Icon(Icons.broken_image, color: AppColors.textTertiary),
+                            child: const Icon(Icons.broken_image,
+                                color: AppColors.textTertiary),
                           ),
                         ),
                       ),

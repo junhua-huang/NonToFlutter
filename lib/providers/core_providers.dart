@@ -25,10 +25,10 @@ final currentTabIndexProvider = StateProvider<int>((ref) => 0);
 /// when scrolling, replacing the old HomeScreen.barVisible ValueNotifier.
 final barVisibleProvider = StateProvider<bool>((ref) => true);
 
-/// Derived: total unread notification count across all notifications.
+/// Derived: server/provider unread notification count.
 final unreadNotificationsCountProvider = Provider<int>((ref) {
   final state = ref.watch(notificationsProvider);
-  return state.notifications.where((n) => !n.isRead).length;
+  return state.unreadCount;
 });
 
 /// Derived: total unread message count across all conversations.

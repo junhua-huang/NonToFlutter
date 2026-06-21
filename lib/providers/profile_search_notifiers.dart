@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:nonto/models/post.dart';
@@ -79,10 +79,12 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
     try {
       final cacheKey = 'user:$userId:posts:${state.postsPage}';
       final result = await DataLayer().query(cacheKey, () async {
-        final resp = await _postService.getUserPosts(userId, page: state.postsPage);
+        final resp =
+            await _postService.getUserPosts(userId, page: state.postsPage);
         if (resp.success && resp.data != null) {
           final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
-          final list = data['posts'] as List<dynamic>? ?? (data as List<dynamic>);
+          final list =
+              data['posts'] as List<dynamic>? ?? (data as List<dynamic>);
           return list;
         }
         return null;
@@ -129,7 +131,9 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
       });
       if (result.data != null) {
         state = state.copyWith(
-          likeCount: result.data is int ? result.data : int.tryParse(result.data.toString()) ?? 0,
+          likeCount: result.data is int
+              ? result.data
+              : int.tryParse(result.data.toString()) ?? 0,
           isLoadingLikes: false,
         );
       } else {
@@ -154,7 +158,8 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
   }
 
   /// Update post interaction stats.
-  void updatePostInteraction(int postId, {int? likeCount, int? commentCount, int? viewCount}) {
+  void updatePostInteraction(int postId,
+      {int? likeCount, int? commentCount, int? viewCount}) {
     final posts = state.userPosts.map((p) {
       if (p.id == postId) {
         return p.copyWith(
@@ -359,11 +364,6 @@ class SearchNotifier extends StateNotifier<SearchState> {
 
   void clearSearch() {
     state = state.clearSearch();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 }
 

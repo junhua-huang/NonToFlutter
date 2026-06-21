@@ -1,8 +1,6 @@
-﻿import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/widgets/comic_event_card.dart';
-import 'package:nonto/screens/comic/comic_detail_page.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/comic_service.dart';
@@ -78,7 +76,8 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
         },
       );
       if (result.data != null && mounted) {
-        final page = ComicEventsPage.fromJson(result.data as Map<String, dynamic>);
+        final page =
+            ComicEventsPage.fromJson(result.data as Map<String, dynamic>);
         setState(() {
           _events = page.records;
           _hasMore = page.page < page.pages;
@@ -201,7 +200,8 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
           ? FloatingActionButton.small(
               backgroundColor: AppColors.primary,
               elevation: 4,
-              child: const Icon(Icons.arrow_upward, color: Colors.white, size: 20),
+              child:
+                  const Icon(Icons.arrow_upward, color: Colors.white, size: 20),
               onPressed: () {
                 _scrollController.animateTo(
                   0,
@@ -216,9 +216,21 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
 
   Widget _buildCityFilter() {
     const cities = [
-      '全部', '南宁', '桂林', '柳州', '北海', '梧州',
-      '玉林', '贵港', '钦州', '防城港', '百色',
-      '河池', '贺州', '来宾', '崇左',
+      '全部',
+      '南宁',
+      '桂林',
+      '柳州',
+      '北海',
+      '梧州',
+      '玉林',
+      '贵港',
+      '钦州',
+      '防城港',
+      '百色',
+      '河池',
+      '贺州',
+      '来宾',
+      '崇左',
     ];
 
     return Container(
@@ -235,17 +247,22 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
               child: GestureDetector(
                 onTap: () => _onCityChanged(city),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : AppColors.backgroundSecondary,
+                    color: isSelected
+                        ? AppColors.primary
+                        : AppColors.backgroundSecondary,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     city,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      color:
+                          isSelected ? Colors.white : AppColors.textSecondary,
                       fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ),
@@ -304,7 +321,8 @@ class _ComicTimelinePageState extends State<ComicTimelinePage> {
     setState(() {
       _events[index] = event.copyWith(
         isFollowed: !wasFollowed,
-        followCount: wasFollowed ? event.followCount - 1 : event.followCount + 1,
+        followCount:
+            wasFollowed ? event.followCount - 1 : event.followCount + 1,
       );
     });
     try {

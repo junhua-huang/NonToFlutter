@@ -38,6 +38,23 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // ── 极光推送 manifestPlaceholders ──
+        // JPUSH_APPKEY: 极光应用 AppKey；JPUSH_CHANNEL: 渠道名（统计用）
+        // 厂商通道 APPID/APPKEY 留空占位——实际证书需在各厂商开发者后台申请，
+        // 然后填到极光控制台「厂商通道」里，这里不需要写真实值。
+        manifestPlaceholders["JPUSH_APPKEY"] = "c9c5db77d7cb1a466951e774"
+        manifestPlaceholders["JPUSH_CHANNEL"] = "nonto-default"
+        manifestPlaceholders["HUAWEI_APPID"] = ""
+        manifestPlaceholders["XIAOMI_APPID"] = ""
+        manifestPlaceholders["XIAOMI_APPKEY"] = ""
+        manifestPlaceholders["OPPO_APPKEY"] = ""
+        manifestPlaceholders["OPPO_APPID"] = ""
+        manifestPlaceholders["OPPO_APPSECRET"] = ""
+        manifestPlaceholders["VIVO_APPKEY"] = ""
+        manifestPlaceholders["VIVO_APPID"] = ""
+        manifestPlaceholders["MEIZU_APPID"] = ""
+        manifestPlaceholders["MEIZU_APPKEY"] = ""
     }
 
     signingConfigs {

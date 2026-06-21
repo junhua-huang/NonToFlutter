@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 
 /// 视频播放器平台接口（鸿蒙端通过 MethodChannel 调用原生）
 abstract class NontoVideoPlayerPlatform {
-  static final NontoVideoPlayerPlatform instance = _NontoVideoPlayerPlatformImpl();
+  static final NontoVideoPlayerPlatform instance =
+      _NontoVideoPlayerPlatformImpl();
 
   Future<String> create();
   Future<void> init(String source, {bool isAsset, bool isFile});
@@ -23,7 +24,6 @@ abstract class NontoVideoPlayerPlatform {
 class _NontoVideoPlayerPlatformImpl extends NontoVideoPlayerPlatform {
   static const _channel = MethodChannel('nonto_video_player');
 
-  int _textureId = -1;
   int _duration = 0;
   int _position = 0;
   bool _isPlaying = false;
@@ -57,7 +57,6 @@ class _NontoVideoPlayerPlatformImpl extends NontoVideoPlayerPlatform {
   @override
   Future<String> create() async {
     final result = await _channel.invokeMethod<String>('create');
-    _textureId = int.tryParse(result ?? '-1') ?? -1;
     return result ?? '-1';
   }
 

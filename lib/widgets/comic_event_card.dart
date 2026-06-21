@@ -218,11 +218,13 @@ class _ComicEventCardState extends State<ComicEventCard> {
                 ),
               ),
               const SizedBox(width: 6),
-              // 状态标签
+              // 状态标签：用本地实时计算的状态，避免服务端遗漏重算导致
+              // 已结束的漫展显示为"即将开始"。
               if (widget.showOwnerBadge)
                 _buildBadge('我发布的', AppColors.primary)
               else
-                _buildBadge(_event.statusText, _statusColor(_event.status)),
+                _buildBadge(_event.effectiveStatusText,
+                    _statusColor(_event.effectiveStatus)),
               const SizedBox(width: 8),
               // 关注人数
               Text(

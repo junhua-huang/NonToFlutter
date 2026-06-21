@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// App-wide page transition animations
@@ -16,7 +15,8 @@ class AppTransitions {
       reverseTransitionDuration: duration,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curved =
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         // single AnimatedBuilder wrapping both transitions — one rebuild per tick
         return AnimatedBuilder(
           animation: curved,
@@ -45,7 +45,8 @@ class AppTransitions {
       opaque: true,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curved =
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         return AnimatedBuilder(
           animation: curved,
           builder: (context, _) {
@@ -138,7 +139,8 @@ class AnimatedCounter extends StatelessWidget {
   const AnimatedCounter({
     super.key,
     required this.count,
-    this.style = const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+    this.style = const TextStyle(
+        fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
     this.duration = const Duration(milliseconds: 300),
   });
 
@@ -167,4 +169,3 @@ class IntTween extends Tween<int> {
 // Backward-compatible alias
 @Deprecated('Use StaggeredWidget instead')
 typedef StaggeredAnimation = StaggeredWidget;
-

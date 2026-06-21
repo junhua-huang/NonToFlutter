@@ -4,8 +4,11 @@ import 'package:nonto/config/app_config.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/connectivity_service.dart';
 import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/local_db_service.dart';
 import 'package:nonto/services/sound_service.dart';
+import 'package:nonto/providers/chat_room_state.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter/services.dart';
 import 'package:reliable_websocket/reliable_websocket.dart';
 
 /// 全局 WebSocket 服务，内部使用 ReliableWebSocketClient
@@ -18,6 +21,15 @@ class WebSocketService {
   ReliableWebSocketClient? _client;
   bool _isConnected = false;
   Future<void>? _connecting;
+  // 网络恢复监听：网络从离线→在线时主动重连，避免等心跳超时（60s+）才重连。
+  // 之前用户切 WiFi/4G 后要等很久才恢复 WS，是「经常断开」的主因之一。
+  StreamSubscription<bool>? _connectivitySub;
+  // 定期健康检查：兜底捕获「socket 看似 authenticated 实则僵死」的极端情况
+  // （心跳 ping 发出去了但 pong 永不返回、且心跳定时器被异常取消等）。
+  // 每 90s 检查一次：若长时间未收到任何 WS 帧，强制重连。
+  Timer? _healthCheckTimer;
+  // 最近一次收到 WS 帧的时间，用于健康判断。
+  DateTime _lastFrameAt = DateTime.now();
 
   // 事件流控制器
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -62,6 +74,8 @@ class WebSocketService {
 
   /// 初始化连接（通常在登录成功后调用）
   Future<void> connect() async {
+    // 启动网络监听（幂等），网络恢复时主动重连
+    _ensureConnectivityListener();
     final token = ApiClient.token;
     if (token == null || token.isEmpty) {
       debugPrint('[WS] ❗ no token, skip connect');
@@ -93,9 +107,9 @@ class WebSocketService {
         .replaceFirst('http://', 'ws://')
         .replaceFirst('https://', 'wss://');
     // 带 token query 参数兼容连接层的低层鉴权
-    final uri = '$wsUrl/ws?access_token=$token';
+    final uri = '$wsUrl?access_token=$token';
 
-    debugPrint('[WS] 🔌 connecting to $wsUrl/ws');
+    debugPrint('[WS] 🔌 connecting to $wsUrl');
 
     _client = ReliableWebSocketClient(
       url: uri,
@@ -109,6 +123,10 @@ class WebSocketService {
           'client_msg_id': clientMsgId,
           'message_id': messageId,
         });
+      },
+      onMessageFailed: (clientMsgId, error) {
+        debugPrint('[WS] reliable send failed: $error (clientMsgId=$clientMsgId)');
+        _sendErrorController.add({'clientMsgId': clientMsgId, 'error': error});
       },
       onConnectionStateChange: _onConnectionStateChange,
       onError: (message, clientMsgId) {
@@ -147,9 +165,79 @@ class WebSocketService {
       if (connected) {
         debugPrint('[WS] ✅ 已连接（认证成功）');
         DataLayer().flushOfflineQueue();
+        _lastFrameAt = DateTime.now();
+        _startHealthCheck();
       } else {
         debugPrint('[WS] ❌ 已断开');
+        _stopHealthCheck();
       }
+    }
+  }
+
+  /// 启动定期健康检查：兜底捕获僵死连接。
+  /// 心跳 ping/pong 已是主要保活机制，这里只防极端情况（定时器异常、
+  /// socket 半开等）。若 90s 内未收到任何 WS 帧且网络在线，强制重连。
+  void _startHealthCheck() {
+    _stopHealthCheck();
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 90), (_) {
+      if (!_isConnected) return;
+      final silentFor = DateTime.now().difference(_lastFrameAt);
+      if (silentFor > const Duration(seconds: 90)) {
+        final online = ConnectivityService().isOnline;
+        debugPrint('[WS] 🩺 health check: no frames for ${silentFor.inSeconds}s, online=$online');
+        if (online) {
+          // 有网但 90s 无任何帧 → 连接僵死，强制重连
+          _forceReconnect();
+        }
+      }
+    });
+  }
+
+  void _stopHealthCheck() {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
+  }
+
+  /// 订阅网络状态：网络从离线恢复到在线时，立即发起一次重连，
+  /// 而不是被动等待 20s 心跳 × 3 次未响应（~60s+）才重连。
+  /// 这是「用户切网络后 WS 经常断开、很久才恢复」的关键修复，
+  /// 也是「有网就不断 WS」的主动保障。
+  void _ensureConnectivityListener() {
+    if (_connectivitySub != null) return;
+    ConnectivityService().start();
+    _connectivitySub = ConnectivityService().isOnlineStream.listen((online) {
+      debugPrint('[WS] connectivity → online=$online, connected=$_isConnected');
+      if (online && !_isConnected) {
+        // 网络恢复但 WS 没连上：强制重连（旧连接可能已僵死）。
+        _forceReconnect();
+      }
+    });
+  }
+
+  /// 强制重连：调用 ReliableWebSocketClient.forceReconnect()，
+  /// 无视当前状态重建连接。不会进入 disconnected 终态，保证「有网就不断」。
+  /// 公开给 App 回前台、网络恢复等场景调用。
+  Future<void> forceReconnect() => _forceReconnect();
+
+  Future<void> _forceReconnect() async {
+    final token = ApiClient.token;
+    if (token == null || token.isEmpty) return;
+    if (_client == null) {
+      // 客户端还没建过（首次连接前网络就恢复了）→ 走正常 connect
+      debugPrint('[WS] 🔄 force reconnect: no client, normal connect');
+      await connect();
+      return;
+    }
+    debugPrint('[WS] 🔄 force reconnect (network recovered / app resumed)');
+    _isConnected = false;
+    // 清掉进行中的连接 future，允许 connect() 重新进入
+    _connecting = null;
+    try {
+      await _client!.forceReconnect();
+    } catch (e) {
+      debugPrint('[WS] force reconnect error: $e');
+      // 失败也走正常 connect 兜底
+      await connect();
     }
   }
 
@@ -158,6 +246,8 @@ class WebSocketService {
     final event = payload['event'] as String?;
     final innerData = payload['data'];
     debugPrint('WebSocket: received event=$event seq=$seq');
+    // 记录最近收到帧的时间，供健康检查判断连接是否僵死
+    _lastFrameAt = DateTime.now();
 
     switch (event) {
       case 'new_message':
@@ -197,6 +287,26 @@ class WebSocketService {
           'data': normalized,
           ...normalized,
         });
+        // 提醒：收到他人发来的新消息、且当前不在该聊天室时，播放通知音 + 震动，
+        // 让用户即使不在线也能感知到新消息（之前只有 new_notification 才有声音）。
+        try {
+          final convIdRaw = normalized['conversation_id'];
+          final convIdInt = convIdRaw is int
+              ? convIdRaw
+              : (int.tryParse(convIdRaw?.toString() ?? '') ?? 0);
+          final isConvOpen = convIdInt != 0 && ChatRoomState.isOpen(convIdInt);
+          // 是否本人发送的消息回显（不提醒自己）
+          final senderId = normalized['sender_id'];
+          final myId = LocalDbService().currentUserId;
+          final isOwn = senderId != null &&
+              myId != null &&
+              senderId.toString() == myId;
+          final token = ApiClient.token;
+          if (!isConvOpen && !isOwn && token != null && token.isNotEmpty) {
+            SoundService().playNotificationSound();
+            HapticFeedback.lightImpact();
+          }
+        } catch (_) {}
         break;
 
       case 'message_read':
@@ -308,6 +418,9 @@ class WebSocketService {
   Future<void> disconnect() async {
     debugPrint('[WS] disconnecting');
     _connecting = null;
+    _stopHealthCheck();
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
     final client = _client;
     _client = null;
     await client?.disconnect();

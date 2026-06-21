@@ -77,6 +77,7 @@ class ProtocolFrame {
   final String? requestId;
   final int? seq;
   final Map<String, dynamic>? payload;
+
   /// 完整原始 JSON（用于访问未建模的自定义字段）
   final Map<String, dynamic>? rawJson;
 
@@ -97,9 +98,7 @@ class ProtocolFrame {
 
     var payload = json['payload'] as Map<String, dynamic>?;
     // 向后兼容旧协议（字段平铺无 payload 包裹）
-    if (payload == null) {
-      payload = _extractLegacyPayload(json, type);
-    }
+    payload ??= _extractLegacyPayload(json, type);
 
     return ProtocolFrame(
       type: type,
@@ -121,7 +120,8 @@ class ProtocolFrame {
         };
       case MessageType.ack:
         return {
-          if (json.containsKey('client_msg_id')) 'client_msg_id': json['client_msg_id'],
+          if (json.containsKey('client_msg_id'))
+            'client_msg_id': json['client_msg_id'],
           if (json.containsKey('server_seq')) 'server_seq': json['server_seq'],
           if (json.containsKey('message_id')) 'message_id': json['message_id'],
           if (json.containsKey('status')) 'status': json['status'],
@@ -169,23 +169,29 @@ class ProtocolFrame {
 
   /// error: payload.msg 或 payload.code
   String? get errorMsg => payload is Map
-      ? ((payload!['msg'] ?? payload!['message'] ?? payload!['error']) as String?)
+      ? ((payload!['msg'] ?? payload!['message'] ?? payload!['error'])
+          as String?)
       : null;
 
   /// ack: payload.client_msg_id
-  String? get ackClientMsgId => payload is Map ? payload!['client_msg_id'] as String? : null;
+  String? get ackClientMsgId =>
+      payload is Map ? payload!['client_msg_id'] as String? : null;
 
   /// ack: payload.message_id
-  int? get ackMessageId => payload is Map ? payload!['message_id'] as int? : null;
+  int? get ackMessageId =>
+      payload is Map ? payload!['message_id'] as int? : null;
 
   /// ack: payload.server_seq
-  int? get ackServerSeq => payload is Map ? payload!['server_seq'] as int? : null;
+  int? get ackServerSeq =>
+      payload is Map ? payload!['server_seq'] as int? : null;
 
   /// sync_result: payload.list
-  List<dynamic>? get syncList => payload is Map ? payload!['list'] as List<dynamic>? : null;
+  List<dynamic>? get syncList =>
+      payload is Map ? payload!['list'] as List<dynamic>? : null;
 
   /// session_list: payload.sessions
-  List<dynamic>? get sessionList => payload is Map ? payload!['sessions'] as List<dynamic>? : null;
+  List<dynamic>? get sessionList =>
+      payload is Map ? payload!['sessions'] as List<dynamic>? : null;
 
   /// friend_online / typing 等自定义事件
   String? get eventName => payload is Map ? payload!['event'] as String? : null;

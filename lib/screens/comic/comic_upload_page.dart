@@ -1,12 +1,9 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 
-import 'package:cross_file/cross_file.dart';
-import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/comic_service.dart';
-import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -37,8 +34,8 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
   String? _selectedCity;
   List<String> _selectedTags = [];
   List<ComicCity> _cities = [];
-  List<XFile> _imageFiles = [];
-  List<Uint8List> _imageBytes = [];
+  final List<XFile> _imageFiles = [];
+  final List<Uint8List> _imageBytes = [];
   bool _isSubmitting = false;
   bool _isLoading = false;
   ComicEvent? _editingEvent;
@@ -81,7 +78,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
         setState(() {
           _editingEvent = e;
           _nameController.text = e.name;
-          _venueController.text = e.venue ?? '';
+          _venueController.text = e.venue;
           _introController.text = e.intro ?? '';
           _websiteController.text = e.website ?? '';
           _ticketController.text = e.ticketInfo ?? '';
@@ -90,8 +87,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
           _selectedTags = List<String>.from(e.tags);
           _startDate =
               e.startDate != null ? DateTime.tryParse(e.startDate!) : null;
-          _endDate =
-              e.endDate != null ? DateTime.tryParse(e.endDate!) : null;
+          _endDate = e.endDate != null ? DateTime.tryParse(e.endDate!) : null;
           _isLoading = false;
         });
       } else {
@@ -140,19 +136,18 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
       final file = _imageFiles[i];
       try {
         final filename = file.name;
-        final ext = filename.contains('.')
-            ? filename.split('.').last
-            : 'jpg';
-        final presignResp =
-            await ApiClient().post('/upload/presign', data: {
+        final ext = filename.contains('.') ? filename.split('.').last : 'jpg';
+        final presignResp = await ApiClient().post('/upload/presign', data: {
           'filename': filename,
           'file_type': ext,
           'upload_type': 'comic',
         });
         if (presignResp.statusCode == 200) {
           final data = presignResp.data;
-          final putUrl = data['presigned_url'] ?? data['put_url'] ?? data['url'];
-          final finalUrl = data['public_url'] ?? data['file_url'] ?? data['url'];
+          final putUrl =
+              data['presigned_url'] ?? data['put_url'] ?? data['url'];
+          final finalUrl =
+              data['public_url'] ?? data['file_url'] ?? data['url'];
           await ApiClient().dio.put(putUrl, data: await file.readAsBytes());
           urls.add(finalUrl);
         } else {
@@ -297,8 +292,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
-              disabledBackgroundColor:
-                  AppColors.primary.withValues(alpha: 0.5),
+              disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
             ),
             child: _isSubmitting
                 ? const SizedBox(
@@ -319,7 +313,8 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : Form(
               key: _formKey,
               child: ListView(
@@ -347,9 +342,13 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: _buildDateButton('开始日期', _startDate, _pickStartDate)),
+                      Expanded(
+                          child: _buildDateButton(
+                              '开始日期', _startDate, _pickStartDate)),
                       const SizedBox(width: 12),
-                      Expanded(child: _buildDateButton('结束日期', _endDate, _pickEndDate)),
+                      Expanded(
+                          child:
+                              _buildDateButton('结束日期', _endDate, _pickEndDate)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -413,7 +412,10 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
                     right: 2,
                     top: 2,
                     child: GestureDetector(
-                      onTap: () => setState(() { _imageFiles.removeAt(i); _imageBytes.removeAt(i); }),
+                      onTap: () => setState(() {
+                        _imageFiles.removeAt(i);
+                        _imageBytes.removeAt(i);
+                      }),
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: const BoxDecoration(
@@ -493,8 +495,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide: BorderSide(color: AppColors.primary, width: 1.5),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -570,10 +571,12 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
                 ),
               ),
             );
-            if (city != null) setState(() {
-              _selectedCityId = city.id;
-              _selectedCity = city.name;
-            });
+            if (city != null) {
+              setState(() {
+                _selectedCityId = city.id;
+                _selectedCity = city.name;
+              });
+            }
           },
           borderRadius: BorderRadius.circular(12),
           child: Container(
@@ -608,8 +611,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
     );
   }
 
-  Widget _buildDateButton(
-      String label, DateTime? date, VoidCallback onTap) {
+  Widget _buildDateButton(String label, DateTime? date, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -625,9 +627,7 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
                 size: 16, color: AppColors.textSecondary),
             const SizedBox(width: 8),
             Text(
-              date != null
-                  ? '${date.month}月${date.day}日'
-                  : label,
+              date != null ? '${date.month}月${date.day}日' : label,
               style: TextStyle(
                 fontSize: 14,
                 color: date != null
@@ -672,19 +672,14 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
               selectedColor: AppColors.primary.withValues(alpha: 0.15),
               checkmarkColor: AppColors.primary,
               labelStyle: TextStyle(
-                color: isSelected
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
                 fontSize: 13,
-                fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
                 side: BorderSide(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.borderLight,
+                  color: isSelected ? AppColors.primary : AppColors.borderLight,
                 ),
               ),
               backgroundColor: AppColors.background,

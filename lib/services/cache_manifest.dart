@@ -23,6 +23,17 @@ class CacheEntry {
   /// 是否为参数化 key（运行时由方法生成，如 msgRecent(convId)）
   final bool isParameterized;
 
+  /// 该条目 payload 的数据结构版本。
+  /// 与 [CacheEnvelope] 的 `_v` 字段对齐：payload 结构变更时 +1。
+  /// DataLayer 读取时若版本不匹配，调用 [migrate] 升级或丢弃。
+  final int dataVersion;
+
+  /// payload 旧版本 → 当前 [dataVersion] 的升级函数。
+  /// - 返回升级后的 payload（会回写缓存）
+  /// - 返回 null 表示丢弃，DataLayer 会删除该缓存条目并走 L3 网络
+  /// - 为 null 表示无升级路径，版本不匹配直接丢弃
+  final dynamic Function(int fromVersion, dynamic payload)? migrate;
+
   const CacheEntry({
     required this.key,
     required this.domain,
@@ -31,6 +42,8 @@ class CacheEntry {
     required this.dataShape,
     this.isWarmup = false,
     this.isParameterized = false,
+    this.dataVersion = 1,
+    this.migrate,
   });
 }
 
@@ -278,6 +291,31 @@ class CacheManifest {
   /// 按域筛选。
   static List<CacheEntry> byDomain(String domain) =>
       entries.where((e) => e.domain == domain).toList();
+
+  /// 按精确 key 查找（参数化 key 不参与匹配，返回 null）。
+  /// 用于 DataLayer 读取时获取该条目的 dataVersion / migrate。
+  static CacheEntry? byKey(String key) {
+    for (final e in entries) {
+      if (e.isParameterized) continue;
+      if (e.key == key) return e;
+    }
+    return null;
+  }
+
+  /// 按 domain 前缀匹配参数化 key 的 dataVersion。
+  /// 用于 DataLayer 读取运行时生成的 key（如 `msg:42:recent`）时
+  /// 回退到同 domain 的 dataVersion。
+  static CacheEntry? byDomainMatch(String key) {
+    final domain = key.split(':').first;
+    // 优先返回同 domain 的非参数化条目，其次参数化条目
+    for (final e in entries) {
+      if (e.domain == domain && !e.isParameterized) return e;
+    }
+    for (final e in entries) {
+      if (e.domain == domain && e.isParameterized) return e;
+    }
+    return null;
+  }
 
   /// 域列表。
   static List<String> get domains =>

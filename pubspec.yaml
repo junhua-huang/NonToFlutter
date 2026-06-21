@@ -54,14 +54,23 @@ dependencies:
   shimmer: ^3.0.0
   pull_to_refresh_flutter3: ^2.0.2
   flutter_svg: ^2.2.4
+  google_fonts: ^6.2.1
   intl: ^0.20.2
   
   # ── Web 端视频回退（HTML5 <video>，media_kit 不支持 Web） ──
   video_player: ^2.9.3
+  flutter_social_video:
+    path: D:/flutter_social_video
 
   # ── 数据库（三端均已适配） ──
   drift: ^2.21.0
   sqlite3_flutter_libs: ^0.5.0
+  path: ^1.9.1
+  path_provider:
+    git:
+      url: https://gitcode.com/openharmony-tpc/flutter_packages.git
+      path: packages/path_provider/path_provider
+      ref: master
   
   # ── 网络状态（三端均已适配） ──
   connectivity_plus: ^7.1.1
@@ -82,6 +91,12 @@ dependencies:
     path: packages/share_plus_ohos
   image_cropper_plus:
     path: packages/image_cropper_plus
+
+  # ── 音频播放（三端通过条件导入选择实现） ──
+  audioplayers: ^5.2.1
+
+  # ── 极光推送（仅 Android/iOS 生效，Web/HarmonyOS 在 PushService 里 platform check 跳过） ──
+  jpush_flutter: ^3.0.2
 
 dependency_overrides:
   # ── 鸿蒙适配版（基于上游源码 + 鸿蒙端实现，iOS/Android 行为不变） ──

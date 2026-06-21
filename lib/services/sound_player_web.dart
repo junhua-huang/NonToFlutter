@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
 /// Web 平台音效播放器
 ///
 /// 使用 dart:html Audio 元素直接播放，绕过 audioplayers 在 Web 上的兼容性问题。
@@ -58,13 +60,10 @@ class SoundPlayer {
     return bytes;
   }
 
-  static List<int> _int32Le(int v) => [
-    v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF
-  ];
+  static List<int> _int32Le(int v) =>
+      [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF];
 
-  static List<int> _int16Le(int v) => [
-    v & 0xFF, (v >> 8) & 0xFF
-  ];
+  static List<int> _int16Le(int v) => [v & 0xFF, (v >> 8) & 0xFF];
 
   /// 播放 asset 音效
   Future<void> playAsset(String assetPath) async {

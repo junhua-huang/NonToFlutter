@@ -2,7 +2,7 @@
 ///
 /// - 鸿蒙端：基于 AVTranscoder 实现视频转码压缩
 /// - iOS/Android 端：委托给 video_compress 包
-library video_compress_ohos;
+library;
 
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';

@@ -11,6 +11,7 @@ import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/api/topic_service.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
+
 /// 搜索建议下拉组件（实时搜索建议）
 class SearchSuggestions extends StatefulWidget {
   final String query;
@@ -100,49 +101,70 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
       final bool shortQuery = query.trim().length < 2;
 
       final List<Future> futures = [
-        SearchService().suggestUsers(query, limit: 3),
+        SearchService()
+            .suggestUsers(query, limit: 3)
+            .then<dynamic>((value) => value)
+            .catchError((_) => null),
       ];
       if (!shortQuery) {
-        futures.add(SearchService().globalSearch(query));
-        futures.add(TopicService().getTopics(q: query, perPage: 3));
+        futures.add(SearchService()
+            .globalSearch(query)
+            .then<dynamic>((value) => value)
+            .catchError((_) => null));
+        futures.add(TopicService()
+            .getTopics(q: query, perPage: 3)
+            .then<dynamic>((value) => value)
+            .catchError((_) => null));
       }
 
-      final results = await Future.wait(futures);
+      final results = await Future.wait(futures, eagerError: false);
 
       // 丢弃过期请求的结果
       if (!mounted || gen != _generation) return;
 
       // Users
-      final userResp = results[0];
-      if (userResp.success && userResp.data != null) {
+      final userResp = results[0] as dynamic;
+      if (userResp != null && userResp.success && userResp.data != null) {
         final data = userResp.data;
         List userList = [];
-        if (data is List) { userList = data; }
-        else if (data is Map) { userList = data['users'] ?? data['items'] ?? []; }
-        _users = userList.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
+        if (data is List) {
+          userList = data;
+        } else if (data is Map) {
+          userList = data['users'] ?? data['items'] ?? [];
+        }
+        _users = userList
+            .map((e) => User.fromJson(e as Map<String, dynamic>))
+            .toList();
       } else {
         _users = [];
       }
 
       if (!shortQuery) {
         // Posts
-        final postResp = results[1];
-        if (postResp.success && postResp.data != null) {
+        final postResp = results[1] as dynamic;
+        if (postResp != null && postResp.success && postResp.data != null) {
           final data = postResp.data as Map<String, dynamic>;
           final list = data['posts'] as List? ?? [];
-          _posts = list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+          _posts = list
+              .map((e) => Post.fromJson(e as Map<String, dynamic>))
+              .toList();
         } else {
           _posts = [];
         }
 
         // Topics
-        final topicResp = results[2];
-        if (topicResp.success && topicResp.data != null) {
+        final topicResp = results[2] as dynamic;
+        if (topicResp != null && topicResp.success && topicResp.data != null) {
           final data = topicResp.data;
           List topicList = [];
-          if (data is List) { topicList = data; }
-          else if (data is Map) { topicList = data['topics'] ?? data['items'] ?? []; }
-          _topics = topicList.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList();
+          if (data is List) {
+            topicList = data;
+          } else if (data is Map) {
+            topicList = data['topics'] ?? data['items'] ?? [];
+          }
+          _topics = topicList
+              .map((e) => Topic.fromJson(e as Map<String, dynamic>))
+              .toList();
         } else {
           _topics = [];
         }
@@ -167,62 +189,77 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
     }
 
     return Container(
-      color: Colors.white,
+      color: AppColors.background,
       child: _isLoading
           ? const Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary)),
             )
-          : ListView(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              children: [
-                // Search action
-                InkWell(
-                  onTap: () => widget.onSearch?.call(widget.query),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.search, size: 20, color: AppColors.primary),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text('搜索 "${widget.query}"',
-                            style: const TextStyle(fontSize: 15, color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
-                        ),
-                        const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
-                      ],
+          : MediaQuery.removePadding(
+              // ListView 默认会消费 MediaQuery 的 top padding（状态栏/导航栏安全区），
+              // 这里嵌套在搜索框下方，移除后第一项 InkWell 直接贴搜索框底边。
+              context: context,
+              removeTop: true,
+              child: ListView(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                children: [
+                  // Search action
+                  InkWell(
+                    onTap: () => widget.onSearch?.call(widget.query),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.search,
+                              size: 20, color: AppColors.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text('搜索 "${widget.query}"',
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w500)),
+                          ),
+                          const Icon(Icons.arrow_forward_ios,
+                              size: 14, color: AppColors.textSecondary),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const Divider(height: 1),
+                  const Divider(height: 1),
 
-                // Topics
-                if (_topics.isNotEmpty) ...[
-                  _buildSectionHeader('话题'),
-                  ..._topics.map((t) => _buildTopicItem(t)),
-                ],
+                  // Topics
+                  if (_topics.isNotEmpty) ...[
+                    _buildSectionHeader('话题'),
+                    ..._topics.map((t) => _buildTopicItem(t)),
+                  ],
 
-                // Users
-                if (_users.isNotEmpty) ...[
-                  _buildSectionHeader('用户'),
-                  ..._users.map((u) => _buildUserItem(u)),
-                ],
+                  // Users
+                  if (_users.isNotEmpty) ...[
+                    _buildSectionHeader('用户'),
+                    ..._users.map((u) => _buildUserItem(u)),
+                  ],
 
-                // Posts
-                if (_posts.isNotEmpty) ...[
-                  _buildSectionHeader('帖子'),
-                  ..._posts.take(3).map((p) => _buildPostItem(p)),
-                ],
+                  // Posts
+                  if (_posts.isNotEmpty) ...[
+                    _buildSectionHeader('帖子'),
+                    ..._posts.take(3).map((p) => _buildPostItem(p)),
+                  ],
 
-                if (_topics.isEmpty && _users.isEmpty && _posts.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(
-                      child: Text('暂无建议', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                  if (_topics.isEmpty && _users.isEmpty && _posts.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(
+                        child: Text('暂无建议',
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 14)),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
     );
   }
@@ -230,7 +267,11 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+      child: Text(title,
+          style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary)),
     );
   }
 
@@ -238,9 +279,11 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
     return InkWell(
       onTap: () {
         widget.onClose();
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => UserProfileScreen(user: user),
-        ));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => UserProfileScreen(user: user),
+            ));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -253,9 +296,13 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(user.displayName ?? user.username,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.textPrimary)),
                   Text('@${user.username}',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
             ),
@@ -269,9 +316,11 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
     return InkWell(
       onTap: () {
         widget.onClose();
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => TopicSearchResultsScreen(topicName: topic.name),
-        ));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TopicSearchResultsScreen(topicName: topic.name),
+            ));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -284,10 +333,14 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('#${topic.name}',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.textPrimary)),
                   if (topic.postCount > 0)
                     Text('${topic.postCount} 条帖子',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
             ),
@@ -301,9 +354,11 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
     return InkWell(
       onTap: () {
         widget.onClose();
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => PostDetailScreen(postId: post.id),
-        ));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PostDetailScreen(postId: post.id),
+            ));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -316,9 +371,15 @@ class _SearchSuggestionsState extends State<SearchSuggestions> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(post.user?.displayName ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
-                  Text(post.content ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: AppColors.textPrimary)),
+                  Text(post.content ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
             ),

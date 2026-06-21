@@ -11,6 +11,7 @@ import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/enhanced_media_viewer.dart';
 import 'package:nonto/widgets/media_viewer.dart';
+import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -425,20 +426,14 @@ class PostCard extends StatelessWidget {
                     ),
             ),
           // --- Actions ---
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 16, 12),
-            child: Row(
-              children: [
-                _ActionIcon(icon: Icons.comment_outlined, count: post.commentCount, onTap: onTap),
-                _ActionIcon(
-                  icon: post.isLiked == true ? Icons.favorite : Icons.favorite_border,
-                  count: post.likeCount,
-                  color: post.isLiked == true ? const Color(0xFFF91880) : null,
-                  onTap: onLike ?? () {},
-                ),
-                _ActionIcon(icon: Icons.bar_chart, count: post.viewCount, onTap: () => _showPostStats(context, post)),
-              ],
-            ),
+          NontoPostActionBar(
+            commentCount: post.commentCount,
+            likeCount: post.likeCount,
+            viewCount: post.viewCount,
+            isLiked: post.isLiked == true,
+            onComment: onTap,
+            onLike: onLike ?? () {},
+            onView: () => _showPostStats(context, post),
           ),
           // Divider
           Padding(
@@ -473,44 +468,6 @@ class _StatRow extends StatelessWidget {
         const Spacer(),
         Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.onSurface)),
       ],
-    );
-  }
-}
-
-class _ActionIcon extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const _ActionIcon({
-    required this.icon,
-    this.count = 0,
-    this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: color ?? AppColors.textSecondary),
-            if (count > 0) ...[
-              const SizedBox(width: 4),
-              Text(
-                count >= 1000 ? '${(count / 1000).toStringAsFixed(1)}K' : '$count',
-                style: TextStyle(color: color ?? AppColors.textSecondary, fontSize: 13),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

@@ -7,7 +7,7 @@ class ComicService {
   static const String _basePath = '/comic';
 
   Future<ApiResponse<List<ComicCity>>> getCities() async {
-    final resp = await ApiClient().get<List<dynamic>>('$_basePath/cities');
+    final resp = await ApiClient().getDeduped<List<dynamic>>('$_basePath/cities');
     if (resp.success && resp.data != null) {
       final cities =
           resp.data!.map((e) => ComicCity.fromJson(e as Map<String, dynamic>)).toList();
@@ -17,7 +17,7 @@ class ComicService {
   }
 
   Future<ApiResponse<List<ComicTag>>> getTags() async {
-    final resp = await ApiClient().get<List<dynamic>>('$_basePath/tags');
+    final resp = await ApiClient().getDeduped<List<dynamic>>('$_basePath/tags');
     if (resp.success && resp.data != null) {
       final tags =
           resp.data!.map((e) => ComicTag.fromJson(e as Map<String, dynamic>)).toList();
@@ -39,7 +39,7 @@ class ComicService {
       params['city'] = city;
     }
 
-    final resp = await ApiClient().get<Map<String, dynamic>>(
+    final resp = await ApiClient().getDeduped<Map<String, dynamic>>(
       '$_basePath/events',
       params: params,
     );
@@ -53,7 +53,7 @@ class ComicService {
     final params = <String, dynamic>{};
     if (userId != null) params['userId'] = userId.toString();
 
-    final resp = await ApiClient().get<Map<String, dynamic>>(
+    final resp = await ApiClient().getDeduped<Map<String, dynamic>>(
       '$_basePath/events/$eventId',
       params: params,
     );
@@ -75,7 +75,7 @@ class ComicService {
 
   /// 获取当前用户发布的漫展（分页）
   Future<ApiResponse<ComicEventsPage>> getMyEvents({int page = 1, int size = 10}) async {
-    final resp = await ApiClient().get<Map<String, dynamic>>(
+    final resp = await ApiClient().getDeduped<Map<String, dynamic>>(
       '$_basePath/my-events',
       params: {'page': page.toString(), 'size': size.toString()},
     );
@@ -87,7 +87,7 @@ class ComicService {
 
   /// 获取当前用户关注的漫展（分页）
   Future<ApiResponse<ComicEventsPage>> getMyFollowed({int page = 1, int size = 10}) async {
-    final resp = await ApiClient().get<Map<String, dynamic>>(
+    final resp = await ApiClient().getDeduped<Map<String, dynamic>>(
       '$_basePath/my-followed',
       params: {'page': page.toString(), 'size': size.toString()},
     );

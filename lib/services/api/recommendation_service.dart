@@ -6,8 +6,12 @@ class RecommendationService {
   RecommendationService._();
   final ApiClient _api = ApiClient();
 
-  Future<ApiResponse> getFeed({int page = 1, int perPage = 20}) =>
-      _api.getDeduped('/recommendations/feed', params: {'page': page, 'per_page': perPage});
+  Future<ApiResponse> getFeed({int page = 1, int perPage = 20, String? cursor}) =>
+      _api.getDeduped('/recommendations/feed', params: {
+        'page': page,
+        'per_page': perPage,
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+      });
   Future<ApiResponse> getTrending({int limit = 10, int hours = 24}) =>
       _api.getDeduped('/recommendations/trending', params: {'limit': limit, 'hours': hours});
   Future<ApiResponse> suggestUsers({int limit = 10}) =>

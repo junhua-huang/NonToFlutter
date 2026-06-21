@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -47,7 +46,6 @@ class _CropPageState extends State<CropPage> {
   late Rect _cropRect;
 
   // 触摸状态
-  int? _activePointerId;
   _DragMode _dragMode = _DragMode.none;
   Offset _lastFocalPoint = Offset.zero;
   double _lastScale = 1.0;
@@ -140,7 +138,8 @@ class _CropPageState extends State<CropPage> {
             onPressed: () => Navigator.pop(context),
             child: const Text('取消', style: TextStyle(color: Colors.white)),
           ),
-          const Text('裁剪图片', style: TextStyle(color: Colors.white, fontSize: 16)),
+          const Text('裁剪图片',
+              style: TextStyle(color: Colors.white, fontSize: 16)),
           TextButton(
             onPressed: _doCrop,
             child: const Text('确定', style: TextStyle(color: Colors.blue)),
@@ -155,7 +154,8 @@ class _CropPageState extends State<CropPage> {
       builder: (context, constraints) {
         final imgW = _image!.width.toDouble();
         final imgH = _image!.height.toDouble();
-        final fitScale = min(constraints.maxWidth / imgW, constraints.maxHeight / imgH);
+        final fitScale =
+            min(constraints.maxWidth / imgW, constraints.maxHeight / imgH);
         final displayW = imgW * fitScale;
         final displayH = imgH * fitScale;
         final dx = (constraints.maxWidth - displayW) / 2;
@@ -185,7 +185,6 @@ class _CropPageState extends State<CropPage> {
   }
 
   void _onScaleStart(ScaleStartDetails details) {
-    _activePointerId = details.pointerCount > 1 ? 1 : details.pointerCount;
     _lastFocalPoint = details.focalPoint;
     _lastScale = _scale;
 
@@ -218,7 +217,6 @@ class _CropPageState extends State<CropPage> {
 
   void _onScaleEnd(ScaleEndDetails details) {
     _dragMode = _DragMode.none;
-    _activePointerId = null;
   }
 
   Widget _buildBottomBar() {
@@ -253,9 +251,7 @@ class _CropPageState extends State<CropPage> {
     final w = _cropRect.width.toInt();
     final h = _cropRect.height.toInt();
     final ratio = widget.config.aspectRatio;
-    return ratio != null
-        ? '${w}x$h (${ratio.toStringAsFixed(2)})'
-        : '${w}x$h';
+    return ratio != null ? '${w}x$h (${ratio.toStringAsFixed(2)})' : '${w}x$h';
   }
 
   void _rotateClockwise() {
@@ -343,7 +339,8 @@ class _CropPainter extends CustomPainter {
     );
     // 下半部分
     canvas.drawRect(
-      Rect.fromLTWH(0, cropRect.bottom, size.width, size.height - cropRect.bottom),
+      Rect.fromLTWH(
+          0, cropRect.bottom, size.width, size.height - cropRect.bottom),
       Paint()..color = config.maskColor,
     );
     // 左侧
@@ -353,7 +350,8 @@ class _CropPainter extends CustomPainter {
     );
     // 右侧
     canvas.drawRect(
-      Rect.fromLTWH(cropRect.right, cropRect.top, size.width - cropRect.right, cropRect.height),
+      Rect.fromLTWH(cropRect.right, cropRect.top, size.width - cropRect.right,
+          cropRect.height),
       Paint()..color = config.maskColor,
     );
 

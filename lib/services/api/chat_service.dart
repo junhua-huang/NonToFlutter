@@ -7,12 +7,13 @@ class ChatService {
   ChatService._();
   final ApiClient _api = ApiClient();
 
-  Future<ApiResponse> getConversations() => _api.getDeduped('/chat/sessions');
+  Future<ApiResponse> getConversations({int page = 1, int perPage = 30}) =>
+      _api.getDeduped('/chat/sessions', params: {'page': page, 'per_page': perPage});
   Future<ApiResponse> getOrCreateConversation(int userId) => _api.getDeduped('/chat/conversations/$userId');
   Future<ApiResponse> getMessages(int convId, {int page = 1, int perPage = 50}) =>
       _api.getDeduped('/chat/conversations/$convId/messages', params: {'page': page, 'per_page': perPage});
 
-  /// 批量获取多个会话的最新消息（最多 50 个会话）。
+  /// 批量获取多个会话的最新消息（最多 20 个会话）。
   Future<ApiResponse> getBatchMessages(List<int> convIds, {int perPage = 30}){
     String convIdsStr = convIds.join(',');
 

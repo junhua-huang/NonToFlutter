@@ -2,10 +2,9 @@
 ///
 /// - 鸿蒙端：基于 AVImageGenerator 从视频中提取指定位置的帧
 /// - iOS/Android 端：委托给 video_thumbnail 包
-library video_thumbnail_ohos;
+library;
 
 import 'dart:io' show Platform;
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:video_thumbnail/video_thumbnail.dart' as vt;
 

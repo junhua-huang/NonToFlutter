@@ -151,6 +151,37 @@ class RequestManager {
   /// 当前执行中请求数
   int get inFlightCount => _running;
 
+  /// 清空所有在途请求与 TTL 缓存。
+  ///
+  /// 用途：账号切换 / 登出时调用，防止：
+  /// - 旧账号 token 发出的请求结果被当作 TTL 缓存复用给新账号
+  /// - 排队中的旧请求在登出后仍被执行
+  /// - _inFlight dedup 复用旧账号身份下的进行中 Future
+  ///
+  /// 注意：执行中的请求底层 Future 无法真正中止，但其 completer
+  /// 会以 [RequestCancelledException] 完成，调用方收到取消异常后应放弃结果。
+  void clearAll() {
+    debugPrint('[RequestManager] clearAll: in-flight=${_inFlight.length}, queued=${_waitQueue.length}');
+
+    // 取消执行中的请求（不再回填结果给调用方）
+    for (final entry in _inFlight.values.toList()) {
+      if (!entry.finalize() && !entry.completer.isCompleted) {
+        entry.completer.completeError(RequestCancelledException(entry.key));
+      }
+    }
+    _inFlight.clear();
+
+    // 取消排队中的请求
+    for (final queued in _waitQueue.toList()) {
+      if (!queued.completer.isCompleted) {
+        queued.completer.completeError(RequestCancelledException(queued.key));
+      }
+    }
+    _waitQueue.clear();
+
+    _running = 0;
+  }
+
   // ── 内部方法 ──
 
   /// 按优先级插入队列（优先级高的在前，同优先级先进先出）

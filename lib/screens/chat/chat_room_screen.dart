@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nonto/config/app_theme.dart';
@@ -8,8 +8,8 @@ import 'package:nonto/models/message.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/services/api/chat_service.dart';
-import 'package:nonto/screens/messages/messages_tab.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
@@ -21,8 +21,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 
-// ── Twitter DM 颜色常量 ──
-class _TwColors {
+// ── Nonto 聊天颜色常量 ──
+class _NontoChatColors {
   // 浅色
   static const bg = Color(0xFFFFFFFF);
   static const otherBubble = Color(0xFFEFF3F4);
@@ -40,7 +40,7 @@ class _TwColors {
   static const darkInputBg = Color(0xFF202327);
 }
 
-/// Twitter/X DM 风格聊天室页面
+/// Nonto 聊天室页面
 class ChatRoomScreen extends ConsumerStatefulWidget {
   final Conversation conversation;
 
@@ -63,12 +63,21 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   StreamSubscription? _errorSub;
   final Set<int> _reactions = {}; // optimistic reaction message IDs
   bool _loadingMore = false; // track history loading state
-  int _lastMsgCount = 0; // track message count for auto-scroll
+  // 上次自动滚动到底部时的消息条数，用于区分“收到新消息”与“ACK 替换乐观消息导致重建”。
+  // 只有真正新增消息时才滚动；ACK 替换（条数不变）不应触发滚动，避免抖动。
+  int _lastScrolledMsgCount = 0;
+  // 记录上一次滚动到底部时「最后一条消息的 id」。
+  // 仅靠 _lastScrolledMsgCount（条数）判断有缺陷：
+  // 当消息被撤回/删除导致条数减少，再回到同一数字时不会再滚动。
+  // 用「末尾消息 id」作为单调变化的指纹，撤回（id 不变）不会误判，
+  // 新消息到达（id 变大）或乐观消息（id 极大）始终能触发一次滚动。
+  int _lastScrolledLastMsgId = 0;
 
   @override
   void initState() {
     super.initState();
-    MessagesTab.currentChatRoomConvId = widget.conversation.id.toString();
+    // 记录当前打开的会话，供未读统计判断（当前会话不产生未读红点）。
+    ChatRoomState.setConversation(widget.conversation.id);
 
     final auth = ref.read(authProvider);
     final currentUserId = auth.user?.id ?? 0;
@@ -91,12 +100,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
 
     // 立即清除本地未读气泡（不等服务端确认）
-    ref.read(conversationsProvider.notifier).clearConversationUnread(widget.conversation.id);
+    ref
+        .read(conversationsProvider.notifier)
+        .clearConversationUnread(widget.conversation.id);
   }
 
   @override
   void dispose() {
-    MessagesTab.currentChatRoomConvId = null;
+    ChatRoomState.setConversation(null);
     _errorSub?.cancel();
     _refreshController.dispose();
     _messageController.dispose();
@@ -107,14 +118,24 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   // ── 发送 ──
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
+  void _scrollToBottom({bool animate = true}) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final maxExtent = position.maxScrollExtent;
+    if (!animate) {
+      // 即时定位：发送消息时用，避免与 build 里的动画滚动打架造成抖动
+      _scrollController.jumpTo(maxExtent);
+      return;
     }
+    // 仅当当前已接近底部时才动画滚动到底部，
+    // 否则用户正在翻看历史消息，自动滚动会打断阅读。
+    final distance = (maxExtent - position.pixels).abs();
+    if (distance > 800) return;
+    _scrollController.animateTo(
+      maxExtent,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
   }
 
   void _sendMessage() {
@@ -122,7 +143,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (text.isEmpty) return;
     HapticFeedback.lightImpact();
 
-    final notifier = ref.read(messagesProvider(widget.conversation.id).notifier);
+    final notifier =
+        ref.read(messagesProvider(widget.conversation.id).notifier);
     if (_quotedMessage != null) {
       // 发送带引用的消息，不再拼「回复」前缀
       notifier.sendMessage(
@@ -135,14 +157,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
     _messageController.clear();
     setState(() => _quotedMessage = null);
-    _scrollToBottom();
+    // 发送时用即时定位（jumpTo），不动画——否则会和 build 里的 postFrame
+    // 动画滚动冲突，导致消息列表上下抖动。
+    _scrollToBottom(animate: false);
   }
 
   void _onTextChanged(String text) {
     if (WebSocketService().isConnected) {
-      ref
-          .read(messagesProvider(widget.conversation.id).notifier)
-          .sendTyping();
+      ref.read(messagesProvider(widget.conversation.id).notifier).sendTyping();
     }
   }
 
@@ -157,7 +179,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             .read(messagesProvider(widget.conversation.id).notifier)
             .sendImageMessage(bytes, file.name);
       }
-      _scrollToBottom();
+      _scrollToBottom(animate: false);
     } catch (e) {
       // _picker.pickMultipleMedia may not be available on web, fallback to single
       try {
@@ -173,7 +195,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           ref
               .read(messagesProvider(widget.conversation.id).notifier)
               .sendImageMessage(bytes, picked.name);
-          _scrollToBottom();
+          _scrollToBottom(animate: false);
         }
       } catch (e2) {
         debugPrint('Pick media error: $e2');
@@ -210,22 +232,35 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final canRecall = isMe && !msg.isRecalled && msg.id < 1000000000000;
     final options = <TwitterSheetOption<String>>[
       if (!msg.isRecalled)
-        const TwitterSheetOption(icon: Icons.copy, label: '复制文字', value: 'copy'),
+        const TwitterSheetOption(
+            icon: Icons.copy, label: '复制文字', value: 'copy'),
       if (!msg.isRecalled)
-        const TwitterSheetOption(icon: Icons.format_quote, label: '引用回复', value: 'quote'),
+        const TwitterSheetOption(
+            icon: Icons.format_quote, label: '引用回复', value: 'quote'),
       if (!msg.isRecalled)
-        const TwitterSheetOption(icon: Icons.forward, label: '转发', value: 'forward'),
+        const TwitterSheetOption(
+            icon: Icons.forward, label: '转发', value: 'forward'),
       if (canRecall)
-        const TwitterSheetOption(icon: Icons.undo, label: '撤回', value: 'recall', isDestructive: true),
+        const TwitterSheetOption(
+            icon: Icons.undo,
+            label: '撤回',
+            value: 'recall',
+            isDestructive: true),
       if (isMe && !msg.isRecalled)
-        const TwitterSheetOption(icon: Icons.delete_outline, label: '删除消息', value: 'delete', isDestructive: true),
+        const TwitterSheetOption(
+            icon: Icons.delete_outline,
+            label: '删除消息',
+            value: 'delete',
+            isDestructive: true),
       if (!msg.isRecalled)
-        const TwitterSheetOption(icon: Icons.flag_outlined, label: '举报', value: 'report'),
+        const TwitterSheetOption(
+            icon: Icons.flag_outlined, label: '举报', value: 'report'),
     ];
 
     if (options.isEmpty) return; // 已撤回消息无菜单
 
-    final action = await TwitterBottomSheet.show<String>(context, options: options);
+    final action =
+        await TwitterBottomSheet.show<String>(context, options: options);
     if (!mounted) return;
     switch (action) {
       case 'copy':
@@ -236,10 +271,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         _messageFocusNode.requestFocus();
         break;
       case 'recall':
-        ref.read(messagesProvider(widget.conversation.id).notifier).recallMessage(msg.id);
+        ref
+            .read(messagesProvider(widget.conversation.id).notifier)
+            .recallMessage(msg.id);
         break;
       case 'delete':
-        ref.read(messagesProvider(widget.conversation.id).notifier).removeMessage(msg.id);
+        ref
+            .read(messagesProvider(widget.conversation.id).notifier)
+            .removeMessage(msg.id);
         break;
       case 'forward':
       case 'report':
@@ -272,22 +311,33 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final msgState = ref.watch(messagesProvider(widget.conversation.id));
     final otherUser = widget.conversation.otherUser;
 
-    // 仅在消息数量变化时滚动到底部（避免每次 build 都滚）
+    // 仅在「消息列表确实前进」时滚动到底部：
+    // - 条数增加（新增消息）
+    // - 或末尾消息 id 变化（撤回后重发、乐观消息 ACK 替换等条数不变但末尾变化的情况）
+    // 之前只看条数，遇到撤回/删除使条数回退、之后再增长到同一值时不会滚动。
     final msgCount = msgState.messages.length;
-    if (msgCount != _lastMsgCount && msgCount > 0) {
-      _lastMsgCount = msgCount;
+    final lastMsgId =
+        msgState.messages.isNotEmpty ? msgState.messages.last.id : 0;
+    if (msgCount > 0 &&
+        (msgCount > _lastScrolledMsgCount ||
+            lastMsgId != _lastScrolledLastMsgId)) {
+      _lastScrolledMsgCount = msgCount;
+      _lastScrolledLastMsgId = lastMsgId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom();
+        // 收到新消息用动画；_scrollToBottom 内部还会判断距离底部
+        // 是否在 800px 内，用户翻看历史时不打断。
+        _scrollToBottom(animate: true);
       });
     }
 
     return Scaffold(
-      backgroundColor: _isDark ? _TwColors.darkBg : _TwColors.bg,
+      backgroundColor: _isDark ? _NontoChatColors.darkBg : _NontoChatColors.bg,
       appBar: _buildAppBar(otherUser, msgState),
       body: Column(
         children: [
           if (!msgState.wsConnected) _buildWsBanner(),
-          Expanded(child: _buildMessageList(msgState, currentUserId, otherUser)),
+          Expanded(
+              child: _buildMessageList(msgState, currentUserId, otherUser)),
           if (_quotedMessage != null) _buildQuickReplyBar(),
           _buildInputBar(msgState.isSending),
           if (_showEmojiPicker) _buildEmojiPicker(),
@@ -299,10 +349,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   // ── 导航栏 ──
 
   PreferredSizeWidget _buildAppBar(User? otherUser, MessagesState msgState) {
-    final bgColor = _isDark ? _TwColors.darkBg : _TwColors.bg;
-    final textColor = _isDark ? _TwColors.darkText : _TwColors.text;
-    final subColor = _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp;
-    final divColor = _isDark ? _TwColors.darkDivider : _TwColors.divider;
+    final bgColor = _isDark ? _NontoChatColors.darkBg : _NontoChatColors.bg;
+    final textColor =
+        _isDark ? _NontoChatColors.darkText : _NontoChatColors.text;
+    final subColor =
+        _isDark ? _NontoChatColors.darkTimestamp : _NontoChatColors.timestamp;
+    final divColor =
+        _isDark ? _NontoChatColors.darkDivider : _NontoChatColors.divider;
 
     return AppBar(
       backgroundColor: bgColor,
@@ -340,16 +393,19 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 Builder(builder: (context) {
                   // 优先使用 msgState.otherUserIsOnline（来自 WS 实时推送）
                   // 回退到 otherUser.isOnline（构造时传入的静态值）
-                  final isOnline = msgState.otherUserIsOnline ?? otherUser?.isOnline;
+                  final isOnline =
+                      msgState.otherUserIsOnline ?? otherUser?.isOnline;
                   final statusText = isOnline == true
                       ? '在线'
                       : isOnline == false
                           ? '离线'
-                          : (msgState.otherUserTyping ? '正在输入...' : '@${otherUser?.username ?? ''}');
+                          : (msgState.otherUserTyping
+                              ? '正在输入...'
+                              : '@${otherUser?.username ?? ''}');
                   final statusColor = isOnline == true
                       ? const Color(0xFF00BA7C)
                       : msgState.otherUserTyping
-                          ? _TwColors.selfBubble
+                          ? _NontoChatColors.selfBubble
                           : subColor;
                   return Text(
                     statusText,
@@ -432,15 +488,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
     if (msgState.messages.isEmpty && msgState.isLoading) {
       return const Center(
-          child: CircularProgressIndicator(color: _TwColors.selfBubble));
+          child: CircularProgressIndicator(color: _NontoChatColors.selfBubble));
     }
     if (msgState.messages.isEmpty && !msgState.isLoading) {
       return _buildEmpty(otherUser);
     }
 
     final grouped = _groupMessages(msgState.messages, currentUserId ?? 0);
-    final lastGroupIdx =
-        grouped.lastIndexWhere((e) => e is _MsgGroup);
+    final lastGroupIdx = grouped.lastIndexWhere((e) => e is _MsgGroup);
 
     return SmartRefresher(
       controller: _refreshController,
@@ -453,8 +508,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         _refreshController.refreshCompleted();
       },
       header: const WaterDropHeader(
-        complete:
-            Text('刷新成功', style: TextStyle(color: AppColors.primary)),
+        complete: Text('刷新成功', style: TextStyle(color: AppColors.primary)),
         waterDropColor: AppColors.primary,
       ),
       child: ListView.builder(
@@ -489,11 +543,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.error_outline,
-              size: 48, color: _TwColors.timestamp),
+              size: 48, color: _NontoChatColors.timestamp),
           const SizedBox(height: 12),
           Text(error,
               style: const TextStyle(
-                  color: _TwColors.timestamp, fontSize: 15)),
+                  color: _NontoChatColors.timestamp, fontSize: 15)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {
@@ -502,7 +556,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   .retry();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: _TwColors.selfBubble,
+              backgroundColor: _NontoChatColors.selfBubble,
               foregroundColor: Colors.white,
             ),
             child: const Text('重试'),
@@ -523,11 +577,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
               style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: _isDark ? _TwColors.darkText : _TwColors.text)),
+                  color: _isDark
+                      ? _NontoChatColors.darkText
+                      : _NontoChatColors.text)),
           const SizedBox(height: 4),
           Text('@${otherUser?.username ?? ''}',
               style: const TextStyle(
-                  color: _TwColors.timestamp, fontSize: 14)),
+                  color: _NontoChatColors.timestamp, fontSize: 14)),
           const SizedBox(height: 16),
           const EmptyStateWidget(
             icon: Icons.chat_bubble_outline,
@@ -549,7 +605,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             width: 18,
             height: 18,
             child: CircularProgressIndicator(
-                strokeWidth: 2, color: _TwColors.selfBubble),
+                strokeWidth: 2, color: _NontoChatColors.selfBubble),
           ),
         ),
       );
@@ -560,7 +616,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         child: Text(
           '没有更多了',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _TwColors.timestamp, fontSize: 13),
+          style: TextStyle(color: _NontoChatColors.timestamp, fontSize: 13),
         ),
       );
     }
@@ -581,7 +637,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         child: Text(
           '查看更早的消息',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _TwColors.selfBubble, fontSize: 13),
+          style: TextStyle(color: _NontoChatColors.selfBubble, fontSize: 13),
         ),
       ),
     );
@@ -595,15 +651,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
             color: _isDark
-                ? _TwColors.darkOtherBubble.withValues(alpha: 0.6)
-                : _TwColors.otherBubble.withValues(alpha: 0.8),
+                ? _NontoChatColors.darkOtherBubble.withValues(alpha: 0.6)
+                : _NontoChatColors.otherBubble.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             label,
             style: TextStyle(
               fontSize: 11,
-              color: _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp,
+              color: _isDark
+                  ? _NontoChatColors.darkTimestamp
+                  : _NontoChatColors.timestamp,
             ),
           ),
         ),
@@ -620,15 +678,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 12,
-            color: _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp,
+            color: _isDark
+                ? _NontoChatColors.darkTimestamp
+                : _NontoChatColors.timestamp,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMessageGroup(
-      _MsgGroup group, bool isMe, User? otherUser,
+  Widget _buildMessageGroup(_MsgGroup group, bool isMe, User? otherUser,
       {required bool isLastInList}) {
     final msgs = group.messages;
     final last = msgs.last;
@@ -698,11 +757,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final isImage = msg.messageType == MessageType.image;
     final isRecalled = msg.isRecalled;
     final bubbleColor = isMe
-        ? _TwColors.selfBubble
-        : (_isDark ? _TwColors.darkOtherBubble : _TwColors.otherBubble);
+        ? _NontoChatColors.selfBubble
+        : (_isDark
+            ? _NontoChatColors.darkOtherBubble
+            : _NontoChatColors.otherBubble);
     final textColor = isMe
         ? Colors.white
-        : (_isDark ? _TwColors.darkText : _TwColors.text);
+        : (_isDark ? _NontoChatColors.darkText : _NontoChatColors.text);
 
     // ── 已撤回消息：居中灰色提示 ──
     if (isRecalled) {
@@ -715,20 +776,27 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: _isDark ? _TwColors.darkOtherBubble : _TwColors.otherBubble,
+            color: _isDark
+                ? _NontoChatColors.darkOtherBubble
+                : _NontoChatColors.otherBubble,
             borderRadius: const BorderRadius.all(Radius.circular(16)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.undo, size: 14,
-                color: _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp),
+              Icon(Icons.undo,
+                  size: 14,
+                  color: _isDark
+                      ? _NontoChatColors.darkTimestamp
+                      : _NontoChatColors.timestamp),
               const SizedBox(width: 4),
               Text(
                 isMe ? '你撤回了一条消息' : '消息已撤回',
                 style: TextStyle(
                   fontSize: 13,
-                  color: _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp,
+                  color: _isDark
+                      ? _NontoChatColors.darkTimestamp
+                      : _NontoChatColors.timestamp,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -814,7 +882,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
-                      color: _isDark ? _TwColors.darkBg : _TwColors.bg,
+                      color: _isDark
+                          ? _NontoChatColors.darkBg
+                          : _NontoChatColors.bg,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
@@ -886,12 +956,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     value: progress > 0 ? progress : null,
                     minHeight: 4,
                     backgroundColor: Colors.white.withValues(alpha: 0.6),
-                    valueColor: const AlwaysStoppedAnimation<Color>(_TwColors.selfBubble),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                        _NontoChatColors.selfBubble),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    progress > 0 ? '上传中 ${(progress * 100).round()}%' : '准备上传...',
-                    style: const TextStyle(fontSize: 12, color: _TwColors.timestamp),
+                    progress > 0
+                        ? '上传中 ${(progress * 100).round()}%'
+                        : '准备上传...',
+                    style: const TextStyle(
+                        fontSize: 12, color: _NontoChatColors.timestamp),
                   ),
                 ],
               ),
@@ -929,7 +1003,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             ? () => ref
                 .read(messagesProvider(widget.conversation.id).notifier)
                 .retryImageUpload(msg.id)
-            : (url.startsWith('http') && !isUploading ? () => _showImageViewer(url) : null),
+            : (url.startsWith('http') && !isUploading
+                ? () => _showImageViewer(url)
+                : null),
         child: imageChild,
       ),
     );
@@ -948,7 +1024,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       ? Icons.article
                       : Icons.comment,
           size: 16,
-          color: isMe ? Colors.white70 : _TwColors.timestamp,
+          color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
         ),
         const SizedBox(width: 6),
         Flexible(
@@ -980,8 +1056,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 fit: BoxFit.contain,
                 placeholder: (_, __) =>
                     const Center(child: CircularProgressIndicator()),
-                errorWidget: (_, __, ___) =>
-                    const Icon(Icons.broken_image, color: Colors.white54, size: 48),
+                errorWidget: (_, __, ___) => const Icon(Icons.broken_image,
+                    color: Colors.white54, size: 48),
               ),
             ),
           ),
@@ -995,13 +1071,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   Widget _buildQuotePreview(Message msg, bool isMe) {
     final quoteColor = isMe
         ? Colors.white.withValues(alpha: 0.7)
-        : _TwColors.selfBubble;
+        : _NontoChatColors.selfBubble;
     final quoteBg = isMe
         ? Colors.white.withValues(alpha: 0.15)
-        : _TwColors.selfBubble.withValues(alpha: 0.08);
+        : _NontoChatColors.selfBubble.withValues(alpha: 0.08);
     final quoteTextColor = isMe
         ? Colors.white.withValues(alpha: 0.85)
-        : (_isDark ? _TwColors.darkText : _TwColors.text);
+        : (_isDark ? _NontoChatColors.darkText : _NontoChatColors.text);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -1034,10 +1110,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: _isDark ? _TwColors.darkInputBg : _TwColors.inputBg,
+        color:
+            _isDark ? _NontoChatColors.darkInputBg : _NontoChatColors.inputBg,
         border: Border(
           top: BorderSide(
-            color: _isDark ? _TwColors.darkDivider : _TwColors.divider,
+            color: _isDark
+                ? _NontoChatColors.darkDivider
+                : _NontoChatColors.divider,
           ),
         ),
       ),
@@ -1047,7 +1126,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             width: 3,
             height: 32,
             decoration: BoxDecoration(
-              color: _TwColors.selfBubble,
+              color: _NontoChatColors.selfBubble,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1058,14 +1137,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  msg.senderId ==
-                          ref.read(authProvider).user?.id
+                  msg.senderId == ref.read(authProvider).user?.id
                       ? '你'
                       : widget.conversation.otherUser?.displayName ?? '',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: _TwColors.selfBubble,
+                    color: _NontoChatColors.selfBubble,
                   ),
                 ),
                 Text(
@@ -1074,7 +1152,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
-                    color: _isDark ? _TwColors.darkText : _TwColors.text,
+                    color: _isDark
+                        ? _NontoChatColors.darkText
+                        : _NontoChatColors.text,
                   ),
                 ),
               ],
@@ -1083,7 +1163,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           IconButton(
             icon: Icon(Icons.close,
                 size: 18,
-                color: _isDark ? _TwColors.darkTimestamp : _TwColors.timestamp),
+                color: _isDark
+                    ? _NontoChatColors.darkTimestamp
+                    : _NontoChatColors.timestamp),
             onPressed: () => setState(() => _quotedMessage = null),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
@@ -1096,10 +1178,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   // ── 输入区域 ──
 
   Widget _buildInputBar(bool isSending) {
-    final bgColor = _isDark ? _TwColors.darkBg : _TwColors.bg;
-    final divColor = _isDark ? _TwColors.darkDivider : _TwColors.divider;
-    final inputBg = _isDark ? _TwColors.darkInputBg : _TwColors.inputBg;
-    final hasText = _messageController.text.trim().isNotEmpty;
+    final bgColor = _isDark ? _NontoChatColors.darkBg : _NontoChatColors.bg;
+    final divColor =
+        _isDark ? _NontoChatColors.darkDivider : _NontoChatColors.divider;
+    final inputBg =
+        _isDark ? _NontoChatColors.darkInputBg : _NontoChatColors.inputBg;
 
     return Container(
       padding: EdgeInsets.only(
@@ -1118,10 +1201,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           // 表情按钮
           IconButton(
             icon: Icon(
-              _showEmojiPicker
-                  ? Icons.keyboard
-                  : Icons.emoji_emotions_outlined,
-              color: _TwColors.selfBubble,
+              _showEmojiPicker ? Icons.keyboard : Icons.emoji_emotions_outlined,
+              color: _NontoChatColors.selfBubble,
               size: 22,
             ),
             onPressed: _toggleEmojiPicker,
@@ -1131,7 +1212,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           // 附件按钮
           IconButton(
             icon: const Icon(Icons.add_circle_outline,
-                color: _TwColors.selfBubble, size: 22),
+                color: _NontoChatColors.selfBubble, size: 22),
             onPressed: () => _showAttachmentOptions(),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -1147,7 +1228,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 border: Border.all(
                   color: _isDark
                       ? Colors.transparent
-                      : _TwColors.divider.withValues(alpha: 0.5),
+                      : _NontoChatColors.divider.withValues(alpha: 0.5),
                 ),
               ),
               child: TextField(
@@ -1159,43 +1240,68 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 onChanged: _onTextChanged,
                 style: TextStyle(
                   fontSize: 15,
-                  color: _isDark ? _TwColors.darkText : _TwColors.text,
+                  color: _isDark
+                      ? _NontoChatColors.darkText
+                      : _NontoChatColors.text,
                 ),
                 decoration: InputDecoration(
                   hintText: '发一条私信',
                   hintStyle: TextStyle(
                     color: _isDark
-                        ? _TwColors.darkTimestamp
-                        : _TwColors.timestamp,
+                        ? _NontoChatColors.darkTimestamp
+                        : _NontoChatColors.timestamp,
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 4),
           // 发送按钮
-          if (hasText || isSending)
-            isSending
-                ? const Padding(
-                    padding: EdgeInsets.all(10),
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          color: _TwColors.selfBubble, strokeWidth: 2),
-                    ),
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.send_rounded,
-                        color: _TwColors.selfBubble, size: 22),
-                    onPressed: _sendMessage,
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 36, minHeight: 36),
-                  ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _messageController,
+            builder: (context, value, _) {
+              final hasText = value.text.trim().isNotEmpty;
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: isSending
+                    ? const Padding(
+                        key: ValueKey('chat-send-progress'),
+                        padding: EdgeInsets.all(10),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: _NontoChatColors.selfBubble,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      )
+                    : hasText
+                        ? IconButton(
+                            key: const ValueKey('chat-send-button'),
+                            icon: const Icon(
+                              Icons.send_rounded,
+                              color: _NontoChatColors.selfBubble,
+                              size: 22,
+                            ),
+                            onPressed: _sendMessage,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 36),
+                          )
+                        : const SizedBox(
+                            key: ValueKey('chat-send-empty'),
+                            width: 36,
+                            height: 36,
+                          ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -1205,8 +1311,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final action = await TwitterBottomSheet.show<String>(
       context,
       options: const [
-        TwitterSheetOption(icon: Icons.camera_alt_outlined, label: '拍照', value: 'camera'),
-        TwitterSheetOption(icon: Icons.photo_library_outlined, label: '从相册选择', value: 'gallery'),
+        TwitterSheetOption(
+            icon: Icons.camera_alt_outlined, label: '拍照', value: 'camera'),
+        TwitterSheetOption(
+            icon: Icons.photo_library_outlined,
+            label: '从相册选择',
+            value: 'gallery'),
       ],
     );
     if (!mounted) return;
@@ -1229,7 +1339,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final emojis = categories[_emojiTabIndex].value;
     return Container(
       height: 300,
-      color: _isDark ? _TwColors.darkInputBg : _TwColors.inputBg,
+      color: _isDark ? _NontoChatColors.darkInputBg : _NontoChatColors.inputBg,
       child: Column(
         children: [
           // 分类标签
@@ -1247,7 +1357,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                         border: Border(
                           bottom: BorderSide(
                             color: isSelected
-                                ? _TwColors.selfBubble
+                                ? _NontoChatColors.selfBubble
                                 : Colors.transparent,
                             width: 2,
                           ),
@@ -1268,8 +1378,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           // 表情网格（支持上下滑动）
           Expanded(
             child: GridView.builder(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 8,
                 childAspectRatio: 1.2,
@@ -1302,9 +1411,18 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (messages.isEmpty) return [];
 
     // 转换为正向（最旧→最新）便于分组
+    // 排序与 provider 一致：优先服务端 seq，其次 createdAt，最后用 id 兜底保证稳定。
+    // 之前只用 createdAt 排序，乐观消息(now())与服务端回显(服务器时间)时间戳有偏差时，
+    // ACK 替换会让消息跳到错误位置，表现为「新消息跑到上面」。
     final sorted = messages.toList()
-      ..sort((a, b) => (a.createdAt ?? DateTime(0))
-          .compareTo(b.createdAt ?? DateTime(0)));
+      ..sort((a, b) {
+        if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
+        final ac = a.createdAt ?? DateTime(0);
+        final bc = b.createdAt ?? DateTime(0);
+        if (ac != bc) return ac.compareTo(bc);
+        // 同一时刻（毫秒级相同）用 id 兜底，保证排序稳定，避免抖动
+        return a.id.compareTo(b.id);
+      });
 
     final result = <dynamic>[];
     _MsgGroup? currentGroup;
@@ -1313,16 +1431,22 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       final msg = sorted[i];
       final prev = i > 0 ? sorted[i - 1] : null;
 
-      // 时间分隔符（> 1 小时）
-      if (prev != null) {
-        final gap = msg.createdAt!.difference(prev.createdAt!);
-        if (gap.inHours >= 1) {
-          result.add(_TimeSeparatorData(_formatSeparatorTime(msg.createdAt!)));
-          currentGroup = null;
+      // 时间分隔符（> 1 小时）。createdAt 理论上必填，但历史脏数据 / 异常
+      // 服务端响应可能缺字段；直接 createdAt!.difference 会抛 NPE 导致整个
+      // 聊天室白屏。这里做 null 兜底：缺时间戳的消息不参与分隔判断，仅显示自己。
+      final msgTime = msg.createdAt;
+      final prevTime = prev?.createdAt;
+      if (msgTime != null) {
+        if (prevTime != null) {
+          final gap = msgTime.difference(prevTime);
+          if (gap.inHours >= 1) {
+            result.add(_TimeSeparatorData(_formatSeparatorTime(msgTime)));
+            currentGroup = null;
+          }
+        } else {
+          // 第一条消息前加时间
+          result.add(_TimeSeparatorData(_formatSeparatorTime(msgTime)));
         }
-      } else {
-        // 第一条消息前加时间
-        result.add(_TimeSeparatorData(_formatSeparatorTime(msg.createdAt!)));
       }
 
       // 系统消息（通过内容特征识别，如 "加入了群聊"、"创建了对话"）
@@ -1337,13 +1461,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       }
 
       final isMe = msg.senderId == currentUserId;
-      final sameSender = currentGroup != null &&
-          currentGroup.senderId == msg.senderId;
+      final sameSender =
+          currentGroup != null && currentGroup.senderId == msg.senderId;
+      // withinTime 判定同样对 createdAt 做 null 兜底：
+      // 当前消息或组内最后一条缺时间戳时，直接视为「不满足同组时间窗」，
+      // 开新组即可，避免 NPE。
+      final groupLastTime = currentGroup?.messages.last.createdAt;
       final withinTime = currentGroup != null &&
-          msg.createdAt!
-                  .difference(currentGroup.messages.last.createdAt!)
-                  .inMinutes <
-              2;
+          msgTime != null &&
+          groupLastTime != null &&
+          msgTime.difference(groupLastTime).inMinutes < 2;
 
       if (sameSender && withinTime) {
         // 同组追加
@@ -1372,7 +1499,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final msgDay = DateTime(localDt.year, localDt.month, localDt.day);
     final diff = today.difference(msgDay).inDays;
 
-    final time = '${localDt.hour.toString().padLeft(2, '0')}:${localDt.minute.toString().padLeft(2, '0')}';
+    final time =
+        '${localDt.hour.toString().padLeft(2, '0')}:${localDt.minute.toString().padLeft(2, '0')}';
     if (diff == 0) return '今天 $time';
     if (diff == 1) return '昨天 $time';
     return '${localDt.year}年${localDt.month}月${localDt.day}日';
@@ -1420,7 +1548,7 @@ class _SendStatusIcon extends StatelessWidget {
     if (message.status == 'uploading') {
       return Text(
         '上传中 ${(message.uploadProgress ?? 0) > 0 ? ((message.uploadProgress ?? 0) * 100).round() : 0}%',
-        style: const TextStyle(fontSize: 11, color: _TwColors.timestamp),
+        style: const TextStyle(fontSize: 11, color: _NontoChatColors.timestamp),
       );
     }
     if (message.status == 'sending' || message.id >= 1000000000000) {
@@ -1428,14 +1556,16 @@ class _SendStatusIcon extends StatelessWidget {
         width: 12,
         height: 12,
         child: CircularProgressIndicator(
-            strokeWidth: 1.5, color: _TwColors.timestamp),
+            strokeWidth: 1.5, color: _NontoChatColors.timestamp),
       );
     }
     // 已读
     if (message.isRead == true) {
-      return const Icon(Icons.done_all, size: 14, color: _TwColors.selfBubble);
+      return const Icon(Icons.done_all,
+          size: 14, color: _NontoChatColors.selfBubble);
     }
     // 已送达
-    return const Icon(Icons.done_all, size: 14, color: _TwColors.timestamp);
+    return const Icon(Icons.done_all,
+        size: 14, color: _NontoChatColors.timestamp);
   }
 }

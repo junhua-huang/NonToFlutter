@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:vector_math/vector_math_64.dart' show Vector3;
 
 /// 裁剪形状
 enum CropShape { circle, rectangle }
@@ -11,7 +10,7 @@ enum CropShape { circle, rectangle }
 /// 内部交互模式
 enum _InteractionMode { none, moveImage, moveCrop, resizeCrop }
 
-/// Web 兼容的图片裁剪页面
+/// Nonto 图片裁剪页：头像与封面编辑时使用的轻量裁剪入口。
 ///
 /// 双 GestureDetector 架构：
 /// - 底层：控制图片的平移 / 缩放（单指平移图片，双指捏合缩放）
@@ -116,8 +115,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
     return _cropRect.contains(point);
   }
 
-  Rect get _cropRect =>
-      Rect.fromLTWH(_cropOffset.dx, _cropOffset.dy, _cropSize.width, _cropSize.height);
+  Rect get _cropRect => Rect.fromLTWH(
+      _cropOffset.dx, _cropOffset.dy, _cropSize.width, _cropSize.height);
 
   // ── 手势处理 ──
 
@@ -179,8 +178,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
     final zoom = newScale / _initialImageScale;
     setState(() {
       _imageScale = newScale;
-      _imageOffset = d.localFocalPoint -
-          (_initialFocalPoint - _initialImageOffset) * zoom;
+      _imageOffset =
+          d.localFocalPoint - (_initialFocalPoint - _initialImageOffset) * zoom;
     });
   }
 
@@ -201,9 +200,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
   void _updateCropResize(Offset delta) {
     final screen = MediaQuery.of(context).size;
     final isCircle = widget.cropShape == CropShape.circle;
-    final ratio = (widget.cropShape == CropShape.rectangle)
-        ? widget.aspectRatio
-        : null;
+    final ratio =
+        (widget.cropShape == CropShape.rectangle) ? widget.aspectRatio : null;
 
     double newLeft = _initialCropOffset.dx;
     double newTop = _initialCropOffset.dy;
@@ -212,23 +210,23 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
 
     switch (_resizeCorner) {
       case 1: // 左上角
-        newLeft = (_initialCropOffset.dx + delta.dx)
-            .clamp(0.0, _initialCropOffset.dx + _initialCropSize.width - _cropMinSize);
-        newTop = (_initialCropOffset.dy + delta.dy)
-            .clamp(0.0, _initialCropOffset.dy + _initialCropSize.height - _cropMinSize);
+        newLeft = (_initialCropOffset.dx + delta.dx).clamp(
+            0.0, _initialCropOffset.dx + _initialCropSize.width - _cropMinSize);
+        newTop = (_initialCropOffset.dy + delta.dy).clamp(0.0,
+            _initialCropOffset.dy + _initialCropSize.height - _cropMinSize);
         newW = _initialCropOffset.dx + _initialCropSize.width - newLeft;
         newH = _initialCropOffset.dy + _initialCropSize.height - newTop;
         break;
       case 2: // 右上角
         newW = (_initialCropSize.width + delta.dx)
             .clamp(_cropMinSize, screen.width - _initialCropOffset.dx);
-        newTop = (_initialCropOffset.dy + delta.dy)
-            .clamp(0.0, _initialCropOffset.dy + _initialCropSize.height - _cropMinSize);
+        newTop = (_initialCropOffset.dy + delta.dy).clamp(0.0,
+            _initialCropOffset.dy + _initialCropSize.height - _cropMinSize);
         newH = _initialCropOffset.dy + _initialCropSize.height - newTop;
         break;
       case 3: // 左下角
-        newLeft = (_initialCropOffset.dx + delta.dx)
-            .clamp(0.0, _initialCropOffset.dx + _initialCropSize.width - _cropMinSize);
+        newLeft = (_initialCropOffset.dx + delta.dx).clamp(
+            0.0, _initialCropOffset.dx + _initialCropSize.width - _cropMinSize);
         newW = _initialCropOffset.dx + _initialCropSize.width - newLeft;
         newH = (_initialCropSize.height + delta.dy)
             .clamp(_cropMinSize, screen.height - _initialCropOffset.dy);
@@ -243,10 +241,9 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
 
     if (isCircle) {
       // ── 圆形：强制等比 ──
-      final size = (_cropMinSize > (newW + newH) / 2
-              ? _cropMinSize
-              : (newW + newH) / 2)
-          .clamp(_cropMinSize, min(screen.width, screen.height).toDouble());
+      final size =
+          (_cropMinSize > (newW + newH) / 2 ? _cropMinSize : (newW + newH) / 2)
+              .clamp(_cropMinSize, min(screen.width, screen.height).toDouble());
       final initCx = _initialCropOffset.dx + _initialCropSize.width / 2;
       final initCy = _initialCropOffset.dy + _initialCropSize.height / 2;
 
@@ -300,10 +297,12 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
           final wDelta2 = newW - _initialCropSize.width;
           final hDelta2 = newH - _initialCropSize.height;
           if (wDelta2.abs() >= hDelta2.abs()) {
-            newW = newW.clamp(_cropMinSize, screen.width - _initialCropOffset.dx);
+            newW =
+                newW.clamp(_cropMinSize, screen.width - _initialCropOffset.dx);
             newH = newW / aRatio;
           } else {
-            newH = newH.clamp(_cropMinSize, screen.height - _initialCropOffset.dy);
+            newH =
+                newH.clamp(_cropMinSize, screen.height - _initialCropOffset.dy);
             newW = newH * aRatio;
           }
           break;
@@ -323,11 +322,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
 
   Rect _getCropScreenRect() => _cropRect;
 
-  Offset _toChild(Offset screenPoint, Matrix4 inverseMatrix) {
-    final v =
-        inverseMatrix.transform3(Vector3(screenPoint.dx, screenPoint.dy, 0));
-    return Offset(v.x, v.y);
-  }
+  Offset _toChild(Offset screenPoint, Matrix4 inverseMatrix) =>
+      MatrixUtils.transformPoint(inverseMatrix, screenPoint);
 
   Rect _getImageDisplayRect(ui.Image image, Size childSize) {
     final imgAspect = image.width / image.height;
@@ -337,8 +333,7 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
       return Rect.fromLTWH(0, (childSize.height - h) / 2, childSize.width, h);
     } else {
       final w = childSize.height * imgAspect;
-      return Rect.fromLTWH(
-          (childSize.width - w) / 2, 0, w, childSize.height);
+      return Rect.fromLTWH((childSize.width - w) / 2, 0, w, childSize.height);
     }
   }
 
@@ -363,8 +358,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
     if (_image == null) return null;
 
     final matrix = Matrix4.identity()
-      ..translate(_imageOffset.dx, _imageOffset.dy)
-      ..scale(_imageScale);
+      ..translateByDouble(_imageOffset.dx, _imageOffset.dy, 0, 1)
+      ..scaleByDouble(_imageScale, _imageScale, 1, 1);
     final inverseMatrix = Matrix4.inverted(matrix);
     final screenSize = MediaQuery.of(context).size;
     final cropRect = _getCropScreenRect();
@@ -399,13 +394,22 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
       }
     }
 
-    if (minPx == null) return null;
+    final safeMinPx = minPx;
+    final safeMaxPx = maxPx;
+    final safeMinPy = minPy;
+    final safeMaxPy = maxPy;
+    if (safeMinPx == null ||
+        safeMaxPx == null ||
+        safeMinPy == null ||
+        safeMaxPy == null) {
+      return null;
+    }
 
-    final srcW = maxPx! - minPx!;
-    final srcH = maxPy! - minPy!;
+    final srcW = safeMaxPx - safeMinPx;
+    final srcH = safeMaxPy - safeMinPy;
     final srcSize = max(srcW, srcH);
-    final cx = (minPx! + maxPx!) / 2;
-    final cy = (minPy! + maxPy!) / 2;
+    final cx = (safeMinPx + safeMaxPx) / 2;
+    final cy = (safeMinPy + safeMaxPy) / 2;
     final srcLeft =
         (cx - srcSize / 2).clamp(0, _image!.width.toDouble() - 1).toDouble();
     final srcTop =
@@ -421,8 +425,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     canvas.clipPath(Path()
-      ..addOval(Rect.fromLTWH(
-          0, 0, outputSize.toDouble(), outputSize.toDouble())));
+      ..addOval(
+          Rect.fromLTWH(0, 0, outputSize.toDouble(), outputSize.toDouble())));
     canvas.drawImageRect(
       _image!,
       Rect.fromLTWH(srcLeft, srcTop, clampedSize, clampedSize),
@@ -468,16 +472,23 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
       }
     }
 
-    if (minPx == null) return null;
+    final safeMinPx = minPx;
+    final safeMaxPx = maxPx;
+    final safeMinPy = minPy;
+    final safeMaxPy = maxPy;
+    if (safeMinPx == null ||
+        safeMaxPx == null ||
+        safeMinPy == null ||
+        safeMaxPy == null) {
+      return null;
+    }
 
-    final srcLeft =
-        minPx!.clamp(0, _image!.width.toDouble() - 1).toDouble();
-    final srcTop =
-        minPy!.clamp(0, _image!.height.toDouble() - 1).toDouble();
-    final srcW = (maxPx! - minPx!)
+    final srcLeft = safeMinPx.clamp(0, _image!.width.toDouble() - 1).toDouble();
+    final srcTop = safeMinPy.clamp(0, _image!.height.toDouble() - 1).toDouble();
+    final srcW = (safeMaxPx - safeMinPx)
         .clamp(1, _image!.width.toDouble() - srcLeft)
         .toDouble();
-    final srcH = (maxPy! - minPy!)
+    final srcH = (safeMaxPy - safeMinPy)
         .clamp(1, _image!.height.toDouble() - srcTop)
         .toDouble();
 
@@ -540,8 +551,7 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child:
-                    const Text('返回', style: TextStyle(color: Colors.white)),
+                child: const Text('返回', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -555,8 +565,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
 
     final isCircle = widget.cropShape == CropShape.circle;
     final imgMatrix = Matrix4.identity()
-      ..translate(_imageOffset.dx, _imageOffset.dy)
-      ..scale(_imageScale);
+      ..translateByDouble(_imageOffset.dx, _imageOffset.dy, 0, 1)
+      ..scaleByDouble(_imageScale, _imageScale, 1, 1);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -589,8 +599,7 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
                 size: screenSize,
                 painter: isCircle
                     ? _CircleHolePainter(
-                        center: Offset(
-                            _cropOffset.dx + _cropSize.width / 2,
+                        center: Offset(_cropOffset.dx + _cropSize.width / 2,
                             _cropOffset.dy + _cropSize.height / 2),
                         radius: _cropSize.width / 2)
                     : _RectHolePainter(rect: _cropRect),
@@ -608,8 +617,7 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
                         height: _cropSize.height,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border:
-                              Border.all(color: Colors.white, width: 1.5),
+                          border: Border.all(color: Colors.white, width: 1.5),
                         ),
                       )
                     : Container(
@@ -617,8 +625,7 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
                         height: _cropSize.height,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(4),
-                          border:
-                              Border.all(color: Colors.white, width: 1.5),
+                          border: Border.all(color: Colors.white, width: 1.5),
                         ),
                       ),
               ),
@@ -648,7 +655,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
                 child: Material(
                   color: Colors.black45,
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 24),
+                    icon:
+                        const Icon(Icons.close, color: Colors.white, size: 24),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
@@ -664,7 +672,8 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
                 elevation: 4,
                 onPressed: () async {
                   final result = await _doCrop();
-                  if (mounted) Navigator.of(context).pop(result);
+                  if (!context.mounted) return;
+                  Navigator.of(context).pop(result);
                 },
                 child: const Icon(Icons.check, size: 28),
               ),
@@ -689,11 +698,11 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
 
   List<Widget> _buildCornerHandles(bool isCircle) {
     final positions = [
-      Offset(_cropOffset.dx - 9, _cropOffset.dy - 9),                     // 左上
-      Offset(_cropOffset.dx + _cropSize.width - 9, _cropOffset.dy - 9),   // 右上
-      Offset(_cropOffset.dx - 9, _cropOffset.dy + _cropSize.height - 9),  // 左下
+      Offset(_cropOffset.dx - 9, _cropOffset.dy - 9), // 左上
+      Offset(_cropOffset.dx + _cropSize.width - 9, _cropOffset.dy - 9), // 右上
+      Offset(_cropOffset.dx - 9, _cropOffset.dy + _cropSize.height - 9), // 左下
       Offset(_cropOffset.dx + _cropSize.width - 9,
-          _cropOffset.dy + _cropSize.height - 9),                          // 右下
+          _cropOffset.dy + _cropSize.height - 9), // 右下
     ];
 
     return positions.map((p) {
@@ -755,8 +764,7 @@ class _RectHolePainter extends CustomPainter {
         PathOperation.difference,
         Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
         Path()
-          ..addRRect(
-              RRect.fromRectAndRadius(rect, const Radius.circular(4))),
+          ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4))),
       ),
       paint,
     );

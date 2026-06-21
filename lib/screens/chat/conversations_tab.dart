@@ -3,6 +3,7 @@ import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
 import 'package:nonto/utils/date_utils.dart';
+import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/shimmer_skeletons.dart';
@@ -95,19 +96,11 @@ class _ConversationTile extends StatelessWidget {
 
     return ListTile(
       onTap: onTap,
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundColor: AppColors.borderLight,
-        backgroundImage:
-            other?.avatarUrl != null && (other!.avatarUrl as String).isNotEmpty
-                ? NetworkImage(other.avatarUrl as String)
-                : null,
-        child: other?.avatarUrl == null
-            ? Text(other?.displayName?[0] ?? '?',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, color: AppColors.textSecondary))
-            : null,
-      ),
+      // 之前直接用 NetworkImage(other.avatarUrl)，但后端头像多为相对路径
+      // （如 /uploads/...），未经 ImageUtils.resolveUrl 拼接 baseUrl，
+      // 导致 NetworkImage 解析成 file:///... 失败，头像永远不显示。
+      // 统一走 ImageUtils.buildAvatar：含 resolveUrl + 缓存 + memCacheWidth 限制解码尺寸。
+      leading: ImageUtils.buildAvatar(other, radius: 24),
       title: Row(
         children: [
           Expanded(

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -20,6 +20,24 @@ class LocalDbService {
 
   AppDatabase? _db;
   String? _currentUserId;
+
+  /// 当前 LocalDbService 绑定的用户 ID（与登录态用户的字符串 ID 一致）。
+  /// 用于跨模块做"token 用户 ↔ DB 用户"一致性断言。
+  String? get currentUserId => _currentUserId;
+
+  /// 立刻清掉身份字段并断开 DB 引用，但 **不删** 磁盘文件。
+  /// 用于 token 与 DB 用户不一致时的紧急止血：保证后续 `init(newUserId)`
+  /// 一定走"开新库"分支，而不会被 `_currentUserId == userId` 短路掉。
+  ///
+  /// 调用方应紧接着 `await init(newUserId)`，否则期间任何 DB 操作都会无声失败。
+  Future<void> resetIdentity() async {
+    final oldDb = _db;
+    _db = null;
+    _currentUserId = null;
+    try {
+      await oldDb?.close();
+    } catch (_) {}
+  }
 
   Future<void> _closeCurrent() async {
     await _db?.close();
@@ -48,7 +66,7 @@ class LocalDbService {
     try {
       await db.insertMessage(_messageToCompanion(msg));
     } catch (e) {
-      print('[DB] insertMessage failed (non-critical): $e');
+      debugPrint('[DB] insertMessage failed (non-critical): $e');
     }
   }
 
@@ -56,10 +74,9 @@ class LocalDbService {
     final db = _db;
     if (db == null) return;
     try {
-      await db.insertMessages(
-          messages.map(_messageToCompanion).toList());
+      await db.insertMessages(messages.map(_messageToCompanion).toList());
     } catch (e) {
-      print('[DB] insertMessages failed (non-critical): $e');
+      debugPrint('[DB] insertMessages failed (non-critical): $e');
     }
   }
 
@@ -67,8 +84,8 @@ class LocalDbService {
       {int limit = 50, int offset = 0}) async {
     final db = _db;
     if (db == null) return [];
-    final rows = await db.getMessages(conversationId,
-        limit: limit, offset: offset);
+    final rows =
+        await db.getMessages(conversationId, limit: limit, offset: offset);
     return rows.map(_driftRowToMessage).toList().reversed.toList();
   }
 
@@ -211,7 +228,8 @@ class LocalDbService {
       unreadCount: Value(conv.unreadCount),
       isOnline: const Value(false),
       // Use lastMessageAt as the best available timestamp for SQLite creation order
-      createdAt: Value(conv.lastMessageAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch),
+      createdAt: Value(conv.lastMessageAt?.millisecondsSinceEpoch ??
+          DateTime.now().millisecondsSinceEpoch),
     );
   }
 
@@ -263,91 +281,73 @@ class LocalDbService {
   ///
   /// [perPage] 每页消息数，默认 50 条。
   /// 完成后广播 `chat:preload:done` 通知 UI 刷新。
-  Future<void> preloadAllConversationMessages({int perPage = 50}) async {
+  Future<void> preloadRecentConversationMessages(
+      {int perPage = 30, int maxConversations = 5}) async {
     final db = _db;
     if (db == null) return;
 
     final userId = _currentUserId;
     if (userId == null) return;
 
-    // 1. 从持久层加载会话列表
     final conversations = await getConversations();
+    final convIds =
+        conversations.map((c) => c.id).take(maxConversations).toList();
+    if (convIds.isEmpty) return;
 
-    final allConvIds = conversations.map((c) => c.id).toList();
-
-    // 2. 首轮：加载本地 SQLite + warmup 缓存，让 UI 立即可用
-    for (final convId in allConvIds) {
+    for (final convId in convIds) {
       final localMessages = await getMessages(convId, limit: perPage);
       if (localMessages.isNotEmpty) {
         final localJson = localMessages.map((m) => m.toJson()).toList();
-        await DataLayer().write(CacheKeys.msgRecentByUser(convId, userId), localJson);
+        await DataLayer().write(CacheKeys.msgRecent(convId), localJson);
+        await DataLayer()
+            .write(CacheKeys.msgRecentByUser(convId, userId), localJson);
       }
     }
 
-    // 3. 网络刷新：无论缓存是否命中，批量请求 ALL 会话的最新数据
-    //    warmup 缓存可能来自 L2 SQLite 旧数据，必须以网络最新数据为准
-    if (allConvIds.isNotEmpty) {
-      try {
-        debugPrint('[Preload] batch HTTP: ${allConvIds.length} convs, perPage=$perPage');
-        final resp = await ChatService()
-            .getBatchMessages(allConvIds, perPage: perPage)
-            .timeout(const Duration(seconds: 25));
-        if (resp.success && resp.data != null) {
-          final data = resp.data is String
-              ? (() { try { return jsonDecode(resp.data as String); } catch (_) { return {}; } })()
-              : resp.data;
-          final batchConversations =
-              data['data']?['conversations'] ?? data['conversations'] ?? <dynamic>[];
-          final receivedIds = <int>{};
+    try {
+      debugPrint(
+          '[Preload] recent batch HTTP: ${convIds.length} convs, perPage=$perPage');
+      final resp = await ChatService()
+          .getBatchMessages(convIds, perPage: perPage)
+          .timeout(const Duration(seconds: 12));
+      if (resp.success && resp.data != null) {
+        final data = resp.data is String
+            ? (() {
+                try {
+                  return jsonDecode(resp.data as String);
+                } catch (_) {
+                  return {};
+                }
+              })()
+            : resp.data;
+        final batchConversations = data['data']?['conversations'] ??
+            data['conversations'] ??
+            <dynamic>[];
 
-          debugPrint('[Preload] batch returned ${batchConversations.length} conversations');
+        debugPrint(
+            '[Preload] recent batch returned ${batchConversations.length} conversations');
 
-          for (final c in batchConversations) {
-            if (c is! Map<String, dynamic>) continue;
-            final convId = c['conversation_id'] ?? c['id'];
-            final messages = c['messages'];
-            if (convId is int && messages is List && messages.isNotEmpty) {
-              receivedIds.add(convId);
-              debugPrint('[Preload]   conv=$convId: ${messages.length} msgs from batch');
-              final localMessages = await getMessages(convId, limit: perPage);
-              await _mergeAndPersist(
-                db: db,
-                userId: userId,
-                convId: convId,
-                perPage: perPage,
-                localMessages: localMessages,
-                serverJsonList: messages.cast<Map<String, dynamic>>(),
-              );
-              // 验证写入
-              final verify = await getMessages(convId, limit: 5);
-              debugPrint('[Preload]   conv=$convId: after write, SQLite has ${verify.length} msgs');
-            }
-          }
-
-          // 4. 批量未覆盖的会话（后端部分失败），降级为逐个请求
-          for (final id in allConvIds) {
-            if (!receivedIds.contains(id)) {
-              try {
-                await _preloadSingleConversation(
-                  userId: userId, convId: id, perPage: perPage, db: db,
-                );
-              } catch (_) {}
-            }
-          }
-        }
-      } catch (_) {
-        // 批量整体失败，降级为逐个请求
-        for (final id in allConvIds) {
-          try {
-            await _preloadSingleConversation(
-              userId: userId, convId: id, perPage: perPage, db: db,
+        for (final c in batchConversations) {
+          if (c is! Map<String, dynamic>) continue;
+          final convId = c['conversation_id'] ?? c['id'];
+          final messages = c['messages'];
+          if (convId is int && messages is List && messages.isNotEmpty) {
+            final localMessages = await getMessages(convId, limit: perPage);
+            await _mergeAndPersist(
+              db: db,
+              userId: userId,
+              convId: convId,
+              perPage: perPage,
+              localMessages: localMessages,
+              serverJsonList: messages.cast<Map<String, dynamic>>(),
             );
-          } catch (_) {}
+          }
         }
       }
+    } catch (e) {
+      debugPrint('[Preload] recent preload skipped: $e');
     }
 
-    // 通知 UI 预加载完成
     DataLayer().invalidate(CacheKeys.convPattern);
   }
 
@@ -360,18 +360,17 @@ class LocalDbService {
     required List localMessages,
     required List<Map<String, dynamic>> serverJsonList,
   }) async {
-    final cacheKey = CacheKeys.msgRecentByUser(convId, userId);
+    final cacheKey = CacheKeys.msgRecent(convId);
+    final userCacheKey = CacheKeys.msgRecentByUser(convId, userId);
 
-    final serverMessages = serverJsonList
-        .map((e) => Message.fromJson(e))
-        .toList();
+    final serverMessages =
+        serverJsonList.map((e) => Message.fromJson(e)).toList();
 
     await insertMessages(serverMessages);
 
-    final existingIds = localMessages
-        .map((m) => m.id)
-        .toSet();
-    final newFromServer = serverMessages.where((m) => !existingIds.contains(m.id));
+    final existingIds = localMessages.map((m) => m.id).toSet();
+    final newFromServer =
+        serverMessages.where((m) => !existingIds.contains(m.id));
     final merged = [
       ...localMessages.whereType<Message>(),
       ...newFromServer,
@@ -384,33 +383,7 @@ class LocalDbService {
 
     final finalJson = finalMsgs.map((m) => m.toJson()).toList();
     await DataLayer().write(cacheKey, finalJson);
-  }
-
-  /// 单个会话的网络预加载（降级路径，批量不可用时使用）
-  Future<void> _preloadSingleConversation({
-    required String userId,
-    required int convId,
-    required int perPage,
-    required AppDatabase db,
-  }) async {
-    final localMessages = await getMessages(convId, limit: perPage);
-
-    final resp = await ChatService().getMessages(convId, perPage: perPage);
-    if (!resp.success || resp.data == null) return;
-
-    final data = resp.data is String ? jsonDecode(resp.data as String) : resp.data;
-    final serverJsonList =
-        (data['messages'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
-    if (serverJsonList.isEmpty) return;
-
-    await _mergeAndPersist(
-      db: db,
-      userId: userId,
-      convId: convId,
-      perPage: perPage,
-      localMessages: localMessages,
-      serverJsonList: serverJsonList,
-    );
+    await DataLayer().write(userCacheKey, finalJson);
   }
 
   /// 关闭当前数据库并删除数据库文件，用于账号切换时彻底清理旧数据。
@@ -429,4 +402,3 @@ class LocalDbService {
     }
   }
 }
-

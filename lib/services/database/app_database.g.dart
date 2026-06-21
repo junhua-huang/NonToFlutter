@@ -1162,18 +1162,871 @@ class ConversationsTableCompanion
   }
 }
 
+class $CacheTableTable extends CacheTable
+    with TableInfo<$CacheTableTable, CacheTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CacheTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _cacheKeyMeta =
+      const VerificationMeta('cacheKey');
+  @override
+  late final GeneratedColumn<String> cacheKey = GeneratedColumn<String>(
+      'cache_key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _dataMeta = const VerificationMeta('data');
+  @override
+  late final GeneratedColumn<String> data = GeneratedColumn<String>(
+      'data', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _ttlSecondsMeta =
+      const VerificationMeta('ttlSeconds');
+  @override
+  late final GeneratedColumn<int> ttlSeconds = GeneratedColumn<int>(
+      'ttl_seconds', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _dataVersionMeta =
+      const VerificationMeta('dataVersion');
+  @override
+  late final GeneratedColumn<int> dataVersion = GeneratedColumn<int>(
+      'data_version', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(1));
+  @override
+  List<GeneratedColumn> get $columns =>
+      [cacheKey, data, createdAt, ttlSeconds, dataVersion];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cache';
+  @override
+  VerificationContext validateIntegrity(Insertable<CacheTableData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('cache_key')) {
+      context.handle(_cacheKeyMeta,
+          cacheKey.isAcceptableOrUnknown(data['cache_key']!, _cacheKeyMeta));
+    } else if (isInserting) {
+      context.missing(_cacheKeyMeta);
+    }
+    if (data.containsKey('data')) {
+      context.handle(
+          _dataMeta, this.data.isAcceptableOrUnknown(data['data']!, _dataMeta));
+    } else if (isInserting) {
+      context.missing(_dataMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('ttl_seconds')) {
+      context.handle(
+          _ttlSecondsMeta,
+          ttlSeconds.isAcceptableOrUnknown(
+              data['ttl_seconds']!, _ttlSecondsMeta));
+    } else if (isInserting) {
+      context.missing(_ttlSecondsMeta);
+    }
+    if (data.containsKey('data_version')) {
+      context.handle(
+          _dataVersionMeta,
+          dataVersion.isAcceptableOrUnknown(
+              data['data_version']!, _dataVersionMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {cacheKey};
+  @override
+  CacheTableData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CacheTableData(
+      cacheKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cache_key'])!,
+      data: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}data'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}created_at'])!,
+      ttlSeconds: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}ttl_seconds'])!,
+      dataVersion: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}data_version'])!,
+    );
+  }
+
+  @override
+  $CacheTableTable createAlias(String alias) {
+    return $CacheTableTable(attachedDatabase, alias);
+  }
+}
+
+class CacheTableData extends DataClass implements Insertable<CacheTableData> {
+  final String cacheKey;
+  final String data;
+  final int createdAt;
+  final int ttlSeconds;
+  final int dataVersion;
+  const CacheTableData(
+      {required this.cacheKey,
+      required this.data,
+      required this.createdAt,
+      required this.ttlSeconds,
+      required this.dataVersion});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['cache_key'] = Variable<String>(cacheKey);
+    map['data'] = Variable<String>(data);
+    map['created_at'] = Variable<int>(createdAt);
+    map['ttl_seconds'] = Variable<int>(ttlSeconds);
+    map['data_version'] = Variable<int>(dataVersion);
+    return map;
+  }
+
+  CacheTableCompanion toCompanion(bool nullToAbsent) {
+    return CacheTableCompanion(
+      cacheKey: Value(cacheKey),
+      data: Value(data),
+      createdAt: Value(createdAt),
+      ttlSeconds: Value(ttlSeconds),
+      dataVersion: Value(dataVersion),
+    );
+  }
+
+  factory CacheTableData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CacheTableData(
+      cacheKey: serializer.fromJson<String>(json['cacheKey']),
+      data: serializer.fromJson<String>(json['data']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      ttlSeconds: serializer.fromJson<int>(json['ttlSeconds']),
+      dataVersion: serializer.fromJson<int>(json['dataVersion']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'cacheKey': serializer.toJson<String>(cacheKey),
+      'data': serializer.toJson<String>(data),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'ttlSeconds': serializer.toJson<int>(ttlSeconds),
+      'dataVersion': serializer.toJson<int>(dataVersion),
+    };
+  }
+
+  CacheTableData copyWith(
+          {String? cacheKey,
+          String? data,
+          int? createdAt,
+          int? ttlSeconds,
+          int? dataVersion}) =>
+      CacheTableData(
+        cacheKey: cacheKey ?? this.cacheKey,
+        data: data ?? this.data,
+        createdAt: createdAt ?? this.createdAt,
+        ttlSeconds: ttlSeconds ?? this.ttlSeconds,
+        dataVersion: dataVersion ?? this.dataVersion,
+      );
+  CacheTableData copyWithCompanion(CacheTableCompanion data) {
+    return CacheTableData(
+      cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
+      data: data.data.present ? data.data.value : this.data,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      ttlSeconds:
+          data.ttlSeconds.present ? data.ttlSeconds.value : this.ttlSeconds,
+      dataVersion:
+          data.dataVersion.present ? data.dataVersion.value : this.dataVersion,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CacheTableData(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('data: $data, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('ttlSeconds: $ttlSeconds, ')
+          ..write('dataVersion: $dataVersion')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(cacheKey, data, createdAt, ttlSeconds, dataVersion);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CacheTableData &&
+          other.cacheKey == this.cacheKey &&
+          other.data == this.data &&
+          other.createdAt == this.createdAt &&
+          other.ttlSeconds == this.ttlSeconds &&
+          other.dataVersion == this.dataVersion);
+}
+
+class CacheTableCompanion extends UpdateCompanion<CacheTableData> {
+  final Value<String> cacheKey;
+  final Value<String> data;
+  final Value<int> createdAt;
+  final Value<int> ttlSeconds;
+  final Value<int> dataVersion;
+  final Value<int> rowid;
+  const CacheTableCompanion({
+    this.cacheKey = const Value.absent(),
+    this.data = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.ttlSeconds = const Value.absent(),
+    this.dataVersion = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CacheTableCompanion.insert({
+    required String cacheKey,
+    required String data,
+    required int createdAt,
+    required int ttlSeconds,
+    this.dataVersion = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : cacheKey = Value(cacheKey),
+        data = Value(data),
+        createdAt = Value(createdAt),
+        ttlSeconds = Value(ttlSeconds);
+  static Insertable<CacheTableData> custom({
+    Expression<String>? cacheKey,
+    Expression<String>? data,
+    Expression<int>? createdAt,
+    Expression<int>? ttlSeconds,
+    Expression<int>? dataVersion,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (cacheKey != null) 'cache_key': cacheKey,
+      if (data != null) 'data': data,
+      if (createdAt != null) 'created_at': createdAt,
+      if (ttlSeconds != null) 'ttl_seconds': ttlSeconds,
+      if (dataVersion != null) 'data_version': dataVersion,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CacheTableCompanion copyWith(
+      {Value<String>? cacheKey,
+      Value<String>? data,
+      Value<int>? createdAt,
+      Value<int>? ttlSeconds,
+      Value<int>? dataVersion,
+      Value<int>? rowid}) {
+    return CacheTableCompanion(
+      cacheKey: cacheKey ?? this.cacheKey,
+      data: data ?? this.data,
+      createdAt: createdAt ?? this.createdAt,
+      ttlSeconds: ttlSeconds ?? this.ttlSeconds,
+      dataVersion: dataVersion ?? this.dataVersion,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (cacheKey.present) {
+      map['cache_key'] = Variable<String>(cacheKey.value);
+    }
+    if (data.present) {
+      map['data'] = Variable<String>(data.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (ttlSeconds.present) {
+      map['ttl_seconds'] = Variable<int>(ttlSeconds.value);
+    }
+    if (dataVersion.present) {
+      map['data_version'] = Variable<int>(dataVersion.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CacheTableCompanion(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('data: $data, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('ttlSeconds: $ttlSeconds, ')
+          ..write('dataVersion: $dataVersion, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OfflineQueueTableTable extends OfflineQueueTable
+    with TableInfo<$OfflineQueueTableTable, OfflineQueueTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OfflineQueueTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _cacheKeyMeta =
+      const VerificationMeta('cacheKey');
+  @override
+  late final GeneratedColumn<String> cacheKey = GeneratedColumn<String>(
+      'cache_key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _dataMeta = const VerificationMeta('data');
+  @override
+  late final GeneratedColumn<String> data = GeneratedColumn<String>(
+      'data', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+      'action', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('write'));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, cacheKey, data, action, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'offline_queue';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<OfflineQueueTableData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('cache_key')) {
+      context.handle(_cacheKeyMeta,
+          cacheKey.isAcceptableOrUnknown(data['cache_key']!, _cacheKeyMeta));
+    } else if (isInserting) {
+      context.missing(_cacheKeyMeta);
+    }
+    if (data.containsKey('data')) {
+      context.handle(
+          _dataMeta, this.data.isAcceptableOrUnknown(data['data']!, _dataMeta));
+    } else if (isInserting) {
+      context.missing(_dataMeta);
+    }
+    if (data.containsKey('action')) {
+      context.handle(_actionMeta,
+          action.isAcceptableOrUnknown(data['action']!, _actionMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  OfflineQueueTableData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OfflineQueueTableData(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      cacheKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cache_key'])!,
+      data: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}data'])!,
+      action: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}action'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $OfflineQueueTableTable createAlias(String alias) {
+    return $OfflineQueueTableTable(attachedDatabase, alias);
+  }
+}
+
+class OfflineQueueTableData extends DataClass
+    implements Insertable<OfflineQueueTableData> {
+  final int id;
+  final String cacheKey;
+  final String data;
+  final String action;
+  final int createdAt;
+  const OfflineQueueTableData(
+      {required this.id,
+      required this.cacheKey,
+      required this.data,
+      required this.action,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['cache_key'] = Variable<String>(cacheKey);
+    map['data'] = Variable<String>(data);
+    map['action'] = Variable<String>(action);
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  OfflineQueueTableCompanion toCompanion(bool nullToAbsent) {
+    return OfflineQueueTableCompanion(
+      id: Value(id),
+      cacheKey: Value(cacheKey),
+      data: Value(data),
+      action: Value(action),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory OfflineQueueTableData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OfflineQueueTableData(
+      id: serializer.fromJson<int>(json['id']),
+      cacheKey: serializer.fromJson<String>(json['cacheKey']),
+      data: serializer.fromJson<String>(json['data']),
+      action: serializer.fromJson<String>(json['action']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'cacheKey': serializer.toJson<String>(cacheKey),
+      'data': serializer.toJson<String>(data),
+      'action': serializer.toJson<String>(action),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  OfflineQueueTableData copyWith(
+          {int? id,
+          String? cacheKey,
+          String? data,
+          String? action,
+          int? createdAt}) =>
+      OfflineQueueTableData(
+        id: id ?? this.id,
+        cacheKey: cacheKey ?? this.cacheKey,
+        data: data ?? this.data,
+        action: action ?? this.action,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  OfflineQueueTableData copyWithCompanion(OfflineQueueTableCompanion data) {
+    return OfflineQueueTableData(
+      id: data.id.present ? data.id.value : this.id,
+      cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
+      data: data.data.present ? data.data.value : this.data,
+      action: data.action.present ? data.action.value : this.action,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OfflineQueueTableData(')
+          ..write('id: $id, ')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('data: $data, ')
+          ..write('action: $action, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, cacheKey, data, action, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OfflineQueueTableData &&
+          other.id == this.id &&
+          other.cacheKey == this.cacheKey &&
+          other.data == this.data &&
+          other.action == this.action &&
+          other.createdAt == this.createdAt);
+}
+
+class OfflineQueueTableCompanion
+    extends UpdateCompanion<OfflineQueueTableData> {
+  final Value<int> id;
+  final Value<String> cacheKey;
+  final Value<String> data;
+  final Value<String> action;
+  final Value<int> createdAt;
+  const OfflineQueueTableCompanion({
+    this.id = const Value.absent(),
+    this.cacheKey = const Value.absent(),
+    this.data = const Value.absent(),
+    this.action = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  OfflineQueueTableCompanion.insert({
+    this.id = const Value.absent(),
+    required String cacheKey,
+    required String data,
+    this.action = const Value.absent(),
+    required int createdAt,
+  })  : cacheKey = Value(cacheKey),
+        data = Value(data),
+        createdAt = Value(createdAt);
+  static Insertable<OfflineQueueTableData> custom({
+    Expression<int>? id,
+    Expression<String>? cacheKey,
+    Expression<String>? data,
+    Expression<String>? action,
+    Expression<int>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (cacheKey != null) 'cache_key': cacheKey,
+      if (data != null) 'data': data,
+      if (action != null) 'action': action,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  OfflineQueueTableCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? cacheKey,
+      Value<String>? data,
+      Value<String>? action,
+      Value<int>? createdAt}) {
+    return OfflineQueueTableCompanion(
+      id: id ?? this.id,
+      cacheKey: cacheKey ?? this.cacheKey,
+      data: data ?? this.data,
+      action: action ?? this.action,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (cacheKey.present) {
+      map['cache_key'] = Variable<String>(cacheKey.value);
+    }
+    if (data.present) {
+      map['data'] = Variable<String>(data.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OfflineQueueTableCompanion(')
+          ..write('id: $id, ')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('data: $data, ')
+          ..write('action: $action, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AppMetaTableTable extends AppMetaTable
+    with TableInfo<$AppMetaTableTable, AppMetaTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AppMetaTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+      'key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+      'value', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [key, value, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'app_meta';
+  @override
+  VerificationContext validateIntegrity(Insertable<AppMetaTableData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+          _keyMeta, key.isAcceptableOrUnknown(data['key']!, _keyMeta));
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+          _valueMeta, value.isAcceptableOrUnknown(data['value']!, _valueMeta));
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  AppMetaTableData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AppMetaTableData(
+      key: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}key'])!,
+      value: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}value'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $AppMetaTableTable createAlias(String alias) {
+    return $AppMetaTableTable(attachedDatabase, alias);
+  }
+}
+
+class AppMetaTableData extends DataClass
+    implements Insertable<AppMetaTableData> {
+  final String key;
+  final String value;
+  final int updatedAt;
+  const AppMetaTableData(
+      {required this.key, required this.value, required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  AppMetaTableCompanion toCompanion(bool nullToAbsent) {
+    return AppMetaTableCompanion(
+      key: Value(key),
+      value: Value(value),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AppMetaTableData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AppMetaTableData(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  AppMetaTableData copyWith({String? key, String? value, int? updatedAt}) =>
+      AppMetaTableData(
+        key: key ?? this.key,
+        value: value ?? this.value,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  AppMetaTableData copyWithCompanion(AppMetaTableCompanion data) {
+    return AppMetaTableData(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppMetaTableData(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AppMetaTableData &&
+          other.key == this.key &&
+          other.value == this.value &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AppMetaTableCompanion extends UpdateCompanion<AppMetaTableData> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const AppMetaTableCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AppMetaTableCompanion.insert({
+    required String key,
+    required String value,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  })  : key = Value(key),
+        value = Value(value),
+        updatedAt = Value(updatedAt);
+  static Insertable<AppMetaTableData> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AppMetaTableCompanion copyWith(
+      {Value<String>? key,
+      Value<String>? value,
+      Value<int>? updatedAt,
+      Value<int>? rowid}) {
+    return AppMetaTableCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppMetaTableCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $MessagesTableTable messagesTable = $MessagesTableTable(this);
   late final $ConversationsTableTable conversationsTable =
       $ConversationsTableTable(this);
+  late final $CacheTableTable cacheTable = $CacheTableTable(this);
+  late final $OfflineQueueTableTable offlineQueueTable =
+      $OfflineQueueTableTable(this);
+  late final $AppMetaTableTable appMetaTable = $AppMetaTableTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [messagesTable, conversationsTable];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+        messagesTable,
+        conversationsTable,
+        cacheTable,
+        offlineQueueTable,
+        appMetaTable
+      ];
 }
 
 typedef $$MessagesTableTableCreateCompanionBuilder = MessagesTableCompanion
@@ -1717,6 +2570,491 @@ typedef $$ConversationsTableTableProcessedTableManager = ProcessedTableManager<
     ),
     ConversationsTableData,
     PrefetchHooks Function()>;
+typedef $$CacheTableTableCreateCompanionBuilder = CacheTableCompanion Function({
+  required String cacheKey,
+  required String data,
+  required int createdAt,
+  required int ttlSeconds,
+  Value<int> dataVersion,
+  Value<int> rowid,
+});
+typedef $$CacheTableTableUpdateCompanionBuilder = CacheTableCompanion Function({
+  Value<String> cacheKey,
+  Value<String> data,
+  Value<int> createdAt,
+  Value<int> ttlSeconds,
+  Value<int> dataVersion,
+  Value<int> rowid,
+});
+
+class $$CacheTableTableFilterComposer
+    extends Composer<_$AppDatabase, $CacheTableTable> {
+  $$CacheTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get cacheKey => $composableBuilder(
+      column: $table.cacheKey, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get data => $composableBuilder(
+      column: $table.data, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get ttlSeconds => $composableBuilder(
+      column: $table.ttlSeconds, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get dataVersion => $composableBuilder(
+      column: $table.dataVersion, builder: (column) => ColumnFilters(column));
+}
+
+class $$CacheTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $CacheTableTable> {
+  $$CacheTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get cacheKey => $composableBuilder(
+      column: $table.cacheKey, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get data => $composableBuilder(
+      column: $table.data, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get ttlSeconds => $composableBuilder(
+      column: $table.ttlSeconds, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get dataVersion => $composableBuilder(
+      column: $table.dataVersion, builder: (column) => ColumnOrderings(column));
+}
+
+class $$CacheTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CacheTableTable> {
+  $$CacheTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get cacheKey =>
+      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+
+  GeneratedColumn<String> get data =>
+      $composableBuilder(column: $table.data, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get ttlSeconds => $composableBuilder(
+      column: $table.ttlSeconds, builder: (column) => column);
+
+  GeneratedColumn<int> get dataVersion => $composableBuilder(
+      column: $table.dataVersion, builder: (column) => column);
+}
+
+class $$CacheTableTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $CacheTableTable,
+    CacheTableData,
+    $$CacheTableTableFilterComposer,
+    $$CacheTableTableOrderingComposer,
+    $$CacheTableTableAnnotationComposer,
+    $$CacheTableTableCreateCompanionBuilder,
+    $$CacheTableTableUpdateCompanionBuilder,
+    (
+      CacheTableData,
+      BaseReferences<_$AppDatabase, $CacheTableTable, CacheTableData>
+    ),
+    CacheTableData,
+    PrefetchHooks Function()> {
+  $$CacheTableTableTableManager(_$AppDatabase db, $CacheTableTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CacheTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CacheTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CacheTableTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> cacheKey = const Value.absent(),
+            Value<String> data = const Value.absent(),
+            Value<int> createdAt = const Value.absent(),
+            Value<int> ttlSeconds = const Value.absent(),
+            Value<int> dataVersion = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CacheTableCompanion(
+            cacheKey: cacheKey,
+            data: data,
+            createdAt: createdAt,
+            ttlSeconds: ttlSeconds,
+            dataVersion: dataVersion,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String cacheKey,
+            required String data,
+            required int createdAt,
+            required int ttlSeconds,
+            Value<int> dataVersion = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CacheTableCompanion.insert(
+            cacheKey: cacheKey,
+            data: data,
+            createdAt: createdAt,
+            ttlSeconds: ttlSeconds,
+            dataVersion: dataVersion,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$CacheTableTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $CacheTableTable,
+    CacheTableData,
+    $$CacheTableTableFilterComposer,
+    $$CacheTableTableOrderingComposer,
+    $$CacheTableTableAnnotationComposer,
+    $$CacheTableTableCreateCompanionBuilder,
+    $$CacheTableTableUpdateCompanionBuilder,
+    (
+      CacheTableData,
+      BaseReferences<_$AppDatabase, $CacheTableTable, CacheTableData>
+    ),
+    CacheTableData,
+    PrefetchHooks Function()>;
+typedef $$OfflineQueueTableTableCreateCompanionBuilder
+    = OfflineQueueTableCompanion Function({
+  Value<int> id,
+  required String cacheKey,
+  required String data,
+  Value<String> action,
+  required int createdAt,
+});
+typedef $$OfflineQueueTableTableUpdateCompanionBuilder
+    = OfflineQueueTableCompanion Function({
+  Value<int> id,
+  Value<String> cacheKey,
+  Value<String> data,
+  Value<String> action,
+  Value<int> createdAt,
+});
+
+class $$OfflineQueueTableTableFilterComposer
+    extends Composer<_$AppDatabase, $OfflineQueueTableTable> {
+  $$OfflineQueueTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get cacheKey => $composableBuilder(
+      column: $table.cacheKey, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get data => $composableBuilder(
+      column: $table.data, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get action => $composableBuilder(
+      column: $table.action, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$OfflineQueueTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $OfflineQueueTableTable> {
+  $$OfflineQueueTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get cacheKey => $composableBuilder(
+      column: $table.cacheKey, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get data => $composableBuilder(
+      column: $table.data, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get action => $composableBuilder(
+      column: $table.action, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$OfflineQueueTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OfflineQueueTableTable> {
+  $$OfflineQueueTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get cacheKey =>
+      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+
+  GeneratedColumn<String> get data =>
+      $composableBuilder(column: $table.data, builder: (column) => column);
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$OfflineQueueTableTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $OfflineQueueTableTable,
+    OfflineQueueTableData,
+    $$OfflineQueueTableTableFilterComposer,
+    $$OfflineQueueTableTableOrderingComposer,
+    $$OfflineQueueTableTableAnnotationComposer,
+    $$OfflineQueueTableTableCreateCompanionBuilder,
+    $$OfflineQueueTableTableUpdateCompanionBuilder,
+    (
+      OfflineQueueTableData,
+      BaseReferences<_$AppDatabase, $OfflineQueueTableTable,
+          OfflineQueueTableData>
+    ),
+    OfflineQueueTableData,
+    PrefetchHooks Function()> {
+  $$OfflineQueueTableTableTableManager(
+      _$AppDatabase db, $OfflineQueueTableTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OfflineQueueTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OfflineQueueTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OfflineQueueTableTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> cacheKey = const Value.absent(),
+            Value<String> data = const Value.absent(),
+            Value<String> action = const Value.absent(),
+            Value<int> createdAt = const Value.absent(),
+          }) =>
+              OfflineQueueTableCompanion(
+            id: id,
+            cacheKey: cacheKey,
+            data: data,
+            action: action,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String cacheKey,
+            required String data,
+            Value<String> action = const Value.absent(),
+            required int createdAt,
+          }) =>
+              OfflineQueueTableCompanion.insert(
+            id: id,
+            cacheKey: cacheKey,
+            data: data,
+            action: action,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$OfflineQueueTableTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $OfflineQueueTableTable,
+    OfflineQueueTableData,
+    $$OfflineQueueTableTableFilterComposer,
+    $$OfflineQueueTableTableOrderingComposer,
+    $$OfflineQueueTableTableAnnotationComposer,
+    $$OfflineQueueTableTableCreateCompanionBuilder,
+    $$OfflineQueueTableTableUpdateCompanionBuilder,
+    (
+      OfflineQueueTableData,
+      BaseReferences<_$AppDatabase, $OfflineQueueTableTable,
+          OfflineQueueTableData>
+    ),
+    OfflineQueueTableData,
+    PrefetchHooks Function()>;
+typedef $$AppMetaTableTableCreateCompanionBuilder = AppMetaTableCompanion
+    Function({
+  required String key,
+  required String value,
+  required int updatedAt,
+  Value<int> rowid,
+});
+typedef $$AppMetaTableTableUpdateCompanionBuilder = AppMetaTableCompanion
+    Function({
+  Value<String> key,
+  Value<String> value,
+  Value<int> updatedAt,
+  Value<int> rowid,
+});
+
+class $$AppMetaTableTableFilterComposer
+    extends Composer<_$AppDatabase, $AppMetaTableTable> {
+  $$AppMetaTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$AppMetaTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $AppMetaTableTable> {
+  $$AppMetaTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$AppMetaTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AppMetaTableTable> {
+  $$AppMetaTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$AppMetaTableTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $AppMetaTableTable,
+    AppMetaTableData,
+    $$AppMetaTableTableFilterComposer,
+    $$AppMetaTableTableOrderingComposer,
+    $$AppMetaTableTableAnnotationComposer,
+    $$AppMetaTableTableCreateCompanionBuilder,
+    $$AppMetaTableTableUpdateCompanionBuilder,
+    (
+      AppMetaTableData,
+      BaseReferences<_$AppDatabase, $AppMetaTableTable, AppMetaTableData>
+    ),
+    AppMetaTableData,
+    PrefetchHooks Function()> {
+  $$AppMetaTableTableTableManager(_$AppDatabase db, $AppMetaTableTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AppMetaTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AppMetaTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AppMetaTableTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> key = const Value.absent(),
+            Value<String> value = const Value.absent(),
+            Value<int> updatedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AppMetaTableCompanion(
+            key: key,
+            value: value,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String key,
+            required String value,
+            required int updatedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AppMetaTableCompanion.insert(
+            key: key,
+            value: value,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$AppMetaTableTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $AppMetaTableTable,
+    AppMetaTableData,
+    $$AppMetaTableTableFilterComposer,
+    $$AppMetaTableTableOrderingComposer,
+    $$AppMetaTableTableAnnotationComposer,
+    $$AppMetaTableTableCreateCompanionBuilder,
+    $$AppMetaTableTableUpdateCompanionBuilder,
+    (
+      AppMetaTableData,
+      BaseReferences<_$AppDatabase, $AppMetaTableTable, AppMetaTableData>
+    ),
+    AppMetaTableData,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1725,4 +3063,10 @@ class $AppDatabaseManager {
       $$MessagesTableTableTableManager(_db, _db.messagesTable);
   $$ConversationsTableTableTableManager get conversationsTable =>
       $$ConversationsTableTableTableManager(_db, _db.conversationsTable);
+  $$CacheTableTableTableManager get cacheTable =>
+      $$CacheTableTableTableManager(_db, _db.cacheTable);
+  $$OfflineQueueTableTableTableManager get offlineQueueTable =>
+      $$OfflineQueueTableTableTableManager(_db, _db.offlineQueueTable);
+  $$AppMetaTableTableTableManager get appMetaTable =>
+      $$AppMetaTableTableTableManager(_db, _db.appMetaTable);
 }

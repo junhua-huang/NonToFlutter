@@ -2,7 +2,7 @@
 ///
 /// 提供消息确认、有序交付、发件箱持久化、自动重连等可靠性保障，
 /// 与业务完全解耦。
-library reliable_websocket;
+library;
 
 export 'src/client.dart';
 export 'src/protocol/message.dart';

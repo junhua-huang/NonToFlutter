@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nonto/models/post.dart';
@@ -7,14 +7,10 @@ import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-/// 全屏图片浏览模式
+/// Nonto 图片浏览页：沉浸查看帖子图片、作者信息与正文上下文。
 ///
-/// 功能：
-/// - 左右滑动在当前帖子图片之间切换
-/// - 双指放大 / 双击恢复原始尺寸
-/// - 上下滑动切换图片（原始尺寸时）
-/// - 底部显示作者信息和帖子文字
-/// - 点击空白区域切换底部信息栏显示/隐藏
+/// 保留轻量全屏浏览体验：左右翻页、缩放查看、竖向手势切图、
+/// 作者资料入口以及可展开的帖子正文。
 class ImageViewerScreen extends StatefulWidget {
   /// 图片 URL 列表
   final List<String> imageUrls;
@@ -108,13 +104,19 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
   late int _currentIndex;
   bool _showInfoBar = true;
 
+  bool get _hasInfoBarContent {
+    return widget.author != null ||
+        (widget.postContent != null && widget.postContent!.isNotEmpty);
+  }
+
   // 图片缩放状态追踪：记录每张图片是否被放大
   final Map<int, bool> _isZoomedMap = {};
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex.clamp(0, max(0, widget.imageUrls.length - 1));
+    _currentIndex =
+        widget.initialIndex.clamp(0, max(0, widget.imageUrls.length - 1));
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -150,10 +152,6 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
     _isZoomedMap[index] = isZoomed;
   }
 
-  bool _isCurrentZoomed() {
-    return _isZoomedMap[_currentIndex] ?? false;
-  }
-
   @override
   Widget build(BuildContext context) {
     final resolved = widget.imageUrls
@@ -180,57 +178,13 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
             // 主图片区域 —— PageView 左右滑动 + 上下滑动导航
             _buildImagePages(resolved, safeIndex),
 
-            // 关闭按钮（顶部左上角，始终显示）
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.black45,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.close, color: Colors.white, size: 22),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            _buildCloseButton(),
 
-            // 页码指示器（多图时显示）
             if (resolved.length > 1)
-              SafeArea(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        '${safeIndex + 1} / ${resolved.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              _buildPageIndicator(safeIndex, resolved.length),
 
             // 底部信息栏（可切换显示/隐藏）
-            if (widget.author != null || (widget.postContent != null && widget.postContent!.isNotEmpty))
+            if (_hasInfoBarContent)
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeInOut,
@@ -240,6 +194,56 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                 child: _buildInfoBar(),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCloseButton() {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 22),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageIndicator(int safeIndex, int total) {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              '${safeIndex + 1} / $total',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -258,27 +262,27 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           },
         ),
         child: PageView.builder(
-        controller: _pageController,
-        itemCount: resolved.length,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemBuilder: (context, index) {
-          return _ZoomableImage(
-            imageUrl: resolved[index],
-            heroTag: widget.heroTag ?? 'photo_$index',
-            isCurrentPage: index == safeIndex,
-            canSwipeVertically: !(_isZoomedMap[index] ?? false),
-            onSwipeUp: (index > 0) ? _goToPrevious : null,
-            onSwipeDown: (index < resolved.length - 1) ? _goToNext : null,
-            onZoomChanged: (zoomed) => _onZoomStateChanged(index, zoomed),
-            onTap: _toggleInfoBar,
-          );
-        },
+          controller: _pageController,
+          itemCount: resolved.length,
+          onPageChanged: (index) {
+            setState(() => _currentIndex = index);
+          },
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemBuilder: (context, index) {
+            return _ZoomableImage(
+              imageUrl: resolved[index],
+              heroTag: widget.heroTag ?? 'photo_$index',
+              isCurrentPage: index == safeIndex,
+              canSwipeVertically: !(_isZoomedMap[index] ?? false),
+              onSwipeUp: (index > 0) ? _goToPrevious : null,
+              onSwipeDown: (index < resolved.length - 1) ? _goToNext : null,
+              onZoomChanged: (zoomed) => _onZoomStateChanged(index, zoomed),
+              onTap: _toggleInfoBar,
+            );
+          },
+        ),
       ),
-    ),
     );
   }
 
@@ -315,22 +319,25 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
               children: [
                 GestureDetector(
                   onTap: () {
-                    if (author != null) {
-                      Navigator.push(context, MaterialPageRoute(
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
                         builder: (_) => UserProfileScreen(user: author),
-                      ));
-                    }
+                      ),
+                    );
                   },
                   child: CircleAvatar(
                     radius: 18,
                     backgroundColor: Colors.grey[800],
-                    backgroundImage: author.avatarUrl != null && author.avatarUrl!.isNotEmpty
-                        ? NetworkImage(author.avatarUrl!)
-                        : null,
+                    backgroundImage:
+                        author.avatarUrl != null && author.avatarUrl!.isNotEmpty
+                            ? NetworkImage(author.avatarUrl!)
+                            : null,
                     child: author.avatarUrl == null || author.avatarUrl!.isEmpty
                         ? Text(
                             author.initials,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                           )
                         : null,
                   ),
@@ -342,11 +349,12 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                     children: [
                       GestureDetector(
                         onTap: () {
-                          if (author != null) {
-                            Navigator.push(context, MaterialPageRoute(
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
                               builder: (_) => UserProfileScreen(user: author),
-                            ));
-                          }
+                            ),
+                          );
                         },
                         child: Text(
                           author.displayName ?? author.username,
@@ -360,7 +368,8 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                       if (createdAt != null)
                         Text(
                           _formatRelativeTime(createdAt),
-                          style: const TextStyle(color: Colors.white60, fontSize: 12),
+                          style: const TextStyle(
+                              color: Colors.white60, fontSize: 12),
                         ),
                     ],
                   ),
@@ -437,9 +446,9 @@ class _ZoomableImage extends StatefulWidget {
 }
 
 class _ZoomableImageState extends State<_ZoomableImage> {
-  final TransformationController _transformController = TransformationController();
+  final TransformationController _transformController =
+      TransformationController();
   bool _isZoomed = false;
-  double _verticalDragOffset = 0;
 
   @override
   void initState() {
@@ -498,11 +507,8 @@ class _ZoomableImageState extends State<_ZoomableImage> {
       onDoubleTap: _handleDoubleTap,
       onTap: widget.onTap,
       // 原始尺寸时的上下滑动 → 切换图片
-      onVerticalDragUpdate: (!_isZoomed && widget.canSwipeVertically)
-          ? (details) {
-              _verticalDragOffset += details.primaryDelta ?? 0;
-            }
-          : null,
+      onVerticalDragUpdate:
+          (!_isZoomed && widget.canSwipeVertically) ? (_) {} : null,
       onVerticalDragEnd: (!_isZoomed && widget.canSwipeVertically)
           ? (details) {
               if (details.primaryVelocity != null) {
@@ -514,7 +520,6 @@ class _ZoomableImageState extends State<_ZoomableImage> {
                   widget.onSwipeUp?.call();
                 }
               }
-              _verticalDragOffset = 0;
             }
           : null,
       child: InteractiveViewer(
@@ -522,7 +527,7 @@ class _ZoomableImageState extends State<_ZoomableImage> {
         minScale: 0.5,
         maxScale: 4.0,
         panEnabled: _isZoomed, // 仅在缩放时允许平移
-        scaleEnabled: true,    // 始终允许缩放
+        scaleEnabled: true, // 始终允许缩放
         child: _buildImage(),
       ),
     );
@@ -545,7 +550,8 @@ class _ZoomableImageState extends State<_ZoomableImage> {
             children: [
               Icon(Icons.broken_image, color: Colors.white54, size: 48),
               SizedBox(height: 8),
-              Text('图片加载失败', style: TextStyle(color: Colors.white54, fontSize: 14)),
+              Text('图片加载失败',
+                  style: TextStyle(color: Colors.white54, fontSize: 14)),
             ],
           ),
         ),
@@ -578,24 +584,26 @@ class _ExpandablePostContentState extends State<_ExpandablePostContent> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _needsExpand
-          ? () => setState(() => _expanded = !_expanded)
-          : null,
+      onTap: _needsExpand ? () => setState(() => _expanded = !_expanded) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AnimatedCrossFade(
             duration: const Duration(milliseconds: 200),
-            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             firstChild: Text(
               widget.content,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+              style: const TextStyle(
+                  color: Colors.white70, fontSize: 14, height: 1.4),
             ),
             secondChild: Text(
               widget.content,
-              style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+              style: const TextStyle(
+                  color: Colors.white70, fontSize: 14, height: 1.4),
             ),
           ),
           if (_needsExpand)

@@ -1,4 +1,4 @@
-﻿import 'package:nonto/config/app_config.dart';
+import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/auth_state.dart';
@@ -10,22 +10,42 @@ import 'package:nonto/services/api/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 // ═══════════════════════════════════════════════════════════════
 // 共享 UI 构建方法
 // ═══════════════════════════════════════════════════════════════
-Widget _buildSettingsSection(String title, List<Widget> children) {
+Widget _buildSettingsSection(
+  String title,
+  List<Widget> children, {
+  String? subtitle,
+}) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
       Container(
@@ -40,14 +60,19 @@ Widget _buildSettingsSection(String title, List<Widget> children) {
     ],
   );
 }
+
 Widget _buildSettingsDivider() {
-  return const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.borderLight);
+  return const Divider(
+      height: 1, indent: 16, endIndent: 16, color: AppColors.borderLight);
 }
+
+/// Nonto 设置页：账号、安全、通知、外观与服务信息的统一入口。
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
+
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   static const _prefPush = 'pref_push_notifications';
   static const _prefMessage = 'pref_message_alerts';
@@ -66,6 +91,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
     _loadNotificationSettings();
   }
+
   Future<void> _loadNotificationSettings() async {
     try {
       final resp = await NotificationService().getSettings();
@@ -91,6 +117,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _pushNotifications = prefs.getBool(_prefPush) ?? false;
       _messageAlerts = prefs.getBool(_prefMessage) ?? false;
@@ -105,14 +132,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await prefs.setBool(_prefMessage, _messageAlerts);
     await prefs.setBool(_prefSound, _soundEnabled);
   }
+
   Future<void> _updateNotificationSetting(String key, bool value) async {
     if (!_isNotifSettingsLoaded) return;
     // 同时持久化到本地和 API（字段名对齐后端 notify_push / notify_message / notify_sound）
     final prefs = await SharedPreferences.getInstance();
     switch (key) {
-      case 'notify_push': await prefs.setBool(_prefPush, value); break;
-      case 'notify_message': await prefs.setBool(_prefMessage, value); break;
-      case 'notify_sound': await prefs.setBool(_prefSound, value); break;
+      case 'notify_push':
+        await prefs.setBool(_prefPush, value);
+        break;
+      case 'notify_message':
+        await prefs.setBool(_prefMessage, value);
+        break;
+      case 'notify_sound':
+        await prefs.setBool(_prefSound, value);
+        break;
     }
     try {
       await NotificationService().updateSettings({key: value});
@@ -123,16 +157,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // ─── 主题选择 ───
   IconData _themeIcon(ThemeMode mode) => switch (mode) {
-    ThemeMode.dark   => Icons.dark_mode,
-    ThemeMode.system => Icons.brightness_auto,
-    _                => Icons.light_mode,
-  };
+        ThemeMode.dark => Icons.dark_mode,
+        ThemeMode.system => Icons.brightness_auto,
+        _ => Icons.light_mode,
+      };
 
   String _themeLabel(ThemeMode mode) => switch (mode) {
-    ThemeMode.dark   => '深色',
-    ThemeMode.system => '跟随系统',
-    _                => '浅色',
-  };
+        ThemeMode.dark => '深色',
+        ThemeMode.system => '跟随系统',
+        _ => '浅色',
+      };
 
   void _showThemePicker(BuildContext context, WidgetRef ref) {
     final current = ref.read(themeProvider);
@@ -153,18 +187,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               Center(
                 child: Container(
-                  width: 36, height: 4,
-                  decoration: const BoxDecoration(color: AppColors.dragHandle, borderRadius: BorderRadius.all(Radius.circular(2))),
+                  width: 36,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                      color: AppColors.dragHandle,
+                      borderRadius: BorderRadius.all(Radius.circular(2))),
                 ),
               ),
               const SizedBox(height: 20),
-              const Text('外观模式', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const Text('外观模式',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 16),
-              _themeOption(ctx, ref, ThemeMode.light, '浅色模式', Icons.light_mode, current),
+              _themeOption(
+                  ctx, ref, ThemeMode.light, '浅色模式', Icons.light_mode, current),
               const SizedBox(height: 8),
-              _themeOption(ctx, ref, ThemeMode.dark, '深色模式', Icons.dark_mode, current),
+              _themeOption(
+                  ctx, ref, ThemeMode.dark, '深色模式', Icons.dark_mode, current),
               const SizedBox(height: 8),
-              _themeOption(ctx, ref, ThemeMode.system, '跟随系统', Icons.brightness_auto, current),
+              _themeOption(ctx, ref, ThemeMode.system, '跟随系统',
+                  Icons.brightness_auto, current),
             ],
           ),
         ),
@@ -172,7 +216,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _themeOption(BuildContext ctx, WidgetRef ref, ThemeMode mode, String label, IconData icon, ThemeMode current) {
+  Widget _themeOption(BuildContext ctx, WidgetRef ref, ThemeMode mode,
+      String label, IconData icon, ThemeMode current) {
     final isSelected = mode == current;
     return GestureDetector(
       onTap: () {
@@ -185,16 +230,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         decoration: BoxDecoration(
           color: isSelected ? AppColors.selectionHighlight : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent, width: 1.5),
+          border: Border.all(
+              color: isSelected ? AppColors.primary : Colors.transparent,
+              width: 1.5),
         ),
         child: Row(
           children: [
-            Icon(icon, color: isSelected ? AppColors.primary : AppColors.textPrimary, size: 22),
+            Icon(icon,
+                color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                size: 22),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: isSelected ? AppColors.primary : AppColors.textPrimary)),
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.textPrimary)),
             ),
-            if (isSelected) const Icon(Icons.check_circle, color: AppColors.primary, size: 20),
+            if (isSelected)
+              const Icon(Icons.check_circle,
+                  color: AppColors.primary, size: 20),
           ],
         ),
       ),
@@ -226,146 +283,165 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
           // 账号与安全
-          _buildSettingsSection('账号与安全', [
-            _buildListTile(
-              title: '修改密码',
-              icon: Icons.lock_outline,
-              trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap: () => _showChangePasswordDialog(context),
-            ),
-            _buildSettingsDivider(),
-            _buildListTile(
-              title: '隐私设置',
-              icon: Icons.privacy_tip_outlined,
-              trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap: () => _showPrivacySettings(context),
-            ),
-            _buildSettingsDivider(),
-            _buildListTile(
-              title: '账号注销',
-              icon: Icons.delete_outline,
-              iconColor: Colors.red,
-              titleColor: Colors.red,
-              trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.red),
-              onTap: () => _showAccountDeletionDialog(context, authState),
-            ),
-          ]),
+          _buildSettingsSection(
+            '账号与安全',
+            [
+              _buildListTile(
+                title: '修改密码',
+                subtitle: '定期更新密码可以提升账号安全',
+                icon: Icons.lock_outline,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () => _showChangePasswordDialog(context),
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
+                title: '隐私设置',
+                subtitle: '控制主页、帖子和搜索可见范围',
+                icon: Icons.privacy_tip_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () => _showPrivacySettings(context),
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
+                title: '账号注销',
+                subtitle: '永久删除账号和相关数据',
+                icon: Icons.delete_outline,
+                iconColor: Colors.red,
+                titleColor: Colors.red,
+                trailing: const Icon(Icons.chevron_right,
+                    size: 20, color: Colors.red),
+                onTap: () => _showAccountDeletionDialog(context, authState),
+              ),
+            ],
+            subtitle: '管理登录、隐私和账号安全',
+          ),
           const SizedBox(height: 24),
           // 通知设置
-          _buildSettingsSection('通知设置', [
-            _buildSwitchTile(
-              title: '推送通知',
-              icon: Icons.notifications_outlined,
-              value: _pushNotifications,
-              onChanged: (v) {
-                setState(() => _pushNotifications = v);
-                _updateNotificationSetting('notify_push', v);
-              },
-            ),
-            _buildSettingsDivider(),
-            _buildSwitchTile(
-              title: '消息提醒',
-              icon: Icons.message_outlined,
-              value: _messageAlerts,
-              onChanged: (v) {
-                setState(() => _messageAlerts = v);
-                _updateNotificationSetting('notify_message', v);
-              },
-            ),
-            _buildSettingsDivider(),
-            _buildSwitchTile(
-              title: '声音',
-              icon: Icons.volume_up_outlined,
-              value: _soundEnabled,
-              onChanged: (v) {
-                setState(() => _soundEnabled = v);
-                _updateNotificationSetting('notify_sound', v);
-              },
-            ),
-          ]),
+          _buildSettingsSection(
+            '通知设置',
+            [
+              _buildSwitchTile(
+                title: '推送通知',
+                subtitle: '新互动、好友请求和系统动态',
+                icon: Icons.notifications_outlined,
+                value: _pushNotifications,
+                enabled: _isNotifSettingsLoaded,
+                onChanged: (v) {
+                  setState(() => _pushNotifications = v);
+                  _updateNotificationSetting('notify_push', v);
+                },
+              ),
+              _buildSettingsDivider(),
+              _buildSwitchTile(
+                title: '消息提醒',
+                subtitle: '私信和会话更新',
+                icon: Icons.message_outlined,
+                value: _messageAlerts,
+                enabled: _isNotifSettingsLoaded,
+                onChanged: (v) {
+                  setState(() => _messageAlerts = v);
+                  _updateNotificationSetting('notify_message', v);
+                },
+              ),
+              _buildSettingsDivider(),
+              _buildSwitchTile(
+                title: '声音',
+                subtitle: '操作反馈和提醒音效',
+                icon: Icons.volume_up_outlined,
+                value: _soundEnabled,
+                enabled: _isNotifSettingsLoaded,
+                onChanged: (v) {
+                  setState(() => _soundEnabled = v);
+                  _updateNotificationSetting('notify_sound', v);
+                },
+              ),
+            ],
+            subtitle: '控制 Nonto 如何提醒你',
+          ),
           const SizedBox(height: 24),
           // 通用
-          _buildSettingsSection('通用', [
-            _buildListTile(
-              title: '外观模式',
-              icon: _themeIcon(ref.watch(themeProvider)),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _themeLabel(ref.watch(themeProvider)),
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right, size: 20),
-                ],
+          _buildSettingsSection(
+            '通用',
+            [
+              _buildListTile(
+                title: '外观模式',
+                subtitle: '浅色、深色或跟随系统',
+                icon: _themeIcon(ref.watch(themeProvider)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _themeLabel(ref.watch(themeProvider)),
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 14),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right, size: 20),
+                  ],
+                ),
+                onTap: () => _showThemePicker(context, ref),
               ),
-              onTap: () => _showThemePicker(context, ref),
-            ),
-          ]),
+            ],
+            subtitle: '外观和显示偏好',
+          ),
           const SizedBox(height: 24),
           // 关于
-          _buildSettingsSection('关于', [
-            _buildListTile(
-              title: '版本号',
-              icon: Icons.info_outline,
-              trailing: Text(
-                'v${AppConfig.appVersion}',
-                style: const TextStyle(color: AppColors.textSecondary),
+          _buildSettingsSection(
+            '关于 Nonto',
+            [
+              _buildListTile(
+                title: '版本号',
+                icon: Icons.info_outline,
+                trailing: Text(
+                  'v${AppConfig.appVersion}',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+                onTap: null,
               ),
-              onTap: null,
-            ),
-            _buildSettingsDivider(),
-            _buildListTile(
-              title: '用户协议',
-              icon: Icons.description_outlined,
-              trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap: () => Navigator.pushNamed(context, AppRoutes.termsOfService),
-            ),
-            _buildSettingsDivider(),
-            _buildListTile(
-              title: '隐私政策',
-              icon: Icons.security_outlined,
-              trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap: () => Navigator.pushNamed(context, AppRoutes.privacyPolicy),
-            ),
-            _buildSettingsDivider(),
-            _buildListTile(
-              title: '开源许可',
-              icon: Icons.code_outlined,
-              trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap: () => Navigator.pushNamed(context, AppRoutes.openSource),
-            ),
-          ]),
+              _buildSettingsDivider(),
+              _buildListTile(
+                title: '用户协议',
+                icon: Icons.description_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.termsOfService),
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
+                title: '隐私政策',
+                icon: Icons.security_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.privacyPolicy),
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
+                title: '开源许可',
+                icon: Icons.code_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.openSource),
+              ),
+            ],
+            subtitle: '版本、协议与开源信息',
+          ),
           const SizedBox(height: 32),
           // 退出登录
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ElevatedButton.icon(
-              onPressed: () => _showLogoutConfirmation(context, authState),
-              icon: const Icon(Icons.logout, size: 20),
-              label: const Text(
-                '退出登录',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-            ),
+          _buildDestructiveActionButton(
+            icon: Icons.logout,
+            label: '退出登录',
+            onPressed: () => _showLogoutConfirmation(context, authState),
           ),
           const SizedBox(height: 24),
         ],
       ),
     );
   }
+
   // ─── UI helpers ───
   Widget _buildListTile({
     required String title,
     required IconData icon,
+    String? subtitle,
     Color? iconColor,
     Color? titleColor,
     Widget? trailing,
@@ -380,32 +456,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           fontSize: 16,
         ),
       ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle,
+              style:
+                  const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
       trailing: trailing,
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       minLeadingWidth: 32,
     );
   }
+
   Widget _buildSwitchTile({
     required String title,
     required IconData icon,
     required bool value,
     required ValueChanged<bool> onChanged,
+    String? subtitle,
+    bool enabled = true,
   }) {
     return ListTile(
       leading: Icon(icon, color: AppColors.textPrimary),
       title: Text(title, style: const TextStyle(fontSize: 16)),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle,
+              style:
+                  const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
       trailing: Switch.adaptive(
         value: value,
-        onChanged: onChanged,
+        onChanged: enabled ? onChanged : null,
         activeTrackColor: AppColors.primary.withValues(alpha: 0x80),
         activeThumbColor: AppColors.primary,
       ),
-      onTap: () => onChanged(!value),
+      onTap: enabled ? () => onChanged(!value) : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       minLeadingWidth: 32,
     );
   }
+
+  Widget _buildDestructiveActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 20),
+        label: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 48),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        ),
+      ),
+    );
+  }
+
   // 修改密码对话框
   Future<void> _showChangePasswordDialog(BuildContext context) async {
     final oldPasswordController = TextEditingController();
@@ -461,7 +581,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
                 return;
               }
-              if (newPasswordController.text != confirmPasswordController.text) {
+              if (newPasswordController.text !=
+                  confirmPasswordController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('两次输入的新密码不一致')),
                 );
@@ -474,14 +595,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (result.success) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('密码修改成功'), backgroundColor: Colors.green),
+                    const SnackBar(
+                        content: Text('密码修改成功'), backgroundColor: Colors.green),
                   );
                   Navigator.pop(context);
                 }
               } else {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('密码修改失败: ${result.message}'), backgroundColor: Colors.red),
+                    SnackBar(
+                        content: Text('密码修改失败: ${result.message}'),
+                        backgroundColor: Colors.red),
                   );
                 }
               }
@@ -492,10 +616,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
+
   // 隐私设置
   void _showPrivacySettings(BuildContext context) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const _PrivacySettingsPage()));
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const _PrivacySettingsPage()));
   }
+
   // 账号注销确认 (GDPR "被遗忘权" 流程)
   void _showAccountDeletionDialog(BuildContext context, AuthState authState) {
     showDialog(
@@ -505,22 +632,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               title: const Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
+                  Icon(Icons.warning_amber_rounded,
+                      color: Colors.red, size: 22),
                   SizedBox(width: 8),
-                  Text('账号注销', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600, fontSize: 17)),
+                  Text('账号注销',
+                      style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 17)),
                 ],
               ),
               content: _isDeleting
                   ? const SizedBox(
                       height: 60,
-                      child: Center(child: CircularProgressIndicator(color: Colors.red)),
+                      child: Center(
+                          child: CircularProgressIndicator(color: Colors.red)),
                     )
                   : const Text(
                       '此操作将永久删除您的账号、所有帖子、评论和私信。此操作不可撤销。',
-                      style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
+                      style: TextStyle(
+                          fontSize: 15, color: AppColors.textSecondary),
                     ),
               actions: _isDeleting
                   ? null
@@ -544,7 +679,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                               );
                               Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                MaterialPageRoute(
+                                    builder: (_) => const LoginScreen()),
                                 (route) => false,
                               );
                             }
@@ -560,7 +696,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             }
                           }
                         },
-                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        style:
+                            TextButton.styleFrom(foregroundColor: Colors.red),
                         child: const Text('确认注销'),
                       ),
                     ],
@@ -570,6 +707,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       },
     );
   }
+
   // 退出登录确认
   void _showLogoutConfirmation(BuildContext context, AuthState authState) {
     showDialog(
@@ -604,6 +742,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 }
+
 // ═══════════════════════════════════════════════════════════════
 // 隐私设置子页面
 // ═══════════════════════════════════════════════════════════════
@@ -612,6 +751,7 @@ class _PrivacySettingsPage extends StatefulWidget {
   @override
   State<_PrivacySettingsPage> createState() => _PrivacySettingsPageState();
 }
+
 class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
   final AuthService _authService = AuthService();
   bool _isLoading = true;
@@ -627,16 +767,19 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     super.initState();
     _loadSettings();
   }
+
   Future<void> _loadSettings() async {
     try {
       final resp = await _authService.getPrivacy();
       if (resp.success && resp.data != null) {
         setState(() {
           _profileVisibility = resp.data['profile_visibility'] ?? 'public';
-          _postDefaultVisibility = resp.data['post_default_visibility'] ?? 'public';
+          _postDefaultVisibility =
+              resp.data['post_default_visibility'] ?? 'public';
           _showEmail = resp.data['show_email'] ?? false;
           _allowSearch = resp.data['allow_search'] ?? true;
-          _allowFriendRequests = resp.data['allow_friend_requests'] ?? 'everyone';
+          _allowFriendRequests =
+              resp.data['allow_friend_requests'] ?? 'everyone';
           _isLoading = false;
         });
       } else {
@@ -646,6 +789,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
   Future<void> _saveSettings() async {
     setState(() => _isSaving = true);
     try {
@@ -668,18 +812,26 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('网络错误，请重试'), backgroundColor: Colors.red, duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('网络错误，请重试'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2)),
         );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('隐私设置', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        title: const Text('隐私设置',
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -688,8 +840,13 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
           TextButton(
             onPressed: _isSaving ? null : _saveSettings,
             child: _isSaving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('保存', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary)),
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('保存',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, color: AppColors.primary)),
           ),
         ],
         backgroundColor: AppColors.background,
@@ -739,7 +896,8 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
                         const _Option('friends_only', '仅好友', '仅好友可见'),
                       ],
                       currentValue: _postDefaultVisibility,
-                      onSelected: (v) => setState(() => _postDefaultVisibility = v),
+                      onSelected: (v) =>
+                          setState(() => _postDefaultVisibility = v),
                     ),
                   ),
                 ]),
@@ -753,11 +911,13 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
                       title: '谁可以向你发送好友请求',
                       options: [
                         const _Option('everyone', '所有人', '任何人都可以向你发送好友请求'),
-                        const _Option('friends_of_friends', '好友的好友', '仅好友的好友可以向你发送请求'),
+                        const _Option(
+                            'friends_of_friends', '好友的好友', '仅好友的好友可以向你发送请求'),
                         const _Option('none', '关闭', '不接受任何好友请求'),
                       ],
                       currentValue: _allowFriendRequests,
-                      onSelected: (v) => setState(() => _allowFriendRequests = v),
+                      onSelected: (v) =>
+                          setState(() => _allowFriendRequests = v),
                     ),
                   ),
                   _buildSettingsDivider(),
@@ -774,6 +934,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
             ),
     );
   }
+
   // ─── Picker dialog ───
   void _showPicker({
     required String title,
@@ -798,12 +959,19 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
             children: [
               Center(
                 child: Container(
-                  width: 36, height: 4,
-                  decoration: const BoxDecoration(color: AppColors.dragHandle, borderRadius: BorderRadius.all(Radius.circular(2))),
+                  width: 36,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                      color: AppColors.dragHandle,
+                      borderRadius: BorderRadius.all(Radius.circular(2))),
                 ),
               ),
               const SizedBox(height: 20),
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 16),
               ...options.map((opt) {
                 final isSelected = opt.value == currentValue;
@@ -815,11 +983,18 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
                   child: Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.selectionHighlight : AppColors.surface,
+                      color: isSelected
+                          ? AppColors.selectionHighlight
+                          : AppColors.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent, width: 1.5),
+                      border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary
+                              : Colors.transparent,
+                          width: 1.5),
                     ),
                     child: Row(
                       children: [
@@ -827,13 +1002,24 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(opt.label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: isSelected ? AppColors.primary : AppColors.textPrimary)),
+                              Text(opt.label,
+                                  style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : AppColors.textPrimary)),
                               const SizedBox(height: 2),
-                              Text(opt.description, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                              Text(opt.description,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary)),
                             ],
                           ),
                         ),
-                        if (isSelected) const Icon(Icons.check_circle, color: AppColors.primary, size: 20),
+                        if (isSelected)
+                          const Icon(Icons.check_circle,
+                              color: AppColors.primary, size: 20),
                       ],
                     ),
                   ),
@@ -845,22 +1031,31 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       ),
     );
   }
+
   // ─── Labels ───
   String _profileVisibilityLabel(String v) {
     switch (v) {
-      case 'friends_only': return '仅好友';
-      case 'private': return '仅自己';
-      default: return '所有人';
+      case 'friends_only':
+        return '仅好友';
+      case 'private':
+        return '仅自己';
+      default:
+        return '所有人';
     }
   }
+
   String _postVisibilityLabel(String v) => v == 'friends_only' ? '仅好友' : '公开';
   String _friendRequestLabel(String v) {
     switch (v) {
-      case 'friends_of_friends': return '好友的好友';
-      case 'none': return '关闭';
-      default: return '所有人';
+      case 'friends_of_friends':
+        return '好友的好友';
+      case 'none':
+        return '关闭';
+      default:
+        return '所有人';
     }
   }
+
   // ─── Shared widgets ───
   Widget _buildOptionTile({
     required String title,
@@ -871,13 +1066,15 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     return ListTile(
       leading: Icon(icon, color: AppColors.textPrimary),
       title: Text(title, style: const TextStyle(fontSize: 16)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+      subtitle: Text(subtitle,
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
       trailing: const Icon(Icons.chevron_right, size: 20),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       minLeadingWidth: 32,
     );
   }
+
   Widget _buildSwitchTileFull({
     required String title,
     required String subtitle,
@@ -888,7 +1085,8 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     return ListTile(
       leading: Icon(icon, color: AppColors.textPrimary),
       title: Text(title, style: const TextStyle(fontSize: 16)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+      subtitle: Text(subtitle,
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
       trailing: Switch.adaptive(
         value: value,
         onChanged: onChanged,
@@ -901,6 +1099,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     );
   }
 }
+
 class _Option {
   final String value;
   final String label;

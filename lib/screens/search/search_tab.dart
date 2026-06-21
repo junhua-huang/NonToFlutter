@@ -1,4 +1,3 @@
-﻿import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/models/post.dart';
@@ -7,14 +6,13 @@ import 'package:nonto/models/user.dart';
 import 'package:nonto/widgets/comic_event_card.dart';
 import 'package:nonto/screens/comic/comic_timeline_page.dart';
 import 'package:nonto/screens/comic/comic_my_events_page.dart';
-import 'package:nonto/screens/comic/comic_detail_page.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
-import 'package:nonto/services/api/recommendation_service.dart';
 import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/api/topic_service.dart';
 import 'package:nonto/providers/explore_notifier.dart';
+import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/add_friend_button.dart';
@@ -26,7 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 import 'package:nonto/utils/bar_scroll_handler.dart';
 
-/// Twitter/X Explore 风格搜索页（带实时搜索建议）
+/// Nonto 发现页：融合探索内容、搜索记录、实时建议与结果页。
 class SearchTab extends ConsumerStatefulWidget {
   const SearchTab({super.key});
   @override
@@ -39,6 +37,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
   final _focusNode = FocusNode();
   final _refreshController = RefreshController(initialRefresh: false);
   final _textNotEmpty = ValueNotifier<bool>(false);
+  int _searchGeneration = 0;
 
   List<String> _searchHistory = [];
   List<User> _userResults = [];
@@ -47,6 +46,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   /// 是否处于搜索态（焦点驱动）：隐藏标题栏、展开搜索记录/建议、右侧显示按钮
   bool _inSearchMode = false;
+
   /// 是否已发起过搜索（显示结果页）
   bool _isSearching = false;
   bool _isLoading = false;
@@ -64,7 +64,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _controller.addListener(_onTextChanged);
-    _controller.addListener(() => _textNotEmpty.value = _controller.text.isNotEmpty);
+    _controller
+        .addListener(() => _textNotEmpty.value = _controller.text.isNotEmpty);
     _focusNode.addListener(_onFocusChanged);
     _loadSearchHistory();
     // Explorer data auto-loads via exploreProvider constructor — no _activate needed
@@ -147,6 +148,10 @@ class _SearchTabState extends ConsumerState<SearchTab>
     _controller.clear();
     _textNotEmpty.value = false;
     _focusNode.unfocus();
+    // 退出搜索态时强制把全局 bar 恢复显示：用户在搜索态期间标题栏被隐藏，
+    // 但 barVisibleProvider 的值是按上次滚动决定的，可能仍为 false，
+    // 导致退出后看似"标题栏没回来"。
+    ref.read(barVisibleProvider.notifier).state = true;
     setState(() {
       _inSearchMode = false;
       if (clearResults) {
@@ -159,7 +164,14 @@ class _SearchTabState extends ConsumerState<SearchTab>
     });
   }
 
+  void _focusSearch() {
+    ref.read(barVisibleProvider.notifier).state = true;
+    setState(() => _inSearchMode = true);
+    _focusNode.requestFocus();
+  }
+
   Future<void> _doSearch(String query) async {
+    final generation = ++_searchGeneration;
     _focusNode.unfocus();
     setState(() {
       _isSearching = true;
@@ -190,9 +202,14 @@ class _SearchTabState extends ConsumerState<SearchTab>
       });
       return;
     }
-    setState(() { _isSearching = true; _isLoading = true; _error = null; });
+    setState(() {
+      _isSearching = true;
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final resp = await SearchService().globalSearch(query);
+      if (!mounted || generation != _searchGeneration) return;
       if (resp.success && resp.data != null) {
         final dynamic rawData = resp.data;
         if (rawData is! Map) {
@@ -203,37 +220,46 @@ class _SearchTabState extends ConsumerState<SearchTab>
         setState(() {
           final dynamic usersRaw = data['users'];
           _userResults = (usersRaw is List ? usersRaw : const <dynamic>[])
-              .map((e) => User.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+              .map((e) => User.fromJson(
+                  e is Map<String, dynamic> ? e : <String, dynamic>{}))
               .toList();
           final dynamic postsRaw = data['posts'];
           _postResults = (postsRaw is List ? postsRaw : const <dynamic>[])
-              .map((e) => Post.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+              .map((e) => Post.fromJson(
+                  e is Map<String, dynamic> ? e : <String, dynamic>{}))
               .toList();
           final dynamic eventsRaw = data['events'];
-          _comicEventResults = (eventsRaw is List ? eventsRaw : const <dynamic>[])
-              .map((e) => ComicEvent.fromListJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
-              .toList();
+          _comicEventResults =
+              (eventsRaw is List ? eventsRaw : const <dynamic>[])
+                  .map((e) => ComicEvent.fromListJson(
+                      e is Map<String, dynamic> ? e : <String, dynamic>{}))
+                  .toList();
         });
         // 根据搜索结果类型自动切到对应 Tab（无动画，直接跳到目标 Tab）
         final specialType = data['type'] as String?;
         if (specialType == 'hot_posts' || specialType == 'trending_topics') {
-          _tabController.index = 1; // 帖子
+          _tabController.index = 3; // 帖子
         } else if (specialType == 'comic_events') {
-          _tabController.index = 3; // 漫展
+          _tabController.index = 2; // 漫展
         } else {
-          _tabController.index = 0; // 默认用户
+          _tabController.index = 0; // 全部
         }
         SearchService().saveHistory(query, 'global');
       } else {
         final msg = resp.message ?? '搜索失败';
-        debugPrint('[Search] globalSearch failed: $msg, statusCode=${resp.statusCode}');
-        setState(() => _error = (resp.statusCode == 422) ? '搜索关键词至少需要2个字符' : msg);
+        debugPrint(
+            '[Search] globalSearch failed: $msg, statusCode=${resp.statusCode}');
+        setState(
+            () => _error = (resp.statusCode == 422) ? '搜索关键词至少需要2个字符' : msg);
       }
     } catch (e) {
+      if (!mounted || generation != _searchGeneration) return;
       debugPrint('[Search] globalSearch exception for query="$query": $e');
       setState(() => _error = '搜索失败，请重试');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted && generation == _searchGeneration) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -251,29 +277,41 @@ class _SearchTabState extends ConsumerState<SearchTab>
     final topPadding = MediaQuery.of(context).padding.top;
     return Column(
       children: [
-        // (a) 标题栏：搜索态时高度收为状态栏安全区高度，平滑过渡
-        AnimatedSize(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          child: SizedBox(
-            height: _inSearchMode ? topPadding : (kToolbarHeight + topPadding),
-            child: _inSearchMode
-                ? const SizedBox.shrink()
-                : AppBar(
-                    title: const Text('Explore',
-                        style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    backgroundColor: AppColors.background,
-                    elevation: 0,
-                    surfaceTintColor: Colors.transparent,
-                  ),
-          ),
+        // (a) 标题栏：以下三种情况都隐藏，否则显示 'Explore'：
+        //     1) _inSearchMode：进入搜索态（焦点在搜索框）
+        //     2) !barVisible：用户在默认推荐内容里下滑，与其他 Tab 行为一致
+        //   仅 AnimatedSize 依赖 barVisible，局部 Consumer 避免全树重建。
+        Consumer(
+          builder: (context, ref, _) {
+            final barVisible = ref.watch(barVisibleProvider);
+            final hideHeader = _inSearchMode || !barVisible;
+            return AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: SizedBox(
+                height: hideHeader ? topPadding : (kToolbarHeight + topPadding),
+                child: hideHeader
+                    ? const SizedBox.shrink()
+                    : AppBar(
+                        title: const Text('发现',
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary)),
+                        backgroundColor: AppColors.background,
+                        elevation: 0,
+                        surfaceTintColor: Colors.transparent,
+                      ),
+              ),
+            );
+          },
         ),
         // (b) 搜索框行 + 右侧按钮（AnimatedSwitcher 切换形态）
         Padding(
-          padding: EdgeInsets.fromLTRB(12, _inSearchMode ? 6 : 12, 4, 4),
+          // 搜索态下 bottom 收为 0，让搜索建议紧贴搜索框下方；
+          // 非搜索态保留 4px，避免与 TabBar/内容区贴死。
+          padding: EdgeInsets.fromLTRB(
+              12, _inSearchMode ? 6 : 12, 4, _inSearchMode ? 0 : 4),
           child: Row(
             children: [
               Expanded(
@@ -340,6 +378,17 @@ class _SearchTabState extends ConsumerState<SearchTab>
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
+            // 默认 layoutBuilder 用 Stack(alignment: center)，会把不撑满
+            // 的子组件（如 SearchSuggestions 的 shrinkWrap ListView、结果页
+            // 的 Center loading）垂直居中，导致搜索框下方出现一大段空白、
+            // "搜索 xxx" 行被推到屏幕中间。改用 topCenter 让所有子态顶端对齐。
+            layoutBuilder: (currentChild, previousChildren) => Stack(
+              alignment: Alignment.topCenter,
+              children: <Widget>[
+                ...previousChildren,
+                if (currentChild != null) currentChild,
+              ],
+            ),
             child: _buildContentArea(),
           ),
         ),
@@ -369,6 +418,14 @@ class _SearchTabState extends ConsumerState<SearchTab>
     );
   }
 
+  bool _hasExploreContent(ExploreState s) {
+    return s.trendingTopics.isNotEmpty ||
+        s.trendingPosts.isNotEmpty ||
+        s.recentComicEvents.isNotEmpty ||
+        s.followedComicEvents.isNotEmpty ||
+        s.suggestedUsers.isNotEmpty;
+  }
+
   /// 内容区四态切换：
   /// 1. 搜索结果页（_isSearching）
   /// 2. 搜索态 + 有文字：实时建议
@@ -380,7 +437,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
       return KeyedSubtree(
         key: const ValueKey('results'),
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary))
             : _buildSearchResults(),
       );
     }
@@ -434,15 +492,58 @@ class _SearchTabState extends ConsumerState<SearchTab>
                 height: 44,
               ),
               child: exploreState.isLoading &&
-                      exploreState.trendingTopics.isEmpty &&
-                      exploreState.trendingPosts.isEmpty &&
+                      !_hasExploreContent(exploreState) &&
                       !_isRefreshing
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary))
-                  : _buildDefaultView(exploreState),
+                  ? _buildExploreLoadingState()
+                  : !_hasExploreContent(exploreState)
+                      ? _buildExploreEmptyState()
+                      : _buildDefaultView(exploreState),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildExploreLoadingState() {
+    return const Center(
+      child: CircularProgressIndicator(color: AppColors.primary),
+    );
+  }
+
+  Widget _buildExploreEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.travel_explore_outlined,
+              size: 52,
+              color: AppColors.textTertiary.withValues(alpha: 0.55),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              '暂时没有发现内容',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '下拉刷新，或试试搜索你感兴趣的话题、帖子和漫展。',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -454,7 +555,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.history, size: 48, color: AppColors.textTertiary.withValues(alpha: 0.5)),
+            Icon(Icons.history,
+                size: 48, color: AppColors.textTertiary.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
             const Text('暂无搜索记录',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
@@ -531,7 +633,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
     // 3) Recent Comic Events → navigation to timeline
     if (s.recentComicEvents.isNotEmpty) {
       items.add(_DefaultItem.headerWithAction('近期漫展', '查看全部', () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const ComicTimelinePage()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const ComicTimelinePage()));
       }));
       for (final event in s.recentComicEvents.take(3)) {
         items.add(_DefaultItem.comicEvent(event));
@@ -542,7 +645,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
     // 4) Followed Comic Events → navigation to my events
     if (s.followedComicEvents.isNotEmpty) {
       items.add(_DefaultItem.headerWithAction('我关注的漫展', '查看全部', () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const ComicMyEventsPage()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const ComicMyEventsPage()));
       }));
       for (final event in s.followedComicEvents.take(3)) {
         items.add(_DefaultItem.comicEvent(event));
@@ -552,10 +656,11 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
     // 5) Recommended Users
     if (s.suggestedUsers.isNotEmpty) {
-      items.add(_DefaultItem.headerWithAction('推荐好友', '查看全部', () {
-        _controller.text = '';
-        _doSearch('');
-      }));
+      items.add(_DefaultItem.headerWithAction(
+        '推荐好友',
+        '查看全部',
+        _focusSearch,
+      ));
       items.add(_DefaultItem.friendRow(s.suggestedUsers.take(10).toList()));
       items.add(_DefaultItem.divider());
     }
@@ -574,11 +679,17 @@ class _SearchTabState extends ConsumerState<SearchTab>
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
               child: Row(
                 children: [
-                  Text(item.label!, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.textPrimary)),
+                  Text(item.label!,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          color: AppColors.textPrimary)),
                   const Spacer(),
                   GestureDetector(
                     onTap: item.onAction,
-                    child: Text(item.actionLabel!, style: TextStyle(color: AppColors.primary, fontSize: 13)),
+                    child: Text(item.actionLabel!,
+                        style:
+                            TextStyle(color: AppColors.primary, fontSize: 13)),
                   ),
                 ],
               ),
@@ -599,14 +710,15 @@ class _SearchTabState extends ConsumerState<SearchTab>
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Divider(height: 1, color: AppColors.borderLight),
             );
-          case _DefaultItemType.historyItem:
-            return _buildCompactHistoryItem(item.historyIndex!);
           case _DefaultItemType.postItem:
             return PostCard(
               post: item.post!,
-              onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => PostDetailScreen(postId: item.post!.id, initialPost: item.post),
-              )),
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PostDetailScreen(
+                        postId: item.post!.id, initialPost: item.post),
+                  )),
             );
           case _DefaultItemType.topicItem:
             return _buildTopicItem(item.topic!);
@@ -621,31 +733,6 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildFriendCard(User user) {
     return _FriendCard(user: user);
-  }
-
-  Widget _buildFriendRow(List<User> friends) {
-    return SizedBox(
-      height: 170,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: friends.length,
-        itemBuilder: (context, index) {
-          final user = friends[index];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => UserProfileScreen(user: user),
-                ));
-              },
-              child: _FriendCard(user: user),
-            ),
-          );
-        },
-      ),
-    );
   }
 
   Widget _buildCompactHistoryItem(int index) {
@@ -663,10 +750,13 @@ class _SearchTabState extends ConsumerState<SearchTab>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              const Icon(Icons.history, size: 18, color: AppColors.textSecondary),
+              const Icon(Icons.history,
+                  size: 18, color: AppColors.textSecondary),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(_searchHistory[index], style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                child: Text(_searchHistory[index],
+                    style: const TextStyle(
+                        fontSize: 14, color: AppColors.textPrimary)),
               ),
             ],
           ),
@@ -675,84 +765,14 @@ class _SearchTabState extends ConsumerState<SearchTab>
     );
   }
 
-  Widget _buildTrendingPostCard(Post post) {
-    return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => PostDetailScreen(postId: post.id, initialPost: post),
-      )),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.borderLight),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Author row
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: Row(
-                children: [
-                  ImageUtils.buildAvatar(post.user, radius: 14),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(post.user?.displayName ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary)),
-                        Text('@${post.user?.username ?? ''}  ·  ${AppDateUtils.formatTimeAgo(post.createdAt)}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Content
-            if (post.content != null && post.content!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                child: Text(post.content!, maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, height: 1.3, color: AppColors.textPrimary)),
-              ),
-            // Image
-            if (post.hasImage)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 160),
-                    child: ImageUtils.buildPostImage(post.images != null && post.images!.isNotEmpty ? post.images![0] : null, width: double.infinity),
-                  ),
-                ),
-              ),
-            // Stats row
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-              child: Row(
-                children: [
-                  _SmallIcon(icon: Icons.comment_outlined, count: post.commentCount),
-                  const SizedBox(width: 28),
-                  _SmallIcon(icon: Icons.favorite_border, count: post.likeCount),
-                  const SizedBox(width: 28),
-                  if (post.viewCount > 0) _SmallIcon(icon: Icons.visibility_outlined, count: post.viewCount),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTopicItem(Topic topic) {
     return InkWell(
       onTap: () {
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => TopicSearchResultsScreen(topicName: topic.name),
-        ));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TopicSearchResultsScreen(topicName: topic.name),
+            ));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -763,15 +783,21 @@ class _SearchTabState extends ConsumerState<SearchTab>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('#${topic.name}',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
-                  if (topic.description != null && topic.description!.isNotEmpty) ...[
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: AppColors.textPrimary)),
+                  if (topic.description != null &&
+                      topic.description!.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(topic.description!,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13)),
                   ],
                   const SizedBox(height: 2),
                   Text('${topic.postCount} 条帖子 · ${topic.followerCount} 人关注',
-                    style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                      style: const TextStyle(
+                          color: AppColors.textTertiary, fontSize: 12)),
                 ],
               ),
             ),
@@ -813,7 +839,9 @@ class _SearchTabState extends ConsumerState<SearchTab>
                 color: isFollowing ? AppColors.borderLight : AppColors.primary,
                 width: 1.2,
               ),
-              color: isFollowing ? AppColors.backgroundSecondary : Colors.transparent,
+              color: isFollowing
+                  ? AppColors.backgroundSecondary
+                  : Colors.transparent,
             ),
             alignment: Alignment.center,
             child: Text(
@@ -821,7 +849,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: isFollowing ? AppColors.textSecondary : AppColors.primary,
+                color:
+                    isFollowing ? AppColors.textSecondary : AppColors.primary,
               ),
             ),
           ),
@@ -841,17 +870,22 @@ class _SearchTabState extends ConsumerState<SearchTab>
       );
     }
 
-    final hasNoResults = _userResults.isEmpty && _postResults.isEmpty && _comicEventResults.isEmpty;
+    final hasNoResults = _userResults.isEmpty &&
+        _postResults.isEmpty &&
+        _comicEventResults.isEmpty;
     if (hasNoResults) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.search_off, size: 56, color: AppColors.borderLight),
+            const Icon(Icons.search_off,
+                size: 56, color: AppColors.borderLight),
             const SizedBox(height: 16),
-            Text('未找到相关结果', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+            Text('未找到相关结果',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
             const SizedBox(height: 6),
-            const Text('试试其他关键词', style: TextStyle(color: AppColors.textTertiary, fontSize: 14)),
+            const Text('试试其他关键词',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 14)),
           ],
         ),
       );
@@ -862,7 +896,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
         // Tabs
         Container(
           decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.borderLight, width: 0.5)),
+            border: Border(
+                bottom: BorderSide(color: AppColors.borderLight, width: 0.5)),
           ),
           child: TabBar(
             controller: _tabController,
@@ -871,7 +906,8 @@ class _SearchTabState extends ConsumerState<SearchTab>
             indicatorColor: AppColors.primary,
             indicatorSize: TabBarIndicatorSize.label,
             indicatorWeight: 3,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            labelStyle:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             unselectedLabelStyle: const TextStyle(fontSize: 15),
             tabs: const [
               Tab(text: '全部'),
@@ -903,7 +939,11 @@ class _SearchTabState extends ConsumerState<SearchTab>
         if (_userResults.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('用户', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
+            child: Text('用户',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: AppColors.textPrimary)),
           ),
           ..._userResults.map((u) => _buildUserTile(u)),
           const Divider(height: 1, color: AppColors.borderLight),
@@ -911,14 +951,22 @@ class _SearchTabState extends ConsumerState<SearchTab>
         if (_postResults.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text('帖子', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
+            child: Text('帖子',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: AppColors.textPrimary)),
           ),
           ..._postResults.map((p) => _buildPostTile(p)),
         ],
         if (_comicEventResults.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text('漫展', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
+            child: Text('漫展',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: AppColors.textPrimary)),
           ),
           ..._comicEventResults.map((e) => ComicEventCard(event: e)),
         ],
@@ -928,7 +976,9 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildUsersList() {
     if (_userResults.isEmpty) {
-      return const Center(child: Text('没有匹配的用户', style: TextStyle(color: AppColors.textSecondary)));
+      return const Center(
+          child: Text('没有匹配的用户',
+              style: TextStyle(color: AppColors.textSecondary)));
     }
     return ListView.builder(
       itemCount: _userResults.length,
@@ -938,7 +988,9 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildPostsList() {
     if (_postResults.isEmpty) {
-      return const Center(child: Text('没有匹配的帖子', style: TextStyle(color: AppColors.textSecondary)));
+      return const Center(
+          child: Text('没有匹配的帖子',
+              style: TextStyle(color: AppColors.textSecondary)));
     }
     return ListView.builder(
       itemCount: _postResults.length,
@@ -948,7 +1000,9 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildComicEventsList() {
     if (_comicEventResults.isEmpty) {
-      return const Center(child: Text('没有匹配的漫展', style: TextStyle(color: AppColors.textSecondary)));
+      return const Center(
+          child: Text('没有匹配的漫展',
+              style: TextStyle(color: AppColors.textSecondary)));
     }
     return ListView.builder(
       itemCount: _comicEventResults.length,
@@ -962,9 +1016,12 @@ class _SearchTabState extends ConsumerState<SearchTab>
 
   Widget _buildPostTile(Post post) {
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => PostDetailScreen(postId: post.id, initialPost: post),
-      )),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                PostDetailScreen(postId: post.id, initialPost: post),
+          )),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Column(
@@ -980,31 +1037,43 @@ class _SearchTabState extends ConsumerState<SearchTab>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(post.user?.displayName ?? '未知用户',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary)),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.textPrimary)),
                       Text(AppDateUtils.formatTimeAgo(post.createdAt),
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12)),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            Text(post.content ?? '', maxLines: 3, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.textPrimary)),
+            Text(post.content ?? '',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 14, height: 1.4, color: AppColors.textPrimary)),
             if (post.hasImage) ...[
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 180),
-                  child: ImageUtils.buildPostImage(post.images != null && post.images!.isNotEmpty ? post.images![0] : null, width: double.infinity),
+                  child: ImageUtils.buildPostImage(
+                      post.images != null && post.images!.isNotEmpty
+                          ? post.images![0]
+                          : null,
+                      width: double.infinity),
                 ),
               ),
             ],
             const SizedBox(height: 8),
             Row(
               children: [
-                _SmallIcon(icon: Icons.comment_outlined, count: post.commentCount),
+                _SmallIcon(
+                    icon: Icons.comment_outlined, count: post.commentCount),
                 const SizedBox(width: 28),
                 _SmallIcon(icon: Icons.favorite_border, count: post.likeCount),
                 const SizedBox(width: 28),
@@ -1045,7 +1114,10 @@ class _FriendCard extends StatelessWidget {
               user.displayName ?? user.username,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: AppColors.textPrimary),
             ),
           ),
           const SizedBox(height: 2),
@@ -1055,7 +1127,8 @@ class _FriendCard extends StatelessWidget {
               '@${user.username}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+              style:
+                  const TextStyle(color: AppColors.textSecondary, fontSize: 11),
             ),
           ),
           const SizedBox(height: 8),
@@ -1078,9 +1151,11 @@ class _UserTile extends StatelessWidget {
     final user = this.user;
     return InkWell(
       onTap: () {
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => UserProfileScreen(user: user),
-        ));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => UserProfileScreen(user: user),
+            ));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -1093,13 +1168,21 @@ class _UserTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(user.displayName ?? user.username,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: AppColors.textPrimary)),
                   const SizedBox(height: 2),
-                  Text('@${user.username}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  Text('@${user.username}',
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13)),
                   if (user.bio != null && user.bio!.isNotEmpty) ...[
                     const SizedBox(height: 3),
-                    Text(user.bio!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    Text(user.bio!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13)),
                   ],
                 ],
               ),
@@ -1126,7 +1209,9 @@ class _SmallIcon extends StatelessWidget {
         Icon(icon, size: 16, color: AppColors.textSecondary),
         if (count > 0) ...[
           const SizedBox(width: 3),
-          Text('$count', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          Text('$count',
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 12)),
         ],
       ],
     );
@@ -1139,7 +1224,6 @@ enum _DefaultItemType {
   headerWithAction,
   friendRow,
   divider,
-  historyItem,
   postItem,
   topicItem,
   comicEventItem,
@@ -1152,7 +1236,6 @@ class _DefaultItem {
   final String? actionLabel;
   final VoidCallback? onAction;
   final List<User>? friends;
-  final int? historyIndex;
   final Post? post;
   final Topic? topic;
   final ComicEvent? comicEvent;
@@ -1163,23 +1246,24 @@ class _DefaultItem {
     this.actionLabel,
     this.onAction,
     this.friends,
-    this.historyIndex,
     this.post,
     this.topic,
     this.comicEvent,
   });
 
-  factory _DefaultItem.headerWithAction(String label, String actionLabel, VoidCallback onAction) =>
-      _DefaultItem._(type: _DefaultItemType.headerWithAction, label: label, actionLabel: actionLabel, onAction: onAction);
+  factory _DefaultItem.headerWithAction(
+          String label, String actionLabel, VoidCallback onAction) =>
+      _DefaultItem._(
+          type: _DefaultItemType.headerWithAction,
+          label: label,
+          actionLabel: actionLabel,
+          onAction: onAction);
 
   factory _DefaultItem.friendRow(List<User> friends) =>
       _DefaultItem._(type: _DefaultItemType.friendRow, friends: friends);
 
   factory _DefaultItem.divider() =>
       _DefaultItem._(type: _DefaultItemType.divider);
-
-  factory _DefaultItem.history(int index) =>
-      _DefaultItem._(type: _DefaultItemType.historyItem, historyIndex: index);
 
   factory _DefaultItem.post(Post post) =>
       _DefaultItem._(type: _DefaultItemType.postItem, post: post);

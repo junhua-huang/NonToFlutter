@@ -7,6 +7,7 @@ import 'package:nonto/providers/explore_notifier.dart';
 import 'package:nonto/providers/feed_notifier.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
+import 'package:nonto/screens/auth/otp_widgets.dart';
 import 'package:nonto/screens/auth/register_screen.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/screens/home/home_screen.dart';
@@ -23,6 +24,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _codeController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
   bool _isLoggingIn = false;
@@ -31,18 +33,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isLoggingIn) return;
+
+    final authNotifier = ref.read(authProvider.notifier);
+    final authState = ref.read(authProvider);
+    // 当后端已要求验证码（requiresEmailCode=true）时，本次提交必须带 code。
+    // 校验放在 submit 前，避免空 code 再次触发 429。
+    final requiresEmailCode = authState.requiresEmailCode;
+    if (requiresEmailCode && _codeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入邮箱验证码'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     setState(() => _isLoggingIn = true);
     try {
-      final authNotifier = ref.read(authProvider.notifier);
       final success = await authNotifier.login(
         _emailController.text.trim(),
         _passwordController.text,
+        emailCode: requiresEmailCode ? _codeController.text.trim() : null,
       );
       if (!mounted) return;
       if (success) {
@@ -65,10 +81,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
       } else {
-        final error = ref.read(authProvider).error;
-        if (error != null) {
+        final newError = ref.read(authProvider).error;
+        if (newError != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(error), backgroundColor: Colors.red),
+            SnackBar(content: Text(newError), backgroundColor: Colors.red),
           );
         }
       }
@@ -210,6 +226,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     validator: (v) =>
                         (v?.isEmpty ?? true) ? '请输入密码' : null,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // 邮箱验证码行：仅当后端要求（连续失败 ≥ 5 次）时显示。
+                  // 使用 Builder 让 ref.watch 在此子树内生效，避免整页 rebuild 浪费。
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final requiresOtp = ref.watch(
+                          authProvider.select((s) => s.requiresEmailCode));
+                      return AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: requiresOtp
+                            ? Padding(
+                                key: const ValueKey('otp-row'),
+                                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                                child: OtpFieldRow(
+                                  codeController: _codeController,
+                                  emailController: _emailController,
+                                  purpose: 'login',
+                                ),
+                              )
+                            : const SizedBox.shrink(key: ValueKey('no-otp')),
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
 

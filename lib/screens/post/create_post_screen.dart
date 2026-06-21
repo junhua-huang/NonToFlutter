@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:nonto/config/app_config.dart';
@@ -8,6 +8,7 @@ import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/screens/home/home/feed_tab.dart';
+import 'package:nonto/screens/profile/profile_tab.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
@@ -21,7 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_compress_ohos/video_compress_ohos.dart';
 import 'package:video_thumbnail_ohos/video_thumbnail_ohos.dart';
 
-/// 发帖页面 — 支持 1-9 张图片、压缩、上传进度、草稿恢复
+/// Nonto 创作页：文本、图片、视频、话题与草稿的一体化发布入口。
 class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({super.key});
 
@@ -61,9 +62,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   static const String _draftTextKey = 'create_post_draft_text';
   static const String _draftImagePathsKey = 'create_post_draft_image_paths';
 
-  Color get _xBlue => AppColors.primary;
-  Color get _xBlack => AppColors.textPrimary;
-  Color get _xDarkGrey => AppColors.textSecondary;
+  Color get _accentColor => AppColors.primary;
+  Color get _primaryTextColor => AppColors.textPrimary;
+  Color get _secondaryTextColor => AppColors.textSecondary;
+
+  bool get _hasComposerContent =>
+      _controller.text.trim().isNotEmpty ||
+      _selectedImages.isNotEmpty ||
+      _selectedVideo != null;
+
+  bool get _isOverCharacterLimit => _charCount > _maxChars;
+
+  bool get _canSubmitPost =>
+      _hasComposerContent && !_isSubmitting && !_isOverCharacterLimit;
 
   @override
   void initState() {
@@ -87,6 +98,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   Future<void> _restoreDraft() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
       final savedText = prefs.getString(_draftTextKey);
 
       if (savedText != null && savedText.isNotEmpty) {
@@ -111,7 +123,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             // 文件已不存在，跳过
           }
         }
-        if (restoredImages.isNotEmpty && mounted) {
+        if (!mounted) return;
+        if (restoredImages.isNotEmpty) {
           setState(() {
             _selectedImages.addAll(restoredImages);
             _imageBytesList.addAll(restoredBytes);
@@ -158,13 +171,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         maxWidth: 1920,
         imageQuality: 92,
       );
-      if (picked == null || picked.isEmpty) return;
+      if (picked.isEmpty) return;
 
       final bytesList = <Uint8List>[];
       for (final file in picked) {
         final bytes = await file.readAsBytes();
         bytesList.add(bytes);
       }
+      if (!mounted) return;
 
       setState(() {
         // 重置视频
@@ -172,7 +186,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         _videoBytes = null;
         // 追加图片（不覆盖已有选择，用户可多次选图累计到上限）
         final remaining = _maxImages - _selectedImages.length;
-        final toAdd = picked.length > remaining ? picked.sublist(0, remaining) : picked;
+        final toAdd =
+            picked.length > remaining ? picked.sublist(0, remaining) : picked;
         _selectedImages.addAll(toAdd);
         _imageBytesList.addAll(bytesList.take(toAdd.length));
       });
@@ -217,6 +232,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         } catch (e) {
           debugPrint('Thumbnail extraction failed: $e');
         }
+        if (!mounted) return;
         setState(() {
           _selectedVideo = videoFile;
           _videoBytes = bytes;
@@ -268,7 +284,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _isSubmitting = true;
       _uploadProgress = 0;
       _uploadedCount = 0;
-      _totalUploadCount = _selectedImages.length + (_selectedVideo != null ? 1 : 0);
+      _totalUploadCount =
+          _selectedImages.length + (_selectedVideo != null ? 1 : 0);
       _error = null;
     });
 
@@ -374,10 +391,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (resp.success) {
         Post? serverPost;
         if (resp.data != null) {
-          final postData = resp.data is Map ? resp.data as Map<String, dynamic> : null;
+          final postData =
+              resp.data is Map ? resp.data as Map<String, dynamic> : null;
           if (postData != null) {
             if (postData.containsKey('post')) {
-              serverPost = Post.fromJson(postData['post'] as Map<String, dynamic>);
+              serverPost =
+                  Post.fromJson(postData['post'] as Map<String, dynamic>);
             } else if (postData.containsKey('id')) {
               serverPost = Post.fromJson(postData);
             }
@@ -401,8 +420,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             );
 
         FeedTab.newPostNotifier.value = optimisticPost;
+        // 通知个人主页刷新：发帖后切到个人主页能立即看到新帖，无需手动下拉。
+        ProfileTab.newPostNotifier.value = true;
         await _clearDraft();
-        if (mounted) Navigator.of(context).pop(true);
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
       } else {
         await _saveDraft();
         if (mounted) {
@@ -455,15 +477,21 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                      const Icon(Icons.delete_outline,
+                          size: 16, color: Colors.red),
                       const SizedBox(width: 6),
-                      const Text('点击图片上的 × 删除', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      const Text('点击图片上的 × 删除',
+                          style: TextStyle(color: Colors.red, fontSize: 12)),
                       const Spacer(),
                       GestureDetector(
                         onTap: () => setState(() => _showDeleteButtons = false),
                         child: const Padding(
                           padding: EdgeInsets.all(8),
-                          child: Text('完成', style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w700)),
+                          child: Text('完成',
+                              style: TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       ),
                     ],
@@ -515,22 +543,26 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         child: Image.memory(
                           _imageBytesList[index],
                           fit: BoxFit.cover,
-                          width: 120, height: 120,
+                          width: 120,
+                          height: 120,
                         ),
                       ),
                       // 删除模式下显示 X 按钮
                       if (_showDeleteButtons)
                         Positioned(
-                          top: 4, right: 4,
+                          top: 4,
+                          right: 4,
                           child: GestureDetector(
                             onTap: () => _removeImageAt(index),
                             child: Container(
                               padding: const EdgeInsets.all(4),
                               decoration: const BoxDecoration(
                                 color: Colors.black54,
-                                borderRadius: BorderRadius.all(Radius.circular(14)),
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(14)),
                               ),
-                              child: const Icon(Icons.close, size: 16, color: Colors.white),
+                              child: const Icon(Icons.close,
+                                  size: 16, color: Colors.white),
                             ),
                           ),
                         ),
@@ -539,14 +571,18 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         bottom: 4,
                         left: 4,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.black54,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${index + 1}/${_selectedImages.length}',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600),
                           ),
                         ),
                       ),
@@ -566,11 +602,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.delete_outline, size: 14, color: AppColors.textSecondary.withValues(alpha: 0.6)),
+                  Icon(Icons.delete_outline,
+                      size: 14,
+                      color: AppColors.textSecondary.withValues(alpha: 0.6)),
                   const SizedBox(width: 4),
                   Text(
                     '长按拖动排序 / 点击进入删除模式',
-                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary.withValues(alpha: 0.6)),
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary.withValues(alpha: 0.6)),
                   ),
                 ],
               ),
@@ -608,10 +648,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           final pos = _controller.selection.baseOffset;
           if (pos < 0) {
             _controller.text = '$text$emoji';
-            _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+            _controller.selection =
+                TextSelection.collapsed(offset: _controller.text.length);
           } else {
-            _controller.text = '${text.substring(0, pos)}$emoji${text.substring(pos)}';
-            _controller.selection = TextSelection.collapsed(offset: pos + emoji.length);
+            _controller.text =
+                '${text.substring(0, pos)}$emoji${text.substring(pos)}';
+            _controller.selection =
+                TextSelection.collapsed(offset: pos + emoji.length);
           }
           _focusNode.requestFocus();
         },
@@ -635,19 +678,24 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         final pos = _controller.selection.baseOffset;
         if (pos < 0) {
           _controller.text = '$text#$topicName ';
-          _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+          _controller.selection =
+              TextSelection.collapsed(offset: _controller.text.length);
         } else {
-          _controller.text = '${text.substring(0, pos)}#$topicName ${text.substring(pos)}';
-          _controller.selection = TextSelection.collapsed(offset: pos + '#$topicName '.length);
+          _controller.text =
+              '${text.substring(0, pos)}#$topicName ${text.substring(pos)}';
+          _controller.selection =
+              TextSelection.collapsed(offset: pos + '#$topicName '.length);
         }
         _focusNode.requestFocus();
       },
       onCancel: (searchText) {
         // 取消弹窗时，将输入框内容插入到帖子中
         if (searchText.isNotEmpty) {
-          _controller.text = '${textBefore.substring(0, cursorPos < 0 ? textBefore.length : cursorPos)}#${searchText.trim()}${cursorPos < 0 ? '' : textBefore.substring(cursorPos)}';
+          _controller.text =
+              '${textBefore.substring(0, cursorPos < 0 ? textBefore.length : cursorPos)}#${searchText.trim()}${cursorPos < 0 ? '' : textBefore.substring(cursorPos)}';
           _controller.selection = TextSelection.collapsed(
-            offset: (cursorPos < 0 ? textBefore.length : cursorPos) + '#${searchText.trim()}'.length,
+            offset: (cursorPos < 0 ? textBefore.length : cursorPos) +
+                '#${searchText.trim()}'.length,
           );
         }
         _focusNode.requestFocus();
@@ -667,10 +715,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         final pos = _controller.selection.baseOffset;
         if (pos < 0) {
           _controller.text = '$text@$username ';
-          _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+          _controller.selection =
+              TextSelection.collapsed(offset: _controller.text.length);
         } else {
-          _controller.text = '${text.substring(0, pos)}@$username ${text.substring(pos)}';
-          _controller.selection = TextSelection.collapsed(offset: pos + '@$username '.length);
+          _controller.text =
+              '${text.substring(0, pos)}@$username ${text.substring(pos)}';
+          _controller.selection =
+              TextSelection.collapsed(offset: pos + '@$username '.length);
         }
         _focusNode.requestFocus();
       },
@@ -706,16 +757,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           if (_thumbnailBytes != null)
                             Image.memory(_thumbnailBytes!, fit: BoxFit.cover)
                           else
-                            const Icon(Icons.videocam, size: 40, color: Colors.white24),
+                            const Icon(Icons.videocam,
+                                size: 40, color: Colors.white24),
                           // 播放按钮
                           Center(
                             child: Container(
-                              width: 56, height: 56,
+                              width: 56,
+                              height: 56,
                               decoration: BoxDecoration(
                                 color: Colors.black45,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.play_arrow, size: 36, color: Colors.white),
+                              child: const Icon(Icons.play_arrow,
+                                  size: 36, color: Colors.white),
                             ),
                           ),
                         ],
@@ -726,7 +780,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           // 删除按钮（长按后显示，3秒后消失）
           if (_showDeleteButtons)
             Positioned(
-              top: 8, right: 8,
+              top: 8,
+              right: 8,
               child: GestureDetector(
                 onTap: _removeMedia,
                 child: Container(
@@ -751,9 +806,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           File(_selectedVideo!.path),
         );
         await _videoController!.initialize();
+        if (!mounted) return;
         _videoController!.play();
         _videoController!.addListener(() {
-          if (mounted && _videoController!.value.position >= _videoController!.value.duration) {
+          if (mounted &&
+              _videoController!.value.position >=
+                  _videoController!.value.duration) {
             setState(() => _isVideoPlaying = false);
             _videoController?.dispose();
             _videoController = null;
@@ -781,15 +839,101 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     });
   }
 
+  Widget _buildSubmitButton() {
+    return TextButton(
+      onPressed: _canSubmitPost ? _submitPost : null,
+      style: TextButton.styleFrom(
+        backgroundColor: _canSubmitPost ? _accentColor : Colors.grey[300],
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        disabledBackgroundColor: Colors.grey[300],
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 160),
+        child: _isSubmitting
+            ? const SizedBox(
+                key: ValueKey('submitting'),
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Text(
+                '发布',
+                key: ValueKey('publish'),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildComposerToolbar({required bool isOverLimit}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.borderLight)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _ToolbarButton(
+              icon: Icons.image_outlined,
+              label: '图片 (${_selectedImages.length}/$_maxImages)',
+              onTap: _selectedImages.length >= _maxImages ? null : _pickImages,
+            ),
+            const SizedBox(width: 4),
+            _ToolbarButton(
+              icon: Icons.videocam_outlined,
+              label: '视频',
+              onTap: _selectedImages.isNotEmpty ? null : _pickVideo,
+            ),
+            const SizedBox(width: 4),
+            _ToolbarButton(
+              icon: Icons.alternate_email,
+              label: '@好友',
+              onTap: _showMentionPicker,
+            ),
+            const SizedBox(width: 4),
+            _ToolbarButton(
+              icon: Icons.tag,
+              label: '#话题',
+              onTap: _showTopicPicker,
+            ),
+            const SizedBox(width: 4),
+            _ToolbarButton(
+              icon: Icons.emoji_emotions_outlined,
+              label: '表情',
+              onTap: _showEmojiPicker,
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundSecondary,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$_charCount/$_maxChars',
+                style: TextStyle(
+                  color: isOverLimit ? Colors.red : _secondaryTextColor,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final user = auth.user;
-    final hasContent = _controller.text.trim().isNotEmpty ||
-        _selectedImages.isNotEmpty ||
-        _selectedVideo != null;
-    final canPost = hasContent && !_isSubmitting;
-    final isOverLimit = _charCount > _maxChars;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -798,31 +942,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: Icon(Icons.close, color: _xBlack, size: 24),
+          icon: Icon(Icons.close, color: _primaryTextColor, size: 24),
           onPressed: () {
             _saveDraft();
             Navigator.of(context).pop();
           },
         ),
-        actions: [
-          TextButton(
-          onPressed: canPost && !isOverLimit ? _submitPost : null,
-          style: TextButton.styleFrom(
-            backgroundColor: canPost && !isOverLimit ? _xBlue : Colors.grey[300],
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            disabledBackgroundColor: Colors.grey[300],
-          ),
-          child: _isSubmitting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text('发帖',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-        ),
-        ],
+        actions: [_buildSubmitButton()],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(0.5),
           child: Container(height: 0.5, color: AppColors.borderLight),
@@ -851,13 +977,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
-                                color: _xBlack,
+                                color: _primaryTextColor,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '@${user?.username ?? ''}',
-                              style: TextStyle(color: _xDarkGrey, fontSize: 13),
+                              style: TextStyle(
+                                  color: _secondaryTextColor, fontSize: 13),
                             ),
                           ],
                         ),
@@ -872,15 +999,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     autofocus: true,
                     maxLines: null,
                     maxLength: _maxChars,
-                    style: TextStyle(fontSize: 18, height: 1.4, color: _xBlack),
+                    style: TextStyle(
+                        fontSize: 18, height: 1.4, color: _primaryTextColor),
                     decoration: InputDecoration(
                       hintText: '有什么新鲜事？',
-                      hintStyle: TextStyle(color: _xDarkGrey, fontSize: 18),
+                      hintStyle:
+                          TextStyle(color: _secondaryTextColor, fontSize: 18),
                       border: InputBorder.none,
                       counterText: '',
                     ),
                   ),
-          // Image grid preview (tap to preview)
+                  // Image grid preview (tap to preview)
                   if (_selectedImages.isNotEmpty && _imageBytesList.isNotEmpty)
                     _buildImageList(),
                   // Video preview
@@ -891,7 +1020,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     LinearProgressIndicator(
                       value: _uploadProgress > 0 ? _uploadProgress : null,
                       backgroundColor: AppColors.borderLight,
-                      valueColor: AlwaysStoppedAnimation(_xBlue),
+                      valueColor: AlwaysStoppedAnimation(_accentColor),
                       minHeight: 4,
                       borderRadius: BorderRadius.circular(2),
                     ),
@@ -902,77 +1031,22 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           : _uploadProgress > 0
                               ? '上传中 ${(_uploadProgress * 100).toInt()}%'
                               : '发布中...',
-                      style: TextStyle(color: _xDarkGrey, fontSize: 12),
+                      style:
+                          TextStyle(color: _secondaryTextColor, fontSize: 12),
                     ),
                   ],
                   // Error
                   if (_error != null) ...[
                     const SizedBox(height: 8),
-                    Text(_error!, style: TextStyle(color: Colors.red, fontSize: 13)),
+                    Text(_error!,
+                        style: TextStyle(color: Colors.red, fontSize: 13)),
                   ],
                 ],
               ),
             ),
           ),
           // Bottom toolbar — horizontally scrollable
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.borderLight)),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _ToolbarButton(
-                    icon: Icons.image_outlined,
-                    label: '图片 (${_selectedImages.length}/$_maxImages)',
-                    onTap: _selectedImages.length >= _maxImages ? null : _pickImages,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarButton(
-                    icon: Icons.videocam_outlined,
-                    label: '视频',
-                    onTap: _selectedImages.isNotEmpty ? null : _pickVideo,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarButton(
-                    icon: Icons.alternate_email,
-                    label: '@好友',
-                    onTap: _showMentionPicker,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarButton(
-                    icon: Icons.tag,
-                    label: '#话题',
-                    onTap: _showTopicPicker,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarButton(
-                    icon: Icons.emoji_emotions_outlined,
-                    label: '表情',
-                    onTap: _showEmojiPicker,
-                  ),
-                  const SizedBox(width: 12),
-                  // Character counter
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.backgroundSecondary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '$_charCount/$_maxChars',
-                      style: TextStyle(
-                        color: isOverLimit ? Colors.red : _xDarkGrey,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _buildComposerToolbar(isOverLimit: _isOverCharacterLimit),
         ],
       ),
     );
@@ -993,7 +1067,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
     return CircleAvatar(
       radius: radius,
-      backgroundColor: _xBlue,
+      backgroundColor: _accentColor,
       child: Text(
         user?.initials ?? '?',
         style: TextStyle(
@@ -1023,8 +1097,7 @@ class _ToolbarButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon,
-                size: 20,
-                color: enabled ? AppColors.primary : Colors.grey),
+                size: 20, color: enabled ? AppColors.primary : Colors.grey),
             const SizedBox(width: 4),
             Text(
               label,
@@ -1088,12 +1161,15 @@ class _EmojiPickerPanelState extends State<_EmojiPickerPanel> {
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                              color: isSelected ? AppColors.primary : Colors.transparent,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : Colors.transparent,
                               width: 2,
                             ),
                           ),
                         ),
-                        child: Text(categories[i].key, style: const TextStyle(fontSize: 20)),
+                        child: Text(categories[i].key,
+                            style: const TextStyle(fontSize: 20)),
                       ),
                     ),
                   );
@@ -1119,7 +1195,8 @@ class _EmojiPickerPanelState extends State<_EmojiPickerPanel> {
                   },
                   borderRadius: BorderRadius.circular(20),
                   child: Center(
-                    child: Text(emojis[index], style: const TextStyle(fontSize: 22)),
+                    child: Text(emojis[index],
+                        style: const TextStyle(fontSize: 22)),
                   ),
                 ),
               ),

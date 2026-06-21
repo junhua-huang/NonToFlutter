@@ -95,6 +95,7 @@ class ConnectionManager {
 
   /// 建立连接
   Future<void> connect() async {
+    // 已在连接/已认证 → 跳过，但记录意图，避免重连请求被静默吞掉。
     if (_state == ConnectionState.connecting ||
         _state == ConnectionState.authenticated) {
       _log.info('connect() called but already in state ${_state.name}, skip');
@@ -242,11 +243,17 @@ class ConnectionManager {
   // ========== 重连 ==========
 
   void _startReconnect() {
-    if (_state == ConnectionState.disconnected) return;
+    // 关键：只要不是用户主动 disconnect（disconnected 状态），就一定重连。
+    // 这是「有网就不断 WS」的核心保证——任何异常断开都进入重连循环，
+    // 直到重新连上或用户主动断开。
+    if (_state == ConnectionState.disconnected) {
+      _log.info('Reconnect skipped: user-initiated disconnect');
+      return;
+    }
 
     _setState(ConnectionState.reconnecting);
 
-    // 指数退避：1s → 2s → 4s → 8s → ... → 60s
+    // 指数退避：1s → 2s → 4s → 8s → ... → 60s（无次数上限，有网就永远重试）
     final delay = _reconnectBaseDelay * (1 << _reconnectAttempt);
     final clamped = delay > _reconnectMaxDelay ? _reconnectMaxDelay : delay;
 
@@ -255,8 +262,30 @@ class ConnectionManager {
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(clamped, () {
+      // 重连时若仍卡在 connecting（上一次 connect 未超时），强制复位状态再连，
+      // 避免 connect() 的「已在 connecting」短路让重连请求被静默吞掉。
+      if (_state == ConnectionState.connecting) {
+        _log.warning('Reconnect fired but still connecting, force-reset to reconnecting');
+        _closeChannel();
+        _connectTimer?.cancel();
+        _connectTimer = null;
+        _setState(ConnectionState.reconnecting);
+      }
       connect();
     });
+  }
+
+  /// 强制重连：无视当前状态，断开现有连接并立即重连。
+  /// 用于网络恢复、回前台等场景——此时旧连接可能已僵死，必须强制重建。
+  Future<void> forceReconnect() async {
+    _log.info('Force reconnect requested (state=${_state.name})');
+    _cancelTimers();
+    _closeChannel();
+    // 复位到 reconnecting，绕过 connect() 的短路，并保证 _startReconnect 不会被
+    // disconnected 状态挡住。
+    _setState(ConnectionState.reconnecting);
+    _reconnectAttempt = 0;
+    await connect();
   }
 
   // ========== 资源释放 ==========

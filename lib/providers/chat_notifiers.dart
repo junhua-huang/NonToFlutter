@@ -1,7 +1,6 @@
 ﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
@@ -14,6 +13,8 @@ import 'package:nonto/services/chat_send_queue.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/sound_service.dart';
 import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/services/local_db_service.dart';
+import 'package:nonto/providers/chat_room_state.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -309,7 +310,22 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     );
 
     final existingIdx = state.conversations.indexWhere((c) => c.id == convId);
-    final shouldIncreaseUnread = _currentUserId == null || lastMsg.senderId != _currentUserId;
+    // 是否本人发送。本人发的消息回显绝不应计入未读——之前若服务端回传的
+    // unread_count 包含本人消息，会被错误地设到会话上，表现为「自己发的消息
+    // 也算未读」。这里强制以本地判断为准：本人消息 → 未读清零。
+    final isOwnMessage = _currentUserId != null && lastMsg.senderId == _currentUserId;
+    // 当前会话正打开时（用户在该聊天室），任何新消息都不应产生未读红点。
+    final isCurrentOpenConv = ChatRoomState.isOpen(convId);
+    final shouldIncreaseUnread =
+        !isOwnMessage && !isCurrentOpenConv &&
+        (_currentUserId == null || lastMsg.senderId != _currentUserId);
+    // 最终未读数：本人消息 / 当前打开会话 → 0；否则优先服务端值，服务端无值时本地自增。
+    final int effectiveUnread;
+    if (isOwnMessage || isCurrentOpenConv) {
+      effectiveUnread = 0;
+    } else {
+      effectiveUnread = serverUnread ?? (shouldIncreaseUnread ? (state.conversations.isEmpty ? 0 : (state.conversations[existingIdx >= 0 ? existingIdx : 0].unreadCount) + 1) : (existingIdx >= 0 ? state.conversations[existingIdx].unreadCount : 0));
+    }
     List<Conversation> updated;
     if (existingIdx >= 0) {
       final conv = state.conversations[existingIdx];
@@ -320,7 +336,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         otherUser: conv.otherUser,
         lastMessage: lastMsg,
         lastMessageAt: lastMsg.createdAt,
-        unreadCount: serverUnread ?? (shouldIncreaseUnread ? conv.unreadCount + 1 : conv.unreadCount),
+        unreadCount: effectiveUnread,
       );
       updated = List.from(state.conversations)
         ..removeAt(existingIdx)
@@ -330,24 +346,39 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       return;
     }
     state = state.copyWith(conversations: updated);
-    DataLayer().updateConvLastMessage(
-      convId, preview, lastMsg.createdAt!, unreadIncrement: shouldIncreaseUnread ? 1 : 0,
-    );
+    // 本人消息 / 当前打开会话：把本地 DB 未读同步置 0；否则按 shouldIncreaseUnread 自增。
+    if (isOwnMessage || isCurrentOpenConv) {
+      DataLayer().updateConvLastMessage(
+        convId, preview, lastMsg.createdAt!, unreadIncrement: 0,
+      );
+      // 确保本地未读被清零（updateConvLastMessage 增量为 0 时不会改 unread_count）
+      LocalDbService().clearConversationUnread(convId);
+    } else {
+      DataLayer().updateConvLastMessage(
+        convId, preview, lastMsg.createdAt!, unreadIncrement: shouldIncreaseUnread ? 1 : 0,
+      );
+    }
     DataLayer().invalidate(CacheKeys.convPattern);
   }
 
   void _handleBatchMessages(int conversationId, List<dynamic> messages) {
     final msgs = messages.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
     DataLayer().persistMessages(msgs);
-    final unreadIncoming = _currentUserId == null
-        ? msgs.length
-        : msgs.where((m) => m.senderId != _currentUserId).length;
+    // 排除本人发送的消息，再排除「当前正打开的会话」——后者不应产生未读。
+    final isCurrentOpenConv = ChatRoomState.isOpen(conversationId);
+    final unreadIncoming = isCurrentOpenConv
+        ? 0
+        : (_currentUserId == null
+            ? msgs.length
+            : msgs.where((m) => m.senderId != _currentUserId).length);
 
     final lastMsg = msgs.last;
     final preview = _formatPreview(lastMsg.content ?? '', lastMsg.messageType.name);
     final existingIdx = state.conversations.indexWhere((c) => c.id == conversationId);
     if (existingIdx >= 0) {
       final conv = state.conversations[existingIdx];
+      // 当前会话打开时，强制未读为 0，避免批量回放把本人/已读消息算成未读。
+      final newUnread = isCurrentOpenConv ? 0 : conv.unreadCount + unreadIncoming;
       final updatedConv = Conversation(
         id: conv.id,
         user1Id: conv.user1Id,
@@ -355,15 +386,22 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         otherUser: conv.otherUser,
         lastMessage: lastMsg,
         lastMessageAt: lastMsg.createdAt,
-        unreadCount: conv.unreadCount + unreadIncoming,
+        unreadCount: newUnread,
       );
       final updated = List<Conversation>.from(state.conversations)
         ..removeAt(existingIdx)
         ..insert(0, updatedConv);
       state = state.copyWith(conversations: updated);
-      DataLayer().updateConvLastMessage(
-        conversationId, preview, lastMsg.createdAt!, unreadIncrement: unreadIncoming,
-      );
+      if (isCurrentOpenConv) {
+        DataLayer().updateConvLastMessage(
+          conversationId, preview, lastMsg.createdAt!, unreadIncrement: 0,
+        );
+        LocalDbService().clearConversationUnread(conversationId);
+      } else {
+        DataLayer().updateConvLastMessage(
+          conversationId, preview, lastMsg.createdAt!, unreadIncrement: unreadIncoming,
+        );
+      }
     } else {
       loadConversations();
     }
@@ -470,7 +508,9 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       ]);
 
       // 会话列表
-      final response = results[0];
+      // results[0] 来自 .catchError((_) => null)，运行时确实可能为 null；
+      // 分析器因 dynamic 推断为 non-null 误报，这里显式 cast 让语义清晰且消警告。
+      final response = results[0] as dynamic;
       if (response == null) {
         debugPrint('[Conv] getConversations timed out or failed');
         state = state.copyWith(
@@ -512,7 +552,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
 
         // 提取未读通知数量（独立 try/catch，单个超时不影响会话列表）
         int unread = state.unreadCount;
-        final unreadResp = results[1]!;
+        final unreadResp = results[1];
         try {
           debugPrint('[Conv] getUnreadCount success=${unreadResp.success}, data=${unreadResp.data}');
           if (unreadResp.success && unreadResp.data != null) {
@@ -668,6 +708,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   StreamSubscription? _wsConnSub;
   StreamSubscription? _wsErrorSub;
   StreamSubscription? _wsSendErrorSub;
+  StreamSubscription? _wsAckSub;
   StreamSubscription? _wsFriendOnlineSub;
   StreamSubscription? _wsFriendOfflineSub;
   Timer? _typingTimer;
@@ -687,7 +728,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     // 监听发送错误（携带 clientMsgId），用于通知 ChatSendQueue 标记消息失败
     _wsSendErrorSub = _ws.sendErrorStream.listen(_onSendError);
     // 监听 ACK 携带的 message_id，用于替换乐观消息的临时 ID
-    _ws.ackMessageIdStream.listen(_onAckMessageId);
+    _wsAckSub = _ws.ackMessageIdStream.listen(_onAckMessageId);
     state = state.copyWith(wsConnected: _ws.isConnected);
   }
 
@@ -713,9 +754,26 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     debugPrint('[Chat] ack message_id: ${msg.id} → $messageId (clientMsgId=$clientMsgId)');
   }
 
-  /// 由 ChatRoomScreen 在 initState 中调用，传入当前用户 ID 和对方用户 ID 并启动加载
+  /// 由 ChatRoomScreen 在 initState 中调用，传入当前用户 ID 和对方用户 ID 并启动加载。
+  ///
+  /// 注意：family Provider 不会随 ChatRoomScreen pop 自动销毁，
+  /// 同一会话第二次进入时若直接 `if (_initialized) return;` 会跳过
+  /// joinConversation / markRead，导致服务端不知道用户已重新进入房间，
+  /// 表现为：对方已读回执不下发、typing 不显示。
+  /// 因此把「重复进入也要做的事」放到守卫之前。
   void init(int currentUserId, {int? otherUserId}) {
-    if (_initialized) return;
+    // 1) 每次进入都必须做的事：加房间 + 上报已读
+    _ws.joinConversation(conversationId);
+    _sendMarkRead();
+
+    // 2) 已初始化过的实例：只补发 join/markRead，跳过订阅 / 队列重建 / 首次加载
+    if (_initialized) {
+      // 数据已在内存，触发一次轻量增量同步即可填补离线期间空档
+      if (state.messages.isNotEmpty) {
+        unawaited(syncIncremental());
+      }
+      return;
+    }
     _initialized = true;
     _currentUserId = currentUserId;
 
@@ -743,7 +801,6 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     );
     _sendQueue.onAck = _onQueueAck;
     _sendQueue.onFailed = _onQueueFailed;
-    _ws.joinConversation(conversationId);
     _loadMessages();
   }
 
@@ -857,14 +914,29 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         } else {
           msgList = [];
         }
-        final messages = msgList
+        final serverMessages = msgList
             .map((e) => Message.fromJson(e as Map<String, dynamic>))
             .toList();
         if (result.source.name != 'memory' ||
-            messages.length != state.messages.length) {
-          state = state.copyWith(messages: messages, isLoading: false, hasMore: hasMoreFromLoad);
-          await DataLayer().persistMessages(messages);
-          debugPrint('[Messages] Step3 → updated: ${messages.length} msgs (source=${result.source.name}) hasMore=$hasMoreFromLoad');
+            serverMessages.length != state.messages.length) {
+          // BUG 修复：之前直接 `messages: serverMessages` 会覆盖掉用户刚发出、
+          // 还没收到 ACK 的乐观消息（id >= 1e12），表现为「发完一条消息进入聊天室 /
+          // 拉取增量时自己刚发的消息凭空消失」。这里把仍处于 pending 的乐观消息
+          // 追加到服务端列表末尾，保留「发送中」气泡，等服务端 ACK 回来再替换。
+          final serverIds = serverMessages.map((m) => m.id).toSet();
+          final pendingOptimistic = state.messages
+              .where((m) => m.id >= 1000000000000 && !serverIds.contains(m.id))
+              .toList();
+          final merged = <Message>[
+            ...serverMessages,
+            ...pendingOptimistic,
+          ];
+          state = state.copyWith(
+              messages: merged, isLoading: false, hasMore: hasMoreFromLoad);
+          await DataLayer().persistMessages(serverMessages);
+          debugPrint('[Messages] Step3 → updated: ${serverMessages.length} server msgs'
+              '${pendingOptimistic.isNotEmpty ? " + ${pendingOptimistic.length} pending optimistic" : ""}'
+              ' (source=${result.source.name}) hasMore=$hasMoreFromLoad');
         }
       } else if (state.messages.isEmpty) {
         state = state.copyWith(isLoading: false);
@@ -1196,7 +1268,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       final uploadResp = await ApiClient().uploadBytes(
         '/upload/chat/image',
         msg.tempBytes!,
-        'retry_${msgId}.jpg',
+        'retry_$msgId.jpg',
         onSendProgress: (sent, total) {
           if (!mounted || total <= 0) return;
           final progress = (sent / total).clamp(0.0, 1.0).toDouble();
@@ -1237,15 +1309,6 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       debugPrint('Retry image upload error: $e');
       _markUploadFailed(msgId, msg.tempBytes!);
     }
-  }
-
-  void _removeOptimistic(int optimisticId) {
-    if (!mounted) return;
-    state = state.copyWith(
-      messages: state.messages.where((m) => m.id != optimisticId).toList(),
-      isSending: false,
-    );
-    DataLayer().deletePersistedMessage(optimisticId);
   }
 
   /// 从本地列表中移除一条消息（长按删除）
@@ -1444,7 +1507,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   }
 
   void _onWsTyping(Map<String, dynamic> data) {
-    final tConvId = data['conversation_id'] as int?;
+    // 服务端推送的 conversation_id 可能是 int 也可能是 String，
+    // 之前用 `as int?` 强转，遇到 String 会抛 _TypeError，导致整个
+    // typing 事件监听回调抛出、后续 typing 状态全部断流。
+    final raw = data['conversation_id'];
+    final tConvId = raw is int ? raw : int.tryParse(raw?.toString() ?? '');
     if (tConvId != conversationId) return;
     final event = data['event'] ?? 'typing';
     state = state.copyWith(otherUserTyping: event == 'typing');
@@ -1513,6 +1580,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _wsConnSub?.cancel();
     _wsErrorSub?.cancel();
     _wsSendErrorSub?.cancel();
+    _wsAckSub?.cancel();
     _wsFriendOnlineSub?.cancel();
     _wsFriendOfflineSub?.cancel();
     _typingTimer?.cancel();

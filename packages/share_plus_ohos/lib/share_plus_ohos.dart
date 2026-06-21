@@ -2,7 +2,7 @@
 ///
 /// - 鸿蒙端：通过 Want 启动系统分享面板（Share Kit）
 /// - iOS/Android 端：委托给 share_plus 包
-library share_plus_ohos;
+library;
 
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';

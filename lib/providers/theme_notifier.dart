@@ -31,26 +31,25 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
   /// 循环切换：light → dark → system → light …
   Future<void> toggleTheme() async {
     final next = switch (state) {
-      ThemeMode.light   => ThemeMode.dark,
-      ThemeMode.dark    => ThemeMode.system,
-      ThemeMode.system  => ThemeMode.light,
-      _                 => ThemeMode.light,
+      ThemeMode.light => ThemeMode.dark,
+      ThemeMode.dark => ThemeMode.system,
+      ThemeMode.system => ThemeMode.light,
     };
     await setThemeMode(next);
   }
 
   // ─── 序列化 ───
   static ThemeMode _fromString(String? s) => switch (s) {
-    'dark'   => ThemeMode.dark,
-    'system' => ThemeMode.system,
-    _        => ThemeMode.light,   // null / 'light' / 未知值 → light
-  };
+        'dark' => ThemeMode.dark,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.light, // null / 'light' / 未知值 → light
+      };
 
   static String _toString(ThemeMode m) => switch (m) {
-    ThemeMode.dark   => 'dark',
-    ThemeMode.system => 'system',
-    _                => 'light',
-  };
+        ThemeMode.dark => 'dark',
+        ThemeMode.system => 'system',
+        _ => 'light',
+      };
 }
 
 final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>((ref) {

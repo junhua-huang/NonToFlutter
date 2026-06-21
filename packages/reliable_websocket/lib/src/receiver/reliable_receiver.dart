@@ -11,7 +11,8 @@ import '../database/database.dart';
 import '../protocol/message.dart';
 
 /// 消息到达回调（按序）
-typedef OnMessageDelivered = void Function(Map<String, dynamic> payload, int seq);
+typedef OnMessageDelivered = void Function(
+    Map<String, dynamic> payload, int seq);
 
 /// 可靠接收器
 class ReliableReceiver {
@@ -79,7 +80,8 @@ class ReliableReceiver {
     } else if (seq > _lastReceivedSeq + 1) {
       // 乱序到达：sync 可能返回空跳过了历史，直接跳到 seq
       // 不放入缓冲等待，因为那些"缺失"的序号可能已被清理
-      _log.warning('Out of order: expected ${_lastReceivedSeq + 1}, got $seq, jumping');
+      _log.warning(
+          'Out of order: expected ${_lastReceivedSeq + 1}, got $seq, jumping');
       _lastReceivedSeq = seq - 1;
       _db.updateLastReceivedSeq(_lastReceivedSeq);
       _deliver(frame);
@@ -122,6 +124,7 @@ class ReliableReceiver {
   }
 
   /// 请求补发缺失消息
+  // ignore: unused_element
   Future<void> _requestMissing() async {
     final fromSeq = _lastReceivedSeq + 1;
     _log.info('Requesting missing messages from seq=$fromSeq');

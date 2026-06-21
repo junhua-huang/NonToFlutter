@@ -12,34 +12,55 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class FeedState {
   final List<Post> posts;
   final int page;
+  final String? nextCursor;
+  final String? feedStatus;
   final bool hasMore;
-  final bool isLoading;
+  final bool isInitialLoading;
+  final bool isRefreshing;
+  final bool isLoadingMore;
   final String? error;
+  final DateTime? lastUpdatedAt;
 
   const FeedState({
     this.posts = const [],
     this.page = 1,
+    this.nextCursor,
+    this.feedStatus,
     this.hasMore = true,
-    // 默认 true：FeedNotifier 构造后会异步读缓存/网络，在此之前首帧应显示
-    // 骨架屏而非「暂无动态」缺省页（命中缓存或网络返回后会被置 false）。
-    this.isLoading = true,
+    this.isInitialLoading = true,
+    this.isRefreshing = false,
+    this.isLoadingMore = false,
     this.error,
+    this.lastUpdatedAt,
   });
+
+  bool get isLoading => isInitialLoading || isRefreshing || isLoadingMore;
 
   FeedState copyWith({
     List<Post>? posts,
     int? page,
+    String? nextCursor,
+    bool clearNextCursor = false,
+    String? feedStatus,
     bool? hasMore,
-    bool? isLoading,
+    bool? isInitialLoading,
+    bool? isRefreshing,
+    bool? isLoadingMore,
     String? error,
     bool clearError = false,
+    DateTime? lastUpdatedAt,
   }) {
     return FeedState(
       posts: posts ?? this.posts,
       page: page ?? this.page,
+      nextCursor: clearNextCursor ? null : (nextCursor ?? this.nextCursor),
+      feedStatus: feedStatus ?? this.feedStatus,
       hasMore: hasMore ?? this.hasMore,
-      isLoading: isLoading ?? this.isLoading,
+      isInitialLoading: isInitialLoading ?? this.isInitialLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: clearError ? null : (error ?? this.error),
+      lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
     );
   }
 }
@@ -74,7 +95,7 @@ class FeedNotifier extends StateNotifier<FeedState> {
       if (cached is List && cached.isNotEmpty) {
         final posts =
             cached.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-        state = state.copyWith(posts: posts, isLoading: false);
+        state = state.copyWith(posts: posts, page: 2, isInitialLoading: false);
         _loadInProgress = false;
         return;
       }
@@ -90,17 +111,33 @@ class FeedNotifier extends StateNotifier<FeedState> {
     }
   }
 
+  List<Post> _mergeUniquePosts(List<Post> existing, List<Post> incoming) {
+    final seen = existing.map((p) => p.id).toSet();
+    final merged = List<Post>.from(existing);
+    for (final post in incoming) {
+      if (seen.add(post.id)) merged.add(post);
+    }
+    return merged;
+  }
+
   /// Parse posts from API response data and update state.
   void _applyPostsFromData(Map<String, dynamic> data, List postsJson) {
     final posts =
         postsJson.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-    final newPosts =
-        state.page == 1 ? posts : [...state.posts, ...posts];
+    final isFirstPage = state.page == 1;
+    final nextCursor = data['next_cursor'] as String?;
+    final feedStatus = data['feed_status'] as String?;
+    final newPosts = isFirstPage ? posts : _mergeUniquePosts(state.posts, posts);
     state = state.copyWith(
       posts: newPosts,
-      hasMore: data['has_more'] == true || posts.length >= 20,
+      hasMore: data['has_more'] == true ||
+          (nextCursor != null && nextCursor.isNotEmpty),
+      nextCursor: nextCursor,
+      clearNextCursor: nextCursor == null || nextCursor.isEmpty,
+      feedStatus: feedStatus,
       page: state.page + 1,
       clearError: true,
+      lastUpdatedAt: DateTime.now(),
     );
     _syncFeedToCache();
   }
@@ -108,7 +145,10 @@ class FeedNotifier extends StateNotifier<FeedState> {
   /// Fetch feed from recommendation service, with automatic fallback to PostService.
   Future<Map<String, dynamic>?> _fetchFeedResponse() async {
     try {
-      final resp = await RecommendationService().getFeed(page: state.page);
+      final resp = await RecommendationService().getFeed(
+        page: state.page,
+        cursor: state.page == 1 ? null : state.nextCursor,
+      );
       if (resp.success && resp.data != null) {
         return resp.data as Map<String, dynamic>;
       }
@@ -134,18 +174,21 @@ class FeedNotifier extends StateNotifier<FeedState> {
         final List postsJson = data['posts'] ?? data['items'] ?? [];
         _applyPostsFromData(data, postsJson);
       } else {
-        // API 返回空但不是错误 — 只设 error 提示，不清除 hasMore（可能下次请求成功）
         state = state.copyWith(
-          error: state.posts.isEmpty ? '加载失败' : null,
+          error: state.posts.isEmpty ? '加载失败' : '刷新失败，正在显示上次内容',
         );
       }
     } catch (e) {
       debugPrint('FeedNotifier _fetchAndRefreshFeed error: $e');
       state = state.copyWith(
-        error: state.posts.isEmpty ? '加载失败' : null,
+        error: state.posts.isEmpty ? '加载失败' : '刷新失败，正在显示上次内容',
       );
     } finally {
-      state = state.copyWith(isLoading: false);
+      state = state.copyWith(
+        isInitialLoading: false,
+        isRefreshing: false,
+        isLoadingMore: false,
+      );
     }
   }
 
@@ -153,8 +196,16 @@ class FeedNotifier extends StateNotifier<FeedState> {
   Future<void> refreshPosts() async {
     if (_loadInProgress) return;
     _loadInProgress = true;
-    // 保留现有 posts 防止闪烁，只标记 isLoading + 重置 page
-    state = state.copyWith(isLoading: true, page: 1, hasMore: true, clearError: true);
+    // 保留现有 posts 防止闪烁，只标记刷新状态 + 重置 cursor/page
+    state = state.copyWith(
+      isRefreshing: state.posts.isNotEmpty,
+      isInitialLoading: state.posts.isEmpty,
+      isLoadingMore: false,
+      page: 1,
+      hasMore: true,
+      clearNextCursor: true,
+      clearError: true,
+    );
     await _fetchAndRefreshFeed();
     _loadInProgress = false;
   }
@@ -165,7 +216,7 @@ class FeedNotifier extends StateNotifier<FeedState> {
     // 用独立标志防止重入，不阻塞 UI 显示
     if (_loadInProgress) return;
     _loadInProgress = true;
-    state = state.copyWith(isLoading: true);
+    state = state.copyWith(isLoadingMore: true, clearError: true);
     await _fetchAndRefreshFeed();
     _loadInProgress = false;
   }
