@@ -10,10 +10,12 @@ import 'package:nonto/models/community.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
+import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/sound_service.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
 
@@ -22,10 +24,12 @@ import 'package:nonto/utils/image_utils.dart';
 class CommunityChatScreen extends ConsumerStatefulWidget {
   final int communityId;
   final String? communityName;
+  final String? communityAvatar;
   const CommunityChatScreen({
     super.key,
     required this.communityId,
     this.communityName,
+    this.communityAvatar,
   });
 
   @override
@@ -45,6 +49,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   int? _conversationId;
   bool _isLoading = true;
   bool _isSending = false;
+  bool _isMembersLoading = false;
   bool _showEmojiPicker = false;
   int _emojiTabIndex = 0;
 
@@ -54,6 +59,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     _messageSub =
         WebSocketService().messageStream.listen(_appendRealtimeMessage);
     _loadMessages();
+    unawaited(_loadMembersForHeader());
   }
 
   Future<void> _loadMessages() async {
@@ -135,13 +141,13 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     merged
       ..addAll(serverMessages)
       ..addAll(pendingOptimistic);
-    merged.sort((a, b) =>
-        _messageTime(a).compareTo(_messageTime(b)));
+    merged.sort((a, b) => _messageTime(a).compareTo(_messageTime(b)));
     return merged;
   }
 
   Future<void> _writeMessagesCache() async {
-    final snapshot = _messages.map((message) => Map<String, dynamic>.from(message)).toList();
+    final snapshot =
+        _messages.map((message) => Map<String, dynamic>.from(message)).toList();
     await DataLayer().write(
       CacheKeys.communityChatRecent(widget.communityId),
       snapshot,
@@ -182,6 +188,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     });
     _mentionUserIds.clear();
     _syncConversationPreview(content, 'text');
+    unawaited(SoundService().playSendSound());
     await _writeMessagesCache();
 
     try {
@@ -322,7 +329,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     if (existingIdx >= 0) return;
 
     final optimisticIdx = optimisticId == null
-        ? _messages.indexWhere((existing) => _isMatchingOptimistic(existing, messageMap))
+        ? _messages.indexWhere(
+            (existing) => _isMatchingOptimistic(existing, messageMap))
         : _messages.indexWhere((existing) => existing['id'] == optimisticId);
     setState(() {
       if (optimisticIdx >= 0) {
@@ -337,10 +345,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   bool _isMatchingOptimistic(
       Map<String, dynamic> existing, Map<String, dynamic> incoming) {
     if (existing['status']?.toString() != 'sending') return false;
-    final sameSender = existing['sender_id']?.toString() ==
-        incoming['sender_id']?.toString();
-    final sameContent = existing['content']?.toString() ==
-        incoming['content']?.toString();
+    final sameSender =
+        existing['sender_id']?.toString() == incoming['sender_id']?.toString();
+    final sameContent =
+        existing['content']?.toString() == incoming['content']?.toString();
     final sameType = (existing['message_type']?.toString() ?? 'text') ==
         (incoming['message_type']?.toString() ?? 'text');
     final sameMedia = (existing['media_url']?.toString() ?? '') ==
@@ -378,7 +386,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   void _insertTextAtCursor(String text) {
     final currentText = _msgCtrl.text;
     final cursorPos = _msgCtrl.selection.baseOffset;
-    final before = cursorPos >= 0 ? currentText.substring(0, cursorPos) : currentText;
+    final before =
+        cursorPos >= 0 ? currentText.substring(0, cursorPos) : currentText;
     final after = cursorPos >= 0 ? currentText.substring(cursorPos) : '';
     final nextText = '$before$text$after';
     _msgCtrl.value = TextEditingValue(
@@ -402,7 +411,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     final cursorPos = _msgCtrl.selection.baseOffset;
     if (cursorPos > 0 && currentText.substring(0, cursorPos).endsWith('@')) {
       _msgCtrl.value = TextEditingValue(
-        text: '${currentText.substring(0, cursorPos - 1)}@$name ${currentText.substring(cursorPos)}',
+        text:
+            '${currentText.substring(0, cursorPos - 1)}@$name ${currentText.substring(cursorPos)}',
         selection: TextSelection.collapsed(offset: cursorPos + name.length + 1),
       );
     } else {
@@ -440,8 +450,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     _msgFocusNode.requestFocus();
   }
 
-  Future<void> _ensureMembersLoaded() async {
-    if (_members.isNotEmpty) return;
+  List<CommunityMember> get _onlineMembers =>
+      _members.where((member) => member.user?.isOnline == true).toList();
+
+  Future<List<CommunityMember>> _fetchMembers() async {
     final resp = await CommunityApiService().getMembers(widget.communityId);
     final raw = resp.data;
     List<dynamic> list = const [];
@@ -452,10 +464,32 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       final members = data['members'] ?? data['items'] ?? data['data'];
       if (members is List) list = members;
     }
-    _members = list
+    return list
         .whereType<Map>()
-        .map((member) => CommunityMember.fromJson(Map<String, dynamic>.from(member)))
+        .map((member) =>
+            CommunityMember.fromJson(Map<String, dynamic>.from(member)))
         .toList();
+  }
+
+  Future<void> _loadMembersForHeader() async {
+    if (_isMembersLoading) return;
+    if (mounted) setState(() => _isMembersLoading = true);
+    try {
+      final members = await _fetchMembers();
+      if (mounted) {
+        setState(() => _members = members);
+      } else {
+        _members = members;
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isMembersLoading = false);
+    }
+  }
+
+  Future<void> _ensureMembersLoaded() async {
+    if (_members.isNotEmpty) return;
+    _members = await _fetchMembers();
   }
 
   Future<void> _showMentionMemberPicker() async {
@@ -517,7 +551,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       '@ 提及成员',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -547,17 +582,21 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                         : ListView.separated(
                             shrinkWrap: true,
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final member = filtered[index];
                               final user = member.user;
-                              final name = user?.displayName?.trim().isNotEmpty == true
-                                  ? user!.displayName!.trim()
-                                  : (user?.username.trim().isNotEmpty == true
-                                      ? user!.username.trim()
-                                      : '用户${member.userId}');
+                              final name =
+                                  user?.displayName?.trim().isNotEmpty == true
+                                      ? user!.displayName!.trim()
+                                      : (user?.username.trim().isNotEmpty ==
+                                              true
+                                          ? user!.username.trim()
+                                          : '用户${member.userId}');
                               return ListTile(
-                                leading: _buildMemberAvatar(name, user?.avatarUrl),
+                                leading:
+                                    _buildMemberAvatar(name, user?.avatarUrl),
                                 title: Text(name),
                                 subtitle: Text(member.role),
                                 onTap: () {
@@ -671,6 +710,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         setState(() => _messages.add(optimistic));
       }
       _syncConversationPreview(url, messageType);
+      unawaited(SoundService().playSendSound());
       await _writeMessagesCache();
       final resp = await CommunityApiService().sendMessage(
         widget.communityId,
@@ -703,10 +743,187 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         );
   }
 
+  String get _displayCommunityName =>
+      widget.communityName?.trim().isNotEmpty == true
+          ? widget.communityName!.trim()
+          : '社群交流';
+
+  PreferredSizeWidget _buildCommunityAppBar() {
+    return AppBar(
+      titleSpacing: 0,
+      title: _buildCommunityTitle(),
+      actions: [
+        IconButton(
+          tooltip: '群详情',
+          icon: const Icon(Icons.info_outline),
+          onPressed: _openCommunityDetail,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommunityTitle() {
+    return Row(
+      children: [
+        _buildCommunityAvatar(_displayCommunityName, widget.communityAvatar),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _displayCommunityName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _showOnlineMembers,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '在线 ${_onlineMembers.length} 人',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommunityAvatar(String name, String? avatarUrl) {
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      return CircleAvatar(
+        radius: 18,
+        backgroundImage:
+            CachedNetworkImageProvider(ImageUtils.resolveUrl(avatarUrl)),
+      );
+    }
+    return CircleAvatar(
+      radius: 18,
+      child: Text(name.isNotEmpty ? name[0] : '?'),
+    );
+  }
+
+  void _openCommunityDetail() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CommunityDetailScreen(communityId: widget.communityId),
+      ),
+    );
+  }
+
+  Future<void> _showOnlineMembers() async {
+    try {
+      await _ensureMembersLoaded();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('在线成员加载失败: $e')));
+      }
+      return;
+    }
+    if (!mounted) return;
+    final onlineMembers = _onlineMembers;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => _buildOnlineMembersSheet(onlineMembers),
+    );
+  }
+
+  Widget _buildOnlineMembersSheet(List<CommunityMember> onlineMembers) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '在线成员 (${onlineMembers.length})',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            if (onlineMembers.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: Text(
+                    '暂无在线成员',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: onlineMembers.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final member = onlineMembers[index];
+                    final user = member.user;
+                    final name = user?.displayName?.trim().isNotEmpty == true
+                        ? user!.displayName!.trim()
+                        : (user?.username.trim().isNotEmpty == true
+                            ? user!.username.trim()
+                            : '用户${member.userId}');
+                    return ListTile(
+                      leading: _buildMemberAvatar(name, user?.avatarUrl),
+                      title: Text(name),
+                      subtitle: Text(_roleLabel(member.role)),
+                      trailing: const Icon(
+                        Icons.circle,
+                        color: Color(0xFF00BA7C),
+                        size: 10,
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'owner':
+        return '创始人';
+      case 'admin':
+        return '管理员';
+      default:
+        return '成员';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.communityName ?? '社群交流')),
+      appBar: _buildCommunityAppBar(),
       body: Column(
         children: [
           Expanded(child: _buildMessages()),
@@ -857,7 +1074,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: selected ? AppColors.primary : Colors.transparent,
+                          color:
+                              selected ? AppColors.primary : Colors.transparent,
                           width: 2,
                         ),
                       ),
@@ -901,7 +1119,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   Widget _buildMemberAvatar(String name, String? avatarUrl) {
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return CircleAvatar(
-        backgroundImage: CachedNetworkImageProvider(ImageUtils.resolveUrl(avatarUrl)),
+        backgroundImage:
+            CachedNetworkImageProvider(ImageUtils.resolveUrl(avatarUrl)),
       );
     }
     return CircleAvatar(child: Text(name.isNotEmpty ? name[0] : '?'));

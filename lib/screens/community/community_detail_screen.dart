@@ -399,8 +399,11 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      CommunityChatScreen(communityId: community.id),
+                  builder: (_) => CommunityChatScreen(
+                    communityId: community.id,
+                    communityName: community.name,
+                    communityAvatar: community.avatarUrl,
+                  ),
                 ),
               ),
               icon: const Icon(Icons.chat_bubble_outline, size: 18),
@@ -408,11 +411,25 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
             ),
           ),
         if (community.isMember) const SizedBox(width: 8),
-        if (!community.isMember)
+        if (community.isPending)
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.hourglass_empty, size: 18),
+              label: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('已申请'),
+                  Text('等待管理员审核', style: TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
+          )
+        else if (!community.isMember)
           Expanded(
             child: ElevatedButton(
               onPressed: () => _handleJoin(community),
-              child: Text(community.isPending ? '审核中' : '加入社群'),
+              child: const Text('加入社群'),
             ),
           )
         else
@@ -479,15 +496,29 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   }
 
   void _handleJoin(Community community) async {
+    if (community.isPending) return;
     final api = CommunityApiService();
     try {
       if (community.isApproval) {
         final message = await _showJoinDialog();
         if (message == null) return;
         await api.join(community.id, message: message);
-      } else {
-        await api.join(community.id);
+        ref
+            .read(communityDetailProvider.notifier)
+            .updateMembershipStatus(myStatus: 'pending');
+        ref.read(communityListProvider.notifier).refreshMy();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('申请已提交，等待审核')),
+          );
+        }
+        return;
       }
+
+      await api.join(community.id);
+      ref
+          .read(communityDetailProvider.notifier)
+          .updateMembershipStatus(myStatus: 'active', myRole: 'member');
       ref.read(communityDetailProvider.notifier).load(widget.communityId);
       ref.read(communityListProvider.notifier).refreshMy();
     } catch (e) {

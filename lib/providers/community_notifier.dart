@@ -235,6 +235,17 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
           .toList(),
     );
   }
+
+  void updateMembershipStatus({required String myStatus, String? myRole}) {
+    final community = state.community;
+    if (community == null) return;
+    state = state.copyWith(
+      community: community.copyWith(
+        myStatus: myStatus,
+        myRole: myRole,
+      ),
+    );
+  }
 }
 
 // ── Provider 定义 ──

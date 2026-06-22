@@ -11,8 +11,10 @@ void main() {
 
       expect(source, contains('Future<void> _openConversation'));
       expect(source, contains('await Navigator.push'));
-      expect(source,
-          contains('ref.read(conversationsProvider.notifier).loadConversations()'));
+      expect(
+          source,
+          contains(
+              'ref.read(conversationsProvider.notifier).loadConversations()'));
     });
 
     test('community service sends message type and media url', () {
@@ -35,12 +37,14 @@ void main() {
       expect(source, contains('loadConversations();'));
     });
 
-    test('community chat composer has emoji media and mention member affordances',
+    test(
+        'community chat composer has emoji media and mention member affordances',
         () {
       final source = read('lib/screens/community/community_chat_screen.dart');
 
       expect(source, contains("import 'package:nonto/data/emoji_data.dart';"));
-      expect(source, contains("import 'package:image_picker/image_picker.dart';"));
+      expect(
+          source, contains("import 'package:image_picker/image_picker.dart';"));
       expect(source, contains('bool _showEmojiPicker = false;'));
       expect(source, contains('final FocusNode _msgFocusNode = FocusNode();'));
       expect(source, contains('_toggleEmojiPicker'));
@@ -113,11 +117,47 @@ void main() {
       expect(source, contains('if (_isLoading && _messages.isEmpty)'));
     });
 
+    test('community self sends play send sound only from local send path', () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      expect(source,
+          contains("import 'package:nonto/services/sound_service.dart';"));
+
+      final sendStart = source.indexOf('Future<void> _sendMessage()');
+      final recallStart = source.indexOf('Future<void> _recallMessage');
+      final mediaStart = source.indexOf('Future<void> _sendMediaMessage');
+      final syncStart =
+          source.indexOf('void _syncConversationPreview', mediaStart);
+      final appendStart = source.indexOf('void _appendRealtimeMessage');
+      final textChangedStart =
+          source.indexOf('void _onTextChanged', appendStart);
+
+      expect(sendStart, greaterThanOrEqualTo(0));
+      expect(recallStart, greaterThan(sendStart));
+      expect(mediaStart, greaterThanOrEqualTo(0));
+      expect(syncStart, greaterThan(mediaStart));
+      expect(appendStart, greaterThanOrEqualTo(0));
+      expect(textChangedStart, greaterThan(appendStart));
+
+      final sendBody = source.substring(sendStart, recallStart);
+      final mediaBody = source.substring(mediaStart, syncStart);
+      final appendBody = source.substring(appendStart, textChangedStart);
+
+      expect(sendBody, contains('SoundService().playSendSound()'));
+      expect(mediaBody, contains('SoundService().playSendSound()'));
+      expect(appendBody, isNot(contains('playSendSound')),
+          reason: 'WebSocket echoes must not replay the local send sound.');
+      expect(source, isNot(contains('playNotificationSound()')),
+          reason:
+              'Community chat screen must not trigger notification sounds directly.');
+    });
+
     test('community media send does not reload the full message list', () {
       final source = read('lib/screens/community/community_chat_screen.dart');
 
       final mediaStart = source.indexOf('Future<void> _sendMediaMessage');
-      final syncStart = source.indexOf('void _syncConversationPreview', mediaStart);
+      final syncStart =
+          source.indexOf('void _syncConversationPreview', mediaStart);
       expect(mediaStart, greaterThanOrEqualTo(0));
       expect(syncStart, greaterThan(mediaStart));
 
@@ -127,19 +167,24 @@ void main() {
       expect(
         mediaBody,
         isNot(contains('await _loadMessages()')),
-        reason: 'Media send should update locally/realtime, not force a full reload.',
+        reason:
+            'Media send should update locally/realtime, not force a full reload.',
       );
     });
 
-    test('community chat uses cache keys and DataLayer for instant display', () {
+    test('community chat uses cache keys and DataLayer for instant display',
+        () {
       final source = read('lib/screens/community/community_chat_screen.dart');
       final keys = read('lib/services/cache_keys.dart');
 
       expect(keys, contains('communityChatRecent'));
       expect(keys, contains('communityChatConversation'));
-      expect(source, contains("import 'package:nonto/services/cache_keys.dart';"));
-      expect(source, contains("import 'package:nonto/services/data_layer.dart';"));
-      expect(source, contains('CacheKeys.communityChatRecent(widget.communityId)'));
+      expect(
+          source, contains("import 'package:nonto/services/cache_keys.dart';"));
+      expect(
+          source, contains("import 'package:nonto/services/data_layer.dart';"));
+      expect(source,
+          contains('CacheKeys.communityChatRecent(widget.communityId)'));
       expect(source, contains('DataLayer().query'));
       expect(source, contains('DataLayer().write'));
     });

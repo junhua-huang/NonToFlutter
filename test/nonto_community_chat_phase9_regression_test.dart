@@ -59,7 +59,37 @@ void main() {
       expect(source, contains('CommunityChatScreen('));
       expect(source, contains('communityId: conv.communityId!'));
       expect(source, contains('communityName: conv.communityName'));
+      expect(source, contains('communityAvatar: conv.communityAvatar'));
       expect(source, contains('ChatRoomScreen(conversation: conv)'));
+    });
+
+    test('community chat app bar shows avatar online count and detail entry',
+        () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      expect(
+          source,
+          contains(
+              "import 'package:nonto/screens/community/community_detail_screen.dart';"));
+      expect(source, contains('final String? communityAvatar;'));
+      expect(source, contains('this.communityAvatar'));
+      expect(source, contains('_buildCommunityAppBar()'));
+      expect(source, contains('_buildCommunityTitle()'));
+      expect(source, contains('_buildCommunityAvatar('));
+      expect(source, contains("'在线 \${_onlineMembers.length} 人'"));
+      expect(source, contains('_showOnlineMembers'));
+      expect(source, contains('Icons.info_outline'));
+      expect(source,
+          contains('CommunityDetailScreen(communityId: widget.communityId)'));
+    });
+
+    test('community chat filters online members from member user state', () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      expect(source, contains('List<CommunityMember> get _onlineMembers'));
+      expect(source, contains('member.user?.isOnline == true'));
+      expect(source, contains('在线成员'));
+      expect(source, contains('暂无在线成员'));
     });
 
     test('conversation list updates preserve community metadata', () {
@@ -103,7 +133,8 @@ void main() {
       expect(source, contains('_appendRealtimeMessage'));
     });
 
-    test('community chat marks backing conversation open for routing state', () {
+    test('community chat marks backing conversation open for routing state',
+        () {
       final source = read('lib/screens/community/community_chat_screen.dart');
 
       expect(source,
@@ -115,8 +146,10 @@ void main() {
       expect(disposeStart, greaterThan(loadStart));
 
       final loadBody = source.substring(loadStart, disposeStart);
-      expect(loadBody, contains('WebSocketService().joinConversation(_conversationId!)'));
-      expect(loadBody, contains('ChatRoomState.setConversation(_conversationId)'));
+      expect(loadBody,
+          contains('WebSocketService().joinConversation(_conversationId!)'));
+      expect(
+          loadBody, contains('ChatRoomState.setConversation(_conversationId)'));
 
       final disposeEnd = source.indexOf('super.dispose();', disposeStart);
       expect(disposeEnd, greaterThan(disposeStart));
@@ -133,7 +166,8 @@ void main() {
       expect(nextMethod, greaterThan(appendStart));
 
       final appendBody = source.substring(appendStart, nextMethod);
-      expect(appendBody, contains("payload['message'] ?? payload['data'] ?? payload"));
+      expect(appendBody,
+          contains("payload['message'] ?? payload['data'] ?? payload"));
       expect(appendBody, contains('_replaceOptimisticOrAppend'));
       expect(appendBody, contains('_writeMessagesCache'));
     });

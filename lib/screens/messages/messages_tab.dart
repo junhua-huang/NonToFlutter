@@ -136,6 +136,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
           builder: (_) => CommunityChatScreen(
             communityId: conv.communityId!,
             communityName: conv.communityName,
+            communityAvatar: conv.communityAvatar,
           ),
         ),
       );
