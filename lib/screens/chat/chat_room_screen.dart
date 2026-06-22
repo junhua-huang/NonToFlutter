@@ -13,6 +13,7 @@ import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
 import 'package:flutter/material.dart';
@@ -169,6 +170,23 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   Future<void> _pickMedia(ImageSource source) async {
     try {
+      if (source == ImageSource.camera) {
+        final picked = await _picker.pickImage(
+          source: source,
+          maxWidth: 1200,
+          maxHeight: 1200,
+          imageQuality: 85,
+        );
+        if (picked == null) return;
+        final bytes = await picked.readAsBytes();
+        if (!mounted) return;
+        ref
+            .read(messagesProvider(widget.conversation.id).notifier)
+            .sendImageMessage(bytes, picked.name);
+        _scrollToBottom(animate: false);
+        return;
+      }
+
       final picked = await _picker.pickMultipleMedia();
       if (picked.isEmpty) return;
       for (final file in picked) {
@@ -198,6 +216,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         }
       } catch (e2) {
         debugPrint('Pick media error: $e2');
+        if (mounted) showPickerErrorSnackBar(context, e2, target: '相册');
       }
     }
   }

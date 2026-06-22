@@ -4,6 +4,7 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/comic_event.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/comic_service.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -109,24 +110,28 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
   }
 
   Future<void> _pickImages() async {
-    final List<XFile> picked = await _picker.pickMultiImage(
-      maxWidth: 1200,
-      maxHeight: 1200,
-      imageQuality: 85,
-    );
-    if (picked.isNotEmpty && mounted) {
-      final newFiles = picked.toList();
-      final newBytes = <Uint8List>[];
-      for (final f in newFiles) {
-        newBytes.add(await f.readAsBytes());
-      }
-      setState(() {
-        final remaining = 9 - _imageFiles.length;
-        if (remaining > 0) {
-          _imageFiles.addAll(newFiles.take(remaining));
-          _imageBytes.addAll(newBytes.take(remaining));
+    try {
+      final List<XFile> picked = await _picker.pickMultiImage(
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (picked.isNotEmpty && mounted) {
+        final newFiles = picked.toList();
+        final newBytes = <Uint8List>[];
+        for (final f in newFiles) {
+          newBytes.add(await f.readAsBytes());
         }
-      });
+        setState(() {
+          final remaining = 9 - _imageFiles.length;
+          if (remaining > 0) {
+            _imageFiles.addAll(newFiles.take(remaining));
+            _imageBytes.addAll(newBytes.take(remaining));
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) showPickerErrorSnackBar(context, e, target: '相册');
     }
   }
 

@@ -19,6 +19,7 @@ import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/post_card.dart';
@@ -371,7 +372,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
         );
       } catch (e) {
         // Edge/Web 兼容：回退到不传 imageQuality
-        picked = await _picker.pickImage(source: ImageSource.gallery);
+        try {
+          picked = await _picker.pickImage(source: ImageSource.gallery);
+        } catch (fallbackError) {
+          if (mounted) {
+            showPickerErrorSnackBar(context, fallbackError, target: '相册');
+          }
+          return;
+        }
       }
       if (picked == null) return;
 
@@ -462,7 +470,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
           imageQuality: 85,
         );
       } catch (e) {
-        picked = await _picker.pickImage(source: ImageSource.gallery);
+        try {
+          picked = await _picker.pickImage(source: ImageSource.gallery);
+        } catch (fallbackError) {
+          if (mounted) {
+            showPickerErrorSnackBar(context, fallbackError, target: '相册');
+          }
+          return;
+        }
       }
       if (picked == null) return;
       final pickedFile = picked;

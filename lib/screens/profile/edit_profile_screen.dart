@@ -9,6 +9,7 @@ import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/api/upload_service.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,7 +85,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         picked = await _picker.pickImage(
             source: ImageSource.gallery, imageQuality: 85);
       } catch (e) {
-        picked = await _picker.pickImage(source: ImageSource.gallery);
+        try {
+          picked = await _picker.pickImage(source: ImageSource.gallery);
+        } catch (fallbackError) {
+          if (mounted) {
+            showPickerErrorSnackBar(context, fallbackError, target: '相册');
+          }
+          return;
+        }
       }
       if (picked == null) return;
 
@@ -174,7 +182,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         picked = await _picker.pickImage(
             source: ImageSource.gallery, imageQuality: 85);
       } catch (e) {
-        picked = await _picker.pickImage(source: ImageSource.gallery);
+        try {
+          picked = await _picker.pickImage(source: ImageSource.gallery);
+        } catch (fallbackError) {
+          if (mounted) {
+            showPickerErrorSnackBar(context, fallbackError, target: '相册');
+          }
+          return;
+        }
       }
       if (picked == null) return;
 

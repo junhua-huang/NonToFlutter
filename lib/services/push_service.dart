@@ -32,6 +32,7 @@ class PushService {
   late final JPushFlutterInterface _jpush = JPush.newJPush();
 
   bool _initialized = false;
+  bool _permissionRequested = false;
   // registrationId 缓存 + 等待 future，避免登录后重复获取
   String? _registrationId;
   Completer<String?>? _regIdCompleter;
@@ -77,7 +78,8 @@ class PushService {
   /// 申请 Android 13+ 通知权限。应在用户首次交互后调用。
   /// 幂等：已授权则无副作用。
   Future<void> requestPermission() async {
-    if (!_supported || !_initialized) return;
+    if (!_supported || !_initialized || _permissionRequested) return;
+    _permissionRequested = true;
     try {
       _jpush.requestRequiredPermission();
     } catch (e) {

@@ -12,6 +12,7 @@ import 'package:nonto/screens/profile/profile_tab.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/mention_topic_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -196,6 +197,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       });
     } catch (e) {
       debugPrint('Pick images error: $e');
+      if (mounted) showPickerErrorSnackBar(context, e, target: '相册');
     }
   }
 
@@ -246,6 +248,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       debugPrint('Pick video error: $e');
+      if (mounted) showPickerErrorSnackBar(context, e, target: '视频');
     }
   }
 

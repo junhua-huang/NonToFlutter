@@ -197,9 +197,12 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
             .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
             .toList();
         final hasMore = serverHasMore ?? list.length >= 20;
-        final unreadCount = serverUnread ?? state.unreadCount;
+        final mergedNotifications = refresh ? list : [...state.notifications, ...list];
+        final localUnread =
+            mergedNotifications.where((n) => !n.isRead).length;
+        final unreadCount = serverUnread ?? localUnread;
         state = state.copyWith(
-          notifications: refresh ? list : [...state.notifications, ...list],
+          notifications: mergedNotifications,
           page: state.page + 1,
           hasMore: hasMore,
           unreadCount: unreadCount,

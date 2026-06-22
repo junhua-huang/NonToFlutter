@@ -10,6 +10,7 @@ import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/screens/community/community_list_screen.dart';
 import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/push_service.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/app_transitions.dart';
 import 'package:nonto/utils/image_utils.dart';
@@ -58,6 +59,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ref.read(currentTabIndexProvider.notifier).state = widget.initialTab!;
     }
     _listenFriendOnline();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PushService().requestPermission();
+    });
   }
 
   @override

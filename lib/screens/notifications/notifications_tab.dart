@@ -40,7 +40,9 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
   void _loadInitialNotifications() {
     if (!mounted) return;
     final state = ref.read(notificationsProvider);
-    if (state.isInitialLoading && state.notifications.isEmpty) {
+    final hasUnreadInList = state.notifications.any((n) => !n.isRead);
+    if ((state.isInitialLoading && state.notifications.isEmpty) ||
+        (state.unreadCount > 0 && !hasUnreadInList)) {
       ref.read(notificationsProvider.notifier).loadNotifications(refresh: true);
     }
   }

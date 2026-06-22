@@ -18,6 +18,7 @@ import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/sound_service.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 
 /// 社群群聊页
 /// 支持：发送消息、图片/视频、表情、@提及、撤回与管理员删除。
@@ -672,21 +673,29 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   }
 
   Future<void> _pickAndSendImage() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery);
-    if (file == null) return;
-    await _sendMediaMessage(
-      upload: () => UploadService().uploadImage(file),
-      messageType: 'image',
-    );
+    try {
+      final file = await _picker.pickImage(source: ImageSource.gallery);
+      if (file == null) return;
+      await _sendMediaMessage(
+        upload: () => UploadService().uploadImage(file),
+        messageType: 'image',
+      );
+    } catch (e) {
+      if (mounted) showPickerErrorSnackBar(context, e, target: '相册');
+    }
   }
 
   Future<void> _pickAndSendVideo() async {
-    final file = await _picker.pickVideo(source: ImageSource.gallery);
-    if (file == null) return;
-    await _sendMediaMessage(
-      upload: () => UploadService().uploadVideo(file),
-      messageType: 'video',
-    );
+    try {
+      final file = await _picker.pickVideo(source: ImageSource.gallery);
+      if (file == null) return;
+      await _sendMediaMessage(
+        upload: () => UploadService().uploadVideo(file),
+        messageType: 'video',
+      );
+    } catch (e) {
+      if (mounted) showPickerErrorSnackBar(context, e, target: '视频');
+    }
   }
 
   Future<void> _sendMediaMessage({
