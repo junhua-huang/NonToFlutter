@@ -164,14 +164,14 @@ class _FeedTabState extends ConsumerState<FeedTab> {
       return;
     }
     _isRefreshing = true;
+    final refreshFuture = ref.read(feedProvider.notifier).refreshPosts();
+    // 先收起 SmartRefresher 的刷新头，再等待网络返回并替换帖子列表。
+    // 否则刷新头仍展开时列表高度/图片布局变化，收起动画会做 offset 补偿，
+    // 表现为帖子列表自动上冲或刷新后跳动。
+    if (mounted) _refreshController.refreshCompleted();
     try {
-      await ref.read(feedProvider.notifier).refreshPosts();
-      // 立即完成刷新：不要等到 postFrameCallback。
-      // 之前延后到下一帧才 refreshCompleted()，会赶上 child 重建出新高度，
-      // SmartRefresher 收起动画与内容高度变化错开，导致列表做一次补偿性
-      // 回弹（表现为"自动上拉一下"）。同帧完成可避免这个高度差。
+      await refreshFuture;
     } finally {
-      if (mounted) _refreshController.refreshCompleted();
       _isRefreshing = false;
     }
   }
