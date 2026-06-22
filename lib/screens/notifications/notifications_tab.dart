@@ -6,6 +6,7 @@ import 'package:nonto/models/notification.dart' as app_notif;
 import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/screens/friends/friend_requests_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/chat_service.dart';
@@ -118,6 +119,15 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
       case app_notif.NotificationType.friendAccept:
         if (n.senderId != null) {
           _startChatFromNotification(n.senderId!);
+        }
+        break;
+      case app_notif.NotificationType.communityJoinRequest:
+        if (n.relatedId != null) {
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CommunityManageScreen(communityId: n.relatedId!),
+              ));
         }
         break;
       case app_notif.NotificationType.message:
@@ -309,6 +319,8 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
         return Icons.person_add;
       case app_notif.NotificationType.friendAccept:
         return Icons.people;
+      case app_notif.NotificationType.communityJoinRequest:
+        return Icons.groups;
       case app_notif.NotificationType.message:
         return Icons.mail;
       case app_notif.NotificationType.system:
@@ -325,6 +337,7 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
         return AppColors.primary;
       case app_notif.NotificationType.friendRequest:
       case app_notif.NotificationType.friendAccept:
+      case app_notif.NotificationType.communityJoinRequest:
         return const Color(0xFF00BA7C);
       case app_notif.NotificationType.message:
         return AppColors.primary;

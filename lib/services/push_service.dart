@@ -138,6 +138,14 @@ class PushService {
           nav.pushNamed(AppRoutes.notifications);
         }
         break;
+      case 'community_join_request':
+        // 社群入群申请 → 管理页待审核
+        if (relatedId.isNotEmpty) {
+          nav.pushNamed(AppRoutes.communityManageId(relatedId));
+        } else {
+          nav.pushNamed(AppRoutes.notifications);
+        }
+        break;
       default:
         // 其它通知 → 通知页
         nav.pushNamed(AppRoutes.notifications);

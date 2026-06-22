@@ -1,7 +1,16 @@
 import 'package:nonto/utils/date_utils.dart';
 import 'user.dart';
 
-enum NotificationType { like, comment, friendRequest, friendAccept, mention, message, system }
+enum NotificationType {
+  like,
+  comment,
+  friendRequest,
+  friendAccept,
+  mention,
+  message,
+  communityJoinRequest,
+  system,
+}
 
 class AppNotification {
   final int id;
@@ -82,8 +91,9 @@ class AppNotification {
       case 'friend_accept': return NotificationType.friendAccept;
       case 'mention': return NotificationType.mention;
       case 'message': return NotificationType.message;
+      case 'community_join_request': return NotificationType.communityJoinRequest;
       case 'system': return NotificationType.system;
-      default: return NotificationType.message;
+      default: return NotificationType.system;
     }
   }
 }

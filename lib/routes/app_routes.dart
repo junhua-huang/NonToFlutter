@@ -35,6 +35,9 @@ class AppRoutes {
   /// Build a concrete /communities/:id route path
   static String communityDetailId(String id) => '/communities/$id';
 
+  /// Build a concrete /communities/:id/manage route path
+  static String communityManageId(String id) => '/communities/$id/manage';
+
   /// Build a concrete /profile/:id route path
   static String profileViewId(String id) => '/profile/$id';
 

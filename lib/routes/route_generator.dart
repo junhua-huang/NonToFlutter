@@ -146,14 +146,14 @@ class RouteGenerator {
         return _authGuard(
             builder: (_) => CommunityDetailScreen(communityId: communityId));
       }
-      if (segments.length == 4 &&
+      if (segments.length == 3 &&
           segments[0] == 'communities' &&
           segments[2] == 'chat') {
         final communityId = int.parse(segments[1]);
         return _authGuard(
             builder: (_) => CommunityChatScreen(communityId: communityId));
       }
-      if (segments.length == 4 &&
+      if (segments.length == 3 &&
           segments[0] == 'communities' &&
           segments[2] == 'manage') {
         final communityId = int.parse(segments[1]);
