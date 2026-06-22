@@ -73,7 +73,13 @@ void main() {
       expect(source, contains('CommunityApiService().getMembers'));
       expect(source, contains('_insertMention(CommunityMember member)'));
       expect(source, contains('onAvatarLongPress'));
-      expect(source, contains('mentionUserIds: _mentionUserIds.toList()'));
+      expect(
+        source,
+        anyOf(
+          contains('mentionUserIds: _mentionUserIds.toList()'),
+          contains('mentionUserIds: mentionUserIds'),
+        ),
+      );
     });
 
     test('community chat renders image and video messages', () {
@@ -85,6 +91,57 @@ void main() {
       expect(source, contains('_buildImageMessage'));
       expect(source, contains('_buildVideoMessage'));
       expect(source, contains('Icons.play_circle_fill'));
+    });
+
+    test('community text send does not reload the full message list', () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      final sendStart = source.indexOf('Future<void> _sendMessage()');
+      final recallStart = source.indexOf('Future<void> _recallMessage');
+      expect(sendStart, greaterThanOrEqualTo(0));
+      expect(recallStart, greaterThan(sendStart));
+
+      final sendBody = source.substring(sendStart, recallStart);
+
+      expect(sendBody, contains('_isSending = true'));
+      expect(sendBody, contains("_syncConversationPreview(content, 'text')"));
+      expect(
+        sendBody,
+        isNot(contains('await _loadMessages()')),
+        reason: 'Sending should not trigger a full message reload/spinner.',
+      );
+      expect(source, contains('if (_isLoading && _messages.isEmpty)'));
+    });
+
+    test('community media send does not reload the full message list', () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      final mediaStart = source.indexOf('Future<void> _sendMediaMessage');
+      final syncStart = source.indexOf('void _syncConversationPreview', mediaStart);
+      expect(mediaStart, greaterThanOrEqualTo(0));
+      expect(syncStart, greaterThan(mediaStart));
+
+      final mediaBody = source.substring(mediaStart, syncStart);
+
+      expect(mediaBody, contains('_syncConversationPreview(url, messageType)'));
+      expect(
+        mediaBody,
+        isNot(contains('await _loadMessages()')),
+        reason: 'Media send should update locally/realtime, not force a full reload.',
+      );
+    });
+
+    test('community chat uses cache keys and DataLayer for instant display', () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+      final keys = read('lib/services/cache_keys.dart');
+
+      expect(keys, contains('communityChatRecent'));
+      expect(keys, contains('communityChatConversation'));
+      expect(source, contains("import 'package:nonto/services/cache_keys.dart';"));
+      expect(source, contains("import 'package:nonto/services/data_layer.dart';"));
+      expect(source, contains('CacheKeys.communityChatRecent(widget.communityId)'));
+      expect(source, contains('DataLayer().query'));
+      expect(source, contains('DataLayer().write'));
     });
   });
 }

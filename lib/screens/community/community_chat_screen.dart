@@ -9,8 +9,11 @@ import 'package:nonto/data/emoji_data.dart';
 import 'package:nonto/models/community.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
+import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
 
@@ -54,7 +57,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   }
 
   Future<void> _loadMessages() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = _messages.isEmpty);
+    await _loadCachedMessages();
     try {
       final api = CommunityApiService();
       final resp = await api.getChat(widget.communityId, limit: 50);
@@ -69,19 +73,83 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
               : int.tryParse(conversationId?.toString() ?? '');
           if (_conversationId != null) {
             WebSocketService().joinConversation(_conversationId!);
+            ChatRoomState.setConversation(_conversationId);
+            await DataLayer().write(
+              CacheKeys.communityChatConversation(widget.communityId),
+              Map<String, dynamic>.from(conversation),
+            );
           }
         }
         if (data['messages'] is List) {
-          _messages.clear();
-          _messages.addAll(
-            (data['messages'] as List).map(
-              (message) => Map<String, dynamic>.from(message),
-            ),
-          );
+          final serverMessages = (data['messages'] as List)
+              .whereType<Map>()
+              .map((message) => Map<String, dynamic>.from(message))
+              .toList();
+          final merged = _mergeServerMessages(serverMessages);
+          if (mounted) {
+            setState(() {
+              _messages
+                ..clear()
+                ..addAll(merged);
+            });
+          }
+          await _writeMessagesCache();
         }
       }
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadCachedMessages() async {
+    try {
+      final snapshot = await DataLayer().query(
+        CacheKeys.communityChatRecent(widget.communityId),
+        () async => null,
+      );
+      final cached = snapshot.data;
+      if (cached is List && cached.isNotEmpty && mounted) {
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(cached.whereType<Map>().map(
+                  (message) => Map<String, dynamic>.from(message),
+                ));
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> _mergeServerMessages(
+      List<Map<String, dynamic>> serverMessages) {
+    final merged = <Map<String, dynamic>>[];
+    final serverIds = serverMessages
+        .map((message) => message['id'])
+        .where((id) => id != null)
+        .toSet();
+    final pendingOptimistic = _messages.where((message) {
+      final status = message['status']?.toString();
+      final id = message['id'];
+      return status == 'sending' && !serverIds.contains(id);
+    }).map((message) => Map<String, dynamic>.from(message));
+    merged
+      ..addAll(serverMessages)
+      ..addAll(pendingOptimistic);
+    merged.sort((a, b) =>
+        _messageTime(a).compareTo(_messageTime(b)));
+    return merged;
+  }
+
+  Future<void> _writeMessagesCache() async {
+    final snapshot = _messages.map((message) => Map<String, dynamic>.from(message)).toList();
+    await DataLayer().write(
+      CacheKeys.communityChatRecent(widget.communityId),
+      snapshot,
+    );
+    final conversationId = _conversationId;
+    if (conversationId != null) {
+      await DataLayer().write(CacheKeys.msgRecent(conversationId), snapshot);
+    }
   }
 
   @override
@@ -90,6 +158,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     if (conversationId != null) {
       WebSocketService().leaveConversation(conversationId);
     }
+    ChatRoomState.setConversation(null);
     _messageSub?.cancel();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
@@ -102,20 +171,30 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     if (content.isEmpty || _isSending) return;
     final mentionUserIds = _mentionUserIds.toList();
     _msgCtrl.clear();
-    setState(() => _isSending = true);
+    final optimistic = _buildOptimisticMessage(
+      content: content,
+      messageType: 'text',
+      mentionUserIds: mentionUserIds,
+    );
+    setState(() {
+      _isSending = true;
+      _messages.add(optimistic);
+    });
+    _mentionUserIds.clear();
+    _syncConversationPreview(content, 'text');
+    await _writeMessagesCache();
 
     try {
-      await CommunityApiService().sendMessage(
+      final resp = await CommunityApiService().sendMessage(
         widget.communityId,
         content: content,
         messageType: 'text',
-        mentionUserIds: _mentionUserIds.toList(),
+        mentionUserIds: mentionUserIds,
       );
-      _mentionUserIds.clear();
-      _syncConversationPreview(content, 'text');
-      await _loadMessages();
+      _replaceOptimisticWithResponse(optimistic, resp.data);
     } catch (e) {
       if (mounted) {
+        _markOptimisticFailed(optimistic['id']);
         _msgCtrl.text = content;
         _msgCtrl.selection = TextSelection.fromPosition(
           TextPosition(offset: _msgCtrl.text.length),
@@ -128,7 +207,67 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
+      await _writeMessagesCache();
     }
+  }
+
+  Map<String, dynamic> _buildOptimisticMessage({
+    required String content,
+    required String messageType,
+    String? mediaUrl,
+    List<int>? mentionUserIds,
+  }) {
+    final user = ref.read(authProvider).user;
+    final now = DateTime.now();
+    return {
+      'id': now.millisecondsSinceEpoch,
+      'conversation_id': _conversationId,
+      'community_id': widget.communityId,
+      'sender_id': user?.id,
+      'sender': {
+        'id': user?.id,
+        'username': user?.username ?? '',
+        'display_name': user?.displayName,
+        'avatar_url': user?.avatarUrl,
+      },
+      'content': content,
+      'message_type': messageType,
+      'media_url': mediaUrl,
+      'mention_user_ids': mentionUserIds ?? const <int>[],
+      'created_at': now.toIso8601String(),
+      'status': 'sending',
+    };
+  }
+
+  void _replaceOptimisticWithResponse(
+      Map<String, dynamic> optimistic, dynamic responseData) {
+    final serverMessage = _extractMessageMap(responseData);
+    if (serverMessage == null || !mounted) return;
+    _replaceOptimisticOrAppend(serverMessage, optimisticId: optimistic['id']);
+  }
+
+  Map<String, dynamic>? _extractMessageMap(dynamic data) {
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final nested = map['message'];
+      if (nested is Map) return Map<String, dynamic>.from(nested);
+      return map;
+    }
+    return null;
+  }
+
+  void _markOptimisticFailed(dynamic optimisticId) {
+    final updated = _messages.map((message) {
+      if (message['id'] == optimisticId) {
+        return {...message, 'status': 'failed'};
+      }
+      return message;
+    }).toList();
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(updated);
+    });
   }
 
   Future<void> _recallMessage(int messageId, bool isMine) async {
@@ -146,10 +285,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
 
   void _appendRealtimeMessage(Map<String, dynamic> payload) {
     if (payload['event'] != 'new_message') return;
-    final message = payload['message'];
-    if (message is! Map) return;
+    final rawMessage = payload['message'] ?? payload['data'] ?? payload;
+    if (rawMessage is! Map) return;
 
-    final messageMap = Map<String, dynamic>.from(message);
+    final messageMap = Map<String, dynamic>.from(rawMessage);
     final rawConversationId =
         payload['conversation_id'] ?? messageMap['conversation_id'];
     final conversationId = rawConversationId is int
@@ -163,18 +302,62 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
 
     if (_conversationId != null && conversationId != _conversationId) return;
     if (_conversationId == null && communityId != widget.communityId) return;
+    if (!mounted) return;
 
-    final messageId = messageMap['id'];
-    final alreadyAdded = messageId != null &&
-        _messages.any((existing) => existing['id'] == messageId);
-    if (alreadyAdded || !mounted) return;
-
-    setState(() => _messages.add(messageMap));
+    _replaceOptimisticOrAppend(messageMap);
+    unawaited(_writeMessagesCache());
     final messageType = messageMap['message_type']?.toString() ?? 'text';
     final preview = messageMap['media_url']?.toString().isNotEmpty == true
         ? messageMap['media_url'].toString()
         : (messageMap['content']?.toString() ?? '');
     _syncConversationPreview(preview, messageType);
+  }
+
+  void _replaceOptimisticOrAppend(Map<String, dynamic> messageMap,
+      {dynamic optimisticId}) {
+    final messageId = messageMap['id'];
+    final existingIdx = messageId == null
+        ? -1
+        : _messages.indexWhere((existing) => existing['id'] == messageId);
+    if (existingIdx >= 0) return;
+
+    final optimisticIdx = optimisticId == null
+        ? _messages.indexWhere((existing) => _isMatchingOptimistic(existing, messageMap))
+        : _messages.indexWhere((existing) => existing['id'] == optimisticId);
+    setState(() {
+      if (optimisticIdx >= 0) {
+        _messages[optimisticIdx] = messageMap;
+      } else {
+        _messages.add(messageMap);
+      }
+      _messages.sort((a, b) => _messageTime(a).compareTo(_messageTime(b)));
+    });
+  }
+
+  bool _isMatchingOptimistic(
+      Map<String, dynamic> existing, Map<String, dynamic> incoming) {
+    if (existing['status']?.toString() != 'sending') return false;
+    final sameSender = existing['sender_id']?.toString() ==
+        incoming['sender_id']?.toString();
+    final sameContent = existing['content']?.toString() ==
+        incoming['content']?.toString();
+    final sameType = (existing['message_type']?.toString() ?? 'text') ==
+        (incoming['message_type']?.toString() ?? 'text');
+    final sameMedia = (existing['media_url']?.toString() ?? '') ==
+        (incoming['media_url']?.toString() ?? '');
+    final closeTime = _messageTime(existing)
+            .difference(_messageTime(incoming))
+            .inMinutes
+            .abs() <=
+        2;
+    return sameSender && sameContent && sameType && sameMedia && closeTime;
+  }
+
+  DateTime _messageTime(Map<String, dynamic> message) {
+    final raw = message['created_at'];
+    if (raw == null) return DateTime.fromMillisecondsSinceEpoch(0);
+    return DateTime.tryParse(raw.toString()) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   void _onTextChanged(String value) {
@@ -479,14 +662,23 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       if (url == null || url.isEmpty) {
         throw Exception(uploadResp.message ?? '上传失败');
       }
-      await CommunityApiService().sendMessage(
+      final optimistic = _buildOptimisticMessage(
+        content: url,
+        messageType: messageType,
+        mediaUrl: url,
+      );
+      if (mounted) {
+        setState(() => _messages.add(optimistic));
+      }
+      _syncConversationPreview(url, messageType);
+      await _writeMessagesCache();
+      final resp = await CommunityApiService().sendMessage(
         widget.communityId,
         content: url,
         messageType: messageType,
         mediaUrl: url,
       );
-      _syncConversationPreview(url, messageType);
-      await _loadMessages();
+      _replaceOptimisticWithResponse(optimistic, resp.data);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -526,7 +718,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   }
 
   Widget _buildMessages() {
-    if (_isLoading) {
+    if (_isLoading && _messages.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_messages.isEmpty) {

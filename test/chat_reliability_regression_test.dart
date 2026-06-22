@@ -51,5 +51,20 @@ void main() {
         reason: 'The queue should document that protocol retry owns retransmission.',
       );
     });
+
+    test('websocket new message notification sound excludes own echoes', () {
+      final source = read('lib/services/websocket_service.dart');
+
+      final ownCheck = source.indexOf('final isOwn = senderId != null');
+      final gate = source.indexOf('if (!isConvOpen && !isOwn && token != null && token.isNotEmpty)');
+      final soundCall = source.indexOf('SoundService().playNotificationSound()', gate);
+
+      expect(source, contains('ChatRoomState.isOpen(convIdInt)'));
+      expect(source, contains("final senderId = normalized['sender_id'];"));
+      expect(source, contains('final myId = LocalDbService().currentUserId;'));
+      expect(ownCheck, greaterThanOrEqualTo(0));
+      expect(gate, greaterThan(ownCheck));
+      expect(soundCall, greaterThan(gate));
+    });
   });
 }

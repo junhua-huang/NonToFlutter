@@ -701,6 +701,7 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
         try {
           await DataLayer().persistConversations(conversations);
           DataLayer().write(CacheKeys.convFullList, conversationList);
+          unawaited(_warmRecentMessageCaches(conversations));
         } catch (dbError) {
           debugPrint(
               '[Conv] persistConversations failed (non-fatal): $dbError');
@@ -717,6 +718,21 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       state = state.copyWith(error: '网络错误，请稍后重试', isLoading: false);
       debugPrint('[Conv] STATE SET: error="网络错误", exception=$e');
       debugPrint('[Conv] stack: $stack');
+    }
+  }
+
+  Future<void> _warmRecentMessageCaches(List<Conversation> conversations) async {
+    for (final conversation in conversations) {
+      final lastMessage = conversation.lastMessage;
+      if (lastMessage == null) continue;
+      final data = [lastMessage.toJson()];
+      await DataLayer().write(CacheKeys.msgRecent(conversation.id), data);
+      if (conversation.isCommunity && conversation.communityId != null) {
+        await DataLayer().write(
+          CacheKeys.communityChatRecent(conversation.communityId!),
+          data,
+        );
+      }
     }
   }
 

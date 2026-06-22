@@ -21,6 +21,10 @@ class CacheKeys {
   static String msgRecent(int convId) => 'msg:$convId:recent';
   /// 用户维度最近消息（带 userId 前缀）
   static String msgRecentByUser(int convId, String userId) => 'msg:$userId:$convId:recent';
+  /// 社群群聊最近消息（进入前尚未知 backing conversationId 时使用）
+  static String communityChatRecent(int communityId) => 'community:$communityId:chat:recent';
+  /// 社群群聊 backing conversation 元信息
+  static String communityChatConversation(int communityId) => 'community:$communityId:conversation';
 
   // ── Feed ──
   static const String feedPosts = 'feed:1:posts';

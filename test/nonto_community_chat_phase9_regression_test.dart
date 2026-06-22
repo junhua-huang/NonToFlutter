@@ -102,5 +102,40 @@ void main() {
       expect(source, contains('WebSocketService().leaveConversation'));
       expect(source, contains('_appendRealtimeMessage'));
     });
+
+    test('community chat marks backing conversation open for routing state', () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      expect(source,
+          contains("import 'package:nonto/providers/chat_room_state.dart';"));
+
+      final loadStart = source.indexOf('Future<void> _loadMessages()');
+      final disposeStart = source.indexOf('void dispose()');
+      expect(loadStart, greaterThanOrEqualTo(0));
+      expect(disposeStart, greaterThan(loadStart));
+
+      final loadBody = source.substring(loadStart, disposeStart);
+      expect(loadBody, contains('WebSocketService().joinConversation(_conversationId!)'));
+      expect(loadBody, contains('ChatRoomState.setConversation(_conversationId)'));
+
+      final disposeEnd = source.indexOf('super.dispose();', disposeStart);
+      expect(disposeEnd, greaterThan(disposeStart));
+      final disposeBody = source.substring(disposeStart, disposeEnd);
+      expect(disposeBody, contains('ChatRoomState.setConversation(null)'));
+    });
+
+    test('community websocket handler accepts normalized data payloads', () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      final appendStart = source.indexOf('void _appendRealtimeMessage');
+      final nextMethod = source.indexOf('void _onTextChanged', appendStart);
+      expect(appendStart, greaterThanOrEqualTo(0));
+      expect(nextMethod, greaterThan(appendStart));
+
+      final appendBody = source.substring(appendStart, nextMethod);
+      expect(appendBody, contains("payload['message'] ?? payload['data'] ?? payload"));
+      expect(appendBody, contains('_replaceOptimisticOrAppend'));
+      expect(appendBody, contains('_writeMessagesCache'));
+    });
   });
 }
