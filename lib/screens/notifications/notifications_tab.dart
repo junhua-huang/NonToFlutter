@@ -33,17 +33,15 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
   @override
   void initState() {
     super.initState();
-    // 二级兜底：如果 15s 后仍在 initialLoading，强制标记失败
-    Future.delayed(const Duration(seconds: 15), () {
-      if (mounted) {
-        final state = ref.read(notificationsProvider);
-        if (state.isInitialLoading && state.notifications.isEmpty) {
-          ref
-              .read(notificationsProvider.notifier)
-              .loadNotifications(refresh: true);
-        }
-      }
-    });
+    Future.microtask(_loadInitialNotifications);
+  }
+
+  void _loadInitialNotifications() {
+    if (!mounted) return;
+    final state = ref.read(notificationsProvider);
+    if (state.isInitialLoading && state.notifications.isEmpty) {
+      ref.read(notificationsProvider.notifier).loadNotifications(refresh: true);
+    }
   }
 
   @override

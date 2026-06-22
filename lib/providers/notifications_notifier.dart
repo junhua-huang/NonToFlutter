@@ -1,8 +1,9 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:nonto/models/notification.dart';
 import 'package:nonto/services/api/notification_service.dart';
+import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,7 +62,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
     _dataSub = DataLayer().changeStream.listen((key) {
       if (key == '__auth:logout') {
         _reset();
-      } else if (key == 'notif:list:1') {
+      } else if (key == CacheKeys.notifList) {
         _loadCached();
       }
     });
@@ -73,12 +74,11 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
     _loadInProgress = true;
     try {
       final result = await DataLayer()
-          .query('notif:list:1', () async => null)
+          .query(CacheKeys.notifList, () async => null)
           .timeout(const Duration(seconds: 2));
-      if (result.data is List && (result.data as List).isNotEmpty) {
+      if (result.data is List) {
         final list = (result.data as List<dynamic>)
-            .map((e) =>
-                AppNotification.fromJson(e as Map<String, dynamic>))
+            .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
             .toList();
         state = state.copyWith(
           notifications: list,
@@ -98,17 +98,22 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       final val = data['unread_count'];
       final count = val is int
           ? val
-          : (val is double ? val.toInt() : int.tryParse(val?.toString() ?? '') ?? 0);
+          : (val is double
+              ? val.toInt()
+              : int.tryParse(val?.toString() ?? '') ?? 0);
       final ids = data['notification_ids'];
       final readIds = ids is List
           ? ids.map((e) => int.tryParse(e.toString())).whereType<int>().toSet()
           : <int>{};
       final updated = readIds.isEmpty
           ? state.notifications.map((n) => n.copyWith(isRead: true)).toList()
-          : state.notifications.map((n) => readIds.contains(n.id) ? n.copyWith(isRead: true) : n).toList();
+          : state.notifications
+              .map((n) => readIds.contains(n.id) ? n.copyWith(isRead: true) : n)
+              .toList();
       state = state.copyWith(notifications: updated, unreadCount: count);
       try {
-        DataLayer().write('notif:list:1',
+        DataLayer().write(
+          CacheKeys.notifList,
           state.notifications.map((n) => n.toJson()).toList(),
           ttlSeconds: 600,
         );
@@ -116,21 +121,26 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       return;
     }
     final dynamic rawNotif = data['notification'];
-    final notification = rawNotif is Map ? Map<String, dynamic>.from(rawNotif) : null;
+    final notification =
+        rawNotif is Map ? Map<String, dynamic>.from(rawNotif) : null;
     if (event == 'new_notification' && notification != null) {
       final appNotif = AppNotification.fromJson(notification);
       final val = data['unread_count'];
       final unread = val is int
           ? val
-          : (val is double ? val.toInt() : int.tryParse(val?.toString() ?? '') ?? state.unreadCount + 1);
-      final existing = state.notifications.where((n) => n.id != appNotif.id).toList();
+          : (val is double
+              ? val.toInt()
+              : int.tryParse(val?.toString() ?? '') ?? state.unreadCount + 1);
+      final existing =
+          state.notifications.where((n) => n.id != appNotif.id).toList();
       state = state.copyWith(
         notifications: [appNotif, ...existing],
         unreadCount: unread,
         isInitialLoading: false,
       );
       try {
-        DataLayer().write('notif:list:1',
+        DataLayer().write(
+          CacheKeys.notifList,
           state.notifications.map((n) => n.toJson()).toList(),
           ttlSeconds: 600,
         );
@@ -161,33 +171,30 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       int? serverUnread;
       bool? serverHasMore;
 
-      final result = await DataLayer()
-          .query(
-            cacheKey,
-            () async {
-              final resp = await _service
-                  .getNotifications(page: state.page)
-                  .timeout(const Duration(seconds: 20));
-              if (resp.success && resp.data != null) {
-                final data =
-                    resp.data is String ? jsonDecode(resp.data) : resp.data;
-                serverHasMore = data['has_more'] as bool?;
-                serverUnread = data['unread_count'] as int?;
-                final list = data['notifications'] as List<dynamic>? ?? [];
-                return list;
-              }
-              return null;
-            },
-            forceRefresh: refresh,
-          )
-          .timeout(const Duration(seconds: 25), onTimeout: () {
-            return const QueryResult(data: null, source: CacheSource.remote);
-          });
+      final result = await DataLayer().query(
+        cacheKey,
+        () async {
+          final resp = await _service
+              .getNotifications(page: state.page)
+              .timeout(const Duration(seconds: 20));
+          if (resp.success && resp.data != null) {
+            final data =
+                resp.data is String ? jsonDecode(resp.data) : resp.data;
+            serverHasMore = data['has_more'] as bool?;
+            serverUnread = data['unread_count'] as int?;
+            final list = data['notifications'] as List<dynamic>? ?? [];
+            return list;
+          }
+          return null;
+        },
+        forceRefresh: refresh,
+      ).timeout(const Duration(seconds: 25), onTimeout: () {
+        return const QueryResult(data: null, source: CacheSource.remote);
+      });
 
       if (result.data != null) {
         final list = (result.data as List<dynamic>)
-            .map((e) =>
-                AppNotification.fromJson(e as Map<String, dynamic>))
+            .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
             .toList();
         final hasMore = serverHasMore ?? list.length >= 20;
         final unreadCount = serverUnread ?? state.unreadCount;
@@ -231,13 +238,14 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       }
       state = state.copyWith(notifications: updated, unreadCount: unread);
       try {
-        DataLayer().write('notif:list:1',
+        DataLayer().write(
+          CacheKeys.notifList,
           state.notifications.map((n) => n.toJson()).toList(),
           ttlSeconds: 600,
         );
       } catch (_) {}
     }
-    DataLayer().invalidate('notif:*');
+    DataLayer().invalidate(CacheKeys.notifPattern);
   }
 
   void _reset() {

@@ -40,6 +40,68 @@ void main() {
       expect(source, contains('当有人与你互动时会出现在这里'));
     });
 
+    test('notifications first paint does not wait fifteen seconds to fetch',
+        () {
+      final source = read('lib/screens/notifications/notifications_tab.dart');
+
+      expect(source,
+          isNot(contains('Future.delayed(const Duration(seconds: 15)')));
+      expect(source, contains('_loadInitialNotifications'));
+      expect(source, contains('Future.microtask(_loadInitialNotifications)'));
+      expect(source, contains('loadNotifications(refresh: true)'));
+    });
+
+    test('notifications skeleton only covers an empty initial load', () {
+      final source = read('lib/screens/notifications/notifications_tab.dart');
+
+      expect(
+        source,
+        contains('state.isInitialLoading && state.notifications.isEmpty'),
+      );
+      expect(source, contains('_buildNotificationsLoadingState()'));
+      expect(
+        source,
+        isNot(contains(
+            'state.isLoading\n            ? _buildNotificationsLoadingState()')),
+        reason:
+            'Refreshing or loading more must not cover cached notifications.',
+      );
+    });
+
+    test('cached empty notifications end the initial skeleton', () {
+      final notifier = read('lib/providers/notifications_notifier.dart');
+      final loadCachedStart = notifier.indexOf('Future<void> _loadCached()');
+      final nextMethod =
+          notifier.indexOf('void _onWsNotification', loadCachedStart);
+
+      expect(loadCachedStart, greaterThanOrEqualTo(0));
+      expect(nextMethod, greaterThan(loadCachedStart));
+
+      final loadCachedBody = notifier.substring(loadCachedStart, nextMethod);
+      expect(loadCachedBody, contains('DataLayer()'));
+      expect(loadCachedBody, contains('.query(CacheKeys.notifList'));
+      expect(loadCachedBody, contains('if (result.data is List)'));
+      expect(loadCachedBody, contains('notifications: list'));
+      expect(loadCachedBody, contains('isInitialLoading: false'));
+      expect(loadCachedBody, isNot(contains('isNotEmpty')));
+    });
+
+    test('notifications cache path uses centralized cache keys', () {
+      final notifier = read('lib/providers/notifications_notifier.dart');
+      final keys = read('lib/services/cache_keys.dart');
+
+      expect(keys, contains('notifList'));
+      expect(keys, contains('notifPattern'));
+      expect(
+        notifier,
+        contains("import 'package:nonto/services/cache_keys.dart';"),
+      );
+      expect(notifier, contains('CacheKeys.notifList'));
+      expect(notifier, contains('CacheKeys.notifPattern'));
+      expect(notifier, isNot(contains("'notif:list:1'")));
+      expect(notifier, isNot(contains("'notif:*'")));
+    });
+
     test('collapsed read notifications are not built as tiles', () {
       final source = read('lib/screens/notifications/notifications_tab.dart');
 
