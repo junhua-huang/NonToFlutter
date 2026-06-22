@@ -128,9 +128,9 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
         context, MaterialPageRoute(builder: (_) => const NotificationsTab()));
   }
 
-  void _openConversation(Conversation conv) {
+  Future<void> _openConversation(Conversation conv) async {
     if (conv.isCommunity && conv.communityId != null) {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => CommunityChatScreen(
@@ -139,10 +139,18 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
           ),
         ),
       );
+      if (mounted) {
+        await ref.read(conversationsProvider.notifier).loadConversations();
+      }
       return;
     }
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => ChatRoomScreen(conversation: conv)));
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ChatRoomScreen(conversation: conv)),
+    );
+    if (mounted) {
+      await ref.read(conversationsProvider.notifier).loadConversations();
+    }
   }
 
   @override

@@ -490,6 +490,55 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     }
   }
 
+  void upsertCommunityConversationPreview({
+    required int conversationId,
+    required int communityId,
+    required String content,
+    required String msgType,
+    DateTime? createdAt,
+  }) {
+    final now = createdAt ?? DateTime.now();
+    final lastMsg = Message(
+      id: 0,
+      conversationId: conversationId,
+      senderId: _currentUserId ?? 0,
+      content: content,
+      messageType: MessageType.values.firstWhere(
+        (e) => e.name == msgType,
+        orElse: () => MessageType.text,
+      ),
+      mediaUrl: msgType == 'image' || msgType == 'video' ? content : null,
+      createdAt: now,
+    );
+
+    final existingIdx =
+        state.conversations.indexWhere((c) => c.id == conversationId);
+    if (existingIdx < 0) {
+      loadConversations();
+      return;
+    }
+
+    final conv = state.conversations[existingIdx];
+    final updatedConv = Conversation(
+      id: conv.id,
+      user1Id: conv.user1Id,
+      user2Id: conv.user2Id,
+      otherUser: conv.otherUser,
+      lastMessage: lastMsg,
+      lastMessageAt: now,
+      unreadCount: conv.unreadCount,
+      type: conv.type,
+      communityId: conv.communityId,
+      communityName: conv.communityName,
+      communityAvatar: conv.communityAvatar,
+    );
+    final updated = List<Conversation>.from(state.conversations)
+      ..removeAt(existingIdx)
+      ..insert(0, updatedConv);
+    state = state.copyWith(conversations: updated);
+    DataLayer().invalidate(CacheKeys.convPattern);
+  }
+
   /// 发送消息后更新会话列表（移顶、更新预览、更新时间）。
   void onMessageSent(int convId, String content, String msgType, DateTime now) {
     final preview = _formatPreview(content, msgType);

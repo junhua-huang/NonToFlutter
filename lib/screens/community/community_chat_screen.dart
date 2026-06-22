@@ -3,14 +3,19 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/data/emoji_data.dart';
+import 'package:nonto/models/community.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/api/upload_service.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
 
 /// 社群群聊页
-/// 支持：发送消息、@提及、撤回与管理员删除。
+/// 支持：发送消息、图片/视频、表情、@提及、撤回与管理员删除。
 class CommunityChatScreen extends ConsumerStatefulWidget {
   final int communityId;
   final String? communityName;
@@ -28,11 +33,17 @@ class CommunityChatScreen extends ConsumerStatefulWidget {
 class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  final FocusNode _msgFocusNode = FocusNode();
+  final ImagePicker _picker = ImagePicker();
+  final Set<int> _mentionUserIds = {};
   final List<Map<String, dynamic>> _messages = [];
+  List<CommunityMember> _members = [];
   StreamSubscription<Map<String, dynamic>>? _messageSub;
   int? _conversationId;
   bool _isLoading = true;
   bool _isSending = false;
+  bool _showEmojiPicker = false;
+  int _emojiTabIndex = 0;
 
   @override
   void initState() {
@@ -82,12 +93,14 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     _messageSub?.cancel();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
+    _msgFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _sendMessage() async {
     final content = _msgCtrl.text.trim();
     if (content.isEmpty || _isSending) return;
+    final mentionUserIds = _mentionUserIds.toList();
     _msgCtrl.clear();
     setState(() => _isSending = true);
 
@@ -95,11 +108,21 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       await CommunityApiService().sendMessage(
         widget.communityId,
         content: content,
+        messageType: 'text',
+        mentionUserIds: _mentionUserIds.toList(),
       );
+      _mentionUserIds.clear();
+      _syncConversationPreview(content, 'text');
       await _loadMessages();
     } catch (e) {
       if (mounted) {
         _msgCtrl.text = content;
+        _msgCtrl.selection = TextSelection.fromPosition(
+          TextPosition(offset: _msgCtrl.text.length),
+        );
+        _mentionUserIds
+          ..clear()
+          ..addAll(mentionUserIds);
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('发送失败: $e')));
       }
@@ -147,40 +170,345 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     if (alreadyAdded || !mounted) return;
 
     setState(() => _messages.add(messageMap));
+    final messageType = messageMap['message_type']?.toString() ?? 'text';
+    final preview = messageMap['media_url']?.toString().isNotEmpty == true
+        ? messageMap['media_url'].toString()
+        : (messageMap['content']?.toString() ?? '');
+    _syncConversationPreview(preview, messageType);
   }
 
-  void _showMentionPicker() {
-    final controller = TextEditingController();
-    showDialog(
+  void _onTextChanged(String value) {
+    if (value.endsWith('@')) {
+      _showMentionMemberPicker();
+    }
+  }
+
+  void _toggleEmojiPicker() {
+    setState(() => _showEmojiPicker = !_showEmojiPicker);
+    if (_showEmojiPicker) {
+      _msgFocusNode.unfocus();
+    } else {
+      _msgFocusNode.requestFocus();
+    }
+  }
+
+  void _insertTextAtCursor(String text) {
+    final currentText = _msgCtrl.text;
+    final cursorPos = _msgCtrl.selection.baseOffset;
+    final before = cursorPos >= 0 ? currentText.substring(0, cursorPos) : currentText;
+    final after = cursorPos >= 0 ? currentText.substring(cursorPos) : '';
+    final nextText = '$before$text$after';
+    _msgCtrl.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: before.length + text.length),
+    );
+  }
+
+  void _insertEmoji(String emoji) {
+    _insertTextAtCursor(emoji);
+  }
+
+  void _insertMention(CommunityMember member) {
+    final user = member.user;
+    final name = user?.displayName?.trim().isNotEmpty == true
+        ? user!.displayName!.trim()
+        : (user?.username.trim().isNotEmpty == true
+            ? user!.username.trim()
+            : '用户${member.userId}');
+    final currentText = _msgCtrl.text;
+    final cursorPos = _msgCtrl.selection.baseOffset;
+    if (cursorPos > 0 && currentText.substring(0, cursorPos).endsWith('@')) {
+      _msgCtrl.value = TextEditingValue(
+        text: '${currentText.substring(0, cursorPos - 1)}@$name ${currentText.substring(cursorPos)}',
+        selection: TextSelection.collapsed(offset: cursorPos + name.length + 1),
+      );
+    } else {
+      _insertTextAtCursor('@$name ');
+    }
+    _mentionUserIds.add(member.userId);
+    _msgFocusNode.requestFocus();
+  }
+
+  Future<void> _insertMentionFromMessage(Map<String, dynamic> message) async {
+    await _ensureMembersLoaded();
+    final senderId = message['sender_id'] is int
+        ? message['sender_id'] as int
+        : int.tryParse(message['sender_id']?.toString() ?? '');
+    if (senderId == null) return;
+    final member = _members.cast<CommunityMember?>().firstWhere(
+          (member) => member?.userId == senderId,
+          orElse: () => null,
+        );
+    if (member != null) {
+      _insertMention(member);
+      return;
+    }
+
+    final sender = message['sender'] is Map
+        ? Map<String, dynamic>.from(message['sender'] as Map)
+        : <String, dynamic>{};
+    final name = sender['display_name']?.toString().trim().isNotEmpty == true
+        ? sender['display_name'].toString().trim()
+        : (sender['username']?.toString().trim().isNotEmpty == true
+            ? sender['username'].toString().trim()
+            : '用户$senderId');
+    _insertTextAtCursor('@$name ');
+    _mentionUserIds.add(senderId);
+    _msgFocusNode.requestFocus();
+  }
+
+  Future<void> _ensureMembersLoaded() async {
+    if (_members.isNotEmpty) return;
+    final resp = await CommunityApiService().getMembers(widget.communityId);
+    final raw = resp.data;
+    List<dynamic> list = const [];
+    if (raw is List) {
+      list = raw;
+    } else if (raw is Map) {
+      final data = Map<String, dynamic>.from(raw);
+      final members = data['members'] ?? data['items'] ?? data['data'];
+      if (members is List) list = members;
+    }
+    _members = list
+        .whereType<Map>()
+        .map((member) => CommunityMember.fromJson(Map<String, dynamic>.from(member)))
+        .toList();
+  }
+
+  Future<void> _showMentionMemberPicker() async {
+    try {
+      await _ensureMembersLoaded();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('成员加载失败: $e')));
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final searchCtrl = TextEditingController();
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('@ 提及'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: '输入用户名...',
-            border: OutlineInputBorder(),
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        var filtered = List<CommunityMember>.from(_members);
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void filter(String keyword) {
+              final query = keyword.trim().toLowerCase();
+              setSheetState(() {
+                filtered = _members.where((member) {
+                  final user = member.user;
+                  final displayName = user?.displayName?.toLowerCase() ?? '';
+                  final username = user?.username.toLowerCase() ?? '';
+                  return query.isEmpty ||
+                      displayName.contains(query) ||
+                      username.contains(query) ||
+                      member.userId.toString().contains(query);
+                }).toList();
+              });
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderLight,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '@ 提及成员',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: searchCtrl,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: '搜索成员',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onChanged: filter,
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 360),
+                    child: filtered.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 32),
+                            child: Text(
+                              '没有找到成员',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final member = filtered[index];
+                              final user = member.user;
+                              final name = user?.displayName?.trim().isNotEmpty == true
+                                  ? user!.displayName!.trim()
+                                  : (user?.username.trim().isNotEmpty == true
+                                      ? user!.username.trim()
+                                      : '用户${member.userId}');
+                              return ListTile(
+                                leading: _buildMemberAvatar(name, user?.avatarUrl),
+                                title: Text(name),
+                                subtitle: Text(member.role),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _insertMention(member);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    searchCtrl.dispose();
+  }
+
+  void _showMediaPicker() {
+    _msgFocusNode.unfocus();
+    setState(() => _showEmojiPicker = false);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('发送图片'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndSendImage();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.videocam_outlined),
+                title: const Text('发送视频'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndSendVideo();
+                },
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              final text = _msgCtrl.text;
-              _msgCtrl.text = '$text@${controller.text} ';
-              _msgCtrl.selection = TextSelection.fromPosition(
-                TextPosition(offset: _msgCtrl.text.length),
-              );
-            },
-            child: const Text('添加'),
-          ),
-        ],
       ),
     );
+  }
+
+  String? _extractUploadUrl(dynamic resp) {
+    final data = resp.data;
+    if (data is String && data.isNotEmpty) return data;
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      for (final key in ['url', 'file_url', 'media_url']) {
+        final value = map[key]?.toString();
+        if (value != null && value.isNotEmpty) return value;
+      }
+      final nested = map['data'];
+      if (nested is Map) {
+        for (final key in ['url', 'file_url', 'media_url']) {
+          final value = nested[key]?.toString();
+          if (value != null && value.isNotEmpty) return value;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> _pickAndSendImage() async {
+    final file = await _picker.pickImage(source: ImageSource.gallery);
+    if (file == null) return;
+    await _sendMediaMessage(
+      upload: () => UploadService().uploadImage(file),
+      messageType: 'image',
+    );
+  }
+
+  Future<void> _pickAndSendVideo() async {
+    final file = await _picker.pickVideo(source: ImageSource.gallery);
+    if (file == null) return;
+    await _sendMediaMessage(
+      upload: () => UploadService().uploadVideo(file),
+      messageType: 'video',
+    );
+  }
+
+  Future<void> _sendMediaMessage({
+    required Future<dynamic> Function() upload,
+    required String messageType,
+  }) async {
+    if (_isSending) return;
+    setState(() => _isSending = true);
+    try {
+      final uploadResp = await upload();
+      final url = _extractUploadUrl(uploadResp);
+      if (url == null || url.isEmpty) {
+        throw Exception(uploadResp.message ?? '上传失败');
+      }
+      await CommunityApiService().sendMessage(
+        widget.communityId,
+        content: url,
+        messageType: messageType,
+        mediaUrl: url,
+      );
+      _syncConversationPreview(url, messageType);
+      await _loadMessages();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('发送媒体失败: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  void _syncConversationPreview(String content, String msgType) {
+    final conversationId = _conversationId;
+    if (conversationId == null) {
+      ref.read(conversationsProvider.notifier).loadConversations();
+      return;
+    }
+    ref.read(conversationsProvider.notifier).upsertCommunityConversationPreview(
+          conversationId: conversationId,
+          communityId: widget.communityId,
+          content: content,
+          msgType: msgType,
+        );
   }
 
   @override
@@ -191,6 +519,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         children: [
           Expanded(child: _buildMessages()),
           _buildComposer(),
+          if (_showEmojiPicker) _buildEmojiPicker(),
         ],
       ),
     );
@@ -216,6 +545,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           message: message,
           isMine: isMine,
           onRecall: () => _recallMessage(message['id'], isMine),
+          onAvatarLongPress: () => _insertMentionFromMessage(message),
         );
       },
     );
@@ -248,7 +578,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
 
   Widget _buildComposer() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(6, 8, 8, 8),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         boxShadow: const [
@@ -263,13 +593,19 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         child: Row(
           children: [
             IconButton(
-              tooltip: '@ 提及',
-              icon: const Icon(Icons.alternate_email, size: 24),
-              onPressed: _showMentionPicker,
+              tooltip: '表情',
+              icon: const Icon(Icons.emoji_emotions_outlined, size: 24),
+              onPressed: _toggleEmojiPicker,
+            ),
+            IconButton(
+              tooltip: '图片/视频',
+              icon: const Icon(Icons.image_outlined, size: 24),
+              onPressed: _isSending ? null : _showMediaPicker,
             ),
             Expanded(
               child: TextField(
                 controller: _msgCtrl,
+                focusNode: _msgFocusNode,
                 minLines: 1,
                 maxLines: 4,
                 decoration: InputDecoration(
@@ -283,6 +619,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                   ),
                 ),
                 textInputAction: TextInputAction.send,
+                onChanged: _onTextChanged,
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
@@ -304,23 +641,102 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       ),
     );
   }
+
+  Widget _buildEmojiPicker() {
+    final categories = EmojiData.categories;
+    final emojis = categories[_emojiTabIndex].value;
+    return Container(
+      height: 292,
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 46,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final selected = index == _emojiTabIndex;
+                return InkWell(
+                  onTap: () => setState(() => _emojiTabIndex = index),
+                  child: Container(
+                    width: 52,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: selected ? AppColors.primary : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      categories[index].key,
+                      style: const TextStyle(fontSize: 22),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(10),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 8,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemCount: emojis.length,
+              itemBuilder: (context, index) => InkWell(
+                onTap: () => _insertEmoji(emojis[index]),
+                borderRadius: BorderRadius.circular(20),
+                child: Center(
+                  child: Text(
+                    emojis[index],
+                    style: const TextStyle(fontSize: 24),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemberAvatar(String name, String? avatarUrl) {
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      return CircleAvatar(
+        backgroundImage: CachedNetworkImageProvider(ImageUtils.resolveUrl(avatarUrl)),
+      );
+    }
+    return CircleAvatar(child: Text(name.isNotEmpty ? name[0] : '?'));
+  }
 }
 
 class _MessageBubble extends StatelessWidget {
   final Map<String, dynamic> message;
   final bool isMine;
   final VoidCallback? onRecall;
+  final VoidCallback? onAvatarLongPress;
 
   const _MessageBubble({
     required this.message,
     this.isMine = false,
     this.onRecall,
+    this.onAvatarLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     final recalled = message['is_recalled'] == true;
     final content = message['content'] ?? '';
+    final messageType = message['message_type']?.toString() ?? 'text';
+    final mediaUrl = message['media_url']?.toString().isNotEmpty == true
+        ? message['media_url'].toString()
+        : content.toString();
     final sender = message['sender'] is Map
         ? Map<String, dynamic>.from(message['sender'] as Map)
         : <String, dynamic>{};
@@ -360,7 +776,10 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMine) ...[
-            _buildSenderAvatar(senderName, senderAvatar),
+            GestureDetector(
+              onLongPress: onAvatarLongPress,
+              child: _buildSenderAvatar(senderName, senderAvatar),
+            ),
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -394,12 +813,17 @@ class _MessageBubble extends StatelessWidget {
                           ),
                         ),
                       ),
-                    Text(
-                      content.toString(),
-                      style: TextStyle(
-                        color: isMine ? Colors.white : AppColors.textPrimary,
+                    if (messageType == 'image')
+                      _buildImageMessage(mediaUrl)
+                    else if (messageType == 'video')
+                      _buildVideoMessage(mediaUrl)
+                    else
+                      Text(
+                        content.toString(),
+                        style: TextStyle(
+                          color: isMine ? Colors.white : AppColors.textPrimary,
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 4),
                     Text(
                       time,
@@ -414,6 +838,64 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
           if (isMine) const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageMessage(String mediaUrl) {
+    final url = ImageUtils.resolveUrl(mediaUrl);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: CachedNetworkImage(
+        imageUrl: url,
+        width: 220,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(
+          width: 220,
+          height: 160,
+          color: AppColors.backgroundSecondary,
+          alignment: Alignment.center,
+          child: const CircularProgressIndicator(strokeWidth: 2),
+        ),
+        errorWidget: (_, __, ___) => Container(
+          width: 220,
+          height: 120,
+          color: AppColors.backgroundSecondary,
+          alignment: Alignment.center,
+          child: const Icon(Icons.broken_image_outlined),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoMessage(String mediaUrl) {
+    return Container(
+      width: 220,
+      height: 132,
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const Icon(
+            Icons.play_circle_fill,
+            color: Colors.white,
+            size: 54,
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 10,
+            child: Text(
+              mediaUrl,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
+            ),
+          ),
         ],
       ),
     );

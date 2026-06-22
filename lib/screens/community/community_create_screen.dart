@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
@@ -10,14 +12,15 @@ import 'package:nonto/services/api/upload_service.dart';
 /// 创建社群 — 两步表单
 /// Step 1: 名称、简介、规则与视觉资料。
 /// Step 2: 加群方式，默认审核制。
-class CommunityCreateScreen extends StatefulWidget {
+class CommunityCreateScreen extends ConsumerStatefulWidget {
   const CommunityCreateScreen({super.key});
 
   @override
-  State<CommunityCreateScreen> createState() => _CommunityCreateScreenState();
+  ConsumerState<CommunityCreateScreen> createState() =>
+      _CommunityCreateScreenState();
 }
 
-class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
+class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _rulesCtrl = TextEditingController();
@@ -141,6 +144,7 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
         final community = resp.data['community'];
         final id = community is Map ? community['id'] : null;
         if (id != null && mounted) {
+          ref.read(conversationsProvider.notifier).loadConversations();
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(

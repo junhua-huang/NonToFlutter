@@ -103,9 +103,20 @@ class CommunityApiService {
   }
 
   /// 发送群聊消息
-  Future<ApiResponse> sendMessage(int communityId,
-      {required String content, List<int>? mentionUserIds}) {
-    final data = <String, dynamic>{'content': content, 'message_type': 'text'};
+  Future<ApiResponse> sendMessage(
+    int communityId, {
+    required String content,
+    String messageType = 'text',
+    String? mediaUrl,
+    List<int>? mentionUserIds,
+  }) {
+    final data = <String, dynamic>{
+      'content': content,
+      'message_type': messageType,
+    };
+    if (mediaUrl != null && mediaUrl.isNotEmpty) {
+      data['media_url'] = mediaUrl;
+    }
     if (mentionUserIds != null && mentionUserIds.isNotEmpty) {
       data['mention_user_ids'] = mentionUserIds;
     }
