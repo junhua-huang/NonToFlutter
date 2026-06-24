@@ -20,6 +20,7 @@ import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/screens/profile/edit_profile_screen.dart';
+import 'package:nonto/screens/profile/identity_application_screen.dart';
 import 'package:nonto/screens/profile/open_source_screen.dart';
 import 'package:nonto/screens/profile/privacy_policy_screen.dart';
 import 'package:nonto/screens/profile/settings_screen.dart';
@@ -66,6 +67,8 @@ class RouteGenerator {
         );
       case AppRoutes.editProfile:
         return _authGuard(builder: (_) => const EditProfileScreen());
+      case AppRoutes.identityApplication:
+        return _authGuard(builder: (_) => const IdentityApplicationScreen());
       case AppRoutes.settings:
         return _authGuard(builder: (_) => const SettingsScreen());
       case AppRoutes.forgotPassword:

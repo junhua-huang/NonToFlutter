@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:nonto/utils/date_utils.dart';
 
-enum MessageType { text, image, video, file, post, comment }
+enum MessageType { text, image, video, post, system }
 
 class Message {
   final int id;
@@ -44,10 +44,8 @@ class Message {
   factory Message.fromJson(Map<String, dynamic> json) => Message(
     id: _p(json['id']), conversationId: _p(json['conversation_id']),
     senderId: _p(json['sender_id']), content: json['content'],
-    messageType: MessageType.values.firstWhere(
-      (e) => e.name == (json['message_type'] ?? 'text'),
-      orElse: () => MessageType.text),
-    mediaUrl: json['media_url'],
+    messageType: _messageTypeFromJson(json),
+    mediaUrl: json['media_url']?.toString() ?? json['file_url']?.toString(),
     relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
     isRead: json['is_read'] ?? false,
     createdAt: json['created_at'] != null ? AppDateUtils.parseBeijingTime(json['created_at'].toString()) : null,
@@ -67,12 +65,19 @@ class Message {
 
   static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
 
+  static MessageType _messageTypeFromJson(Map<String, dynamic> json) {
+    final raw = (json['message_type'] ?? json['type'] ?? 'text').toString();
+    return MessageType.values.firstWhere(
+      (e) => e.name == raw,
+      orElse: () => MessageType.text,
+    );
+  }
+
   bool get isText => messageType == MessageType.text;
   bool get isImage => messageType == MessageType.image;
   bool get isVideo => messageType == MessageType.video;
-  bool get isFile => messageType == MessageType.file;
   bool get isPostCard => messageType == MessageType.post;
-  bool get isCommentCard => messageType == MessageType.comment;
+  bool get isSystem => messageType == MessageType.system;
   bool get hasMedia => mediaUrl != null && mediaUrl!.isNotEmpty;
 
   Map<String, dynamic> toJson() => {

@@ -287,6 +287,7 @@ class ChatSendQueue {
               msg.content ?? '',
               messageType: msg.messageType.name,
               mediaUrl: msg.mediaUrl,
+              relatedId: msg.relatedId,
               quoteMessageId: msg.quoteMessageId,
               quotePreview: msg.quotePreview,
             )

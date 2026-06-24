@@ -19,6 +19,8 @@ class PostService {
     List<String>? imageUrls,
     String? videoPath,
     String? thumbnailUrl,
+    String? contentCategory,
+    String? displayRoleType,
     List<int>? visibleUserIds,
     int? communityId,
   }) async {
@@ -37,6 +39,10 @@ class PostService {
         final formData = FormData.fromMap({
           'content': content,
           'visibility': visibility,
+          if (contentCategory != null && contentCategory.isNotEmpty)
+            'content_category': contentCategory,
+          if (displayRoleType != null && displayRoleType.isNotEmpty)
+            'display_role_type': displayRoleType,
           if (uploadedUrl != null) 'image_url': uploadedUrl.toString(),
           if (visibleUserIds != null && visibleUserIds.isNotEmpty)
             'visible_user_ids': visibleUserIds.join(','),
@@ -52,6 +58,10 @@ class PostService {
     final formData = FormData.fromMap({
       'content': content,
       'visibility': visibility,
+      if (contentCategory != null && contentCategory.isNotEmpty)
+        'content_category': contentCategory,
+      if (displayRoleType != null && displayRoleType.isNotEmpty)
+        'display_role_type': displayRoleType,
       if (imageUrls != null && imageUrls.isNotEmpty)
         'image_urls': jsonEncode(imageUrls),
       if (videoPath != null && videoPath.isNotEmpty) 'video_url': videoPath,

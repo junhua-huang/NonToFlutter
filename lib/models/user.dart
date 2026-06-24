@@ -11,6 +11,8 @@ class User {
   final String? coverPhotoUrl;
   final DateTime? createdAt;
   final bool? isOnline;
+  final List<String> verifiedRoles;
+  final List<String> verifiedRoleLabels;
 
   /// 头像缓存破坏标记（上传后更新，防止 CachedNetworkImage 使用旧缓存）
   final int? avatarCacheTs;
@@ -28,6 +30,8 @@ class User {
     this.coverPhotoUrl,
     this.createdAt,
     this.isOnline,
+    this.verifiedRoles = const [],
+    this.verifiedRoleLabels = const [],
     this.avatarCacheTs,
     this.coverCacheTs,
   });
@@ -36,7 +40,22 @@ class User {
     return username.isNotEmpty ? username[0].toUpperCase() : '?';
   }
 
+  bool get hasVerifiedIdentity => verifiedRoles.isNotEmpty;
+
+  static List<String> _parseStringList(dynamic value) {
+    if (value is List) {
+      return value.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+    }
+    return const [];
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
+    final verifiedRoles = _parseStringList(json['verified_roles']);
+    final rawVerifiedLabels = _parseStringList(json['verified_role_labels']);
+    final verifiedRoleLabels = verifiedRoles.isEmpty
+        ? const <String>[]
+        : rawVerifiedLabels.take(verifiedRoles.length).toList();
+
     return User(
       id: json['id'] is int
           ? json['id']
@@ -48,6 +67,8 @@ class User {
       avatarUrl: json['avatar_url'],
       coverPhotoUrl: json['cover_photo_url'],
       isOnline: json['is_online'],
+      verifiedRoles: verifiedRoles,
+      verifiedRoleLabels: verifiedRoleLabels,
       avatarCacheTs: json['avatar_cache_ts'],
       coverCacheTs: json['cover_cache_ts'],
       createdAt: json['created_at'] != null
@@ -68,6 +89,10 @@ class User {
       'avatar_cache_ts': avatarCacheTs,
       'cover_cache_ts': coverCacheTs,
       'is_online': isOnline,
+      'verified_roles': verifiedRoles,
+      'verified_role_labels': verifiedRoleLabels,
+      'roles': verifiedRoles,
+      'role_labels': verifiedRoleLabels,
     };
   }
 
@@ -79,6 +104,8 @@ class User {
     bool? isOnline,
     int? avatarCacheTs,
     int? coverCacheTs,
+    List<String>? verifiedRoles,
+    List<String>? verifiedRoleLabels,
   }) {
     return User(
       id: id,
@@ -90,6 +117,8 @@ class User {
       coverPhotoUrl: coverPhotoUrl ?? this.coverPhotoUrl,
       isOnline: isOnline ?? this.isOnline,
       createdAt: createdAt,
+      verifiedRoles: verifiedRoles ?? this.verifiedRoles,
+      verifiedRoleLabels: verifiedRoleLabels ?? this.verifiedRoleLabels,
       avatarCacheTs: avatarCacheTs ?? this.avatarCacheTs,
       coverCacheTs: coverCacheTs ?? this.coverCacheTs,
     );

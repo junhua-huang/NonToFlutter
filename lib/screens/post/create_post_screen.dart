@@ -61,6 +61,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   int _charCount = 0;
   static const int _maxChars = 500;
   static const int _maxImages = 9;
+  static const String _hideIdentityValue = '__hide_identity__';
+  static const List<Map<String, String>> _contentCategories = [
+    {'value': 'work', 'label': '作品'},
+    {'value': 'daily', 'label': '日常'},
+    {'value': 'cosplay', 'label': 'Cosplay'},
+    {'value': 'event', 'label': '活动'},
+  ];
+  String _selectedContentCategory = 'work';
+  String? _selectedDisplayRoleType;
 
   // 草稿 key
   static const String _draftTextKey = 'create_post_draft_text';
@@ -392,6 +401,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
         videoPath: videoUrl,
         thumbnailUrl: thumbnailUrl,
+        contentCategory: _selectedContentCategory,
+        displayRoleType: _selectedDisplayRoleType,
         communityId: widget.communityId,
       );
 
@@ -410,12 +421,29 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           }
         }
 
+        final selectedRoleIndex = _selectedDisplayRoleType == null
+            ? -1
+            : currentUser.verifiedRoles.indexOf(_selectedDisplayRoleType!);
+        final selectedRoleLabel =
+            selectedRoleIndex >= 0 && selectedRoleIndex < currentUser.verifiedRoleLabels.length
+                ? currentUser.verifiedRoleLabels[selectedRoleIndex]
+                : null;
+        if (serverPost?.displayRoleLabel == null && selectedRoleLabel != null) {
+          serverPost = serverPost?.copyWith(
+            contentCategory: _selectedContentCategory,
+            displayRoleType: _selectedDisplayRoleType,
+            displayRoleLabel: selectedRoleLabel,
+          );
+        }
         final optimisticPost = serverPost ??
             Post(
               id: -DateTime.now().millisecondsSinceEpoch,
               content: content,
               videoUrl: videoUrl,
               thumbnailUrl: thumbnailUrl,
+              contentCategory: _selectedContentCategory,
+              displayRoleType: _selectedDisplayRoleType,
+              displayRoleLabel: selectedRoleLabel,
               userId: currentUser.id,
               user: currentUser,
               likeCount: 0,
@@ -939,6 +967,65 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
   }
 
+  Widget _buildIdentityAndCategorySelector(User? user) {
+    final roles = user?.verifiedRoles ?? const <String>[];
+    final labels = user?.verifiedRoleLabels ?? const <String>[];
+    final selectedIndex = _selectedDisplayRoleType == null
+        ? -1
+        : roles.indexOf(_selectedDisplayRoleType!);
+    final selectedRoleLabel = selectedIndex >= 0 && selectedIndex < labels.length
+        ? labels[selectedIndex]
+        : _selectedDisplayRoleType;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        PopupMenuButton<String>(
+          initialValue: _selectedContentCategory,
+          onSelected: (value) => setState(() => _selectedContentCategory = value),
+          itemBuilder: (context) => _contentCategories
+              .map(
+                (item) => PopupMenuItem<String>(
+                  value: item['value']!,
+                  child: Text(item['label']!),
+                ),
+              )
+              .toList(),
+          child: _SelectorChip(
+            icon: Icons.category_outlined,
+            label: _contentCategories.firstWhere(
+              (item) => item['value'] == _selectedContentCategory,
+              orElse: () => _contentCategories.first,
+            )['label']!,
+          ),
+        ),
+        PopupMenuButton<String>(
+          initialValue: _selectedDisplayRoleType ?? _hideIdentityValue,
+          onSelected: (value) => setState(() => _selectedDisplayRoleType =
+              value == _hideIdentityValue ? null : value),
+          itemBuilder: (context) => [
+            const PopupMenuItem<String>(
+              value: _hideIdentityValue,
+              child: Text('不展示身份'),
+            ),
+            for (var i = 0; i < roles.length; i++)
+              PopupMenuItem<String>(
+                value: roles[i],
+                child: Text(i < labels.length ? labels[i] : roles[i]),
+              ),
+          ],
+          child: _SelectorChip(
+            icon: Icons.verified_outlined,
+            label: _selectedDisplayRoleType == null
+                ? '不展示身份'
+                : (selectedRoleLabel ?? _selectedDisplayRoleType!),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
@@ -1039,6 +1126,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ),
                   ],
                   const SizedBox(height: 12),
+                  _buildIdentityAndCategorySelector(user),
+                  const SizedBox(height: 12),
                   // Text field
                   TextField(
                     controller: _controller,
@@ -1119,6 +1208,42 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         user?.initials ?? '?',
         style: TextStyle(
             color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+      ),
+    );
+  }
+}
+
+class _SelectorChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _SelectorChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.textSecondary),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
+        ],
       ),
     );
   }

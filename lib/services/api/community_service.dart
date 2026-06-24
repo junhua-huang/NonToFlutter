@@ -108,6 +108,7 @@ class CommunityApiService {
     required String content,
     String messageType = 'text',
     String? mediaUrl,
+    int? relatedId,
     List<int>? mentionUserIds,
   }) {
     final data = <String, dynamic>{
@@ -116,6 +117,9 @@ class CommunityApiService {
     };
     if (mediaUrl != null && mediaUrl.isNotEmpty) {
       data['media_url'] = mediaUrl;
+    }
+    if (relatedId != null) {
+      data['related_id'] = relatedId;
     }
     if (mentionUserIds != null && mentionUserIds.isNotEmpty) {
       data['mention_user_ids'] = mentionUserIds;

@@ -10,8 +10,10 @@ import 'package:nonto/services/api/report_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/enhanced_media_viewer.dart';
+import 'package:nonto/widgets/identity_badge.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
+import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -325,6 +327,11 @@ class PostCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (post.displayRoleLabel != null &&
+                          post.displayRoleLabel!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        IdentityBadge(label: post.displayRoleLabel),
+                      ],
                       const SizedBox(height: 2),
                       GestureDetector(
                         onTap: () {
@@ -491,6 +498,7 @@ class PostCard extends StatelessWidget {
             onComment: onTap,
             onLike: onLike ?? () {},
             onView: () => _showPostStats(context, post),
+            onShare: () => PostShareToChatSheet.show(context, post: post),
           ),
           // Divider
           Padding(

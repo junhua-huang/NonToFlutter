@@ -303,6 +303,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               _buildSettingsDivider(),
               _buildListTile(
+                title: '身份认证',
+                subtitle: '申请 Coser、摄影师、妆娘等展示身份',
+                icon: Icons.verified_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.identityApplication),
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
                 title: '账号注销',
                 subtitle: '永久删除账号和相关数据',
                 icon: Icons.delete_outline,

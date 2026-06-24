@@ -36,6 +36,16 @@ class PushService {
   // registrationId 缓存 + 等待 future，避免登录后重复获取
   String? _registrationId;
   Completer<String?>? _regIdCompleter;
+  bool _registerRetryScheduled = false;
+  int _registerRetryAttempt = 0;
+  Timer? _registerRetryTimer;
+  String? _lastReportedAppState;
+  String? _reportStateInFlight;
+  static const List<Duration> _registerRetryDelays = [
+    Duration(seconds: 5),
+    Duration(seconds: 15),
+    Duration(seconds: 60),
+  ];
 
   /// 极光 AppKey（与 AndroidManifest / build.gradle 的 manifestPlaceholders 一致）。
   /// 客户端只持有 AppKey，Master Secret 仅服务端使用。
@@ -225,14 +235,19 @@ class PushService {
   /// 获取 rid → 上报 → 设 alias。失败静默，不阻塞登录。
   Future<void> registerAfterLogin() async {
     if (!_supported || !_initialized) return;
+    final ok = await _uploadRegistrationId();
+    if (!ok) _scheduleRegisterRetry();
+  }
+
+  Future<bool> _uploadRegistrationId() async {
     final token = ApiClient.token;
-    if (token == null || token.isEmpty) return;
+    if (token == null || token.isEmpty) return false;
     final userId = LocalDbService().currentUserId;
     try {
       final rid = await getRegistrationId();
       if (rid == null || rid.isEmpty) {
-        debugPrint('[Push] no registrationId, skip upload');
-        return;
+        debugPrint('[Push] no registrationId, schedule retry');
+        return false;
       }
       // 上报（PushApiService 内部走 ApiClient，自动带 JWT）
       final ok = await PushApiService().register(
@@ -241,12 +256,68 @@ class PushService {
         appVersion: AppConfig.appVersion,
       );
       debugPrint('[Push] register upload ok=$ok rid=$rid');
+      if (!ok) return false;
+      _registerRetryTimer?.cancel();
+      _registerRetryTimer = null;
+      _registerRetryAttempt = 0;
+      _registerRetryScheduled = false;
       if (userId != null) {
         final uid = int.tryParse(userId);
         if (uid != null) await setAlias(uid);
       }
+      await reportAppState('foreground');
+      return true;
     } catch (e) {
       debugPrint('[Push] registerAfterLogin error: $e');
+      return false;
+    }
+  }
+
+  void _scheduleRegisterRetry() {
+    if (_registerRetryScheduled) return;
+    if (_registerRetryAttempt >= _registerRetryDelays.length) {
+      debugPrint('[Push] register retry exhausted');
+      return;
+    }
+    final delay = _registerRetryDelays[_registerRetryAttempt++];
+    _registerRetryScheduled = true;
+    debugPrint('[Push] register retry scheduled in ${delay.inSeconds}s');
+    _registerRetryTimer?.cancel();
+    _registerRetryTimer = Timer(delay, () async {
+      _registerRetryScheduled = false;
+      if (ApiClient.token == null || ApiClient.token!.isEmpty) return;
+      final ok = await _uploadRegistrationId();
+      if (!ok) _scheduleRegisterRetry();
+    });
+  }
+
+  Future<void> reportAppState(String appState) async {
+    if (!_supported || !_initialized) return;
+    final token = ApiClient.token;
+    if (token == null || token.isEmpty) return;
+    if (appState != 'foreground' && appState != 'background' && appState != 'unknown') {
+      debugPrint('[Push] invalid app state: $appState');
+      return;
+    }
+    if (_lastReportedAppState == appState) return;
+    if (_reportStateInFlight == appState) return;
+    _reportStateInFlight = appState;
+    try {
+      final rid = await getRegistrationId();
+      if (rid == null || rid.isEmpty) {
+        debugPrint('[Push] no registrationId, skip state=$appState');
+        return;
+      }
+      final ok = await PushApiService().reportDeviceState(
+        registrationId: rid,
+        appState: appState,
+      );
+      if (ok) _lastReportedAppState = appState;
+      debugPrint('[Push] report app_state=$appState ok=$ok');
+    } catch (e) {
+      debugPrint('[Push] reportAppState error: $e');
+    } finally {
+      if (_reportStateInFlight == appState) _reportStateInFlight = null;
     }
   }
 
@@ -263,6 +334,12 @@ class PushService {
       debugPrint('[Push] unregisterOnLogout error: $e');
     }
     // 清缓存，下次登录重新获取
+    _registerRetryTimer?.cancel();
+    _registerRetryTimer = null;
+    _registerRetryScheduled = false;
+    _registerRetryAttempt = 0;
+    _lastReportedAppState = null;
+    _reportStateInFlight = null;
     _registrationId = null;
     _regIdCompleter = null;
   }
@@ -288,6 +365,25 @@ class PushApiService {
       return resp.success;
     } catch (e) {
       debugPrint('[PushApi] register error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> reportDeviceState({
+    required String registrationId,
+    required String appState,
+  }) async {
+    try {
+      final resp = await ApiClient().post(
+        '/push/device-state',
+        data: {
+          'registration_id': registrationId,
+          'app_state': appState,
+        },
+      );
+      return resp.success;
+    } catch (e) {
+      debugPrint('[PushApi] reportDeviceState error: $e');
       return false;
     }
   }

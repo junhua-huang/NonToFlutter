@@ -1,0 +1,153 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nonto/models/message.dart';
+import 'package:nonto/models/conversation.dart';
+import 'package:nonto/widgets/nonto/nonto_conversation_helpers.dart';
+
+void main() {
+  group('chat message type contracts', () {
+    test('MessageType only exposes supported product types', () {
+      expect(MessageType.values.map((e) => e.name),
+          ['text', 'image', 'video', 'post', 'system']);
+    });
+
+    test('Message parses message type and media url compatibility fields', () {
+      final fromFileUrl = Message.fromJson({
+        'id': 1,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'message_type': 'image',
+        'file_url': 'https://cdn.example/a.jpg',
+      });
+      expect(fromFileUrl.messageType, MessageType.image);
+      expect(fromFileUrl.mediaUrl, 'https://cdn.example/a.jpg');
+
+      final fromLegacyType = Message.fromJson({
+        'id': 2,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'type': 'video',
+        'media_url': 'https://cdn.example/v.mp4',
+      });
+      expect(fromLegacyType.messageType, MessageType.video);
+    });
+
+    test('unknown legacy file and comment message types fall back to text', () {
+      final file = Message.fromJson({
+        'id': 1,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'message_type': 'file',
+      });
+      final comment = Message.fromJson({
+        'id': 2,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'message_type': 'comment',
+      });
+
+      expect(file.messageType, MessageType.text);
+      expect(comment.messageType, MessageType.text);
+    });
+
+    test('conversation preview labels media post and system messages', () {
+      Conversation convWith(Message message) => Conversation(
+            id: 1,
+            user1Id: 1,
+            user2Id: 2,
+            lastMessage: message,
+          );
+
+      expect(nontoConversationPreview(convWith(Message(
+        id: 1,
+        conversationId: 1,
+        senderId: 1,
+        content: 'https://cdn.example/a.jpg',
+        messageType: MessageType.image,
+      ))), '[图片]');
+      expect(nontoConversationPreview(convWith(Message(
+        id: 2,
+        conversationId: 1,
+        senderId: 1,
+        content: 'https://cdn.example/v.mp4',
+        messageType: MessageType.video,
+      ))), '[视频]');
+      expect(nontoConversationPreview(convWith(Message(
+        id: 3,
+        conversationId: 1,
+        senderId: 1,
+        content: '帖子摘要',
+        messageType: MessageType.post,
+      ))), '[帖子] 帖子摘要');
+      expect(nontoConversationPreview(convWith(Message(
+        id: 4,
+        conversationId: 1,
+        senderId: 1,
+        content: '欢迎加入',
+        messageType: MessageType.system,
+      ))), '欢迎加入');
+    });
+
+    test('private chat source contains video send and post/system render hooks', () {
+      final source = File('lib/screens/chat/chat_room_screen.dart').readAsStringSync();
+      expect(source, contains('sendVideoMessage'));
+      expect(source, contains('_buildPostCardBubble'));
+      expect(source, contains('_buildSystemMessage'));
+    });
+
+    test('community chat source contains post/system render hooks', () {
+      final source = File('lib/screens/community/community_chat_screen.dart').readAsStringSync();
+      expect(source, contains('_buildPostCard'));
+      expect(source, contains('_buildSystemMessage'));
+    });
+
+    test('send queue passes relatedId to websocket', () {
+      final source = File('lib/services/chat_send_queue.dart').readAsStringSync();
+      expect(source, contains('relatedId: msg.relatedId'));
+    });
+
+    test('local database schema stores full chat message metadata', () {
+      final schema = File('lib/services/database/app_database.dart').readAsStringSync();
+      expect(schema, contains('IntColumn get relatedId'));
+      expect(schema, contains('TextColumn get clientMsgId'));
+      expect(schema, contains('IntColumn get quoteMessageId'));
+      expect(schema, contains('TextColumn get quotePreview'));
+      expect(schema, contains('BoolColumn get isRecalled'));
+      expect(schema, contains('RealColumn get uploadProgress'));
+      expect(schema, contains('TextColumn get lastMessageType'));
+      expect(schema, contains('TextColumn get lastMessageMediaUrl'));
+      expect(schema, contains('IntColumn get lastMessageRelatedId'));
+      expect(schema, contains('BoolColumn get lastMessageIsRecalled'));
+    });
+
+    test('local database persistence maps full message metadata', () {
+      final source = File('lib/services/local_db_service.dart').readAsStringSync();
+      expect(source, contains('relatedId: Value(msg.relatedId)'));
+      expect(source, contains('clientMsgId: Value(msg.clientMsgId)'));
+      expect(source, contains('quoteMessageId: Value(msg.quoteMessageId)'));
+      expect(source, contains('quotePreview: Value(msg.quotePreview)'));
+      expect(source, contains('isRecalled: Value(msg.isRecalled)'));
+      expect(source, contains('uploadProgress: Value(msg.uploadProgress)'));
+      expect(source, contains('lastMessageType: Value(conv.lastMessage?.messageType.name ?? MessageType.text.name)'));
+      expect(source, contains('lastMessageMediaUrl: Value(conv.lastMessage?.mediaUrl)'));
+      expect(source, contains('lastMessageRelatedId: Value(conv.lastMessage?.relatedId)'));
+      expect(source, contains('lastMessageIsRecalled: Value(conv.lastMessage?.isRecalled ?? false)'));
+    });
+
+    test('post share to chat UI entry points exist', () {
+      final sheet = File('lib/widgets/post_share_to_chat_sheet.dart');
+      expect(sheet.existsSync(), isTrue);
+      final sheetSource = sheet.readAsStringSync();
+      expect(sheetSource, contains('class PostShareToChatSheet'));
+      expect(sheetSource, contains("messageType: 'post'"));
+      expect(sheetSource, contains('relatedId: post.id'));
+
+      final detailSource = File('lib/screens/post/post_detail_screen.dart').readAsStringSync();
+      expect(detailSource, contains('PostShareToChatSheet.show'));
+
+      final cardSource = File('lib/widgets/post_card.dart').readAsStringSync();
+      expect(cardSource, contains('PostShareToChatSheet.show'));
+    });
+  });
+}

@@ -17,6 +17,7 @@ import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/comment_section.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
+import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -614,6 +615,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           },
           onLike: _toggleLike,
           onView: () => _showPostStatsDetail(post),
+          onShare: () => PostShareToChatSheet.show(context, post: post),
         ),
       ],
     );

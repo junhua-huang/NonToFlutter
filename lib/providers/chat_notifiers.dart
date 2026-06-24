@@ -1270,6 +1270,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   void sendMessage(String content,
       {String messageType = 'text',
       String? mediaUrl,
+      int? relatedId,
       int? quoteMessageId,
       String? quotePreview}) {
     if (_currentUserId == null) return;
@@ -1290,6 +1291,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         orElse: () => MessageType.text,
       ),
       mediaUrl: mediaUrl,
+      relatedId: relatedId,
       isRead: false,
       createdAt: now,
       requestId: requestId,
@@ -1385,7 +1387,77 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     }
   }
 
-  /// 标记图片上传失败（保留 tempBytes 以便重试）
+  /// 发送视频消息（先上传再发送）
+  Future<void> sendVideoMessage(Uint8List bytes, String fileName) async {
+    if (_currentUserId == null) return;
+    final requestId = _generateRequestId();
+    final now = DateTime.now();
+
+    final optimisticMsg = Message(
+      id: now.millisecondsSinceEpoch,
+      conversationId: conversationId,
+      senderId: _currentUserId!,
+      content: '视频',
+      messageType: MessageType.video,
+      createdAt: now,
+      requestId: requestId,
+      status: 'uploading',
+      tempBytes: bytes,
+    );
+
+    state = state.copyWith(
+      messages: [...state.messages, optimisticMsg],
+      isSending: true,
+    );
+    DataLayer().persistMessage(optimisticMsg);
+
+    try {
+      final uploadResp = await ApiClient().uploadBytes(
+        '/upload/chat/video',
+        bytes,
+        fileName,
+        onSendProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          final progress = (sent / total).clamp(0.0, 1.0).toDouble();
+          final updated = state.messages
+              .map((m) => m.id == optimisticMsg.id
+                  ? m.copyWith(status: 'uploading', uploadProgress: progress)
+                  : m)
+              .toList();
+          state = state.copyWith(messages: updated, isSending: true);
+          _syncL1();
+        },
+      );
+      if (uploadResp.success) {
+        final url = _extractUrl(uploadResp.data);
+        if (url != null) {
+          final queuedMsg = optimisticMsg.copyWith(
+            content: url,
+            mediaUrl: url,
+            status: 'sending',
+            uploadProgress: 1.0,
+            clearTempBytes: true,
+          );
+          final updated = state.messages
+              .map((m) => m.id == optimisticMsg.id ? queuedMsg : m)
+              .toList();
+          state = state.copyWith(messages: updated, isSending: true);
+          await DataLayer().persistMessage(queuedMsg);
+          _syncL1();
+          SoundService().playSendSound();
+          _onMessageSent?.call(conversationId, '视频', 'video', now);
+          _sendQueue.enqueue(queuedMsg);
+        }
+      } else {
+        _markUploadFailed(optimisticMsg.id, bytes);
+      }
+    } catch (e) {
+      debugPrint('Send video error: $e');
+      _markUploadFailed(optimisticMsg.id, bytes);
+    }
+  }
+
+  /// 标记图片/视频上传失败（保留 tempBytes 以便重试）
   void _markUploadFailed(int optimisticId, Uint8List bytes) {
     if (!mounted) return;
     final updated = state.messages.map((m) {

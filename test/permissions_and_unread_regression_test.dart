@@ -77,5 +77,33 @@ void main() {
       expect(tab, contains('state.unreadCount > 0 && !hasUnreadInList'));
       expect(tab, contains('loadNotifications(refresh: true)'));
     });
+
+    test('push service reports app foreground and background state', () {
+      final push = read('lib/services/push_service.dart');
+      final home = read('lib/screens/home/home_screen.dart');
+
+      expect(push, contains('Future<void> reportAppState(String appState)'));
+      expect(push, contains("'/push/device-state'"));
+      expect(push, contains("'registration_id': registrationId"));
+      expect(push, contains("'app_state': appState"));
+      expect(push, contains('String? _lastReportedAppState;'));
+      expect(push, contains('if (_lastReportedAppState == appState) return;'));
+      expect(home, contains("PushService().reportAppState('foreground')"));
+      expect(home, contains("PushService().reportAppState('background')"));
+    });
+
+    test('push registration upload has bounded retry state', () {
+      final push = read('lib/services/push_service.dart');
+
+      expect(push, contains('bool _registerRetryScheduled = false;'));
+      expect(push, contains('static const List<Duration> _registerRetryDelays'));
+      expect(push, contains('Future<bool> _uploadRegistrationId()'));
+      expect(push, contains('_scheduleRegisterRetry()'));
+      expect(push, contains('Timer? _registerRetryTimer;'));
+      expect(push, contains('_registerRetryTimer?.cancel();'));
+      expect(push, contains('Duration(seconds: 5)'));
+      expect(push, contains('Duration(seconds: 15)'));
+      expect(push, contains('Duration(seconds: 60)'));
+    });
   });
 }

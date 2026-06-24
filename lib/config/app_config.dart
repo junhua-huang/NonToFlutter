@@ -18,13 +18,13 @@ class AppConfig {
   // 本地默认连电脑本机；Android 模拟器/真机/生产环境通过 --dart-define 覆盖。
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:5000/api',
+    defaultValue: 'http://192.168.1.6:5000/api',
   );
 
   // WebSocket 地址。
   static const String wsUrl = String.fromEnvironment(
     'WS_URL',
-    defaultValue: 'http://127.0.0.1:5000/ws',
+    defaultValue: 'http://192.168.1.6:5000/ws',
   );
 
   // 分页默认值

@@ -21,6 +21,7 @@ import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
+import 'package:nonto/widgets/identity_badge.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/post_card.dart';
 import 'package:flutter/material.dart';
@@ -718,6 +719,16 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                                     fontSize: 15,
                                     color: AppColors.textSecondary),
                               ),
+                              if (user.verifiedRoleLabels.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: user.verifiedRoleLabels
+                                      .map((label) => IdentityBadge(label: label))
+                                      .toList(),
+                                ),
+                              ],
                             ],
                           ),
                         ),

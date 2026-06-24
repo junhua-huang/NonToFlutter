@@ -9,6 +9,9 @@ class Post {
   final String? videoUrl;
   final String? thumbnailUrl;
   final String? postType;
+  final String? contentCategory;
+  final String? displayRoleType;
+  final String? displayRoleLabel;
   final int userId;
   final String? visibility;
   final bool? isPublic;
@@ -30,6 +33,9 @@ class Post {
     this.videoUrl,
     this.thumbnailUrl,
     this.postType,
+    this.contentCategory,
+    this.displayRoleType,
+    this.displayRoleLabel,
     required this.userId,
     this.visibility,
     this.isPublic,
@@ -59,6 +65,9 @@ class Post {
       videoUrl: json['video_url'],
       thumbnailUrl: json['thumbnail_url'] ?? json['cover_url'],
       postType: json['post_type'],
+      contentCategory: json['content_category'],
+      displayRoleType: json['display_role_type'],
+      displayRoleLabel: json['display_role_label'],
       userId: _parseInt(json['user_id']),
       visibility: json['visibility'],
       isPublic: json['is_public'],
@@ -111,6 +120,9 @@ class Post {
         'video_url': videoUrl,
         'thumbnail_url': thumbnailUrl,
         'post_type': postType,
+        'content_category': contentCategory,
+        'display_role_type': displayRoleType,
+        'display_role_label': displayRoleLabel,
         'user_id': userId,
         'visibility': visibility,
         'is_public': isPublic,
@@ -135,6 +147,9 @@ class Post {
       List<String>? topics,
       String? videoUrl,
       String? thumbnailUrl,
+      String? contentCategory,
+      String? displayRoleType,
+      String? displayRoleLabel,
       bool? isPublic,
       DateTime? updatedAt,
       List<String>? images,
@@ -146,6 +161,9 @@ class Post {
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       postType: postType,
+      contentCategory: contentCategory ?? this.contentCategory,
+      displayRoleType: displayRoleType ?? this.displayRoleType,
+      displayRoleLabel: displayRoleLabel ?? this.displayRoleLabel,
       userId: userId,
       visibility: visibility ?? this.visibility,
       isPublic: isPublic ?? this.isPublic,

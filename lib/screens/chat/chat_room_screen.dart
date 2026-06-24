@@ -7,6 +7,7 @@ import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/services/api/chat_service.dart';
@@ -168,6 +169,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
   }
 
+  bool _isVideoFileName(String name) {
+    final lower = name.toLowerCase();
+    return lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.mkv') ||
+        lower.endsWith('.webm');
+  }
+
   Future<void> _pickMedia(ImageSource source) async {
     try {
       if (source == ImageSource.camera) {
@@ -192,9 +202,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       for (final file in picked) {
         final bytes = await file.readAsBytes();
         if (!mounted) return;
-        ref
-            .read(messagesProvider(widget.conversation.id).notifier)
-            .sendImageMessage(bytes, file.name);
+        final notifier = ref.read(messagesProvider(widget.conversation.id).notifier);
+        if (_isVideoFileName(file.name)) {
+          notifier.sendVideoMessage(bytes, file.name);
+        } else {
+          notifier.sendImageMessage(bytes, file.name);
+        }
       }
       _scrollToBottom(animate: false);
     } catch (e) {
@@ -832,6 +845,10 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       );
     }
 
+    if (msg.messageType == MessageType.system) {
+      return _buildSystemMessage(msg.content ?? '');
+    }
+
     // 连续消息圆角
     const r = Radius.circular(16);
     const rSmall = Radius.circular(4);
@@ -896,6 +913,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     )
                   else if (isImage)
                     _buildImageBubble(msg)
+                  else if (msg.messageType == MessageType.post)
+                    _buildPostCardBubble(msg, isMe)
                   else
                     _buildMediaBubble(msg, isMe, textColor),
                 ],
@@ -925,6 +944,86 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildPostCardBubble(Message msg, bool isMe) {
+    final title = (msg.content?.trim().isNotEmpty == true)
+        ? msg.content!.trim()
+        : '查看帖子 #${msg.relatedId ?? ''}';
+    final imageUrl = msg.mediaUrl?.trim();
+    return InkWell(
+      onTap: msg.relatedId == null
+          ? null
+          : () => Navigator.pushNamed(
+                context,
+                AppRoutes.postDetailId(msg.relatedId.toString()),
+              ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: ImageUtils.resolveUrl(imageUrl),
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.article_outlined,
+                        size: 15,
+                        color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '帖子',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isMe ? Colors.white : _NontoChatColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '点击查看详情',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1044,11 +1143,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         Icon(
           msg.messageType == MessageType.video
               ? Icons.videocam
-              : msg.messageType == MessageType.file
-                  ? Icons.insert_drive_file
-                  : msg.messageType == MessageType.post
-                      ? Icons.article
-                      : Icons.comment,
+              : msg.messageType == MessageType.post
+                  ? Icons.article
+                  : Icons.chat_bubble_outline,
           size: 16,
           color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
         ),

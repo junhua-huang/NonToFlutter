@@ -15,6 +15,7 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String createPost = '/create-post';
   static const String editProfile = '/edit-profile';
+  static const String identityApplication = '/identity-application';
   static const String forgotPassword = '/forgot_password';
   static const String privacyPolicy = '/privacy_policy';
   static const String termsOfService = '/terms_of_service';

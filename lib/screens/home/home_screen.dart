@@ -61,6 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _listenFriendOnline();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       PushService().requestPermission();
+      PushService().reportAppState('foreground');
     });
   }
 
@@ -70,11 +71,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // 用 forceReconnect 强制重建，绕过 connect() 的「已连接」短路——
     // 这是「有网就不断 WS」的关键：回前台必须立即恢复实时通道。
     if (state == AppLifecycleState.resumed) {
+      PushService().reportAppState('foreground');
       final ws = WebSocketService();
       if (ApiClient.token != null && ApiClient.token!.isNotEmpty) {
         debugPrint('[Home] app resumed, force reconnecting WebSocket');
         ws.forceReconnect();
       }
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      PushService().reportAppState('background');
     }
   }
 

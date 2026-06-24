@@ -159,6 +159,10 @@ class LocalDbService {
     String lastMessage,
     DateTime lastMessageAt, {
     int unreadIncrement = 0,
+    MessageType messageType = MessageType.text,
+    String? mediaUrl,
+    int? relatedId,
+    bool isRecalled = false,
   }) async {
     final db = _db;
     if (db == null) return;
@@ -167,6 +171,10 @@ class LocalDbService {
       lastMessage,
       lastMessageAt.millisecondsSinceEpoch,
       unreadIncrement: unreadIncrement,
+      messageType: messageType.name,
+      mediaUrl: mediaUrl,
+      relatedId: relatedId,
+      isRecalled: isRecalled,
     );
   }
 
@@ -191,12 +199,18 @@ class LocalDbService {
       senderId: Value(msg.senderId),
       content: Value(msg.content),
       mediaUrl: Value(msg.mediaUrl),
+      relatedId: Value(msg.relatedId),
       messageType: Value(msg.messageType.name),
       isRead: Value(msg.isRead),
       createdAt: Value(msg.createdAt?.millisecondsSinceEpoch),
       requestId: Value(msg.requestId),
+      clientMsgId: Value(msg.clientMsgId),
       seq: msg.seq != null ? Value(msg.seq) : const Value.absent(),
       status: Value(msg.status),
+      uploadProgress: Value(msg.uploadProgress),
+      quoteMessageId: Value(msg.quoteMessageId),
+      quotePreview: Value(msg.quotePreview),
+      isRecalled: Value(msg.isRecalled),
     );
   }
 
@@ -207,6 +221,7 @@ class LocalDbService {
       senderId: row.senderId,
       content: row.content,
       mediaUrl: row.mediaUrl,
+      relatedId: row.relatedId,
       messageType: MessageType.values.firstWhere(
         (e) => e.name == row.messageType,
         orElse: () => MessageType.text,
@@ -215,6 +230,14 @@ class LocalDbService {
       createdAt: row.createdAt != null
           ? DateTime.fromMillisecondsSinceEpoch(row.createdAt!)
           : null,
+      requestId: row.requestId,
+      clientMsgId: row.clientMsgId,
+      seq: row.seq,
+      status: row.status,
+      uploadProgress: row.uploadProgress,
+      quoteMessageId: row.quoteMessageId,
+      quotePreview: row.quotePreview,
+      isRecalled: row.isRecalled,
     );
   }
 
@@ -228,6 +251,10 @@ class LocalDbService {
       otherUserAvatar: Value(conv.otherUser?.avatarUrl),
       otherUserUsername: Value(conv.otherUser?.username),
       lastMessage: Value(conv.lastMessage?.content),
+      lastMessageType: Value(conv.lastMessage?.messageType.name ?? MessageType.text.name),
+      lastMessageMediaUrl: Value(conv.lastMessage?.mediaUrl),
+      lastMessageRelatedId: Value(conv.lastMessage?.relatedId),
+      lastMessageIsRecalled: Value(conv.lastMessage?.isRecalled ?? false),
       lastMessageAt: Value(conv.lastMessageAt?.millisecondsSinceEpoch),
       unreadCount: Value(conv.unreadCount),
       isOnline: const Value(false),
@@ -238,6 +265,10 @@ class LocalDbService {
   }
 
   Conversation _driftRowToConversation(ConversationsTableData row) {
+    final lastMessageType = MessageType.values.firstWhere(
+      (e) => e.name == row.lastMessageType,
+      orElse: () => MessageType.text,
+    );
     return Conversation(
       id: row.id,
       user1Id: row.user1Id ?? 0,
@@ -257,7 +288,10 @@ class LocalDbService {
               conversationId: row.id,
               senderId: 0,
               content: row.lastMessage!,
-              messageType: MessageType.text,
+              messageType: lastMessageType,
+              mediaUrl: row.lastMessageMediaUrl,
+              relatedId: row.lastMessageRelatedId,
+              isRecalled: row.lastMessageIsRecalled,
               createdAt: row.lastMessageAt != null
                   ? DateTime.fromMillisecondsSinceEpoch(row.lastMessageAt!)
                   : null,

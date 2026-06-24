@@ -29,13 +29,19 @@ class MessagesTable extends Table {
   IntColumn get senderId => integer()();
   TextColumn get content => text().nullable()();
   TextColumn get mediaUrl => text().nullable()();
+  IntColumn get relatedId => integer().nullable()();
   TextColumn get messageType => text().withDefault(const Constant('text'))();
   BoolColumn get isRead => boolean().withDefault(const Constant(false))();
   IntColumn get createdAt => integer().nullable()();
   TextColumn get requestId => text().nullable()();
+  TextColumn get clientMsgId => text().nullable()();
   IntColumn get seq => integer().nullable()(); // 服务端消息序号
   TextColumn get status =>
-      text().withDefault(const Constant('sent'))(); // sending/sent/failed
+      text().withDefault(const Constant('sent'))(); // uploading/sending/sent/failed
+  RealColumn get uploadProgress => real().nullable()();
+  IntColumn get quoteMessageId => integer().nullable()();
+  TextColumn get quotePreview => text().nullable()();
+  BoolColumn get isRecalled => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -51,6 +57,11 @@ class ConversationsTable extends Table {
   TextColumn get otherUserAvatar => text().nullable()();
   TextColumn get otherUserUsername => text().nullable()();
   TextColumn get lastMessage => text().nullable()();
+  TextColumn get lastMessageType => text().withDefault(const Constant('text'))();
+  TextColumn get lastMessageMediaUrl => text().nullable()();
+  IntColumn get lastMessageRelatedId => integer().nullable()();
+  BoolColumn get lastMessageIsRecalled =>
+      boolean().withDefault(const Constant(false))();
   IntColumn get lastMessageAt => integer().nullable()();
   IntColumn get unreadCount => integer().withDefault(const Constant(0))();
   BoolColumn get isOnline => boolean().withDefault(const Constant(false))();
@@ -406,12 +417,27 @@ class AppDatabase extends _$AppDatabase {
     String lastMessage,
     int lastMessageAtEpoch, {
     int unreadIncrement = 0,
+    String messageType = 'text',
+    String? mediaUrl,
+    int? relatedId,
+    bool isRecalled = false,
   }) async {
     if (unreadIncrement > 0) {
       await customStatement(
         'UPDATE conversations_table SET unread_count = unread_count + ?, '
-        'last_message = ?, last_message_at = ? WHERE id = ?',
-        [unreadIncrement, lastMessage, lastMessageAtEpoch, conversationId],
+        'last_message = ?, last_message_type = ?, last_message_media_url = ?, '
+        'last_message_related_id = ?, last_message_is_recalled = ?, '
+        'last_message_at = ? WHERE id = ?',
+        [
+          unreadIncrement,
+          lastMessage,
+          messageType,
+          mediaUrl,
+          relatedId,
+          isRecalled,
+          lastMessageAtEpoch,
+          conversationId,
+        ],
       );
       return;
     }
@@ -419,6 +445,10 @@ class AppDatabase extends _$AppDatabase {
           ..where((t) => t.id.equals(conversationId)))
         .write(ConversationsTableCompanion(
       lastMessage: Value(lastMessage),
+      lastMessageType: Value(messageType),
+      lastMessageMediaUrl: Value(mediaUrl),
+      lastMessageRelatedId: Value(relatedId),
+      lastMessageIsRecalled: Value(isRecalled),
       lastMessageAt: Value(lastMessageAtEpoch),
     ));
   }

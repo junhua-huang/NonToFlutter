@@ -10,6 +10,7 @@ import 'package:nonto/models/community.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
@@ -1188,6 +1189,10 @@ class _MessageBubble extends StatelessWidget {
       );
     }
 
+    if (messageType == 'system') {
+      return _buildSystemMessage(content.toString());
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -1237,6 +1242,8 @@ class _MessageBubble extends StatelessWidget {
                       _buildImageMessage(mediaUrl)
                     else if (messageType == 'video')
                       _buildVideoMessage(mediaUrl)
+                    else if (messageType == 'post')
+                      _buildPostCard(context, message)
                     else
                       Text(
                         content.toString(),
@@ -1259,6 +1266,95 @@ class _MessageBubble extends StatelessWidget {
           ),
           if (isMine) const SizedBox(width: 8),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSystemMessage(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundSecondary,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostCard(BuildContext context, Map<String, dynamic> message) {
+    final relatedId = int.tryParse(message['related_id']?.toString() ?? '');
+    final title = message['content']?.toString().trim().isNotEmpty == true
+        ? message['content'].toString().trim()
+        : '查看帖子 #${relatedId ?? ''}';
+    final rawImageUrl = message['media_url']?.toString().trim();
+    final imageUrl = rawImageUrl != null && rawImageUrl.isNotEmpty
+        ? ImageUtils.resolveUrl(rawImageUrl)
+        : null;
+
+    return InkWell(
+      onTap: relatedId == null
+          ? null
+          : () => Navigator.pushNamed(
+                context,
+                AppRoutes.postDetailId(relatedId.toString()),
+              ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (imageUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.article_outlined,
+                          size: 15, color: AppColors.textTertiary),
+                      const SizedBox(width: 4),
+                      Text('帖子',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textTertiary)),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('点击查看详情',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textTertiary)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

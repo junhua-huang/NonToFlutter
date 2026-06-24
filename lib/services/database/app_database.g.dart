@@ -38,6 +38,12 @@ class $MessagesTableTable extends MessagesTable
   late final GeneratedColumn<String> mediaUrl = GeneratedColumn<String>(
       'media_url', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _relatedIdMeta =
+      const VerificationMeta('relatedId');
+  @override
+  late final GeneratedColumn<int> relatedId = GeneratedColumn<int>(
+      'related_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _messageTypeMeta =
       const VerificationMeta('messageType');
   @override
@@ -67,6 +73,12 @@ class $MessagesTableTable extends MessagesTable
   late final GeneratedColumn<String> requestId = GeneratedColumn<String>(
       'request_id', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _clientMsgIdMeta =
+      const VerificationMeta('clientMsgId');
+  @override
+  late final GeneratedColumn<String> clientMsgId = GeneratedColumn<String>(
+      'client_msg_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _seqMeta = const VerificationMeta('seq');
   @override
   late final GeneratedColumn<int> seq = GeneratedColumn<int>(
@@ -79,6 +91,34 @@ class $MessagesTableTable extends MessagesTable
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant('sent'));
+  static const VerificationMeta _uploadProgressMeta =
+      const VerificationMeta('uploadProgress');
+  @override
+  late final GeneratedColumn<double> uploadProgress = GeneratedColumn<double>(
+      'upload_progress', aliasedName, true,
+      type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _quoteMessageIdMeta =
+      const VerificationMeta('quoteMessageId');
+  @override
+  late final GeneratedColumn<int> quoteMessageId = GeneratedColumn<int>(
+      'quote_message_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _quotePreviewMeta =
+      const VerificationMeta('quotePreview');
+  @override
+  late final GeneratedColumn<String> quotePreview = GeneratedColumn<String>(
+      'quote_preview', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _isRecalledMeta =
+      const VerificationMeta('isRecalled');
+  @override
+  late final GeneratedColumn<bool> isRecalled = GeneratedColumn<bool>(
+      'is_recalled', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_recalled" IN (0, 1))'),
+      defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -86,12 +126,18 @@ class $MessagesTableTable extends MessagesTable
         senderId,
         content,
         mediaUrl,
+        relatedId,
         messageType,
         isRead,
         createdAt,
         requestId,
+        clientMsgId,
         seq,
-        status
+        status,
+        uploadProgress,
+        quoteMessageId,
+        quotePreview,
+        isRecalled
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -128,6 +174,10 @@ class $MessagesTableTable extends MessagesTable
       context.handle(_mediaUrlMeta,
           mediaUrl.isAcceptableOrUnknown(data['media_url']!, _mediaUrlMeta));
     }
+    if (data.containsKey('related_id')) {
+      context.handle(_relatedIdMeta,
+          relatedId.isAcceptableOrUnknown(data['related_id']!, _relatedIdMeta));
+    }
     if (data.containsKey('message_type')) {
       context.handle(
           _messageTypeMeta,
@@ -146,6 +196,12 @@ class $MessagesTableTable extends MessagesTable
       context.handle(_requestIdMeta,
           requestId.isAcceptableOrUnknown(data['request_id']!, _requestIdMeta));
     }
+    if (data.containsKey('client_msg_id')) {
+      context.handle(
+          _clientMsgIdMeta,
+          clientMsgId.isAcceptableOrUnknown(
+              data['client_msg_id']!, _clientMsgIdMeta));
+    }
     if (data.containsKey('seq')) {
       context.handle(
           _seqMeta, seq.isAcceptableOrUnknown(data['seq']!, _seqMeta));
@@ -153,6 +209,30 @@ class $MessagesTableTable extends MessagesTable
     if (data.containsKey('status')) {
       context.handle(_statusMeta,
           status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
+    if (data.containsKey('upload_progress')) {
+      context.handle(
+          _uploadProgressMeta,
+          uploadProgress.isAcceptableOrUnknown(
+              data['upload_progress']!, _uploadProgressMeta));
+    }
+    if (data.containsKey('quote_message_id')) {
+      context.handle(
+          _quoteMessageIdMeta,
+          quoteMessageId.isAcceptableOrUnknown(
+              data['quote_message_id']!, _quoteMessageIdMeta));
+    }
+    if (data.containsKey('quote_preview')) {
+      context.handle(
+          _quotePreviewMeta,
+          quotePreview.isAcceptableOrUnknown(
+              data['quote_preview']!, _quotePreviewMeta));
+    }
+    if (data.containsKey('is_recalled')) {
+      context.handle(
+          _isRecalledMeta,
+          isRecalled.isAcceptableOrUnknown(
+              data['is_recalled']!, _isRecalledMeta));
     }
     return context;
   }
@@ -173,6 +253,8 @@ class $MessagesTableTable extends MessagesTable
           .read(DriftSqlType.string, data['${effectivePrefix}content']),
       mediaUrl: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}media_url']),
+      relatedId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}related_id']),
       messageType: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}message_type'])!,
       isRead: attachedDatabase.typeMapping
@@ -181,10 +263,20 @@ class $MessagesTableTable extends MessagesTable
           .read(DriftSqlType.int, data['${effectivePrefix}created_at']),
       requestId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}request_id']),
+      clientMsgId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}client_msg_id']),
       seq: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}seq']),
       status: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      uploadProgress: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}upload_progress']),
+      quoteMessageId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}quote_message_id']),
+      quotePreview: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}quote_preview']),
+      isRecalled: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_recalled'])!,
     );
   }
 
@@ -201,24 +293,36 @@ class MessagesTableData extends DataClass
   final int senderId;
   final String? content;
   final String? mediaUrl;
+  final int? relatedId;
   final String messageType;
   final bool isRead;
   final int? createdAt;
   final String? requestId;
+  final String? clientMsgId;
   final int? seq;
   final String status;
+  final double? uploadProgress;
+  final int? quoteMessageId;
+  final String? quotePreview;
+  final bool isRecalled;
   const MessagesTableData(
       {required this.id,
       required this.conversationId,
       required this.senderId,
       this.content,
       this.mediaUrl,
+      this.relatedId,
       required this.messageType,
       required this.isRead,
       this.createdAt,
       this.requestId,
+      this.clientMsgId,
       this.seq,
-      required this.status});
+      required this.status,
+      this.uploadProgress,
+      this.quoteMessageId,
+      this.quotePreview,
+      required this.isRecalled});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -231,6 +335,9 @@ class MessagesTableData extends DataClass
     if (!nullToAbsent || mediaUrl != null) {
       map['media_url'] = Variable<String>(mediaUrl);
     }
+    if (!nullToAbsent || relatedId != null) {
+      map['related_id'] = Variable<int>(relatedId);
+    }
     map['message_type'] = Variable<String>(messageType);
     map['is_read'] = Variable<bool>(isRead);
     if (!nullToAbsent || createdAt != null) {
@@ -239,10 +346,23 @@ class MessagesTableData extends DataClass
     if (!nullToAbsent || requestId != null) {
       map['request_id'] = Variable<String>(requestId);
     }
+    if (!nullToAbsent || clientMsgId != null) {
+      map['client_msg_id'] = Variable<String>(clientMsgId);
+    }
     if (!nullToAbsent || seq != null) {
       map['seq'] = Variable<int>(seq);
     }
     map['status'] = Variable<String>(status);
+    if (!nullToAbsent || uploadProgress != null) {
+      map['upload_progress'] = Variable<double>(uploadProgress);
+    }
+    if (!nullToAbsent || quoteMessageId != null) {
+      map['quote_message_id'] = Variable<int>(quoteMessageId);
+    }
+    if (!nullToAbsent || quotePreview != null) {
+      map['quote_preview'] = Variable<String>(quotePreview);
+    }
+    map['is_recalled'] = Variable<bool>(isRecalled);
     return map;
   }
 
@@ -257,6 +377,9 @@ class MessagesTableData extends DataClass
       mediaUrl: mediaUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(mediaUrl),
+      relatedId: relatedId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(relatedId),
       messageType: Value(messageType),
       isRead: Value(isRead),
       createdAt: createdAt == null && nullToAbsent
@@ -265,8 +388,21 @@ class MessagesTableData extends DataClass
       requestId: requestId == null && nullToAbsent
           ? const Value.absent()
           : Value(requestId),
+      clientMsgId: clientMsgId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientMsgId),
       seq: seq == null && nullToAbsent ? const Value.absent() : Value(seq),
       status: Value(status),
+      uploadProgress: uploadProgress == null && nullToAbsent
+          ? const Value.absent()
+          : Value(uploadProgress),
+      quoteMessageId: quoteMessageId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(quoteMessageId),
+      quotePreview: quotePreview == null && nullToAbsent
+          ? const Value.absent()
+          : Value(quotePreview),
+      isRecalled: Value(isRecalled),
     );
   }
 
@@ -279,12 +415,18 @@ class MessagesTableData extends DataClass
       senderId: serializer.fromJson<int>(json['senderId']),
       content: serializer.fromJson<String?>(json['content']),
       mediaUrl: serializer.fromJson<String?>(json['mediaUrl']),
+      relatedId: serializer.fromJson<int?>(json['relatedId']),
       messageType: serializer.fromJson<String>(json['messageType']),
       isRead: serializer.fromJson<bool>(json['isRead']),
       createdAt: serializer.fromJson<int?>(json['createdAt']),
       requestId: serializer.fromJson<String?>(json['requestId']),
+      clientMsgId: serializer.fromJson<String?>(json['clientMsgId']),
       seq: serializer.fromJson<int?>(json['seq']),
       status: serializer.fromJson<String>(json['status']),
+      uploadProgress: serializer.fromJson<double?>(json['uploadProgress']),
+      quoteMessageId: serializer.fromJson<int?>(json['quoteMessageId']),
+      quotePreview: serializer.fromJson<String?>(json['quotePreview']),
+      isRecalled: serializer.fromJson<bool>(json['isRecalled']),
     );
   }
   @override
@@ -296,12 +438,18 @@ class MessagesTableData extends DataClass
       'senderId': serializer.toJson<int>(senderId),
       'content': serializer.toJson<String?>(content),
       'mediaUrl': serializer.toJson<String?>(mediaUrl),
+      'relatedId': serializer.toJson<int?>(relatedId),
       'messageType': serializer.toJson<String>(messageType),
       'isRead': serializer.toJson<bool>(isRead),
       'createdAt': serializer.toJson<int?>(createdAt),
       'requestId': serializer.toJson<String?>(requestId),
+      'clientMsgId': serializer.toJson<String?>(clientMsgId),
       'seq': serializer.toJson<int?>(seq),
       'status': serializer.toJson<String>(status),
+      'uploadProgress': serializer.toJson<double?>(uploadProgress),
+      'quoteMessageId': serializer.toJson<int?>(quoteMessageId),
+      'quotePreview': serializer.toJson<String?>(quotePreview),
+      'isRecalled': serializer.toJson<bool>(isRecalled),
     };
   }
 
@@ -311,24 +459,39 @@ class MessagesTableData extends DataClass
           int? senderId,
           Value<String?> content = const Value.absent(),
           Value<String?> mediaUrl = const Value.absent(),
+          Value<int?> relatedId = const Value.absent(),
           String? messageType,
           bool? isRead,
           Value<int?> createdAt = const Value.absent(),
           Value<String?> requestId = const Value.absent(),
+          Value<String?> clientMsgId = const Value.absent(),
           Value<int?> seq = const Value.absent(),
-          String? status}) =>
+          String? status,
+          Value<double?> uploadProgress = const Value.absent(),
+          Value<int?> quoteMessageId = const Value.absent(),
+          Value<String?> quotePreview = const Value.absent(),
+          bool? isRecalled}) =>
       MessagesTableData(
         id: id ?? this.id,
         conversationId: conversationId ?? this.conversationId,
         senderId: senderId ?? this.senderId,
         content: content.present ? content.value : this.content,
         mediaUrl: mediaUrl.present ? mediaUrl.value : this.mediaUrl,
+        relatedId: relatedId.present ? relatedId.value : this.relatedId,
         messageType: messageType ?? this.messageType,
         isRead: isRead ?? this.isRead,
         createdAt: createdAt.present ? createdAt.value : this.createdAt,
         requestId: requestId.present ? requestId.value : this.requestId,
+        clientMsgId: clientMsgId.present ? clientMsgId.value : this.clientMsgId,
         seq: seq.present ? seq.value : this.seq,
         status: status ?? this.status,
+        uploadProgress:
+            uploadProgress.present ? uploadProgress.value : this.uploadProgress,
+        quoteMessageId:
+            quoteMessageId.present ? quoteMessageId.value : this.quoteMessageId,
+        quotePreview:
+            quotePreview.present ? quotePreview.value : this.quotePreview,
+        isRecalled: isRecalled ?? this.isRecalled,
       );
   MessagesTableData copyWithCompanion(MessagesTableCompanion data) {
     return MessagesTableData(
@@ -339,13 +502,27 @@ class MessagesTableData extends DataClass
       senderId: data.senderId.present ? data.senderId.value : this.senderId,
       content: data.content.present ? data.content.value : this.content,
       mediaUrl: data.mediaUrl.present ? data.mediaUrl.value : this.mediaUrl,
+      relatedId: data.relatedId.present ? data.relatedId.value : this.relatedId,
       messageType:
           data.messageType.present ? data.messageType.value : this.messageType,
       isRead: data.isRead.present ? data.isRead.value : this.isRead,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       requestId: data.requestId.present ? data.requestId.value : this.requestId,
+      clientMsgId:
+          data.clientMsgId.present ? data.clientMsgId.value : this.clientMsgId,
       seq: data.seq.present ? data.seq.value : this.seq,
       status: data.status.present ? data.status.value : this.status,
+      uploadProgress: data.uploadProgress.present
+          ? data.uploadProgress.value
+          : this.uploadProgress,
+      quoteMessageId: data.quoteMessageId.present
+          ? data.quoteMessageId.value
+          : this.quoteMessageId,
+      quotePreview: data.quotePreview.present
+          ? data.quotePreview.value
+          : this.quotePreview,
+      isRecalled:
+          data.isRecalled.present ? data.isRecalled.value : this.isRecalled,
     );
   }
 
@@ -357,19 +534,41 @@ class MessagesTableData extends DataClass
           ..write('senderId: $senderId, ')
           ..write('content: $content, ')
           ..write('mediaUrl: $mediaUrl, ')
+          ..write('relatedId: $relatedId, ')
           ..write('messageType: $messageType, ')
           ..write('isRead: $isRead, ')
           ..write('createdAt: $createdAt, ')
           ..write('requestId: $requestId, ')
+          ..write('clientMsgId: $clientMsgId, ')
           ..write('seq: $seq, ')
-          ..write('status: $status')
+          ..write('status: $status, ')
+          ..write('uploadProgress: $uploadProgress, ')
+          ..write('quoteMessageId: $quoteMessageId, ')
+          ..write('quotePreview: $quotePreview, ')
+          ..write('isRecalled: $isRecalled')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, conversationId, senderId, content,
-      mediaUrl, messageType, isRead, createdAt, requestId, seq, status);
+  int get hashCode => Object.hash(
+      id,
+      conversationId,
+      senderId,
+      content,
+      mediaUrl,
+      relatedId,
+      messageType,
+      isRead,
+      createdAt,
+      requestId,
+      clientMsgId,
+      seq,
+      status,
+      uploadProgress,
+      quoteMessageId,
+      quotePreview,
+      isRecalled);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -379,12 +578,18 @@ class MessagesTableData extends DataClass
           other.senderId == this.senderId &&
           other.content == this.content &&
           other.mediaUrl == this.mediaUrl &&
+          other.relatedId == this.relatedId &&
           other.messageType == this.messageType &&
           other.isRead == this.isRead &&
           other.createdAt == this.createdAt &&
           other.requestId == this.requestId &&
+          other.clientMsgId == this.clientMsgId &&
           other.seq == this.seq &&
-          other.status == this.status);
+          other.status == this.status &&
+          other.uploadProgress == this.uploadProgress &&
+          other.quoteMessageId == this.quoteMessageId &&
+          other.quotePreview == this.quotePreview &&
+          other.isRecalled == this.isRecalled);
 }
 
 class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
@@ -393,24 +598,36 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
   final Value<int> senderId;
   final Value<String?> content;
   final Value<String?> mediaUrl;
+  final Value<int?> relatedId;
   final Value<String> messageType;
   final Value<bool> isRead;
   final Value<int?> createdAt;
   final Value<String?> requestId;
+  final Value<String?> clientMsgId;
   final Value<int?> seq;
   final Value<String> status;
+  final Value<double?> uploadProgress;
+  final Value<int?> quoteMessageId;
+  final Value<String?> quotePreview;
+  final Value<bool> isRecalled;
   const MessagesTableCompanion({
     this.id = const Value.absent(),
     this.conversationId = const Value.absent(),
     this.senderId = const Value.absent(),
     this.content = const Value.absent(),
     this.mediaUrl = const Value.absent(),
+    this.relatedId = const Value.absent(),
     this.messageType = const Value.absent(),
     this.isRead = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.requestId = const Value.absent(),
+    this.clientMsgId = const Value.absent(),
     this.seq = const Value.absent(),
     this.status = const Value.absent(),
+    this.uploadProgress = const Value.absent(),
+    this.quoteMessageId = const Value.absent(),
+    this.quotePreview = const Value.absent(),
+    this.isRecalled = const Value.absent(),
   });
   MessagesTableCompanion.insert({
     this.id = const Value.absent(),
@@ -418,12 +635,18 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     required int senderId,
     this.content = const Value.absent(),
     this.mediaUrl = const Value.absent(),
+    this.relatedId = const Value.absent(),
     this.messageType = const Value.absent(),
     this.isRead = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.requestId = const Value.absent(),
+    this.clientMsgId = const Value.absent(),
     this.seq = const Value.absent(),
     this.status = const Value.absent(),
+    this.uploadProgress = const Value.absent(),
+    this.quoteMessageId = const Value.absent(),
+    this.quotePreview = const Value.absent(),
+    this.isRecalled = const Value.absent(),
   })  : conversationId = Value(conversationId),
         senderId = Value(senderId);
   static Insertable<MessagesTableData> custom({
@@ -432,12 +655,18 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     Expression<int>? senderId,
     Expression<String>? content,
     Expression<String>? mediaUrl,
+    Expression<int>? relatedId,
     Expression<String>? messageType,
     Expression<bool>? isRead,
     Expression<int>? createdAt,
     Expression<String>? requestId,
+    Expression<String>? clientMsgId,
     Expression<int>? seq,
     Expression<String>? status,
+    Expression<double>? uploadProgress,
+    Expression<int>? quoteMessageId,
+    Expression<String>? quotePreview,
+    Expression<bool>? isRecalled,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -445,12 +674,18 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       if (senderId != null) 'sender_id': senderId,
       if (content != null) 'content': content,
       if (mediaUrl != null) 'media_url': mediaUrl,
+      if (relatedId != null) 'related_id': relatedId,
       if (messageType != null) 'message_type': messageType,
       if (isRead != null) 'is_read': isRead,
       if (createdAt != null) 'created_at': createdAt,
       if (requestId != null) 'request_id': requestId,
+      if (clientMsgId != null) 'client_msg_id': clientMsgId,
       if (seq != null) 'seq': seq,
       if (status != null) 'status': status,
+      if (uploadProgress != null) 'upload_progress': uploadProgress,
+      if (quoteMessageId != null) 'quote_message_id': quoteMessageId,
+      if (quotePreview != null) 'quote_preview': quotePreview,
+      if (isRecalled != null) 'is_recalled': isRecalled,
     });
   }
 
@@ -460,24 +695,36 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       Value<int>? senderId,
       Value<String?>? content,
       Value<String?>? mediaUrl,
+      Value<int?>? relatedId,
       Value<String>? messageType,
       Value<bool>? isRead,
       Value<int?>? createdAt,
       Value<String?>? requestId,
+      Value<String?>? clientMsgId,
       Value<int?>? seq,
-      Value<String>? status}) {
+      Value<String>? status,
+      Value<double?>? uploadProgress,
+      Value<int?>? quoteMessageId,
+      Value<String?>? quotePreview,
+      Value<bool>? isRecalled}) {
     return MessagesTableCompanion(
       id: id ?? this.id,
       conversationId: conversationId ?? this.conversationId,
       senderId: senderId ?? this.senderId,
       content: content ?? this.content,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      relatedId: relatedId ?? this.relatedId,
       messageType: messageType ?? this.messageType,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
       requestId: requestId ?? this.requestId,
+      clientMsgId: clientMsgId ?? this.clientMsgId,
       seq: seq ?? this.seq,
       status: status ?? this.status,
+      uploadProgress: uploadProgress ?? this.uploadProgress,
+      quoteMessageId: quoteMessageId ?? this.quoteMessageId,
+      quotePreview: quotePreview ?? this.quotePreview,
+      isRecalled: isRecalled ?? this.isRecalled,
     );
   }
 
@@ -499,6 +746,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     if (mediaUrl.present) {
       map['media_url'] = Variable<String>(mediaUrl.value);
     }
+    if (relatedId.present) {
+      map['related_id'] = Variable<int>(relatedId.value);
+    }
     if (messageType.present) {
       map['message_type'] = Variable<String>(messageType.value);
     }
@@ -511,11 +761,26 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     if (requestId.present) {
       map['request_id'] = Variable<String>(requestId.value);
     }
+    if (clientMsgId.present) {
+      map['client_msg_id'] = Variable<String>(clientMsgId.value);
+    }
     if (seq.present) {
       map['seq'] = Variable<int>(seq.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
+    }
+    if (uploadProgress.present) {
+      map['upload_progress'] = Variable<double>(uploadProgress.value);
+    }
+    if (quoteMessageId.present) {
+      map['quote_message_id'] = Variable<int>(quoteMessageId.value);
+    }
+    if (quotePreview.present) {
+      map['quote_preview'] = Variable<String>(quotePreview.value);
+    }
+    if (isRecalled.present) {
+      map['is_recalled'] = Variable<bool>(isRecalled.value);
     }
     return map;
   }
@@ -528,12 +793,18 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
           ..write('senderId: $senderId, ')
           ..write('content: $content, ')
           ..write('mediaUrl: $mediaUrl, ')
+          ..write('relatedId: $relatedId, ')
           ..write('messageType: $messageType, ')
           ..write('isRead: $isRead, ')
           ..write('createdAt: $createdAt, ')
           ..write('requestId: $requestId, ')
+          ..write('clientMsgId: $clientMsgId, ')
           ..write('seq: $seq, ')
-          ..write('status: $status')
+          ..write('status: $status, ')
+          ..write('uploadProgress: $uploadProgress, ')
+          ..write('quoteMessageId: $quoteMessageId, ')
+          ..write('quotePreview: $quotePreview, ')
+          ..write('isRecalled: $isRecalled')
           ..write(')'))
         .toString();
   }
@@ -592,6 +863,36 @@ class $ConversationsTableTable extends ConversationsTable
   late final GeneratedColumn<String> lastMessage = GeneratedColumn<String>(
       'last_message', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _lastMessageTypeMeta =
+      const VerificationMeta('lastMessageType');
+  @override
+  late final GeneratedColumn<String> lastMessageType = GeneratedColumn<String>(
+      'last_message_type', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('text'));
+  static const VerificationMeta _lastMessageMediaUrlMeta =
+      const VerificationMeta('lastMessageMediaUrl');
+  @override
+  late final GeneratedColumn<String> lastMessageMediaUrl =
+      GeneratedColumn<String>('last_message_media_url', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _lastMessageRelatedIdMeta =
+      const VerificationMeta('lastMessageRelatedId');
+  @override
+  late final GeneratedColumn<int> lastMessageRelatedId = GeneratedColumn<int>(
+      'last_message_related_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _lastMessageIsRecalledMeta =
+      const VerificationMeta('lastMessageIsRecalled');
+  @override
+  late final GeneratedColumn<bool> lastMessageIsRecalled =
+      GeneratedColumn<bool>('last_message_is_recalled', aliasedName, false,
+          type: DriftSqlType.bool,
+          requiredDuringInsert: false,
+          defaultConstraints: GeneratedColumn.constraintIsAlways(
+              'CHECK ("last_message_is_recalled" IN (0, 1))'),
+          defaultValue: const Constant(false));
   static const VerificationMeta _lastMessageAtMeta =
       const VerificationMeta('lastMessageAt');
   @override
@@ -632,6 +933,10 @@ class $ConversationsTableTable extends ConversationsTable
         otherUserAvatar,
         otherUserUsername,
         lastMessage,
+        lastMessageType,
+        lastMessageMediaUrl,
+        lastMessageRelatedId,
+        lastMessageIsRecalled,
         lastMessageAt,
         unreadCount,
         isOnline,
@@ -689,6 +994,30 @@ class $ConversationsTableTable extends ConversationsTable
           lastMessage.isAcceptableOrUnknown(
               data['last_message']!, _lastMessageMeta));
     }
+    if (data.containsKey('last_message_type')) {
+      context.handle(
+          _lastMessageTypeMeta,
+          lastMessageType.isAcceptableOrUnknown(
+              data['last_message_type']!, _lastMessageTypeMeta));
+    }
+    if (data.containsKey('last_message_media_url')) {
+      context.handle(
+          _lastMessageMediaUrlMeta,
+          lastMessageMediaUrl.isAcceptableOrUnknown(
+              data['last_message_media_url']!, _lastMessageMediaUrlMeta));
+    }
+    if (data.containsKey('last_message_related_id')) {
+      context.handle(
+          _lastMessageRelatedIdMeta,
+          lastMessageRelatedId.isAcceptableOrUnknown(
+              data['last_message_related_id']!, _lastMessageRelatedIdMeta));
+    }
+    if (data.containsKey('last_message_is_recalled')) {
+      context.handle(
+          _lastMessageIsRecalledMeta,
+          lastMessageIsRecalled.isAcceptableOrUnknown(
+              data['last_message_is_recalled']!, _lastMessageIsRecalledMeta));
+    }
     if (data.containsKey('last_message_at')) {
       context.handle(
           _lastMessageAtMeta,
@@ -734,6 +1063,16 @@ class $ConversationsTableTable extends ConversationsTable
           DriftSqlType.string, data['${effectivePrefix}other_user_username']),
       lastMessage: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}last_message']),
+      lastMessageType: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}last_message_type'])!,
+      lastMessageMediaUrl: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}last_message_media_url']),
+      lastMessageRelatedId: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}last_message_related_id']),
+      lastMessageIsRecalled: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool,
+          data['${effectivePrefix}last_message_is_recalled'])!,
       lastMessageAt: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}last_message_at']),
       unreadCount: attachedDatabase.typeMapping
@@ -761,6 +1100,10 @@ class ConversationsTableData extends DataClass
   final String? otherUserAvatar;
   final String? otherUserUsername;
   final String? lastMessage;
+  final String lastMessageType;
+  final String? lastMessageMediaUrl;
+  final int? lastMessageRelatedId;
+  final bool lastMessageIsRecalled;
   final int? lastMessageAt;
   final int unreadCount;
   final bool isOnline;
@@ -774,6 +1117,10 @@ class ConversationsTableData extends DataClass
       this.otherUserAvatar,
       this.otherUserUsername,
       this.lastMessage,
+      required this.lastMessageType,
+      this.lastMessageMediaUrl,
+      this.lastMessageRelatedId,
+      required this.lastMessageIsRecalled,
       this.lastMessageAt,
       required this.unreadCount,
       required this.isOnline,
@@ -803,6 +1150,14 @@ class ConversationsTableData extends DataClass
     if (!nullToAbsent || lastMessage != null) {
       map['last_message'] = Variable<String>(lastMessage);
     }
+    map['last_message_type'] = Variable<String>(lastMessageType);
+    if (!nullToAbsent || lastMessageMediaUrl != null) {
+      map['last_message_media_url'] = Variable<String>(lastMessageMediaUrl);
+    }
+    if (!nullToAbsent || lastMessageRelatedId != null) {
+      map['last_message_related_id'] = Variable<int>(lastMessageRelatedId);
+    }
+    map['last_message_is_recalled'] = Variable<bool>(lastMessageIsRecalled);
     if (!nullToAbsent || lastMessageAt != null) {
       map['last_message_at'] = Variable<int>(lastMessageAt);
     }
@@ -838,6 +1193,14 @@ class ConversationsTableData extends DataClass
       lastMessage: lastMessage == null && nullToAbsent
           ? const Value.absent()
           : Value(lastMessage),
+      lastMessageType: Value(lastMessageType),
+      lastMessageMediaUrl: lastMessageMediaUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastMessageMediaUrl),
+      lastMessageRelatedId: lastMessageRelatedId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastMessageRelatedId),
+      lastMessageIsRecalled: Value(lastMessageIsRecalled),
       lastMessageAt: lastMessageAt == null && nullToAbsent
           ? const Value.absent()
           : Value(lastMessageAt),
@@ -862,6 +1225,13 @@ class ConversationsTableData extends DataClass
       otherUserUsername:
           serializer.fromJson<String?>(json['otherUserUsername']),
       lastMessage: serializer.fromJson<String?>(json['lastMessage']),
+      lastMessageType: serializer.fromJson<String>(json['lastMessageType']),
+      lastMessageMediaUrl:
+          serializer.fromJson<String?>(json['lastMessageMediaUrl']),
+      lastMessageRelatedId:
+          serializer.fromJson<int?>(json['lastMessageRelatedId']),
+      lastMessageIsRecalled:
+          serializer.fromJson<bool>(json['lastMessageIsRecalled']),
       lastMessageAt: serializer.fromJson<int?>(json['lastMessageAt']),
       unreadCount: serializer.fromJson<int>(json['unreadCount']),
       isOnline: serializer.fromJson<bool>(json['isOnline']),
@@ -880,6 +1250,10 @@ class ConversationsTableData extends DataClass
       'otherUserAvatar': serializer.toJson<String?>(otherUserAvatar),
       'otherUserUsername': serializer.toJson<String?>(otherUserUsername),
       'lastMessage': serializer.toJson<String?>(lastMessage),
+      'lastMessageType': serializer.toJson<String>(lastMessageType),
+      'lastMessageMediaUrl': serializer.toJson<String?>(lastMessageMediaUrl),
+      'lastMessageRelatedId': serializer.toJson<int?>(lastMessageRelatedId),
+      'lastMessageIsRecalled': serializer.toJson<bool>(lastMessageIsRecalled),
       'lastMessageAt': serializer.toJson<int?>(lastMessageAt),
       'unreadCount': serializer.toJson<int>(unreadCount),
       'isOnline': serializer.toJson<bool>(isOnline),
@@ -896,6 +1270,10 @@ class ConversationsTableData extends DataClass
           Value<String?> otherUserAvatar = const Value.absent(),
           Value<String?> otherUserUsername = const Value.absent(),
           Value<String?> lastMessage = const Value.absent(),
+          String? lastMessageType,
+          Value<String?> lastMessageMediaUrl = const Value.absent(),
+          Value<int?> lastMessageRelatedId = const Value.absent(),
+          bool? lastMessageIsRecalled,
           Value<int?> lastMessageAt = const Value.absent(),
           int? unreadCount,
           bool? isOnline,
@@ -914,6 +1292,15 @@ class ConversationsTableData extends DataClass
             ? otherUserUsername.value
             : this.otherUserUsername,
         lastMessage: lastMessage.present ? lastMessage.value : this.lastMessage,
+        lastMessageType: lastMessageType ?? this.lastMessageType,
+        lastMessageMediaUrl: lastMessageMediaUrl.present
+            ? lastMessageMediaUrl.value
+            : this.lastMessageMediaUrl,
+        lastMessageRelatedId: lastMessageRelatedId.present
+            ? lastMessageRelatedId.value
+            : this.lastMessageRelatedId,
+        lastMessageIsRecalled:
+            lastMessageIsRecalled ?? this.lastMessageIsRecalled,
         lastMessageAt:
             lastMessageAt.present ? lastMessageAt.value : this.lastMessageAt,
         unreadCount: unreadCount ?? this.unreadCount,
@@ -938,6 +1325,18 @@ class ConversationsTableData extends DataClass
           : this.otherUserUsername,
       lastMessage:
           data.lastMessage.present ? data.lastMessage.value : this.lastMessage,
+      lastMessageType: data.lastMessageType.present
+          ? data.lastMessageType.value
+          : this.lastMessageType,
+      lastMessageMediaUrl: data.lastMessageMediaUrl.present
+          ? data.lastMessageMediaUrl.value
+          : this.lastMessageMediaUrl,
+      lastMessageRelatedId: data.lastMessageRelatedId.present
+          ? data.lastMessageRelatedId.value
+          : this.lastMessageRelatedId,
+      lastMessageIsRecalled: data.lastMessageIsRecalled.present
+          ? data.lastMessageIsRecalled.value
+          : this.lastMessageIsRecalled,
       lastMessageAt: data.lastMessageAt.present
           ? data.lastMessageAt.value
           : this.lastMessageAt,
@@ -959,6 +1358,10 @@ class ConversationsTableData extends DataClass
           ..write('otherUserAvatar: $otherUserAvatar, ')
           ..write('otherUserUsername: $otherUserUsername, ')
           ..write('lastMessage: $lastMessage, ')
+          ..write('lastMessageType: $lastMessageType, ')
+          ..write('lastMessageMediaUrl: $lastMessageMediaUrl, ')
+          ..write('lastMessageRelatedId: $lastMessageRelatedId, ')
+          ..write('lastMessageIsRecalled: $lastMessageIsRecalled, ')
           ..write('lastMessageAt: $lastMessageAt, ')
           ..write('unreadCount: $unreadCount, ')
           ..write('isOnline: $isOnline, ')
@@ -977,6 +1380,10 @@ class ConversationsTableData extends DataClass
       otherUserAvatar,
       otherUserUsername,
       lastMessage,
+      lastMessageType,
+      lastMessageMediaUrl,
+      lastMessageRelatedId,
+      lastMessageIsRecalled,
       lastMessageAt,
       unreadCount,
       isOnline,
@@ -993,6 +1400,10 @@ class ConversationsTableData extends DataClass
           other.otherUserAvatar == this.otherUserAvatar &&
           other.otherUserUsername == this.otherUserUsername &&
           other.lastMessage == this.lastMessage &&
+          other.lastMessageType == this.lastMessageType &&
+          other.lastMessageMediaUrl == this.lastMessageMediaUrl &&
+          other.lastMessageRelatedId == this.lastMessageRelatedId &&
+          other.lastMessageIsRecalled == this.lastMessageIsRecalled &&
           other.lastMessageAt == this.lastMessageAt &&
           other.unreadCount == this.unreadCount &&
           other.isOnline == this.isOnline &&
@@ -1009,6 +1420,10 @@ class ConversationsTableCompanion
   final Value<String?> otherUserAvatar;
   final Value<String?> otherUserUsername;
   final Value<String?> lastMessage;
+  final Value<String> lastMessageType;
+  final Value<String?> lastMessageMediaUrl;
+  final Value<int?> lastMessageRelatedId;
+  final Value<bool> lastMessageIsRecalled;
   final Value<int?> lastMessageAt;
   final Value<int> unreadCount;
   final Value<bool> isOnline;
@@ -1022,6 +1437,10 @@ class ConversationsTableCompanion
     this.otherUserAvatar = const Value.absent(),
     this.otherUserUsername = const Value.absent(),
     this.lastMessage = const Value.absent(),
+    this.lastMessageType = const Value.absent(),
+    this.lastMessageMediaUrl = const Value.absent(),
+    this.lastMessageRelatedId = const Value.absent(),
+    this.lastMessageIsRecalled = const Value.absent(),
     this.lastMessageAt = const Value.absent(),
     this.unreadCount = const Value.absent(),
     this.isOnline = const Value.absent(),
@@ -1036,6 +1455,10 @@ class ConversationsTableCompanion
     this.otherUserAvatar = const Value.absent(),
     this.otherUserUsername = const Value.absent(),
     this.lastMessage = const Value.absent(),
+    this.lastMessageType = const Value.absent(),
+    this.lastMessageMediaUrl = const Value.absent(),
+    this.lastMessageRelatedId = const Value.absent(),
+    this.lastMessageIsRecalled = const Value.absent(),
     this.lastMessageAt = const Value.absent(),
     this.unreadCount = const Value.absent(),
     this.isOnline = const Value.absent(),
@@ -1050,6 +1473,10 @@ class ConversationsTableCompanion
     Expression<String>? otherUserAvatar,
     Expression<String>? otherUserUsername,
     Expression<String>? lastMessage,
+    Expression<String>? lastMessageType,
+    Expression<String>? lastMessageMediaUrl,
+    Expression<int>? lastMessageRelatedId,
+    Expression<bool>? lastMessageIsRecalled,
     Expression<int>? lastMessageAt,
     Expression<int>? unreadCount,
     Expression<bool>? isOnline,
@@ -1064,6 +1491,13 @@ class ConversationsTableCompanion
       if (otherUserAvatar != null) 'other_user_avatar': otherUserAvatar,
       if (otherUserUsername != null) 'other_user_username': otherUserUsername,
       if (lastMessage != null) 'last_message': lastMessage,
+      if (lastMessageType != null) 'last_message_type': lastMessageType,
+      if (lastMessageMediaUrl != null)
+        'last_message_media_url': lastMessageMediaUrl,
+      if (lastMessageRelatedId != null)
+        'last_message_related_id': lastMessageRelatedId,
+      if (lastMessageIsRecalled != null)
+        'last_message_is_recalled': lastMessageIsRecalled,
       if (lastMessageAt != null) 'last_message_at': lastMessageAt,
       if (unreadCount != null) 'unread_count': unreadCount,
       if (isOnline != null) 'is_online': isOnline,
@@ -1080,6 +1514,10 @@ class ConversationsTableCompanion
       Value<String?>? otherUserAvatar,
       Value<String?>? otherUserUsername,
       Value<String?>? lastMessage,
+      Value<String>? lastMessageType,
+      Value<String?>? lastMessageMediaUrl,
+      Value<int?>? lastMessageRelatedId,
+      Value<bool>? lastMessageIsRecalled,
       Value<int?>? lastMessageAt,
       Value<int>? unreadCount,
       Value<bool>? isOnline,
@@ -1093,6 +1531,11 @@ class ConversationsTableCompanion
       otherUserAvatar: otherUserAvatar ?? this.otherUserAvatar,
       otherUserUsername: otherUserUsername ?? this.otherUserUsername,
       lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageType: lastMessageType ?? this.lastMessageType,
+      lastMessageMediaUrl: lastMessageMediaUrl ?? this.lastMessageMediaUrl,
+      lastMessageRelatedId: lastMessageRelatedId ?? this.lastMessageRelatedId,
+      lastMessageIsRecalled:
+          lastMessageIsRecalled ?? this.lastMessageIsRecalled,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
       isOnline: isOnline ?? this.isOnline,
@@ -1127,6 +1570,21 @@ class ConversationsTableCompanion
     if (lastMessage.present) {
       map['last_message'] = Variable<String>(lastMessage.value);
     }
+    if (lastMessageType.present) {
+      map['last_message_type'] = Variable<String>(lastMessageType.value);
+    }
+    if (lastMessageMediaUrl.present) {
+      map['last_message_media_url'] =
+          Variable<String>(lastMessageMediaUrl.value);
+    }
+    if (lastMessageRelatedId.present) {
+      map['last_message_related_id'] =
+          Variable<int>(lastMessageRelatedId.value);
+    }
+    if (lastMessageIsRecalled.present) {
+      map['last_message_is_recalled'] =
+          Variable<bool>(lastMessageIsRecalled.value);
+    }
     if (lastMessageAt.present) {
       map['last_message_at'] = Variable<int>(lastMessageAt.value);
     }
@@ -1153,6 +1611,10 @@ class ConversationsTableCompanion
           ..write('otherUserAvatar: $otherUserAvatar, ')
           ..write('otherUserUsername: $otherUserUsername, ')
           ..write('lastMessage: $lastMessage, ')
+          ..write('lastMessageType: $lastMessageType, ')
+          ..write('lastMessageMediaUrl: $lastMessageMediaUrl, ')
+          ..write('lastMessageRelatedId: $lastMessageRelatedId, ')
+          ..write('lastMessageIsRecalled: $lastMessageIsRecalled, ')
           ..write('lastMessageAt: $lastMessageAt, ')
           ..write('unreadCount: $unreadCount, ')
           ..write('isOnline: $isOnline, ')
@@ -2036,12 +2498,18 @@ typedef $$MessagesTableTableCreateCompanionBuilder = MessagesTableCompanion
   required int senderId,
   Value<String?> content,
   Value<String?> mediaUrl,
+  Value<int?> relatedId,
   Value<String> messageType,
   Value<bool> isRead,
   Value<int?> createdAt,
   Value<String?> requestId,
+  Value<String?> clientMsgId,
   Value<int?> seq,
   Value<String> status,
+  Value<double?> uploadProgress,
+  Value<int?> quoteMessageId,
+  Value<String?> quotePreview,
+  Value<bool> isRecalled,
 });
 typedef $$MessagesTableTableUpdateCompanionBuilder = MessagesTableCompanion
     Function({
@@ -2050,12 +2518,18 @@ typedef $$MessagesTableTableUpdateCompanionBuilder = MessagesTableCompanion
   Value<int> senderId,
   Value<String?> content,
   Value<String?> mediaUrl,
+  Value<int?> relatedId,
   Value<String> messageType,
   Value<bool> isRead,
   Value<int?> createdAt,
   Value<String?> requestId,
+  Value<String?> clientMsgId,
   Value<int?> seq,
   Value<String> status,
+  Value<double?> uploadProgress,
+  Value<int?> quoteMessageId,
+  Value<String?> quotePreview,
+  Value<bool> isRecalled,
 });
 
 class $$MessagesTableTableFilterComposer
@@ -2083,6 +2557,9 @@ class $$MessagesTableTableFilterComposer
   ColumnFilters<String> get mediaUrl => $composableBuilder(
       column: $table.mediaUrl, builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<int> get relatedId => $composableBuilder(
+      column: $table.relatedId, builder: (column) => ColumnFilters(column));
+
   ColumnFilters<String> get messageType => $composableBuilder(
       column: $table.messageType, builder: (column) => ColumnFilters(column));
 
@@ -2095,11 +2572,28 @@ class $$MessagesTableTableFilterComposer
   ColumnFilters<String> get requestId => $composableBuilder(
       column: $table.requestId, builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<String> get clientMsgId => $composableBuilder(
+      column: $table.clientMsgId, builder: (column) => ColumnFilters(column));
+
   ColumnFilters<int> get seq => $composableBuilder(
       column: $table.seq, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get status => $composableBuilder(
       column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get uploadProgress => $composableBuilder(
+      column: $table.uploadProgress,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get quoteMessageId => $composableBuilder(
+      column: $table.quoteMessageId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get quotePreview => $composableBuilder(
+      column: $table.quotePreview, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isRecalled => $composableBuilder(
+      column: $table.isRecalled, builder: (column) => ColumnFilters(column));
 }
 
 class $$MessagesTableTableOrderingComposer
@@ -2127,6 +2621,9 @@ class $$MessagesTableTableOrderingComposer
   ColumnOrderings<String> get mediaUrl => $composableBuilder(
       column: $table.mediaUrl, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get relatedId => $composableBuilder(
+      column: $table.relatedId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get messageType => $composableBuilder(
       column: $table.messageType, builder: (column) => ColumnOrderings(column));
 
@@ -2139,11 +2636,29 @@ class $$MessagesTableTableOrderingComposer
   ColumnOrderings<String> get requestId => $composableBuilder(
       column: $table.requestId, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get clientMsgId => $composableBuilder(
+      column: $table.clientMsgId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get seq => $composableBuilder(
       column: $table.seq, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get status => $composableBuilder(
       column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get uploadProgress => $composableBuilder(
+      column: $table.uploadProgress,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get quoteMessageId => $composableBuilder(
+      column: $table.quoteMessageId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get quotePreview => $composableBuilder(
+      column: $table.quotePreview,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isRecalled => $composableBuilder(
+      column: $table.isRecalled, builder: (column) => ColumnOrderings(column));
 }
 
 class $$MessagesTableTableAnnotationComposer
@@ -2170,6 +2685,9 @@ class $$MessagesTableTableAnnotationComposer
   GeneratedColumn<String> get mediaUrl =>
       $composableBuilder(column: $table.mediaUrl, builder: (column) => column);
 
+  GeneratedColumn<int> get relatedId =>
+      $composableBuilder(column: $table.relatedId, builder: (column) => column);
+
   GeneratedColumn<String> get messageType => $composableBuilder(
       column: $table.messageType, builder: (column) => column);
 
@@ -2182,11 +2700,26 @@ class $$MessagesTableTableAnnotationComposer
   GeneratedColumn<String> get requestId =>
       $composableBuilder(column: $table.requestId, builder: (column) => column);
 
+  GeneratedColumn<String> get clientMsgId => $composableBuilder(
+      column: $table.clientMsgId, builder: (column) => column);
+
   GeneratedColumn<int> get seq =>
       $composableBuilder(column: $table.seq, builder: (column) => column);
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<double> get uploadProgress => $composableBuilder(
+      column: $table.uploadProgress, builder: (column) => column);
+
+  GeneratedColumn<int> get quoteMessageId => $composableBuilder(
+      column: $table.quoteMessageId, builder: (column) => column);
+
+  GeneratedColumn<String> get quotePreview => $composableBuilder(
+      column: $table.quotePreview, builder: (column) => column);
+
+  GeneratedColumn<bool> get isRecalled => $composableBuilder(
+      column: $table.isRecalled, builder: (column) => column);
 }
 
 class $$MessagesTableTableTableManager extends RootTableManager<
@@ -2220,12 +2753,18 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             Value<int> senderId = const Value.absent(),
             Value<String?> content = const Value.absent(),
             Value<String?> mediaUrl = const Value.absent(),
+            Value<int?> relatedId = const Value.absent(),
             Value<String> messageType = const Value.absent(),
             Value<bool> isRead = const Value.absent(),
             Value<int?> createdAt = const Value.absent(),
             Value<String?> requestId = const Value.absent(),
+            Value<String?> clientMsgId = const Value.absent(),
             Value<int?> seq = const Value.absent(),
             Value<String> status = const Value.absent(),
+            Value<double?> uploadProgress = const Value.absent(),
+            Value<int?> quoteMessageId = const Value.absent(),
+            Value<String?> quotePreview = const Value.absent(),
+            Value<bool> isRecalled = const Value.absent(),
           }) =>
               MessagesTableCompanion(
             id: id,
@@ -2233,12 +2772,18 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             senderId: senderId,
             content: content,
             mediaUrl: mediaUrl,
+            relatedId: relatedId,
             messageType: messageType,
             isRead: isRead,
             createdAt: createdAt,
             requestId: requestId,
+            clientMsgId: clientMsgId,
             seq: seq,
             status: status,
+            uploadProgress: uploadProgress,
+            quoteMessageId: quoteMessageId,
+            quotePreview: quotePreview,
+            isRecalled: isRecalled,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -2246,12 +2791,18 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             required int senderId,
             Value<String?> content = const Value.absent(),
             Value<String?> mediaUrl = const Value.absent(),
+            Value<int?> relatedId = const Value.absent(),
             Value<String> messageType = const Value.absent(),
             Value<bool> isRead = const Value.absent(),
             Value<int?> createdAt = const Value.absent(),
             Value<String?> requestId = const Value.absent(),
+            Value<String?> clientMsgId = const Value.absent(),
             Value<int?> seq = const Value.absent(),
             Value<String> status = const Value.absent(),
+            Value<double?> uploadProgress = const Value.absent(),
+            Value<int?> quoteMessageId = const Value.absent(),
+            Value<String?> quotePreview = const Value.absent(),
+            Value<bool> isRecalled = const Value.absent(),
           }) =>
               MessagesTableCompanion.insert(
             id: id,
@@ -2259,12 +2810,18 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             senderId: senderId,
             content: content,
             mediaUrl: mediaUrl,
+            relatedId: relatedId,
             messageType: messageType,
             isRead: isRead,
             createdAt: createdAt,
             requestId: requestId,
+            clientMsgId: clientMsgId,
             seq: seq,
             status: status,
+            uploadProgress: uploadProgress,
+            quoteMessageId: quoteMessageId,
+            quotePreview: quotePreview,
+            isRecalled: isRecalled,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -2298,6 +2855,10 @@ typedef $$ConversationsTableTableCreateCompanionBuilder
   Value<String?> otherUserAvatar,
   Value<String?> otherUserUsername,
   Value<String?> lastMessage,
+  Value<String> lastMessageType,
+  Value<String?> lastMessageMediaUrl,
+  Value<int?> lastMessageRelatedId,
+  Value<bool> lastMessageIsRecalled,
   Value<int?> lastMessageAt,
   Value<int> unreadCount,
   Value<bool> isOnline,
@@ -2313,6 +2874,10 @@ typedef $$ConversationsTableTableUpdateCompanionBuilder
   Value<String?> otherUserAvatar,
   Value<String?> otherUserUsername,
   Value<String?> lastMessage,
+  Value<String> lastMessageType,
+  Value<String?> lastMessageMediaUrl,
+  Value<int?> lastMessageRelatedId,
+  Value<bool> lastMessageIsRecalled,
   Value<int?> lastMessageAt,
   Value<int> unreadCount,
   Value<bool> isOnline,
@@ -2353,6 +2918,22 @@ class $$ConversationsTableTableFilterComposer
 
   ColumnFilters<String> get lastMessage => $composableBuilder(
       column: $table.lastMessage, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get lastMessageType => $composableBuilder(
+      column: $table.lastMessageType,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get lastMessageMediaUrl => $composableBuilder(
+      column: $table.lastMessageMediaUrl,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get lastMessageRelatedId => $composableBuilder(
+      column: $table.lastMessageRelatedId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get lastMessageIsRecalled => $composableBuilder(
+      column: $table.lastMessageIsRecalled,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get lastMessageAt => $composableBuilder(
       column: $table.lastMessageAt, builder: (column) => ColumnFilters(column));
@@ -2403,6 +2984,22 @@ class $$ConversationsTableTableOrderingComposer
   ColumnOrderings<String> get lastMessage => $composableBuilder(
       column: $table.lastMessage, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get lastMessageType => $composableBuilder(
+      column: $table.lastMessageType,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get lastMessageMediaUrl => $composableBuilder(
+      column: $table.lastMessageMediaUrl,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get lastMessageRelatedId => $composableBuilder(
+      column: $table.lastMessageRelatedId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get lastMessageIsRecalled => $composableBuilder(
+      column: $table.lastMessageIsRecalled,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get lastMessageAt => $composableBuilder(
       column: $table.lastMessageAt,
       builder: (column) => ColumnOrderings(column));
@@ -2449,6 +3046,18 @@ class $$ConversationsTableTableAnnotationComposer
 
   GeneratedColumn<String> get lastMessage => $composableBuilder(
       column: $table.lastMessage, builder: (column) => column);
+
+  GeneratedColumn<String> get lastMessageType => $composableBuilder(
+      column: $table.lastMessageType, builder: (column) => column);
+
+  GeneratedColumn<String> get lastMessageMediaUrl => $composableBuilder(
+      column: $table.lastMessageMediaUrl, builder: (column) => column);
+
+  GeneratedColumn<int> get lastMessageRelatedId => $composableBuilder(
+      column: $table.lastMessageRelatedId, builder: (column) => column);
+
+  GeneratedColumn<bool> get lastMessageIsRecalled => $composableBuilder(
+      column: $table.lastMessageIsRecalled, builder: (column) => column);
 
   GeneratedColumn<int> get lastMessageAt => $composableBuilder(
       column: $table.lastMessageAt, builder: (column) => column);
@@ -2500,6 +3109,10 @@ class $$ConversationsTableTableTableManager extends RootTableManager<
             Value<String?> otherUserAvatar = const Value.absent(),
             Value<String?> otherUserUsername = const Value.absent(),
             Value<String?> lastMessage = const Value.absent(),
+            Value<String> lastMessageType = const Value.absent(),
+            Value<String?> lastMessageMediaUrl = const Value.absent(),
+            Value<int?> lastMessageRelatedId = const Value.absent(),
+            Value<bool> lastMessageIsRecalled = const Value.absent(),
             Value<int?> lastMessageAt = const Value.absent(),
             Value<int> unreadCount = const Value.absent(),
             Value<bool> isOnline = const Value.absent(),
@@ -2514,6 +3127,10 @@ class $$ConversationsTableTableTableManager extends RootTableManager<
             otherUserAvatar: otherUserAvatar,
             otherUserUsername: otherUserUsername,
             lastMessage: lastMessage,
+            lastMessageType: lastMessageType,
+            lastMessageMediaUrl: lastMessageMediaUrl,
+            lastMessageRelatedId: lastMessageRelatedId,
+            lastMessageIsRecalled: lastMessageIsRecalled,
             lastMessageAt: lastMessageAt,
             unreadCount: unreadCount,
             isOnline: isOnline,
@@ -2528,6 +3145,10 @@ class $$ConversationsTableTableTableManager extends RootTableManager<
             Value<String?> otherUserAvatar = const Value.absent(),
             Value<String?> otherUserUsername = const Value.absent(),
             Value<String?> lastMessage = const Value.absent(),
+            Value<String> lastMessageType = const Value.absent(),
+            Value<String?> lastMessageMediaUrl = const Value.absent(),
+            Value<int?> lastMessageRelatedId = const Value.absent(),
+            Value<bool> lastMessageIsRecalled = const Value.absent(),
             Value<int?> lastMessageAt = const Value.absent(),
             Value<int> unreadCount = const Value.absent(),
             Value<bool> isOnline = const Value.absent(),
@@ -2542,6 +3163,10 @@ class $$ConversationsTableTableTableManager extends RootTableManager<
             otherUserAvatar: otherUserAvatar,
             otherUserUsername: otherUserUsername,
             lastMessage: lastMessage,
+            lastMessageType: lastMessageType,
+            lastMessageMediaUrl: lastMessageMediaUrl,
+            lastMessageRelatedId: lastMessageRelatedId,
+            lastMessageIsRecalled: lastMessageIsRecalled,
             lastMessageAt: lastMessageAt,
             unreadCount: unreadCount,
             isOnline: isOnline,
