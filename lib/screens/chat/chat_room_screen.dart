@@ -202,7 +202,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       for (final file in picked) {
         final bytes = await file.readAsBytes();
         if (!mounted) return;
-        final notifier = ref.read(messagesProvider(widget.conversation.id).notifier);
+        final notifier =
+            ref.read(messagesProvider(widget.conversation.id).notifier);
         if (_isVideoFileName(file.name)) {
           notifier.sendVideoMessage(bytes, file.name);
         } else {
@@ -257,6 +258,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   }
 
   // ── 消息交互 ──
+
+  void _retryFailedMessage(Message msg) {
+    ref
+        .read(messagesProvider(widget.conversation.id).notifier)
+        .retryFailedMessage(msg.id);
+  }
 
   void _showMessageMenu(Message msg) async {
     final isMe = msg.senderId == ref.read(authProvider).user?.id;
@@ -378,7 +385,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           Expanded(
               child: _buildMessageList(msgState, currentUserId, otherUser)),
           if (_quotedMessage != null) _buildQuickReplyBar(),
-          _buildInputBar(msgState.isSending),
+          _buildInputBar(),
           if (_showEmojiPicker) _buildEmojiPicker(),
         ],
       ),
@@ -760,7 +767,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   final msg = msgs[idx];
                   final isFirst = idx == 0;
                   final isLast = idx == msgs.length - 1;
-                  return _buildBubble(
+                  final bubble = _buildBubble(
                     msg: msg,
                     isMe: isMe,
                     isFirst: isFirst,
@@ -768,12 +775,35 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     groupSize: msgs.length,
                     showAvatar: group.showAvatar,
                   );
+                  if (isMe && msg.status == 'failed') {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        bubble,
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4, top: 2),
+                          child: _SendStatusIcon(
+                            message: msg,
+                            isMe: true,
+                            onRetry: () => _retryFailedMessage(msg),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return bubble;
                 }),
                 // 状态图标（仅最后一条自己的消息显示）
-                if (isMe && isLastInList)
+                if (isMe && isLastInList && last.status != 'failed')
                   Padding(
                     padding: const EdgeInsets.only(right: 4, top: 2),
-                    child: _SendStatusIcon(message: last, isMe: true),
+                    child: _SendStatusIcon(
+                      message: last,
+                      isMe: true,
+                      onRetry: last.status == 'failed'
+                          ? () => _retryFailedMessage(last)
+                          : null,
+                    ),
                   ),
               ],
             ),
@@ -949,7 +979,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
   }
 
-
   Widget _buildPostCardBubble(Message msg, bool isMe) {
     final title = (msg.content?.trim().isNotEmpty == true)
         ? msg.content!.trim()
@@ -990,14 +1019,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       Icon(
                         Icons.article_outlined,
                         size: 15,
-                        color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
+                        color:
+                            isMe ? Colors.white70 : _NontoChatColors.timestamp,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '帖子',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
+                          color: isMe
+                              ? Colors.white70
+                              : _NontoChatColors.timestamp,
                         ),
                       ),
                     ],
@@ -1300,7 +1332,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   // ── 输入区域 ──
 
-  Widget _buildInputBar(bool isSending) {
+  Widget _buildInputBar() {
     final bgColor = _isDark ? _NontoChatColors.darkBg : _NontoChatColors.bg;
     final divColor =
         _isDark ? _NontoChatColors.darkDivider : _NontoChatColors.divider;
@@ -1391,37 +1423,24 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 duration: const Duration(milliseconds: 160),
                 switchInCurve: Curves.easeOut,
                 switchOutCurve: Curves.easeIn,
-                child: isSending
-                    ? const Padding(
-                        key: ValueKey('chat-send-progress'),
-                        padding: EdgeInsets.all(10),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: _NontoChatColors.selfBubble,
-                            strokeWidth: 2,
-                          ),
+                child: hasText
+                    ? IconButton(
+                        key: const ValueKey('chat-send-button'),
+                        icon: const Icon(
+                          Icons.send_rounded,
+                          color: _NontoChatColors.selfBubble,
+                          size: 22,
                         ),
+                        onPressed: _sendMessage,
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
                       )
-                    : hasText
-                        ? IconButton(
-                            key: const ValueKey('chat-send-button'),
-                            icon: const Icon(
-                              Icons.send_rounded,
-                              color: _NontoChatColors.selfBubble,
-                              size: 22,
-                            ),
-                            onPressed: _sendMessage,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 36, minHeight: 36),
-                          )
-                        : const SizedBox(
-                            key: ValueKey('chat-send-empty'),
-                            width: 36,
-                            height: 36,
-                          ),
+                    : const SizedBox(
+                        key: ValueKey('chat-send-empty'),
+                        width: 36,
+                        height: 36,
+                      ),
               );
             },
           ),
@@ -1661,12 +1680,30 @@ class _MsgGroup {
 class _SendStatusIcon extends StatelessWidget {
   final Message message;
   final bool isMe;
+  final VoidCallback? onRetry;
 
-  const _SendStatusIcon({required this.message, required this.isMe});
+  const _SendStatusIcon({
+    required this.message,
+    required this.isMe,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (!isMe) return const SizedBox.shrink();
+    if (message.status == 'failed') {
+      return TextButton.icon(
+        onPressed: onRetry,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: Colors.redAccent,
+        ),
+        icon: const Icon(Icons.refresh_rounded, size: 14),
+        label: const Text('重试', style: TextStyle(fontSize: 11)),
+      );
+    }
     // 上传/发送中（乐观消息）
     if (message.status == 'uploading') {
       return Text(

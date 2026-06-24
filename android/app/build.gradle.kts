@@ -15,6 +15,11 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val huaweiAppId = providers.gradleProperty("HUAWEI_APPID")
+    .orElse(providers.environmentVariable("HUAWEI_APPID"))
+    .orElse("")
+    .get()
+
 android {
     namespace = "com.nonto.nonto"
     compileSdk = 36
@@ -41,11 +46,11 @@ android {
 
         // ── 极光推送 manifestPlaceholders ──
         // JPUSH_APPKEY: 极光应用 AppKey；JPUSH_CHANNEL: 渠道名（统计用）
-        // 厂商通道 APPID/APPKEY 留空占位——实际证书需在各厂商开发者后台申请，
-        // 然后填到极光控制台「厂商通道」里，这里不需要写真实值。
+        // 厂商通道证书在极光控制台配置；华为通道还需要把 HMS AppID 注入 Manifest。
+        // 本地/CI 可通过 Gradle 属性或环境变量 HUAWEI_APPID 传入（常见格式：appid=123456）。
         manifestPlaceholders["JPUSH_APPKEY"] = "c9c5db77d7cb1a466951e774"
         manifestPlaceholders["JPUSH_CHANNEL"] = "nonto-default"
-        manifestPlaceholders["HUAWEI_APPID"] = ""
+        manifestPlaceholders["HUAWEI_APPID"] = huaweiAppId
         manifestPlaceholders["XIAOMI_APPID"] = ""
         manifestPlaceholders["XIAOMI_APPKEY"] = ""
         manifestPlaceholders["OPPO_APPKEY"] = ""

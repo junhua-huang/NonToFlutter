@@ -61,7 +61,9 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     super.initState();
     _messageSub =
         WebSocketService().messageStream.listen(_appendRealtimeMessage);
-    _presenceSub = WebSocketService().communityPresenceStream.listen(_applyCommunityPresence);
+    _presenceSub = WebSocketService()
+        .communityPresenceStream
+        .listen(_applyCommunityPresence);
     _loadMessages();
     unawaited(_loadMembersForHeader());
   }
@@ -166,7 +168,9 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     final communityId = _parsePresenceInt(event['community_id']);
     final userId = _parsePresenceInt(event['user_id']);
     final isOnline = event['is_online'];
-    if (communityId != widget.communityId || userId == null || isOnline is! bool) {
+    if (communityId != widget.communityId ||
+        userId == null ||
+        isOnline is! bool) {
       return;
     }
 
@@ -206,7 +210,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
 
   Future<void> _sendMessage() async {
     final content = _msgCtrl.text.trim();
-    if (content.isEmpty || _isSending) return;
+    if (content.isEmpty) return;
     final mentionUserIds = _mentionUserIds.toList();
     _msgCtrl.clear();
     final optimistic = _buildOptimisticMessage(
@@ -215,7 +219,6 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       mentionUserIds: mentionUserIds,
     );
     setState(() {
-      _isSending = true;
       _messages.add(optimistic);
     });
     _mentionUserIds.clear();
@@ -234,18 +237,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     } catch (e) {
       if (mounted) {
         _markOptimisticFailed(optimistic['id']);
-        _msgCtrl.text = content;
-        _msgCtrl.selection = TextSelection.fromPosition(
-          TextPosition(offset: _msgCtrl.text.length),
-        );
-        _mentionUserIds
-          ..clear()
-          ..addAll(mentionUserIds);
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('发送失败: $e')));
       }
     } finally {
-      if (mounted) setState(() => _isSending = false);
       await _writeMessagesCache();
     }
   }
@@ -307,6 +302,54 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         ..clear()
         ..addAll(updated);
     });
+  }
+
+  void _retryMessage(Map<String, dynamic> message) {
+    final content = message['content']?.toString() ?? '';
+    if (content.trim().isEmpty) return;
+    final messageType = message['message_type']?.toString() ?? 'text';
+    final mediaUrl = message['media_url']?.toString();
+    final mentionUserIds = (message['mention_user_ids'] is List)
+        ? (message['mention_user_ids'] as List)
+            .map((id) => int.tryParse(id?.toString() ?? ''))
+            .whereType<int>()
+            .toList()
+        : const <int>[];
+
+    setState(() {
+      _messages.removeWhere((item) => item['id'] == message['id']);
+    });
+    final optimistic = _buildOptimisticMessage(
+      content: content,
+      messageType: messageType,
+      mediaUrl: mediaUrl?.isNotEmpty == true ? mediaUrl : null,
+      mentionUserIds: mentionUserIds,
+    );
+    setState(() => _messages.add(optimistic));
+    _syncConversationPreview(content, messageType);
+    unawaited(SoundService().playSendSound());
+    unawaited(_writeMessagesCache());
+
+    unawaited(() async {
+      try {
+        final resp = await CommunityApiService().sendMessage(
+          widget.communityId,
+          content: content,
+          messageType: messageType,
+          mediaUrl: mediaUrl?.isNotEmpty == true ? mediaUrl : null,
+          mentionUserIds: mentionUserIds,
+        );
+        _replaceOptimisticWithResponse(optimistic, resp.data);
+      } catch (e) {
+        if (mounted) {
+          _markOptimisticFailed(optimistic['id']);
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('重试失败: $e')));
+        }
+      } finally {
+        await _writeMessagesCache();
+      }
+    }());
   }
 
   Future<void> _recallMessage(int messageId, bool isMine) async {
@@ -995,6 +1038,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           isMine: isMine,
           onRecall: () => _recallMessage(message['id'], isMine),
           onAvatarLongPress: () => _insertMentionFromMessage(message),
+          onRetry: () => _retryMessage(message),
         );
       },
     );
@@ -1074,16 +1118,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              icon: _isSending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
+              icon: const Icon(Icons.send),
               color: Colors.white,
               style: IconButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: _isSending ? null : _sendMessage,
+              onPressed: _sendMessage,
             ),
           ],
         ),
@@ -1172,17 +1210,20 @@ class _MessageBubble extends StatelessWidget {
   final bool isMine;
   final VoidCallback? onRecall;
   final VoidCallback? onAvatarLongPress;
+  final VoidCallback? onRetry;
 
   const _MessageBubble({
     required this.message,
     this.isMine = false,
     this.onRecall,
     this.onAvatarLongPress,
+    this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
     final recalled = message['is_recalled'] == true;
+    final bool isFailed = message['status']?.toString() == 'failed';
     final content = message['content'] ?? '';
     final messageType = message['message_type']?.toString() ?? 'text';
     final mediaUrl = message['media_url']?.toString().isNotEmpty == true
@@ -1289,6 +1330,19 @@ class _MessageBubble extends StatelessWidget {
                         color: isMine ? Colors.white70 : AppColors.textTertiary,
                       ),
                     ),
+                    if (isMine && isFailed)
+                      TextButton.icon(
+                        onPressed: onRetry,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.refresh_rounded, size: 14),
+                        label: const Text('重试', style: TextStyle(fontSize: 11)),
+                      ),
                   ],
                 ),
               ),
@@ -1374,7 +1428,8 @@ class _MessageBubble extends StatelessWidget {
                     title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                    style:
+                        TextStyle(fontSize: 14, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 4),
                   Text('点击查看详情',

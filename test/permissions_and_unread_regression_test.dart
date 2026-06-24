@@ -8,25 +8,33 @@ void main() {
       File('$projectRoot/$relativePath').readAsStringSync();
 
   group('permission and unread synchronization regressions', () {
-    test('Android declares notification permission without broad storage access', () {
+    test(
+        'Android declares notification permission without broad storage access',
+        () {
       final manifest = read('android/app/src/main/AndroidManifest.xml');
       final pubspec = read('pubspec.yaml');
 
       expect(manifest, contains('android.permission.POST_NOTIFICATIONS'));
-      expect(manifest, isNot(contains('android.permission.MANAGE_EXTERNAL_STORAGE')));
+      expect(manifest,
+          isNot(contains('android.permission.MANAGE_EXTERNAL_STORAGE')));
       expect(pubspec, isNot(contains('file_picker:')));
       expect(pubspec, isNot(contains('permission_handler:')));
     });
 
-    test('push notification permission is requested from the home shell once', () {
+    test('push notification permission is requested from the home shell once',
+        () {
       final push = read('lib/services/push_service.dart');
       final home = read('lib/screens/home/home_screen.dart');
 
       expect(push, contains('bool _permissionRequested = false;'));
-      expect(push, contains('if (!_supported || !_initialized || _permissionRequested) return;'));
+      expect(
+          push,
+          contains(
+              'if (!_supported || !_initialized || _permissionRequested) return;'));
       expect(push, contains('_permissionRequested = true;'));
       expect(push, contains('_jpush.requestRequiredPermission();'));
-      expect(home, contains("import 'package:nonto/services/push_service.dart';"));
+      expect(
+          home, contains("import 'package:nonto/services/push_service.dart';"));
       expect(home, contains('addPostFrameCallback'));
       expect(home, contains('PushService().requestPermission()'));
     });
@@ -35,8 +43,10 @@ void main() {
       final helper = read('lib/utils/picker_error_utils.dart');
       final postCreate = read('lib/screens/post/create_post_screen.dart');
       final chatRoom = read('lib/screens/chat/chat_room_screen.dart');
-      final communityChat = read('lib/screens/community/community_chat_screen.dart');
-      final communityCreate = read('lib/screens/community/community_create_screen.dart');
+      final communityChat =
+          read('lib/screens/community/community_chat_screen.dart');
+      final communityCreate =
+          read('lib/screens/community/community_create_screen.dart');
       final comicUpload = read('lib/screens/comic/comic_upload_page.dart');
       final editProfile = read('lib/screens/profile/edit_profile_screen.dart');
       final profileTab = read('lib/screens/profile/profile_tab.dart');
@@ -65,12 +75,18 @@ void main() {
 
       expect(notifier, contains('final mergedNotifications = refresh'));
       expect(notifier, contains('final localUnread ='));
-      expect(notifier, contains('mergedNotifications.where((n) => !n.isRead).length'));
-      expect(notifier, contains('final unreadCount = serverUnread ?? localUnread;'));
-      expect(notifier, isNot(contains('final unreadCount = serverUnread ?? state.unreadCount;')));
+      expect(notifier,
+          contains('mergedNotifications.where((n) => !n.isRead).length'));
+      expect(notifier,
+          contains('final unreadCount = serverUnread ?? localUnread;'));
+      expect(
+          notifier,
+          isNot(contains(
+              'final unreadCount = serverUnread ?? state.unreadCount;')));
     });
 
-    test('notifications tab refreshes stale unread badges without unread rows', () {
+    test('notifications tab refreshes stale unread badges without unread rows',
+        () {
       final tab = read('lib/screens/notifications/notifications_tab.dart');
 
       expect(tab, contains('final hasUnreadInList ='));
@@ -92,11 +108,28 @@ void main() {
       expect(home, contains("PushService().reportAppState('background')"));
     });
 
+    test(
+        'Huawei push channel app id is injected from Gradle property or environment',
+        () {
+      final manifest = read('android/app/src/main/AndroidManifest.xml');
+      final gradle = read('android/app/build.gradle.kts');
+
+      expect(manifest, contains('com.huawei.hms.client.appid'));
+      expect(manifest, contains('\${HUAWEI_APPID}'));
+      expect(gradle, contains('gradleProperty("HUAWEI_APPID")'));
+      expect(gradle, contains('environmentVariable("HUAWEI_APPID")'));
+      expect(gradle,
+          contains('manifestPlaceholders["HUAWEI_APPID"] = huaweiAppId'));
+      expect(
+          gradle, isNot(contains('manifestPlaceholders["HUAWEI_APPID"] = ""')));
+    });
+
     test('push registration upload has bounded retry state', () {
       final push = read('lib/services/push_service.dart');
 
       expect(push, contains('bool _registerRetryScheduled = false;'));
-      expect(push, contains('static const List<Duration> _registerRetryDelays'));
+      expect(
+          push, contains('static const List<Duration> _registerRetryDelays'));
       expect(push, contains('Future<bool> _uploadRegistrationId()'));
       expect(push, contains('_scheduleRegisterRetry()'));
       expect(push, contains('Timer? _registerRetryTimer;'));

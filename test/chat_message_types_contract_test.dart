@@ -1,9 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nonto/models/message.dart';
+import 'package:nonto/models/community.dart';
 import 'package:nonto/models/conversation.dart';
+import 'package:nonto/models/message.dart';
+import 'package:nonto/models/user.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_helpers.dart';
+import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
 
 void main() {
   group('chat message type contracts', () {
@@ -59,61 +62,76 @@ void main() {
             lastMessage: message,
           );
 
-      expect(nontoConversationPreview(convWith(Message(
-        id: 1,
-        conversationId: 1,
-        senderId: 1,
-        content: 'https://cdn.example/a.jpg',
-        messageType: MessageType.image,
-      ))), '[图片]');
-      expect(nontoConversationPreview(convWith(Message(
-        id: 2,
-        conversationId: 1,
-        senderId: 1,
-        content: 'https://cdn.example/v.mp4',
-        messageType: MessageType.video,
-      ))), '[视频]');
-      expect(nontoConversationPreview(convWith(Message(
-        id: 3,
-        conversationId: 1,
-        senderId: 1,
-        content: '帖子摘要',
-        messageType: MessageType.post,
-      ))), '[帖子] 帖子摘要');
-      expect(nontoConversationPreview(convWith(Message(
-        id: 4,
-        conversationId: 1,
-        senderId: 1,
-        content: '欢迎加入',
-        messageType: MessageType.system,
-      ))), '欢迎加入');
+      expect(
+          nontoConversationPreview(convWith(Message(
+            id: 1,
+            conversationId: 1,
+            senderId: 1,
+            content: 'https://cdn.example/a.jpg',
+            messageType: MessageType.image,
+          ))),
+          '[图片]');
+      expect(
+          nontoConversationPreview(convWith(Message(
+            id: 2,
+            conversationId: 1,
+            senderId: 1,
+            content: 'https://cdn.example/v.mp4',
+            messageType: MessageType.video,
+          ))),
+          '[视频]');
+      expect(
+          nontoConversationPreview(convWith(Message(
+            id: 3,
+            conversationId: 1,
+            senderId: 1,
+            content: '帖子摘要',
+            messageType: MessageType.post,
+          ))),
+          '[帖子] 帖子摘要');
+      expect(
+          nontoConversationPreview(convWith(Message(
+            id: 4,
+            conversationId: 1,
+            senderId: 1,
+            content: '欢迎加入',
+            messageType: MessageType.system,
+          ))),
+          '欢迎加入');
     });
 
-    test('private chat source contains video send and post/system render hooks', () {
-      final source = File('lib/screens/chat/chat_room_screen.dart').readAsStringSync();
+    test('private chat source contains video send and post/system render hooks',
+        () {
+      final source =
+          File('lib/screens/chat/chat_room_screen.dart').readAsStringSync();
       expect(source, contains('sendVideoMessage'));
       expect(source, contains('_buildPostCardBubble'));
       expect(source, contains('_buildSystemMessage'));
     });
 
     test('community chat source contains post/system render hooks', () {
-      final source = File('lib/screens/community/community_chat_screen.dart').readAsStringSync();
+      final source = File('lib/screens/community/community_chat_screen.dart')
+          .readAsStringSync();
       expect(source, contains('_buildPostCard'));
       expect(source, contains('_buildSystemMessage'));
     });
 
     test('websocket service exposes community presence stream', () {
-      final source = File('lib/services/websocket_service.dart').readAsStringSync();
+      final source =
+          File('lib/services/websocket_service.dart').readAsStringSync();
       expect(source, contains('_communityPresenceController'));
       expect(source, contains('communityPresenceStream'));
       expect(source, contains("case 'community_member_presence':"));
       expect(source, contains('_communityPresenceController.add'));
     });
 
-    test('community chat subscribes to presence and updates member online state', () {
-      final source = File('lib/screens/community/community_chat_screen.dart').readAsStringSync();
+    test(
+        'community chat subscribes to presence and updates member online state',
+        () {
+      final source = File('lib/screens/community/community_chat_screen.dart')
+          .readAsStringSync();
       expect(source, contains('_presenceSub'));
-      expect(source, contains('communityPresenceStream.listen'));
+      expect(source, matches(RegExp(r'communityPresenceStream\s*\.listen')));
       expect(source, contains('_applyCommunityPresence'));
       expect(source, contains("event['community_id']"));
       expect(source, contains('widget.communityId'));
@@ -128,12 +146,14 @@ void main() {
     });
 
     test('send queue passes relatedId to websocket', () {
-      final source = File('lib/services/chat_send_queue.dart').readAsStringSync();
+      final source =
+          File('lib/services/chat_send_queue.dart').readAsStringSync();
       expect(source, contains('relatedId: msg.relatedId'));
     });
 
     test('local database schema stores full chat message metadata', () {
-      final schema = File('lib/services/database/app_database.dart').readAsStringSync();
+      final schema =
+          File('lib/services/database/app_database.dart').readAsStringSync();
       expect(schema, contains('IntColumn get relatedId'));
       expect(schema, contains('TextColumn get clientMsgId'));
       expect(schema, contains('IntColumn get quoteMessageId'));
@@ -147,17 +167,26 @@ void main() {
     });
 
     test('local database persistence maps full message metadata', () {
-      final source = File('lib/services/local_db_service.dart').readAsStringSync();
+      final source =
+          File('lib/services/local_db_service.dart').readAsStringSync();
       expect(source, contains('relatedId: Value(msg.relatedId)'));
       expect(source, contains('clientMsgId: Value(msg.clientMsgId)'));
       expect(source, contains('quoteMessageId: Value(msg.quoteMessageId)'));
       expect(source, contains('quotePreview: Value(msg.quotePreview)'));
       expect(source, contains('isRecalled: Value(msg.isRecalled)'));
       expect(source, contains('uploadProgress: Value(msg.uploadProgress)'));
-      expect(source, contains('lastMessageType: Value(conv.lastMessage?.messageType.name ?? MessageType.text.name)'));
-      expect(source, contains('lastMessageMediaUrl: Value(conv.lastMessage?.mediaUrl)'));
-      expect(source, contains('lastMessageRelatedId: Value(conv.lastMessage?.relatedId)'));
-      expect(source, contains('lastMessageIsRecalled: Value(conv.lastMessage?.isRecalled ?? false)'));
+      expect(
+          source,
+          contains(
+              'lastMessageType: Value(conv.lastMessage?.messageType.name ?? MessageType.text.name)'));
+      expect(source,
+          contains('lastMessageMediaUrl: Value(conv.lastMessage?.mediaUrl)'));
+      expect(source,
+          contains('lastMessageRelatedId: Value(conv.lastMessage?.relatedId)'));
+      expect(
+          source,
+          contains(
+              'lastMessageIsRecalled: Value(conv.lastMessage?.isRecalled ?? false)'));
     });
 
     test('post share to chat UI entry points exist', () {
@@ -168,11 +197,76 @@ void main() {
       expect(sheetSource, contains("messageType: 'post'"));
       expect(sheetSource, contains('relatedId: post.id'));
 
-      final detailSource = File('lib/screens/post/post_detail_screen.dart').readAsStringSync();
+      final detailSource =
+          File('lib/screens/post/post_detail_screen.dart').readAsStringSync();
       expect(detailSource, contains('PostShareToChatSheet.show'));
 
       final cardSource = File('lib/widgets/post_card.dart').readAsStringSync();
       expect(cardSource, contains('PostShareToChatSheet.show'));
+    });
+
+    test('post share sheet parses friend API responses into share targets', () {
+      final friends = parsePostShareFriends({
+        'friends': [
+          {'id': '42', 'username': 'alice', 'display_name': 'Alice'},
+          {'id': 0, 'username': 'invalid'},
+        ],
+      });
+
+      expect(friends, isA<List<User>>());
+      expect(friends.map((friend) => friend.id), [42]);
+      expect(friends.single.displayName, 'Alice');
+    });
+
+    test('post share sheet parses nested friends payloads', () {
+      final friends = parsePostShareFriends({
+        'data': {
+          'users': [
+            {'id': 7, 'username': 'bob'},
+          ],
+        },
+      });
+
+      expect(friends.map((friend) => friend.username), ['bob']);
+    });
+
+    test(
+        'post share sheet keeps all communities returned by my communities API',
+        () {
+      final communities = parsePostShareCommunities({
+        'communities': [
+          {
+            'id': '5',
+            'name': 'Joined Group',
+            'my_role': 'member',
+            'my_status': 'active'
+          },
+          {'id': 6, 'name': 'Legacy Payload Without Membership'},
+        ],
+      });
+
+      expect(communities, isA<List<Community>>());
+      expect(communities.map((community) => community.name), [
+        'Joined Group',
+        'Legacy Payload Without Membership',
+      ]);
+      expect(communities.first.isMember, isTrue);
+      expect(communities.last.isMember, isFalse);
+    });
+
+    test(
+        'post share sheet loads friends and creates private conversation before sending',
+        () {
+      final sheetSource =
+          File('lib/widgets/post_share_to_chat_sheet.dart').readAsStringSync();
+      expect(sheetSource, contains('FriendService().getFriends()'));
+      expect(sheetSource,
+          contains('ChatService().getOrCreateConversation(friend.id)'));
+      expect(sheetSource, contains("messageType: 'post'"));
+      expect(sheetSource, contains('relatedId: post.id'));
+      expect(sheetSource, contains('List<User> friends'));
+      expect(sheetSource,
+          isNot(contains('.where((community) => community.isMember)')));
     });
   });
 }

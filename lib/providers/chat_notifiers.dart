@@ -721,7 +721,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     }
   }
 
-  Future<void> _warmRecentMessageCaches(List<Conversation> conversations) async {
+  Future<void> _warmRecentMessageCaches(
+      List<Conversation> conversations) async {
     for (final conversation in conversations) {
       final lastMessage = conversation.lastMessage;
       if (lastMessage == null) continue;
@@ -1467,6 +1468,31 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       return m;
     }).toList();
     state = state.copyWith(messages: updated, isSending: false);
+  }
+
+  /// 重试失败的普通消息。媒体上传失败继续走专门的上传重试。
+  void retryFailedMessage(int msgId) {
+    final msgIdx = state.messages.indexWhere((m) => m.id == msgId);
+    if (msgIdx < 0) return;
+    final failed = state.messages[msgIdx];
+    if (failed.status != 'failed') return;
+
+    if (failed.messageType == MessageType.image && failed.tempBytes != null) {
+      unawaited(retryImageUpload(msgId));
+      return;
+    }
+
+    final updated = List<Message>.from(state.messages)..removeAt(msgIdx);
+    state = state.copyWith(messages: updated, isSending: false);
+    DataLayer().deletePersistedMessage(failed.id);
+    sendMessage(
+      failed.content ?? '',
+      messageType: failed.messageType.name,
+      mediaUrl: failed.mediaUrl,
+      relatedId: failed.relatedId,
+      quoteMessageId: failed.quoteMessageId,
+      quotePreview: failed.quotePreview,
+    );
   }
 
   /// 重试上传失败的图片消息

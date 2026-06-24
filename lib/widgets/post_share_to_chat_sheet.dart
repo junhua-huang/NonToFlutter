@@ -2,10 +2,54 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:nonto/models/community.dart';
-import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/post.dart';
+import 'package:nonto/models/user.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/api/friend_service.dart';
+
+List<User> parsePostShareFriends(dynamic data) {
+  final items = _extractPostShareItems(data, const [
+    'friends',
+    'users',
+    'items',
+    'data',
+  ]);
+  return items
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .map(User.fromJson)
+      .where((user) => user.id > 0)
+      .toList();
+}
+
+List<Community> parsePostShareCommunities(dynamic data) {
+  final items = _extractPostShareItems(data, const [
+    'communities',
+    'items',
+    'data',
+  ]);
+  return items
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .map(Community.fromJson)
+      .toList();
+}
+
+List<dynamic> _extractPostShareItems(dynamic data, List<String> keys) {
+  if (data is List) return data;
+  if (data is Map) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is List) return value;
+      if (value is Map) {
+        final nested = _extractPostShareItems(value, keys);
+        if (nested.isNotEmpty) return nested;
+      }
+    }
+  }
+  return const [];
+}
 
 class PostShareToChatSheet extends StatefulWidget {
   final Post post;
@@ -31,65 +75,31 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
 
   Future<_ShareTargets> _loadTargets() async {
     final responses = await Future.wait([
-      ChatService().getConversations(page: 1, perPage: 30),
+      FriendService().getFriends(),
       CommunityApiService().getMy(),
     ]);
 
     return _ShareTargets(
-      conversations: _parseConversations(responses[0].data),
-      communities: _parseCommunities(responses[1].data),
+      friends: parsePostShareFriends(responses[0].data),
+      communities: parsePostShareCommunities(responses[1].data),
     );
   }
 
-  List<Conversation> _parseConversations(dynamic data) {
-    final items = _extractItems(data, const [
-      'conversations',
-      'sessions',
-      'items',
-      'data',
-    ]);
-    return items
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .map(Conversation.fromJson)
-        .where((conversation) => !conversation.isCommunity)
-        .toList();
-  }
-
-  List<Community> _parseCommunities(dynamic data) {
-    final items = _extractItems(data, const [
-      'communities',
-      'items',
-      'data',
-    ]);
-    return items
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .map(Community.fromJson)
-        .where((community) => community.isMember)
-        .toList();
-  }
-
-  List<dynamic> _extractItems(dynamic data, List<String> keys) {
-    if (data is List) return data;
-    if (data is Map) {
-      for (final key in keys) {
-        final value = data[key];
-        if (value is List) return value;
-        if (value is Map) {
-          final nested = _extractItems(value, keys);
-          if (nested.isNotEmpty) return nested;
-        }
-      }
-    }
-    return const [];
-  }
-
-  Future<void> _sendToConversation(Conversation conversation) async {
+  Future<void> _sendToFriend(User friend) async {
     final post = widget.post;
-    await _send(() {
+    await _send(() async {
+      final convResp = await ChatService().getOrCreateConversation(friend.id);
+      if (convResp.success != true) return convResp;
+      final data = convResp.data;
+      final conversation = data is Map ? (data['conversation'] ?? data) : null;
+      final conversationId = conversation is Map
+          ? int.tryParse(conversation['id']?.toString() ?? '')
+          : null;
+      if (conversationId == null || conversationId <= 0) {
+        throw StateError('conversation_id_missing');
+      }
       return ChatService().sendMessage(
-        conversation.id,
+        conversationId,
         post.content ?? '',
         messageType: 'post',
         relatedId: post.id,
@@ -149,7 +159,7 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
                 height: 180,
                 child: Center(
                   child: Text(
-                    '加载会话失败',
+                    '加载分享对象失败',
                     style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
@@ -157,7 +167,7 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
             }
 
             final targets = snapshot.data ?? const _ShareTargets();
-            final hasTargets = targets.conversations.isNotEmpty || targets.communities.isNotEmpty;
+            final hasTargets = targets.friends.isNotEmpty || targets.communities.isNotEmpty;
             return ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.75,
@@ -181,16 +191,16 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
                       child: ListView(
                         shrinkWrap: true,
                         children: [
-                          if (targets.conversations.isNotEmpty) ...[
-                            const _SectionHeader('私聊'),
-                            for (final conversation in targets.conversations)
+                          if (targets.friends.isNotEmpty) ...[
+                            const _SectionHeader('好友'),
+                            for (final friend in targets.friends)
                               ListTile(
                                 enabled: !_sending,
                                 contentPadding: EdgeInsets.zero,
                                 leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                                title: Text(conversation.otherUser?.displayName ?? conversation.otherUser?.username ?? '用户'),
+                                title: Text(friend.displayName ?? friend.username),
                                 subtitle: const Text('发送帖子卡片'),
-                                onTap: () => _sendToConversation(conversation),
+                                onTap: () => _sendToFriend(friend),
                               ),
                           ],
                           if (targets.communities.isNotEmpty) ...[
@@ -239,11 +249,11 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _ShareTargets {
-  final List<Conversation> conversations;
+  final List<User> friends;
   final List<Community> communities;
 
   const _ShareTargets({
-    this.conversations = const [],
+    this.friends = const [],
     this.communities = const [],
   });
 }
