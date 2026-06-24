@@ -48,6 +48,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   final List<Map<String, dynamic>> _messages = [];
   List<CommunityMember> _members = [];
   StreamSubscription<Map<String, dynamic>>? _messageSub;
+  StreamSubscription<Map<String, dynamic>>? _presenceSub;
   int? _conversationId;
   bool _isLoading = true;
   bool _isSending = false;
@@ -60,6 +61,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     super.initState();
     _messageSub =
         WebSocketService().messageStream.listen(_appendRealtimeMessage);
+    _presenceSub = WebSocketService().communityPresenceStream.listen(_applyCommunityPresence);
     _loadMessages();
     unawaited(_loadMembersForHeader());
   }
@@ -160,6 +162,33 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     }
   }
 
+  void _applyCommunityPresence(Map<String, dynamic> event) {
+    final communityId = _parsePresenceInt(event['community_id']);
+    final userId = _parsePresenceInt(event['user_id']);
+    final isOnline = event['is_online'];
+    if (communityId != widget.communityId || userId == null || isOnline is! bool) {
+      return;
+    }
+
+    final index = _members.indexWhere((member) => member.userId == userId);
+    if (index < 0) return;
+    final member = _members[index];
+    final user = member.user;
+    if (user == null || user.isOnline == isOnline) return;
+
+    if (!mounted) return;
+    setState(() {
+      _members[index] = member.copyWith(
+        user: user.copyWith(isOnline: isOnline),
+      );
+    });
+  }
+
+  int? _parsePresenceInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '');
+  }
+
   @override
   void dispose() {
     final conversationId = _conversationId;
@@ -168,6 +197,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     }
     ChatRoomState.setConversation(null);
     _messageSub?.cancel();
+    _presenceSub?.cancel();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     _msgFocusNode.dispose();

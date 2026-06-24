@@ -102,6 +102,31 @@ void main() {
       expect(source, contains('_buildSystemMessage'));
     });
 
+    test('websocket service exposes community presence stream', () {
+      final source = File('lib/services/websocket_service.dart').readAsStringSync();
+      expect(source, contains('_communityPresenceController'));
+      expect(source, contains('communityPresenceStream'));
+      expect(source, contains("case 'community_member_presence':"));
+      expect(source, contains('_communityPresenceController.add'));
+    });
+
+    test('community chat subscribes to presence and updates member online state', () {
+      final source = File('lib/screens/community/community_chat_screen.dart').readAsStringSync();
+      expect(source, contains('_presenceSub'));
+      expect(source, contains('communityPresenceStream.listen'));
+      expect(source, contains('_applyCommunityPresence'));
+      expect(source, contains("event['community_id']"));
+      expect(source, contains('widget.communityId'));
+      expect(source, contains('copyWith(isOnline: isOnline)'));
+      expect(source, contains('_presenceSub?.cancel'));
+    });
+
+    test('community member supports copyWith for nested user updates', () {
+      final source = File('lib/models/community.dart').readAsStringSync();
+      expect(source, contains('CommunityMember copyWith'));
+      expect(source, contains('user: user ?? this.user'));
+    });
+
     test('send queue passes relatedId to websocket', () {
       final source = File('lib/services/chat_send_queue.dart').readAsStringSync();
       expect(source, contains('relatedId: msg.relatedId'));

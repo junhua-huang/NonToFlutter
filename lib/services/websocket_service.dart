@@ -42,6 +42,7 @@ class WebSocketService {
   final _friendOnlineController = StreamController<Map<String, dynamic>>.broadcast();
   final _friendOfflineController = StreamController<Map<String, dynamic>>.broadcast();
   final _onlineFriendsController = StreamController<Map<String, dynamic>>.broadcast();
+  final _communityPresenceController = StreamController<Map<String, dynamic>>.broadcast();
   final _ackMessageIdController = StreamController<Map<String, dynamic>>.broadcast();
   final _sendErrorController = StreamController<Map<String, dynamic>>.broadcast();
 
@@ -63,6 +64,9 @@ class WebSocketService {
 
   /// 在线好友批量推送流（认证时服务端推送当前所有在线好友）
   Stream<Map<String, dynamic>> get onlineFriendsStream => _onlineFriendsController.stream;
+
+  /// 社群成员 App 在线状态变化流
+  Stream<Map<String, dynamic>> get communityPresenceStream => _communityPresenceController.stream;
 
   /// ACK 携带 message_id 流
   Stream<Map<String, dynamic>> get ackMessageIdStream => _ackMessageIdController.stream;
@@ -353,6 +357,13 @@ class WebSocketService {
         _onlineFriendsController.add(friendsData);
         break;
 
+      case 'community_member_presence':
+        final presenceData = innerData is Map<String, dynamic>
+            ? innerData
+            : (innerData is Map ? Map<String, dynamic>.from(innerData) : payload);
+        _communityPresenceController.add(presenceData);
+        break;
+
       case 'new_notification':
       case 'notifications_read':
         final notifData = innerData is Map<String, dynamic>
@@ -523,6 +534,7 @@ class WebSocketService {
     _friendOnlineController.close();
     _friendOfflineController.close();
     _onlineFriendsController.close();
+    _communityPresenceController.close();
     _sendErrorController.close();
   }
 }
