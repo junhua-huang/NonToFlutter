@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nonto/config/app_theme.dart';
@@ -12,14 +14,18 @@ import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
+import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/sound_service.dart';
 import 'package:nonto/services/websocket_service.dart';
+import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/utils/picker_error_utils.dart';
+import 'package:nonto/widgets/twitter_bottom_sheet.dart';
+import 'package:nonto/widgets/message_highlight_wrapper.dart';
 
 /// 社群群聊页
 /// 支持：发送消息、图片/视频、表情、@提及、撤回与管理员删除。
@@ -55,6 +61,20 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   bool _isMembersLoading = false;
   bool _showEmojiPicker = false;
   int _emojiTabIndex = 0;
+  Map<String, dynamic>? _quotedMessage;
+
+  /// 向上翻页：是否还有更早消息
+  bool _hasMore = false;
+
+  /// 向上翻页：当前已加载的最小 message id
+  int? _oldestMessageId;
+  bool _loadingMore = false;
+
+  /// message.id → GlobalKey，用于引用跳转定位
+  final Map<int, GlobalKey> _msgAnchors = {};
+
+  /// 命中 jumpTo 后需要高亮的消息 id
+  int? _highlightMessageId;
 
   @override
   void initState() {
@@ -86,6 +106,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           if (_conversationId != null) {
             WebSocketService().joinConversation(_conversationId!);
             ChatRoomState.setConversation(_conversationId);
+            await _markConversationRead();
             await DataLayer().write(
               CacheKeys.communityChatConversation(widget.communityId),
               Map<String, dynamic>.from(conversation),
@@ -103,6 +124,12 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
               _messages
                 ..clear()
                 ..addAll(merged);
+              _hasMore = data['has_more'] == true;
+              _oldestMessageId = _messages.isEmpty
+                  ? null
+                  : _messages.first['id'] is int
+                      ? _messages.first['id'] as int
+                      : int.tryParse(_messages.first['id']?.toString() ?? '');
             });
           }
           await _writeMessagesCache();
@@ -110,6 +137,21 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       }
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _markConversationRead() async {
+    final conversationId = _conversationId;
+    if (conversationId == null) return;
+
+    if (WebSocketService().isConnected) {
+      WebSocketService().markConversationRead(_conversationId!);
+    } else {
+      await ChatService().markRead(_conversationId!);
+    }
+
+    ref
+        .read(conversationsProvider.notifier)
+        .clearConversationUnread(_conversationId!);
   }
 
   Future<void> _loadCachedMessages() async {
@@ -139,10 +181,19 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         .map((message) => message['id'])
         .where((id) => id != null)
         .toSet();
+    final serverClientMsgIds = serverMessages
+        .map((message) => message['client_msg_id']?.toString())
+        .where((id) => id != null && id.isNotEmpty)
+        .toSet();
     final pendingOptimistic = _messages.where((message) {
       final status = message['status']?.toString();
       final id = message['id'];
-      return status == 'sending' && !serverIds.contains(id);
+      final clientMsgId = message['client_msg_id']?.toString();
+      return status == 'sending' &&
+          !serverIds.contains(id) &&
+          (clientMsgId == null ||
+              clientMsgId.isEmpty ||
+              !serverClientMsgIds.contains(clientMsgId));
     }).map((message) => Map<String, dynamic>.from(message));
     merged
       ..addAll(serverMessages)
@@ -212,14 +263,22 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     final content = _msgCtrl.text.trim();
     if (content.isEmpty) return;
     final mentionUserIds = _mentionUserIds.toList();
+    final quoted = _quotedMessage;
+    final quoteMessageId = _extractQuoteId(quoted);
+    final quotePreview = quoted == null ? null : _quotePreviewOf(quoted);
+    final clientMsgId = _newClientMsgId();
     _msgCtrl.clear();
     final optimistic = _buildOptimisticMessage(
       content: content,
       messageType: 'text',
       mentionUserIds: mentionUserIds,
+      quoteMessageId: quoteMessageId,
+      quotePreview: quotePreview,
+      clientMsgId: clientMsgId,
     );
     setState(() {
       _messages.add(optimistic);
+      _quotedMessage = null;
     });
     _mentionUserIds.clear();
     _syncConversationPreview(content, 'text');
@@ -232,6 +291,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         content: content,
         messageType: 'text',
         mentionUserIds: mentionUserIds,
+        quoteMessageId: quoteMessageId,
+        clientMsgId: clientMsgId,
       );
       _replaceOptimisticWithResponse(optimistic, resp.data);
     } catch (e) {
@@ -250,6 +311,9 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     required String messageType,
     String? mediaUrl,
     List<int>? mentionUserIds,
+    int? quoteMessageId,
+    String? quotePreview,
+    String? clientMsgId,
   }) {
     final user = ref.read(authProvider).user;
     final now = DateTime.now();
@@ -268,10 +332,17 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       'message_type': messageType,
       'media_url': mediaUrl,
       'mention_user_ids': mentionUserIds ?? const <int>[],
+      if (quoteMessageId != null) 'quote_message_id': quoteMessageId,
+      if (quotePreview != null) 'quote_preview': quotePreview,
+      if (clientMsgId != null && clientMsgId.isNotEmpty)
+        'client_msg_id': clientMsgId,
       'created_at': now.toIso8601String(),
       'status': 'sending',
     };
   }
+
+  String _newClientMsgId() =>
+      'community_${widget.communityId}_${DateTime.now().microsecondsSinceEpoch}';
 
   void _replaceOptimisticWithResponse(
       Map<String, dynamic> optimistic, dynamic responseData) {
@@ -319,11 +390,13 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     setState(() {
       _messages.removeWhere((item) => item['id'] == message['id']);
     });
+    final clientMsgId = _newClientMsgId();
     final optimistic = _buildOptimisticMessage(
       content: content,
       messageType: messageType,
       mediaUrl: mediaUrl?.isNotEmpty == true ? mediaUrl : null,
       mentionUserIds: mentionUserIds,
+      clientMsgId: clientMsgId,
     );
     setState(() => _messages.add(optimistic));
     _syncConversationPreview(content, messageType);
@@ -338,6 +411,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           messageType: messageType,
           mediaUrl: mediaUrl?.isNotEmpty == true ? mediaUrl : null,
           mentionUserIds: mentionUserIds,
+          clientMsgId: clientMsgId,
         );
         _replaceOptimisticWithResponse(optimistic, resp.data);
       } catch (e) {
@@ -362,6 +436,242 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('撤回失败: $e')));
       }
+    }
+  }
+
+  /// 向上加载更早的历史消息（基于 before_id 分页）。
+  Future<void> _loadMoreHistory() async {
+    if (_loadingMore || !_hasMore || _oldestMessageId == null) return;
+    setState(() => _loadingMore = true);
+    final previousFirstId = _oldestMessageId;
+    final firstKey = _msgAnchors[previousFirstId];
+    final firstCtx = firstKey?.currentContext;
+    // 在 setState 之前测量原"第一条"在视口中的位置，便于加载后回正。
+    double? revealOffsetBefore;
+    if (firstCtx != null) {
+      final firstBox = firstCtx.findRenderObject() as RenderBox?;
+      if (firstBox != null && firstBox.hasSize) {
+        final viewport = RenderAbstractViewport.of(firstBox);
+        revealOffsetBefore = viewport.getOffsetToReveal(firstBox, 0.0).offset;
+      }
+    }
+    try {
+      final resp = await CommunityApiService().getChat(
+        widget.communityId,
+        limit: 50,
+        beforeId: previousFirstId,
+      );
+      if (resp.data is Map) {
+        final data = Map<String, dynamic>.from(resp.data as Map);
+        if (data['messages'] is List) {
+          final older = (data['messages'] as List)
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList();
+          if (older.isNotEmpty && mounted) {
+            setState(() {
+              _messages.insertAll(0, older);
+              _hasMore = data['has_more'] == true;
+              _oldestMessageId = older.first['id'] is int
+                  ? older.first['id'] as int
+                  : int.tryParse(older.first['id']?.toString() ?? '');
+            });
+            await _writeMessagesCache();
+            // 加载更早消息后，原"第一条"向下移动了 older.length 条；
+            // reverse:true 下，让其回到原视口位置。
+            if (revealOffsetBefore != null && mounted) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                final newCtx = firstKey?.currentContext;
+                if (newCtx == null) return;
+                final newBox = newCtx.findRenderObject() as RenderBox?;
+                if (newBox == null) return;
+                final viewport = RenderAbstractViewport.of(newBox);
+                final offsetToReveal =
+                    viewport.getOffsetToReveal(newBox, 0.0).offset;
+                _scrollCtrl.jumpTo(offsetToReveal);
+                revealOffsetBefore;
+              });
+            }
+          } else if (mounted) {
+            setState(() => _hasMore = false);
+          }
+        }
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  /// 点击引用预览条 → 定位到原消息。本地找不到时调用 around 接口拉上下文。
+  Future<void> _onQuoteTap(int? quoteMessageId) async {
+    if (quoteMessageId == null) return;
+    final ok = await _jumpToMessage(quoteMessageId);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('原消息已被删除')),
+      );
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToMessage(quoteMessageId);
+    });
+  }
+
+  Future<bool> _jumpToMessage(int targetId) async {
+    // 1) 本地已有
+    if (_messages.any((m) {
+      final id = m['id'];
+      return (id is int ? id : int.tryParse(id?.toString() ?? '')) == targetId;
+    })) {
+      setState(() => _highlightMessageId = targetId);
+      return true;
+    }
+    // 2) 拉上下文窗口
+    setState(() => _isLoading = true);
+    try {
+      final resp = await CommunityApiService()
+          .getMessagesAround(widget.communityId, targetId);
+      if (resp.data is! Map) {
+        if (mounted) setState(() => _isLoading = false);
+        return false;
+      }
+      final data = Map<String, dynamic>.from(resp.data as Map);
+      if (data['messages'] is! List) {
+        if (mounted) setState(() => _isLoading = false);
+        return false;
+      }
+      final window = (data['messages'] as List)
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+      final hasTarget = window.any((m) {
+        final id = m['id'];
+        return (id is int ? id : int.tryParse(id?.toString() ?? '')) ==
+            targetId;
+      });
+      if (!hasTarget) {
+        if (mounted) setState(() => _isLoading = false);
+        return false;
+      }
+      if (mounted) {
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(window);
+          _hasMore = data['has_more_before'] == true;
+          _oldestMessageId = window.isEmpty
+              ? null
+              : (window.first['id'] is int
+                  ? window.first['id'] as int
+                  : int.tryParse(window.first['id']?.toString() ?? ''));
+          _highlightMessageId = targetId;
+          _isLoading = false;
+        });
+        await _writeMessagesCache();
+      }
+      return true;
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+      return false;
+    }
+  }
+
+  GlobalKey _anchorKey(int msgId) =>
+      _msgAnchors.putIfAbsent(msgId, () => GlobalKey());
+
+  void _scrollToMessage(int msgId) {
+    final key = _msgAnchors[msgId];
+    final ctx = key?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _clearHighlight() {
+    if (_highlightMessageId != null) {
+      setState(() => _highlightMessageId = null);
+    }
+  }
+
+  /// 长按消息气泡：弹出操作菜单（回复 / 撤回 / 复制 等）。
+  Future<void> _showMessageMenu(
+      Map<String, dynamic> message, bool isMine) async {
+    final messageType = message['message_type']?.toString() ?? 'text';
+    final isRecalled = message['is_recalled'] == true;
+    final isFailed = message['status']?.toString() == 'failed';
+    if (isRecalled || isFailed || messageType == 'system') return;
+
+    final canRecall = isMine;
+    final options = <TwitterSheetOption<String>>[
+      const TwitterSheetOption(
+          icon: Icons.format_quote, label: '回复', value: 'reply'),
+      if (messageType == 'text')
+        const TwitterSheetOption(
+            icon: Icons.copy, label: '复制文字', value: 'copy'),
+      if (canRecall)
+        const TwitterSheetOption(
+          icon: Icons.undo,
+          label: '撤回',
+          value: 'recall',
+          isDestructive: true,
+        ),
+    ];
+    if (options.isEmpty) return;
+
+    final action =
+        await TwitterBottomSheet.show<String>(context, options: options);
+    if (!mounted) return;
+    switch (action) {
+      case 'reply':
+        setState(() => _quotedMessage = message);
+        _msgFocusNode.requestFocus();
+        break;
+      case 'copy':
+        await Clipboard.setData(
+            ClipboardData(text: message['content']?.toString() ?? ''));
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('已复制')));
+        }
+        break;
+      case 'recall':
+        final rawId = message['id'];
+        final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+        if (id != null) await _recallMessage(id, isMine);
+        break;
+    }
+  }
+
+  int? _extractQuoteId(Map<String, dynamic>? message) {
+    if (message == null) return null;
+    final raw = message['id'];
+    if (raw is int) return raw;
+    return int.tryParse(raw?.toString() ?? '');
+  }
+
+  /// 仅用于乐观渲染时本地展示，后端响应到达后会用服务器生成的 preview 覆盖。
+  String _quotePreviewOf(Map<String, dynamic> message) {
+    final type = message['message_type']?.toString() ?? 'text';
+    switch (type) {
+      case 'image':
+        return '[图片]';
+      case 'video':
+        return '[视频]';
+      case 'post':
+        final t = message['content']?.toString().trim() ?? '';
+        return t.isEmpty
+            ? '[帖子]'
+            : '[帖子] ${t.length > 30 ? '${t.substring(0, 30)}...' : t}';
+      default:
+        final t = message['content']?.toString() ?? '';
+        return t.length > 50 ? '${t.substring(0, 50)}...' : t;
     }
   }
 
@@ -420,6 +730,13 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   bool _isMatchingOptimistic(
       Map<String, dynamic> existing, Map<String, dynamic> incoming) {
     if (existing['status']?.toString() != 'sending') return false;
+    final existingClientMsgId = existing['client_msg_id']?.toString();
+    final incomingClientMsgId = incoming['client_msg_id']?.toString();
+    if (existingClientMsgId != null &&
+        existingClientMsgId.isNotEmpty &&
+        existingClientMsgId == incomingClientMsgId) {
+      return true;
+    }
     final sameSender =
         existing['sender_id']?.toString() == incoming['sender_id']?.toString();
     final sameContent =
@@ -437,9 +754,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   }
 
   DateTime _messageTime(Map<String, dynamic> message) {
-    final raw = message['created_at'];
-    if (raw == null) return DateTime.fromMillisecondsSinceEpoch(0);
-    return DateTime.tryParse(raw.toString()) ??
+    return AppDateUtils.parseServerTime(message['created_at']?.toString()) ??
         DateTime.fromMillisecondsSinceEpoch(0);
   }
 
@@ -1010,6 +1325,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       body: Column(
         children: [
           Expanded(child: _buildMessages()),
+          if (_quotedMessage != null) _buildQuickReplyBar(),
           _buildComposer(),
           if (_showEmojiPicker) _buildEmojiPicker(),
         ],
@@ -1025,22 +1341,68 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       return _buildEmptyMessagesState();
     }
     final currentUserId = ref.watch(authProvider).user?.id;
+    // reverse:true 时 index=0 在视觉底部，index=length-1 是视觉顶部。
+    // hasMore 时在顶部加 1 个占位用于显示 "查看更早的消息"
+    final showLoadMore = _hasMore || _loadingMore;
     return ListView.builder(
       controller: _scrollCtrl,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
-      itemCount: _messages.length,
+      itemCount: _messages.length + (showLoadMore ? 1 : 0),
       itemBuilder: (_, index) {
+        // 视觉顶部 → 加载更多按钮
+        if (showLoadMore && index == _messages.length) {
+          return _buildLoadMoreHistory();
+        }
         final message = _messages[_messages.length - 1 - index];
         final isMine = message['sender_id'] == currentUserId;
-        return _MessageBubble(
+        final rawId = message['id'];
+        final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+        final bubble = _MessageBubble(
           message: message,
           isMine: isMine,
           onRecall: () => _recallMessage(message['id'], isMine),
           onAvatarLongPress: () => _insertMentionFromMessage(message),
+          onLongPress: () => _showMessageMenu(message, isMine),
           onRetry: () => _retryMessage(message),
+          onQuoteTap: _onQuoteTap,
+        );
+        if (id == null) return bubble;
+        return KeyedSubtree(
+          key: _anchorKey(id),
+          child: MessageHighlightWrapper(
+            active: _highlightMessageId == id,
+            onCompleted: _clearHighlight,
+            child: bubble,
+          ),
         );
       },
+    );
+  }
+
+  Widget _buildLoadMoreHistory() {
+    if (_loadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: _loadMoreHistory,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          '查看更早的消息',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.primary, fontSize: 13),
+        ),
+      ),
     );
   }
 
@@ -1065,6 +1427,77 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 输入框上方的回复引用条
+  Widget _buildQuickReplyBar() {
+    final msg = _quotedMessage!;
+    final sender = msg['sender'] is Map
+        ? Map<String, dynamic>.from(msg['sender'] as Map)
+        : <String, dynamic>{};
+    final senderName =
+        sender['display_name']?.toString().trim().isNotEmpty == true
+            ? sender['display_name'].toString().trim()
+            : (sender['username']?.toString().trim().isNotEmpty == true
+                ? sender['username'].toString().trim()
+                : (msg['sender_name']?.toString().trim().isNotEmpty == true
+                    ? msg['sender_name'].toString().trim()
+                    : '用户'));
+    final preview = _quotePreviewOf(msg);
+    final isMine = msg['sender_id'] == ref.watch(authProvider).user?.id;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: Border(
+          top: BorderSide(color: AppColors.borderLight),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isMine ? '回复 你' : '回复 $senderName',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                Text(
+                  preview,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, size: 18, color: AppColors.textTertiary),
+            onPressed: () => setState(() => _quotedMessage = null),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
       ),
     );
   }
@@ -1210,14 +1643,20 @@ class _MessageBubble extends StatelessWidget {
   final bool isMine;
   final VoidCallback? onRecall;
   final VoidCallback? onAvatarLongPress;
+  final VoidCallback? onLongPress;
   final VoidCallback? onRetry;
+
+  /// 点击引用预览条时触发，传入被引消息 id。
+  final void Function(int? quoteMessageId)? onQuoteTap;
 
   const _MessageBubble({
     required this.message,
     this.isMine = false,
     this.onRecall,
     this.onAvatarLongPress,
+    this.onLongPress,
     this.onRetry,
+    this.onQuoteTap,
   });
 
   @override
@@ -1280,8 +1719,7 @@ class _MessageBubble extends StatelessWidget {
           ],
           Flexible(
             child: GestureDetector(
-              onLongPress:
-                  isMine && onRecall != null ? () => onRecall!() : null,
+              onLongPress: onLongPress,
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -1309,6 +1747,10 @@ class _MessageBubble extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (message['quote_message_id'] != null &&
+                        (message['quote_preview']?.toString().isNotEmpty ??
+                            false))
+                      _buildQuotePreview(message, isMine),
                     if (messageType == 'image')
                       _buildImageMessage(mediaUrl)
                     else if (messageType == 'video')
@@ -1368,6 +1810,42 @@ class _MessageBubble extends StatelessWidget {
             text,
             style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 引用预览条（消息气泡内）
+  Widget _buildQuotePreview(Map<String, dynamic> message, bool isMine) {
+    final preview = message['quote_preview']?.toString() ?? '';
+    final rawQuoteId = message['quote_message_id'];
+    final quoteId = rawQuoteId is int
+        ? rawQuoteId
+        : int.tryParse(rawQuoteId?.toString() ?? '');
+    final borderColor =
+        isMine ? Colors.white.withValues(alpha: 0.7) : AppColors.primary;
+    final bgColor = isMine
+        ? Colors.white.withValues(alpha: 0.15)
+        : AppColors.primary.withValues(alpha: 0.08);
+    final textColor =
+        isMine ? Colors.white.withValues(alpha: 0.9) : AppColors.textPrimary;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onQuoteTap == null ? null : () => onQuoteTap!(quoteId),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(6),
+          border: Border(left: BorderSide(color: borderColor, width: 2.5)),
+        ),
+        constraints: const BoxConstraints(maxWidth: 240),
+        child: Text(
+          preview,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, height: 1.3, color: textColor),
         ),
       ),
     );

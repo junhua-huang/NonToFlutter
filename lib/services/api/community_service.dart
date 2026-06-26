@@ -18,8 +18,7 @@ class CommunityApiService {
 
   /// 我的社群
   Future<ApiResponse> getMy({bool manageOnly = false}) {
-    return _api.get('/communities/my',
-        params: {'manage_only': manageOnly});
+    return _api.get('/communities/my', params: {'manage_only': manageOnly});
   }
 
   /// 社群详情
@@ -60,12 +59,14 @@ class CommunityApiService {
 
   /// 通过申请
   Future<ApiResponse> approveJoin(int communityId, int requestId) {
-    return _api.post('/communities/$communityId/join-requests/$requestId/approve');
+    return _api
+        .post('/communities/$communityId/join-requests/$requestId/approve');
   }
 
   /// 拒绝申请
   Future<ApiResponse> rejectJoin(int communityId, int requestId) {
-    return _api.post('/communities/$communityId/join-requests/$requestId/reject');
+    return _api
+        .post('/communities/$communityId/join-requests/$requestId/reject');
   }
 
   // ── 成员管理 ──
@@ -89,17 +90,28 @@ class CommunityApiService {
 
   /// 设管理员/撤管理员
   Future<ApiResponse> setRole(int communityId, int userId, String role) {
-    return _api.put('/communities/$communityId/members/$userId',
-        data: {'role': role});
+    return _api
+        .put('/communities/$communityId/members/$userId', data: {'role': role});
   }
 
   // ── 群聊 ──
 
   /// 获取群聊会话 + 最近消息
+  ///
+  /// 不传 beforeId：返回最近 limit 条。
+  /// 传 beforeId：返回 id < beforeId 的最近 limit 条，用于向上翻页。
   Future<ApiResponse> getChat(int communityId,
-      {int limit = 50}) {
-    return _api.get('/communities/$communityId/chat',
-        params: {'limit': limit});
+      {int limit = 50, int? beforeId}) {
+    final params = <String, dynamic>{'limit': limit};
+    if (beforeId != null) params['before_id'] = beforeId;
+    return _api.get('/communities/$communityId/chat', params: params);
+  }
+
+  /// 获取某条消息在群聊内的上下文窗口（点击引用 → 定位原消息）。
+  Future<ApiResponse> getMessagesAround(int communityId, int targetId,
+      {int before = 20, int after = 20}) {
+    return _api.get('/communities/$communityId/chat/messages/around',
+        params: {'target_id': targetId, 'before': before, 'after': after});
   }
 
   /// 发送群聊消息
@@ -110,6 +122,8 @@ class CommunityApiService {
     String? mediaUrl,
     int? relatedId,
     List<int>? mentionUserIds,
+    int? quoteMessageId,
+    String? clientMsgId,
   }) {
     final data = <String, dynamic>{
       'content': content,
@@ -123,6 +137,12 @@ class CommunityApiService {
     }
     if (mentionUserIds != null && mentionUserIds.isNotEmpty) {
       data['mention_user_ids'] = mentionUserIds;
+    }
+    if (quoteMessageId != null) {
+      data['quote_message_id'] = quoteMessageId;
+    }
+    if (clientMsgId != null && clientMsgId.isNotEmpty) {
+      data['client_msg_id'] = clientMsgId;
     }
     return _api.post('/communities/$communityId/chat/messages', data: data);
   }
@@ -147,16 +167,16 @@ class CommunityApiService {
   }
 
   /// 编辑公告
-  Future<ApiResponse> updateAnnouncement(int communityId, int announcementId,
-      Map<String, dynamic> data) {
-    return _api.put(
-        '/communities/$communityId/announcements/$announcementId', data: data);
+  Future<ApiResponse> updateAnnouncement(
+      int communityId, int announcementId, Map<String, dynamic> data) {
+    return _api.put('/communities/$communityId/announcements/$announcementId',
+        data: data);
   }
 
   /// 删除公告
   Future<ApiResponse> deleteAnnouncement(int communityId, int announcementId) {
-    return _api.delete(
-        '/communities/$communityId/announcements/$announcementId');
+    return _api
+        .delete('/communities/$communityId/announcements/$announcementId');
   }
 
   // ── 黑名单 ──
@@ -182,8 +202,8 @@ class CommunityApiService {
 
   /// 热门帖子
   Future<ApiResponse> getHotPosts(int communityId, {int limit = 20}) {
-    return _api.get('/communities/$communityId/hot-posts',
-        params: {'limit': limit});
+    return _api
+        .get('/communities/$communityId/hot-posts', params: {'limit': limit});
   }
 
   /// 通用 GET（给 provider 内部用）
