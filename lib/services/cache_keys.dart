@@ -57,6 +57,10 @@ class CacheKeys {
   /// 好友列表缓存，按最后联系时间排序
   static const String friendList = 'friend:list';
 
+  // ── 社群 ──
+  /// 我的社群列表缓存，用于分享面板等快速选择场景
+  static const String communityMyList = 'community:my:list';
+
   // ── 漫展 ──
   static String comicEvents() => 'comic:events';
   static String comicDetail(dynamic eventId) => 'comic:$eventId:detail';

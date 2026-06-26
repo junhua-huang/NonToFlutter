@@ -5,8 +5,9 @@ import 'package:nonto/models/community.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
 import 'package:nonto/models/user.dart';
+import 'package:nonto/services/cache_keys.dart';
+import 'package:nonto/services/post_share_target_resolver.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_helpers.dart';
-import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
 
 void main() {
   group('chat message type contracts', () {
@@ -259,14 +260,74 @@ void main() {
         () {
       final sheetSource =
           File('lib/widgets/post_share_to_chat_sheet.dart').readAsStringSync();
-      expect(sheetSource, contains('FriendService().getFriends()'));
+      expect(sheetSource, contains('PostShareTargetResolver().loadTargets()'));
       expect(sheetSource,
-          contains('ChatService().getOrCreateConversation(friend.id)'));
+          contains('ChatService().getOrCreateConversation(target.friend!.id)'));
       expect(sheetSource, contains("messageType: 'post'"));
       expect(sheetSource, contains('relatedId: post.id'));
-      expect(sheetSource, contains('List<User> friends'));
+      expect(sheetSource, contains('PostShareTargetType.friend'));
+      expect(sheetSource, contains('PostShareTargetType.community'));
+      expect(sheetSource, isNot(contains('Future.wait([')));
       expect(sheetSource,
           isNot(contains('.where((community) => community.isMember)')));
+    });
+
+    test('post share target cache keys and resolver contracts exist', () {
+      expect(CacheKeys.friendList, 'friend:list');
+      expect(CacheKeys.communityMyList, 'community:my:list');
+      expect(PostShareTargetType.values.map((type) => type.name), [
+        'friend',
+        'community',
+      ]);
+    });
+
+    test('post share targets are mixed by conversation list order', () {
+      final alice = User(id: 1, username: 'alice', email: 'a@example.com');
+      final bob = User(id: 2, username: 'bob', email: 'b@example.com');
+      const groupA = Community(id: 10, name: 'Group A', ownerId: 1);
+      const groupB = Community(id: 20, name: 'Group B', ownerId: 1);
+
+      final targets = [
+        PostShareTarget.friend(alice, fallbackIndex: 0),
+        PostShareTarget.friend(bob, fallbackIndex: 1),
+        PostShareTarget.community(groupA, fallbackIndex: 2),
+        PostShareTarget.community(groupB, fallbackIndex: 3),
+      ];
+      final conversations = [
+        Conversation(
+          id: 100,
+          user1Id: 1,
+          user2Id: 2,
+          type: 'community',
+          communityId: groupB.id,
+          communityName: groupB.name,
+        ),
+        Conversation(
+          id: 101,
+          user1Id: 1,
+          user2Id: 2,
+          otherUser: bob,
+        ),
+      ];
+
+      final sorted = sortPostShareTargetsByConversationOrder(
+        targets: targets,
+        conversations: conversations,
+      );
+
+      expect(sorted.map((target) => target.stableKey), [
+        'community:20',
+        'friend:2',
+        'friend:1',
+        'community:10',
+      ]);
+    });
+
+    test('post share community list cache is registered in manifest', () {
+      final source = File('lib/services/cache_manifest.dart').readAsStringSync();
+      expect(source, contains('community:my:list'));
+      expect(source, contains("domain: 'community'"));
+      expect(source, contains('我的社群列表'));
     });
   });
 }

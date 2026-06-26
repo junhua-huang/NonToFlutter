@@ -17,6 +17,7 @@ import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
+import 'package:nonto/widgets/message_highlight_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -63,6 +64,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   StreamSubscription? _errorSub;
   final Set<int> _reactions = {}; // optimistic reaction message IDs
   bool _loadingMore = false; // track history loading state
+  /// message.id → GlobalKey，用于点击引用时 Scrollable.ensureVisible 定位。
+  final Map<int, GlobalKey> _msgAnchors = {};
   // 上次自动滚动到底部时的消息条数，用于区分“收到新消息”与“ACK 替换乐观消息导致重建”。
   // 只有真正新增消息时才滚动；ACK 替换（条数不变）不应触发滚动，避免抖动。
   int _lastScrolledMsgCount = 0;
@@ -90,7 +93,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('发送失败: $error'),
+              content: Text('连接异常: $error'),
               duration: const Duration(seconds: 3)),
         );
       }
@@ -775,11 +778,27 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     groupSize: msgs.length,
                     showAvatar: group.showAvatar,
                   );
+                  // 用 KeyedSubtree 包一层，便于 Scrollable.ensureVisible 定位；
+                  // 高亮由 messagesProvider.highlightMessageId 驱动。
+                  final highlightId =
+                      ref.watch(messagesProvider(widget.conversation.id))
+                          .highlightMessageId;
+                  final wrapped = KeyedSubtree(
+                    key: _anchorKey(msg.id),
+                    child: MessageHighlightWrapper(
+                      active: highlightId == msg.id,
+                      onCompleted: () => ref
+                          .read(messagesProvider(widget.conversation.id)
+                              .notifier)
+                          .clearHighlight(),
+                      child: bubble,
+                    ),
+                  );
                   if (isMe && msg.status == 'failed') {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        bubble,
+                        wrapped,
                         Padding(
                           padding: const EdgeInsets.only(right: 4, top: 2),
                           child: _SendStatusIcon(
@@ -791,7 +810,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       ],
                     );
                   }
-                  return bubble;
+                  return wrapped;
                 }),
                 // 状态图标（仅最后一条自己的消息显示）
                 if (isMe && isLastInList && last.status != 'failed')
@@ -1234,29 +1253,67 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         ? Colors.white.withValues(alpha: 0.85)
         : (_isDark ? _NontoChatColors.darkText : _NontoChatColors.text);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: quoteBg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border(
-          left: BorderSide(color: quoteColor, width: 2.5),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _onQuoteTap(msg.quoteMessageId),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: quoteBg,
+          borderRadius: BorderRadius.circular(6),
+          border: Border(
+            left: BorderSide(color: quoteColor, width: 2.5),
+          ),
+        ),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.60,
+        ),
+        child: Text(
+          msg.quotePreview ?? '',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.3,
+            color: quoteTextColor,
+          ),
         ),
       ),
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * 0.60,
-      ),
-      child: Text(
-        msg.quotePreview ?? '',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 12,
-          height: 1.3,
-          color: quoteTextColor,
-        ),
-      ),
+    );
+  }
+
+  /// 点击引用预览条 → 加载并定位到原消息。
+  Future<void> _onQuoteTap(int? quoteMessageId) async {
+    if (quoteMessageId == null) return;
+    final notifier =
+        ref.read(messagesProvider(widget.conversation.id).notifier);
+    final ok = await notifier.jumpToMessage(quoteMessageId);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('原消息已被删除')),
+      );
+      return;
+    }
+    // 等待重建后再滚动
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToMessage(quoteMessageId);
+    });
+  }
+
+  GlobalKey _anchorKey(int msgId) =>
+      _msgAnchors.putIfAbsent(msgId, () => GlobalKey());
+
+  void _scrollToMessage(int msgId) {
+    final key = _msgAnchors[msgId];
+    final ctx = key?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
     );
   }
 

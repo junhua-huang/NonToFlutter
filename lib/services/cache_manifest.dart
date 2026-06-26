@@ -230,6 +230,15 @@ class CacheManifest {
     isParameterized: true,
   );
 
+  // ── 社群 ──
+  static final _communityMyList = const CacheEntry(
+    key: 'community:my:list',
+    domain: 'community',
+    description: '我的社群列表',
+    ttlSeconds: 300,
+    dataShape: 'List<Map>',
+  );
+
   // ── 帖子详情 ──
   static final _postDetail = const CacheEntry(
     key: 'post:{postId}:detail',
@@ -279,6 +288,7 @@ class CacheManifest {
     _explorePosts,
     _exploreUsers,
     _searchGlobal,
+    _communityMyList,
     _postDetail,
     _comicEvents,
     _comicDetail,

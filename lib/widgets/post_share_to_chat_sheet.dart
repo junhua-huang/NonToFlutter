@@ -1,55 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:nonto/models/community.dart';
 import 'package:nonto/models/post.dart';
-import 'package:nonto/models/user.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/community_service.dart';
-import 'package:nonto/services/api/friend_service.dart';
-
-List<User> parsePostShareFriends(dynamic data) {
-  final items = _extractPostShareItems(data, const [
-    'friends',
-    'users',
-    'items',
-    'data',
-  ]);
-  return items
-      .whereType<Map>()
-      .map((item) => Map<String, dynamic>.from(item))
-      .map(User.fromJson)
-      .where((user) => user.id > 0)
-      .toList();
-}
-
-List<Community> parsePostShareCommunities(dynamic data) {
-  final items = _extractPostShareItems(data, const [
-    'communities',
-    'items',
-    'data',
-  ]);
-  return items
-      .whereType<Map>()
-      .map((item) => Map<String, dynamic>.from(item))
-      .map(Community.fromJson)
-      .toList();
-}
-
-List<dynamic> _extractPostShareItems(dynamic data, List<String> keys) {
-  if (data is List) return data;
-  if (data is Map) {
-    for (final key in keys) {
-      final value = data[key];
-      if (value is List) return value;
-      if (value is Map) {
-        final nested = _extractPostShareItems(value, keys);
-        if (nested.isNotEmpty) return nested;
-      }
-    }
-  }
-  return const [];
-}
+import 'package:nonto/services/post_share_target_resolver.dart';
 
 class PostShareToChatSheet extends StatefulWidget {
   final Post post;
@@ -70,25 +25,15 @@ class PostShareToChatSheet extends StatefulWidget {
 }
 
 class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
-  late final Future<_ShareTargets> _targetsFuture = _loadTargets();
+  late final Future<List<PostShareTarget>> _targetsFuture =
+      PostShareTargetResolver().loadTargets();
   bool _sending = false;
 
-  Future<_ShareTargets> _loadTargets() async {
-    final responses = await Future.wait([
-      FriendService().getFriends(),
-      CommunityApiService().getMy(),
-    ]);
-
-    return _ShareTargets(
-      friends: parsePostShareFriends(responses[0].data),
-      communities: parsePostShareCommunities(responses[1].data),
-    );
-  }
-
-  Future<void> _sendToFriend(User friend) async {
+  Future<void> _sendToFriend(PostShareTarget target) async {
     final post = widget.post;
     await _send(() async {
-      final convResp = await ChatService().getOrCreateConversation(friend.id);
+      final convResp =
+          await ChatService().getOrCreateConversation(target.friend!.id);
       if (convResp.success != true) return convResp;
       final data = convResp.data;
       final conversation = data is Map ? (data['conversation'] ?? data) : null;
@@ -107,16 +52,25 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
     });
   }
 
-  Future<void> _sendToCommunity(Community community) async {
+  Future<void> _sendToCommunity(PostShareTarget target) async {
     final post = widget.post;
     await _send(() {
       return CommunityApiService().sendMessage(
-        community.id,
+        target.community!.id,
         content: post.content ?? '',
         messageType: 'post',
         relatedId: post.id,
       );
     });
+  }
+
+  Future<void> _sendToTarget(PostShareTarget target) {
+    switch (target.type) {
+      case PostShareTargetType.friend:
+        return _sendToFriend(target);
+      case PostShareTargetType.community:
+        return _sendToCommunity(target);
+    }
   }
 
   Future<void> _send(Future<dynamic> Function() action) async {
@@ -145,7 +99,7 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: FutureBuilder<_ShareTargets>(
+        child: FutureBuilder<List<PostShareTarget>>(
           future: _targetsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
@@ -166,8 +120,7 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
               );
             }
 
-            final targets = snapshot.data ?? const _ShareTargets();
-            final hasTargets = targets.friends.isNotEmpty || targets.communities.isNotEmpty;
+            final targets = snapshot.data ?? const <PostShareTarget>[];
             return ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.75,
@@ -181,41 +134,33 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
-                  if (!hasTargets)
+                  if (targets.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 48),
                       child: Center(child: Text('暂无可发送的聊天或社群')),
                     )
                   else
                     Flexible(
-                      child: ListView(
+                      child: ListView.builder(
                         shrinkWrap: true,
-                        children: [
-                          if (targets.friends.isNotEmpty) ...[
-                            const _SectionHeader('好友'),
-                            for (final friend in targets.friends)
-                              ListTile(
-                                enabled: !_sending,
-                                contentPadding: EdgeInsets.zero,
-                                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                                title: Text(friend.displayName ?? friend.username),
-                                subtitle: const Text('发送帖子卡片'),
-                                onTap: () => _sendToFriend(friend),
+                        itemCount: targets.length,
+                        itemBuilder: (context, index) {
+                          final target = targets[index];
+                          return ListTile(
+                            enabled: !_sending,
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              child: Icon(
+                                target.type == PostShareTargetType.friend
+                                    ? Icons.person_outline
+                                    : Icons.groups_outlined,
                               ),
-                          ],
-                          if (targets.communities.isNotEmpty) ...[
-                            const _SectionHeader('社群'),
-                            for (final community in targets.communities)
-                              ListTile(
-                                enabled: !_sending,
-                                contentPadding: EdgeInsets.zero,
-                                leading: const CircleAvatar(child: Icon(Icons.groups_outlined)),
-                                title: Text(community.name),
-                                subtitle: const Text('发送帖子卡片'),
-                                onTap: () => _sendToCommunity(community),
-                              ),
-                          ],
-                        ],
+                            ),
+                            title: Text(target.title),
+                            subtitle: Text(target.subtitle),
+                            onTap: () => _sendToTarget(target),
+                          );
+                        },
                       ),
                     ),
                 ],
@@ -226,34 +171,4 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
       ),
     );
   }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String text;
-
-  const _SectionHeader(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _ShareTargets {
-  final List<User> friends;
-  final List<Community> communities;
-
-  const _ShareTargets({
-    this.friends = const [],
-    this.communities = const [],
-  });
 }

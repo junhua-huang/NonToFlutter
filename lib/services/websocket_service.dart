@@ -135,7 +135,6 @@ class WebSocketService {
       onConnectionStateChange: _onConnectionStateChange,
       onError: (message, clientMsgId) {
         debugPrint('[WS] server error: $message (clientMsgId=$clientMsgId)');
-        _errorController.add(message);
         if (clientMsgId != null && clientMsgId.isNotEmpty) {
           _sendErrorController.add({'clientMsgId': clientMsgId, 'error': message});
         }

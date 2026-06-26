@@ -13,6 +13,12 @@ class ChatService {
   Future<ApiResponse> getMessages(int convId, {int page = 1, int perPage = 50}) =>
       _api.getDeduped('/chat/conversations/$convId/messages', params: {'page': page, 'per_page': perPage});
 
+  /// 获取某条消息在会话内的上下文窗口（点击引用 → 定位原消息）。
+  Future<ApiResponse> getMessagesAround(int convId, int targetId,
+      {int before = 20, int after = 20}) =>
+      _api.getDeduped('/chat/conversations/$convId/messages/around',
+          params: {'target_id': targetId, 'before': before, 'after': after});
+
   /// 批量获取多个会话的最新消息（最多 20 个会话）。
   Future<ApiResponse> getBatchMessages(List<int> convIds, {int perPage = 30}){
     String convIdsStr = convIds.join(',');

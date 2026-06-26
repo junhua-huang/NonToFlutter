@@ -800,6 +800,9 @@ class MessagesState {
   final bool wsConnected;
   final bool otherUserTyping;
   final bool? otherUserIsOnline;
+  /// 命中 jumpToMessage 后，需要被高亮 + 滚动定位的消息 id。
+  /// UI 在 ensureVisible 完成并播放高亮动画后调用 clearHighlight 清掉。
+  final int? highlightMessageId;
 
   const MessagesState({
     this.messages = const [],
@@ -812,6 +815,7 @@ class MessagesState {
     this.wsConnected = false,
     this.otherUserTyping = false,
     this.otherUserIsOnline,
+    this.highlightMessageId,
   });
 
   MessagesState copyWith({
@@ -825,6 +829,8 @@ class MessagesState {
     bool? wsConnected,
     bool? otherUserTyping,
     bool? otherUserIsOnline,
+    int? highlightMessageId,
+    bool clearHighlight = false,
     bool clearError = false,
   }) {
     return MessagesState(
@@ -838,6 +844,7 @@ class MessagesState {
       wsConnected: wsConnected ?? this.wsConnected,
       otherUserTyping: otherUserTyping ?? this.otherUserTyping,
       otherUserIsOnline: otherUserIsOnline ?? this.otherUserIsOnline,
+      highlightMessageId: clearHighlight ? null : (highlightMessageId ?? this.highlightMessageId),
     );
   }
 }
@@ -1253,6 +1260,67 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       }
     } catch (e) {
       state = state.copyWith(isLoading: false);
+    }
+  }
+
+  /// 跳转并加载目标消息上下文。
+  ///
+  /// 流程：
+  /// 1) 当前 messages 已包含 target → 直接置 highlight，UI 滚动 + 高亮
+  /// 2) 否则调用 around 接口拉取窗口（before/after 各 20 条），替换 messages
+  /// 3) 失败（消息已删/不存在） → 返回 false，UI 给出 toast 提示
+  ///
+  /// 成功后 state.highlightMessageId 被置为目标 id，UI 在定位 + 高亮完成后
+  /// 必须调用 [clearHighlight] 清掉，否则下次进入页面会再次高亮。
+  Future<bool> jumpToMessage(int targetId) async {
+    // 1) 本地已有 → 直接高亮
+    if (state.messages.any((m) => m.id == targetId)) {
+      state = state.copyWith(highlightMessageId: targetId);
+      return true;
+    }
+
+    // 2) 拉上下文窗口
+    state = state.copyWith(isLoading: true);
+    try {
+      final resp = await _chatService.getMessagesAround(conversationId, targetId);
+      if (!resp.success || resp.data == null) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
+      if (data is! Map) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      final list = (data['messages'] as List?) ?? [];
+      final window = list
+          .map((e) => Message.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (!window.any((m) => m.id == targetId)) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      // 替换为窗口内容，hasMore 由服务端 has_more_before 决定
+      await DataLayer().persistMessages(window);
+      state = state.copyWith(
+        messages: window,
+        isLoading: false,
+        hasMore: data['has_more_before'] == true,
+        highlightMessageId: targetId,
+      );
+      _syncL1();
+      return true;
+    } catch (e) {
+      debugPrint('jumpToMessage error: $e');
+      state = state.copyWith(isLoading: false);
+      return false;
+    }
+  }
+
+  /// UI 完成高亮动画后调用，清掉 highlightMessageId。
+  void clearHighlight() {
+    if (state.highlightMessageId != null) {
+      state = state.copyWith(clearHighlight: true);
     }
   }
 
@@ -1780,7 +1848,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   void _onWsError(String error) {
     if (!mounted) return;
-    state = state.copyWith(isSending: false, error: '发送失败: $error');
+    debugPrint('[Chat] websocket notice: $error');
   }
 
   void _onSendError(Map<String, dynamic> data) {

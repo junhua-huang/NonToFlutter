@@ -106,6 +106,23 @@ void main() {
       expect(source, contains('_sendErrorController.add'));
     });
 
+    test('generic websocket errors are not shown as send failures', () {
+      final service = read('lib/services/websocket_service.dart');
+      final notifier = read('lib/providers/chat_notifiers.dart');
+      final room = read('lib/screens/chat/chat_room_screen.dart');
+
+      final onErrorStart = service.indexOf('onError: (message, clientMsgId)');
+      final onAuthFailedStart = service.indexOf('onAuthFailed:', onErrorStart);
+      expect(onErrorStart, greaterThanOrEqualTo(0));
+      expect(onAuthFailedStart, greaterThan(onErrorStart));
+      final onErrorBody = service.substring(onErrorStart, onAuthFailedStart);
+
+      expect(onErrorBody, contains('if (clientMsgId != null && clientMsgId.isNotEmpty)'));
+      expect(onErrorBody, isNot(contains('_errorController.add(message)')));
+      expect(notifier, isNot(contains(r"state = state.copyWith(isSending: false, error: '发送失败: $error')")));
+      expect(room, isNot(contains(r"content: Text('发送失败: $error')")));
+    });
+
     test('queue ack timeout does not resend with a new client message id', () {
       final source = read('lib/services/chat_send_queue.dart');
       final timerStart = source.indexOf('void _startAckTimer');
