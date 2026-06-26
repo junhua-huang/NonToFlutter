@@ -865,6 +865,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   Timer? _typingTimer;
   int? _currentUserId;
   bool _initialized = false;
+  bool _suppressRecentCacheSync = false;
 
   final void Function(int convId, String content, String msgType, DateTime now)?
       _onMessageSent;
@@ -964,6 +965,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   // ── 数据加载 ──
 
   Future<void> _loadMessages() async {
+    _suppressRecentCacheSync = false;
     debugPrint('[Messages] ═══════════════════════════════════════');
     debugPrint('[Messages] _loadMessages START conv=$conversationId');
 
@@ -1302,13 +1304,13 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       }
       // 替换为窗口内容，hasMore 由服务端 has_more_before 决定
       await DataLayer().persistMessages(window);
+      _suppressRecentCacheSync = true;
       state = state.copyWith(
         messages: window,
         isLoading: false,
         hasMore: data['has_more_before'] == true,
         highlightMessageId: targetId,
       );
-      _syncL1();
       return true;
     } catch (e) {
       debugPrint('jumpToMessage error: $e');
@@ -1897,6 +1899,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   /// 将当前消息列表同步写入 DataLayer L1
   void _syncL1() {
+    if (_suppressRecentCacheSync) return;
     final l1Data = state.messages.map((m) => m.toJson()).toList();
     DataLayer().write(CacheKeys.msgRecent(conversationId), l1Data);
   }

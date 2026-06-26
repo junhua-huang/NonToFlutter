@@ -156,5 +156,27 @@ void main() {
       expect(gate, greaterThan(ownCheck));
       expect(soundCall, greaterThan(gate));
     });
+
+    test('jump to message persists around window without overwriting recent cache',
+        () {
+      final source = read('lib/providers/chat_notifiers.dart');
+      final jumpSource = source
+          .split('Future<bool> jumpToMessage(int targetId) async')[1]
+          .split('/// UI 完成高亮动画后调用')[0];
+      final aroundStart = jumpSource.indexOf('getMessagesAround');
+      final persistStart = jumpSource.indexOf('DataLayer().persistMessages(window)');
+      final stateReplaceStart = jumpSource.indexOf('state = state.copyWith(', persistStart);
+      final syncStart = jumpSource.indexOf('_syncL1()', persistStart);
+
+      expect(aroundStart, isNonNegative);
+      expect(persistStart, greaterThan(aroundStart));
+      expect(stateReplaceStart, greaterThan(persistStart));
+      expect(syncStart, -1,
+          reason:
+              'Around-window navigation should not overwrite msgRecent cache.');
+      expect(source, contains('_suppressRecentCacheSync'));
+      expect(jumpSource, contains('_suppressRecentCacheSync = true'));
+      expect(source, contains('if (_suppressRecentCacheSync) return'));
+    });
   });
 }

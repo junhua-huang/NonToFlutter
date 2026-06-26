@@ -281,6 +281,19 @@ void main() {
       ]);
     });
 
+    test('post share target resolver falls back to SQLite conversations', () {
+      final source =
+          File('lib/services/post_share_target_resolver.dart').readAsStringSync();
+      final cacheIndex = source.indexOf('CacheKeys.convFullList');
+      final dbFallbackIndex =
+          source.indexOf('DataLayer().loadConversationsFromDb()');
+
+      expect(cacheIndex, greaterThanOrEqualTo(0));
+      expect(dbFallbackIndex, greaterThan(cacheIndex),
+          reason: 'Missing/empty convFullList cache should use SQLite history.');
+      expect(source, contains('data.isNotEmpty'));
+    });
+
     test('post share targets are mixed by conversation list order', () {
       final alice = User(id: 1, username: 'alice', email: 'a@example.com');
       final bob = User(id: 2, username: 'bob', email: 'b@example.com');

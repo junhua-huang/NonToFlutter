@@ -215,10 +215,12 @@ class PostShareTargetResolver {
     final cached =
         await DataLayer().query(CacheKeys.convFullList, () async => null);
     final data = cached.data;
-    if (data is! List) return const [];
-    return data
-        .whereType<Map>()
-        .map((item) => Conversation.fromJson(Map<String, dynamic>.from(item)))
-        .toList();
+    if (data is List && data.isNotEmpty) {
+      return data
+          .whereType<Map>()
+          .map((item) => Conversation.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    }
+    return DataLayer().loadConversationsFromDb();
   }
 }
