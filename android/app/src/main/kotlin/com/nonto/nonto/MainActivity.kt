@@ -7,6 +7,12 @@ import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity() {
+    // Flutter 3.29+ 会默认把厂商离线通知点击 intent.data 当作 deep link 处理，
+    // 极光厂商通道可能携带 n_extra 等参数，自动解析会导致无匹配路由或白屏。
+    override fun shouldHandleDeeplinking(): Boolean {
+        return false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createJPushNotificationChannel()
