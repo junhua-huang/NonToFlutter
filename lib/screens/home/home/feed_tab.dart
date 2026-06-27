@@ -215,7 +215,7 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                           padding: const EdgeInsets.only(left: 12),
                           child: NontoHeaderAvatar(
                             user: authState.user,
-                            radius: 10,
+                            radius: 18,
                             onTap: () => Scaffold.of(context).openDrawer(),
                           ),
                         ),

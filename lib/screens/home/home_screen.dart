@@ -6,6 +6,7 @@ import 'package:nonto/models/notification.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/screens/community/community_list_screen.dart';
@@ -137,9 +138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final barVisible = ref.watch(barVisibleProvider);
-    final totalBadge = (ref.watch(unreadNotificationsCountProvider) +
-            ref.watch(unreadMessagesCountProvider))
-        .toInt();
+    final totalBadge = ref.watch(unreadMessagesCountProvider).toInt();
     final currentIndex = ref.watch(currentTabIndexProvider);
 
     return Scaffold(
@@ -284,6 +283,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (badgeCount <= 0) return icon;
 
     return Badge(
+      backgroundColor: AppColors.unreadBadge,
       label: Text(_formatBadgeCount(badgeCount)),
       child: icon,
     );
@@ -395,6 +395,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   MaterialPageRoute(
                       builder: (_) => const FriendRequestsScreen()),
                 );
+              },
+            ),
+            ListTile(
+              leading:
+                  Icon(Icons.verified_outlined, color: AppColors.textPrimary),
+              title: Text('身份认证',
+                  style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, AppRoutes.identityApplication);
               },
             ),
             ListTile(

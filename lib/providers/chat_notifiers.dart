@@ -849,6 +849,15 @@ class MessagesState {
   }
 }
 
+int _compareMessagesForTimeline(Message a, Message b) {
+  if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
+  final aCreatedAt = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  final bCreatedAt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  final timeCompare = aCreatedAt.compareTo(bCreatedAt);
+  if (timeCompare != 0) return timeCompare;
+  return a.id.compareTo(b.id);
+}
+
 class MessagesNotifier extends StateNotifier<MessagesState> {
   final int conversationId;
   final ChatService _chatService = ChatService();
@@ -1018,8 +1027,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         if (state.messages.isEmpty) {
           debugPrint(
               '[Messages] Step2 → SQLite fallback, ${localMessages.length} msgs');
+          final localTimeline = List<Message>.from(localMessages);
+          localTimeline.sort(_compareMessagesForTimeline);
           state = state.copyWith(
-            messages: localMessages.reversed.toList(),
+            messages: localTimeline,
             isLoading: false,
           );
         }
@@ -1085,13 +1096,20 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           // 拉取增量时自己刚发的消息凭空消失」。这里把仍处于 pending 的乐观消息
           // 追加到服务端列表末尾，保留「发送中」气泡，等服务端 ACK 回来再替换。
           final serverIds = serverMessages.map((m) => m.id).toSet();
+          final serverClientMsgIds = serverMessages
+              .map((m) => m.clientMsgId)
+              .where((id) => id != null && id.isNotEmpty)
+              .toSet();
           final pendingOptimistic = state.messages
-              .where((m) => m.id >= 1000000000000 && !serverIds.contains(m.id))
+              .where((m) =>
+                  m.id >= 1000000000000 &&
+                  !serverIds.contains(m.id) &&
+                  (m.clientMsgId == null || m.clientMsgId!.isEmpty || !serverClientMsgIds.contains(m.clientMsgId)))
               .toList();
           final merged = <Message>[
             ...serverMessages,
             ...pendingOptimistic,
-          ];
+          ]..sort(_compareMessagesForTimeline);
           state = state.copyWith(
               messages: merged, isLoading: false, hasMore: hasMoreFromLoad);
           await DataLayer().persistMessages(serverMessages);
@@ -1180,8 +1198,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
       if (newMsgs.isNotEmpty) {
         final List<Message> allMsgs = [...state.messages, ...newMsgs];
-        allMsgs.sort((a, b) =>
-            (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
+        allMsgs.sort(_compareMessagesForTimeline);
         state = state.copyWith(messages: allMsgs);
         await DataLayer().persistMessages(newMsgs);
         _syncL1();
@@ -1244,8 +1261,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             messages.where((m) => !existingIds.contains(m.id)).toList();
         if (newMsgs.isNotEmpty) {
           final allMsgs = [...newMsgs, ...state.messages];
-          allMsgs.sort((a, b) => (a.createdAt ?? DateTime(0))
-              .compareTo(b.createdAt ?? DateTime(0)));
+          allMsgs.sort(_compareMessagesForTimeline);
           state = state.copyWith(
             messages: allMsgs,
             page: state.page + 1,
@@ -1736,10 +1752,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     if (!filtered.any((m) => m.id == serverMsg.id)) {
       filtered.add(serverMsg);
     }
-    filtered.sort((a, b) {
-      if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
-      return (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0));
-    });
+    filtered.sort(_compareMessagesForTimeline);
     state = state.copyWith(messages: filtered, isSending: false);
     DataLayer().persistMessage(serverMsg);
     DataLayer().deletePersistedMessage(optimisticMsgId);
@@ -1816,10 +1829,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     }).toList();
     filtered.add(message);
     // 排序：优先用服务端 seq，无 seq 时按 createdAt
-    filtered.sort((a, b) {
-      if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
-      return (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0));
-    });
+    filtered.sort(_compareMessagesForTimeline);
     state = state.copyWith(messages: filtered, isSending: false);
     DataLayer().persistMessage(message);
   }

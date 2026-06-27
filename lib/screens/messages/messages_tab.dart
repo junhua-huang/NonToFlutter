@@ -1,19 +1,14 @@
-import 'dart:async';
-
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/providers/core_providers.dart';
+import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
 import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/notifications/notifications_tab.dart';
-import 'package:nonto/services/api/notification_service.dart';
-import 'package:nonto/services/cache_keys.dart';
-import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/local_db_service.dart';
-import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_helpers.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_tile.dart';
 import 'package:nonto/widgets/nonto_header_search_bar.dart';
@@ -42,19 +37,12 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   final RefreshController _refreshController = RefreshController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final WebSocketService _wsService = WebSocketService();
-  final NotificationService _notifService = NotificationService();
 
-  int _unreadNotifications = 0;
   String _searchQuery = '';
-
-  StreamSubscription? _wsNotifSub;
 
   @override
   void initState() {
     super.initState();
-    _wsNotifSub = _wsService.notificationStream.listen(_onWsNotification);
-    _fetchUnreadNotifications();
     // 每次进入消息 Tab 主动刷新会话列表（网络）。
     // 覆盖「好友被通过但 WS 推送（friend_accepted_chat）未到达」的场景——
     // 发起方 A 的会话创建原本完全依赖 WS 推送，A 若 WS 未连上就看不到新会话，
@@ -77,44 +65,15 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
 
   @override
   void dispose() {
-    _wsNotifSub?.cancel();
     _refreshController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
-  void _onWsNotification(Map<String, dynamic> data) {
-    if (!mounted) return;
-    final event = data['event'] as String?;
-    if (event == 'new_notification' || event == 'notifications_read') {
-      final val = data['unread_count'];
-      final count = val is int ? val : (val is double ? val.toInt() : 0);
-      setState(() => _unreadNotifications = count);
-    }
-  }
-
-  Future<void> _fetchUnreadNotifications() async {
-    try {
-      final result = await DataLayer().query(
-        CacheKeys.notifUnreadCount,
-        () => _notifService.getUnreadCount(),
-      );
-      if (!mounted) return;
-      final data = result.data;
-      int count = 0;
-      if (data is int) {
-        count = data;
-      } else if (data is Map) {
-        count = data['count'] ?? data['unread_count'] ?? 0;
-      }
-      setState(() => _unreadNotifications = count);
-    } catch (_) {}
-  }
-
   Future<void> _onRefresh() async {
     await ref.read(conversationsProvider.notifier).loadConversations();
-    _fetchUnreadNotifications();
+    ref.read(notificationsProvider.notifier).loadNotifications(refresh: true);
     // 会话列表非空时才批量预取聊天记录
     final convs = ref.read(conversationsProvider).conversations;
     if (convs.isNotEmpty) {
@@ -283,6 +242,8 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   }
 
   Widget _buildNotificationEntry() {
+    final unreadNotifications = ref.watch(unreadNotificationsCountProvider);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -311,19 +272,19 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textPrimary)),
-                      if (_unreadNotifications > 0) ...[
+                      if (unreadNotifications > 0) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 7, vertical: 2),
                           decoration: const BoxDecoration(
-                            color: AppColors.likeRed,
+                            color: AppColors.unreadBadge,
                             borderRadius: BorderRadius.all(Radius.circular(10)),
                           ),
                           child: Text(
-                            _unreadNotifications > 99
+                            unreadNotifications > 99
                                 ? '99+'
-                                : '$_unreadNotifications',
+                                : '$unreadNotifications',
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,

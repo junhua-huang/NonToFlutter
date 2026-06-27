@@ -280,9 +280,9 @@ class WebSocketService {
         if (normalized['message_type'] == null) {
           normalized['message_type'] = 'text';
         }
-        if (normalized['created_at'] == null) {
-          normalized['created_at'] = DateTime.now().toIso8601String();
-        }
+        // 不用当前时间兜底缺失的 created_at；历史/异常消息缺少服务端时间时，
+        // 交给 Message.fromJson 返回 null，并在时间轴排序中落到最早位置。
+        // 否则旧消息会被伪装成“刚刚”，长期停在私聊底部。
         // Notifier 需要 event 字段；MessagesNotifier 读 data 子对象，ConversationsNotifier 读顶层字段
         _messageController.add({
           'event': 'new_message',

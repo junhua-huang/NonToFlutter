@@ -125,11 +125,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                 ..clear()
                 ..addAll(merged);
               _hasMore = data['has_more'] == true;
-              _oldestMessageId = _messages.isEmpty
-                  ? null
-                  : _messages.first['id'] is int
-                      ? _messages.first['id'] as int
-                      : int.tryParse(_messages.first['id']?.toString() ?? '');
+              _oldestMessageId =
+                  _messages.isEmpty ? null : _messageId(_messages.first);
             });
           }
           await _writeMessagesCache();
@@ -174,11 +171,26 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     } catch (_) {}
   }
 
+  String? _messageIdentity(Map<String, dynamic> message) {
+    final id = message['id'];
+    if (id != null) return id.toString();
+    final clientMsgId = message['client_msg_id']?.toString();
+    if (clientMsgId != null && clientMsgId.isNotEmpty) {
+      return 'client:$clientMsgId';
+    }
+    return null;
+  }
+
+  int? _messageId(Map<String, dynamic> message) {
+    final id = message['id'];
+    return id is int ? id : int.tryParse(id?.toString() ?? '');
+  }
+
   List<Map<String, dynamic>> _mergeServerMessages(
       List<Map<String, dynamic>> serverMessages) {
     final merged = <Map<String, dynamic>>[];
     final serverIds = serverMessages
-        .map((message) => message['id'])
+        .map((message) => _messageIdentity(message))
         .where((id) => id != null)
         .toSet();
     final serverClientMsgIds = serverMessages
@@ -187,10 +199,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         .toSet();
     final pendingOptimistic = _messages.where((message) {
       final status = message['status']?.toString();
-      final id = message['id'];
+      final id = _messageIdentity(message);
       final clientMsgId = message['client_msg_id']?.toString();
       return status == 'sending' &&
-          !serverIds.contains(id) &&
+          (id == null || !serverIds.contains(id)) &&
           (clientMsgId == null ||
               clientMsgId.isEmpty ||
               !serverClientMsgIds.contains(clientMsgId));
@@ -469,12 +481,24 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
               .map((m) => Map<String, dynamic>.from(m))
               .toList();
           if (older.isNotEmpty && mounted) {
+            final existingIds = _messages
+                .map((message) => _messageIdentity(message))
+                .where((id) => id != null)
+                .toSet();
+            final uniqueOlder = older
+                .where((message) {
+                  final id = _messageIdentity(message);
+                  return id == null || !existingIds.contains(id);
+                })
+                .map((message) => Map<String, dynamic>.from(message))
+                .toList();
             setState(() {
-              _messages.insertAll(0, older);
+              _messages
+                ..insertAll(0, uniqueOlder)
+                ..sort((a, b) => _messageTime(a).compareTo(_messageTime(b)));
               _hasMore = data['has_more'] == true;
-              _oldestMessageId = older.first['id'] is int
-                  ? older.first['id'] as int
-                  : int.tryParse(older.first['id']?.toString() ?? '');
+              _oldestMessageId =
+                  _messages.isEmpty ? null : _messageId(_messages.first);
             });
             await _writeMessagesCache();
             // 加载更早消息后，原"第一条"向下移动了 older.length 条；
@@ -707,10 +731,11 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
 
   void _replaceOptimisticOrAppend(Map<String, dynamic> messageMap,
       {dynamic optimisticId}) {
-    final messageId = messageMap['id'];
+    final messageId = _messageIdentity(messageMap);
     final existingIdx = messageId == null
         ? -1
-        : _messages.indexWhere((existing) => existing['id'] == messageId);
+        : _messages
+            .indexWhere((existing) => _messageIdentity(existing) == messageId);
     if (existingIdx >= 0) return;
 
     final optimisticIdx = optimisticId == null
@@ -1099,10 +1124,12 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       if (url == null || url.isEmpty) {
         throw Exception(uploadResp.message ?? '上传失败');
       }
+      final clientMsgId = _newClientMsgId();
       final optimistic = _buildOptimisticMessage(
         content: url,
         messageType: messageType,
         mediaUrl: url,
+        clientMsgId: clientMsgId,
       );
       if (mounted) {
         setState(() => _messages.add(optimistic));
@@ -1115,6 +1142,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         content: url,
         messageType: messageType,
         mediaUrl: url,
+        clientMsgId: clientMsgId,
       );
       _replaceOptimisticWithResponse(optimistic, resp.data);
     } catch (e) {

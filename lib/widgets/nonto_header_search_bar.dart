@@ -12,6 +12,7 @@ class NontoHeaderSearchBar extends StatefulWidget {
   final ValueChanged<String>? onSubmitted;
   final VoidCallback? onAvatarTap;
   final Widget? suffixIcon;
+  final Widget? leading;
   final Widget? trailing;
   final bool keepExpandedWhenNotEmpty;
 
@@ -25,6 +26,7 @@ class NontoHeaderSearchBar extends StatefulWidget {
     this.onSubmitted,
     this.onAvatarTap,
     this.suffixIcon,
+    this.leading,
     this.trailing,
     this.keepExpandedWhenNotEmpty = true,
   });
@@ -79,6 +81,11 @@ class _NontoHeaderSearchBarState extends State<NontoHeaderSearchBar> {
         padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
         child: Row(
           children: [
+            if (widget.leading != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: widget.leading!,
+              ),
             AnimatedSize(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,

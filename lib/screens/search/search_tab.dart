@@ -342,6 +342,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
                             focusNode: _focusNode,
                             user: ref.watch(authProvider).user,
                             hintText: '搜索',
+                            leading: _buildSearchLeading(),
                             onAvatarTap: () =>
                                 Scaffold.of(context).openDrawer(),
                             onChanged: (_) => _onTextChanged(),
@@ -399,6 +400,15 @@ class _SearchTabState extends ConsumerState<SearchTab>
           ),
         ],
       ),
+    );
+  }
+
+  Widget? _buildSearchLeading() {
+    if (!_isSearching) return null;
+    return IconButton(
+      icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+      tooltip: '退出搜索',
+      onPressed: () => _exitSearchMode(clearResults: true),
     );
   }
 
