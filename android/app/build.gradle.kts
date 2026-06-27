@@ -15,8 +15,8 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-val huaweiAppId = providers.gradleProperty("HUAWEI_APPID")
-    .orElse(providers.environmentVariable("HUAWEI_APPID"))
+fun gradleOrEnv(name: String): String = providers.gradleProperty(name)
+    .orElse(providers.environmentVariable(name))
     .orElse("")
     .get()
 
@@ -50,16 +50,16 @@ android {
         // 本地/CI 可通过 Gradle 属性或环境变量 HUAWEI_APPID 传入（常见格式：appid=123456）。
         manifestPlaceholders["JPUSH_APPKEY"] = "c9c5db77d7cb1a466951e774"
         manifestPlaceholders["JPUSH_CHANNEL"] = "nonto-default"
-        manifestPlaceholders["HUAWEI_APPID"] = huaweiAppId
-        manifestPlaceholders["XIAOMI_APPID"] = ""
-        manifestPlaceholders["XIAOMI_APPKEY"] = ""
-        manifestPlaceholders["OPPO_APPKEY"] = ""
-        manifestPlaceholders["OPPO_APPID"] = ""
-        manifestPlaceholders["OPPO_APPSECRET"] = ""
-        manifestPlaceholders["VIVO_APPKEY"] = ""
-        manifestPlaceholders["VIVO_APPID"] = ""
-        manifestPlaceholders["MEIZU_APPID"] = ""
-        manifestPlaceholders["MEIZU_APPKEY"] = ""
+        manifestPlaceholders["HUAWEI_APPID"] = gradleOrEnv("HUAWEI_APPID")
+        manifestPlaceholders["XIAOMI_APPID"] = gradleOrEnv("XIAOMI_APPID")
+        manifestPlaceholders["XIAOMI_APPKEY"] = gradleOrEnv("XIAOMI_APPKEY")
+        manifestPlaceholders["OPPO_APPKEY"] = gradleOrEnv("OPPO_APPKEY")
+        manifestPlaceholders["OPPO_APPID"] = gradleOrEnv("OPPO_APPID")
+        manifestPlaceholders["OPPO_APPSECRET"] = gradleOrEnv("OPPO_APPSECRET")
+        manifestPlaceholders["VIVO_APPKEY"] = gradleOrEnv("VIVO_APPKEY")
+        manifestPlaceholders["VIVO_APPID"] = gradleOrEnv("VIVO_APPID")
+        manifestPlaceholders["MEIZU_APPID"] = gradleOrEnv("MEIZU_APPID")
+        manifestPlaceholders["MEIZU_APPKEY"] = gradleOrEnv("MEIZU_APPKEY")
     }
 
     signingConfigs {
@@ -75,8 +75,9 @@ android {
 
     buildTypes {
         release {
-            // 先使用调试签名测试构建是否正常
-            signingConfig = signingConfigs.getByName("debug")
+            // 厂商通道会校验包名 + 签名证书；有 release keystore 时必须使用正式签名。
+            // 没有 key.properties 的本地开发环境降级 debug，但该 APK 不能用于厂商通道验收。
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             // 暂时禁用代码压缩和混淆以排查问题
             isMinifyEnabled = false
             isShrinkResources = false
@@ -86,4 +87,13 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    val jpushVendorPluginVersion = "6.1.0"
+    implementation("cn.jiguang.sdk.plugin:huawei:$jpushVendorPluginVersion")
+    implementation("cn.jiguang.sdk.plugin:xiaomi:$jpushVendorPluginVersion")
+    implementation("cn.jiguang.sdk.plugin:oppo:$jpushVendorPluginVersion")
+    implementation("cn.jiguang.sdk.plugin:vivo:$jpushVendorPluginVersion")
+    implementation("cn.jiguang.sdk.plugin:meizu:$jpushVendorPluginVersion")
 }

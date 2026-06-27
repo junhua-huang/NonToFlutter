@@ -4,8 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final projectRoot = Directory.current.path;
-  String read(String relativePath) =>
-      File('$projectRoot/$relativePath').readAsStringSync();
+  String read(String relativePath) => File('$projectRoot/$relativePath')
+      .readAsStringSync()
+      .replaceAll('\r\n', '\n');
 
   group('Android vendor push channel configuration', () {
     test('vendor credentials are read from Gradle properties or environment', () {
