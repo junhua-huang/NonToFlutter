@@ -3,6 +3,7 @@
     <!-- 允许局域网地址走明文 HTTP（本地开发）-->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">192.168.1.6</domain>
+        <domain includeSubdomains="true">192.168.1.4</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">localhost</domain>
     </domain-config>

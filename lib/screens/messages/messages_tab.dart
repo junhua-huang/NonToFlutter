@@ -47,8 +47,12 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
     // 覆盖「好友被通过但 WS 推送（friend_accepted_chat）未到达」的场景——
     // 发起方 A 的会话创建原本完全依赖 WS 推送，A 若 WS 未连上就看不到新会话，
     // 直到手动下拉。这里在进入 Tab 时静默刷新，保证会话列表始终最新。
-    Future.microtask(
-        () => ref.read(conversationsProvider.notifier).loadConversations());
+    Future.microtask(() async {
+      await Future.wait([
+        ref.read(conversationsProvider.notifier).loadConversations(),
+        ref.read(notificationsProvider.notifier).refreshUnreadCount(),
+      ]);
+    });
     // 从闪屏/登录进入主页后，只预热最近少量会话，避免拖慢消息页首屏。
     _preloadRecentChatMessages();
   }
@@ -72,8 +76,10 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   }
 
   Future<void> _onRefresh() async {
-    await ref.read(conversationsProvider.notifier).loadConversations();
-    ref.read(notificationsProvider.notifier).loadNotifications(refresh: true);
+    await Future.wait([
+      ref.read(conversationsProvider.notifier).loadConversations(),
+      ref.read(notificationsProvider.notifier).refreshUnreadCount(),
+    ]);
     // 会话列表非空时才批量预取聊天记录
     final convs = ref.read(conversationsProvider).conversations;
     if (convs.isNotEmpty) {

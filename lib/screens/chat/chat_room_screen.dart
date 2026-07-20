@@ -488,14 +488,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
   }
 
-  void _openUserProfile(User? user) {
+  Future<void> _openUserProfile(User? user) async {
     if (user == null) return;
-    Navigator.push(
+    final result = await Navigator.push<UserProfileResult>(
       context,
       MaterialPageRoute(
         builder: (_) => UserProfileScreen(user: user),
       ),
     );
+    if (result == UserProfileResult.blocked && mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   // ── WS 横幅 ──
@@ -780,16 +783,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   );
                   // 用 KeyedSubtree 包一层，便于 Scrollable.ensureVisible 定位；
                   // 高亮由 messagesProvider.highlightMessageId 驱动。
-                  final highlightId =
-                      ref.watch(messagesProvider(widget.conversation.id))
-                          .highlightMessageId;
+                  final highlightId = ref
+                      .watch(messagesProvider(widget.conversation.id))
+                      .highlightMessageId;
                   final wrapped = KeyedSubtree(
                     key: _anchorKey(msg.id),
                     child: MessageHighlightWrapper(
                       active: highlightId == msg.id,
                       onCompleted: () => ref
-                          .read(messagesProvider(widget.conversation.id)
-                              .notifier)
+                          .read(
+                              messagesProvider(widget.conversation.id).notifier)
                           .clearHighlight(),
                       child: bubble,
                     ),

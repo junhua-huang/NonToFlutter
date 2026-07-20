@@ -10,6 +10,7 @@ import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/screens/home/home/feed_tab.dart';
 import 'package:nonto/screens/profile/profile_tab.dart';
 import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
 import 'package:nonto/utils/picker_error_utils.dart';
@@ -27,8 +28,14 @@ import 'package:video_thumbnail_ohos/video_thumbnail_ohos.dart';
 class CreatePostScreen extends ConsumerStatefulWidget {
   final int? communityId;
   final String? communityName;
+  final Post? post;
 
-  const CreatePostScreen({super.key, this.communityId, this.communityName});
+  const CreatePostScreen({
+    super.key,
+    this.communityId,
+    this.communityName,
+    this.post,
+  });
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -62,13 +69,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   static const int _maxChars = 500;
   static const int _maxImages = 9;
   static const String _hideIdentityValue = '__hide_identity__';
-  static const List<Map<String, String>> _contentCategories = [
-    {'value': 'work', 'label': '作品'},
-    {'value': 'daily', 'label': '日常'},
-    {'value': 'cosplay', 'label': 'Cosplay'},
-    {'value': 'event', 'label': '活动'},
-  ];
-  String _selectedContentCategory = 'work';
+  String _selectedVisibility = 'public';
+  bool _visibilityChangedByUser = false;
+  bool _isDefaultVisibilityLoading = true;
   String? _selectedDisplayRoleType;
 
   // 草稿 key
@@ -82,20 +85,58 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool get _hasComposerContent =>
       _controller.text.trim().isNotEmpty ||
       _selectedImages.isNotEmpty ||
-      _selectedVideo != null;
+      _selectedVideo != null ||
+      (_isEditing && widget.post!.hasMedia);
 
   bool get _isOverCharacterLimit => _charCount > _maxChars;
 
   bool get _canSubmitPost =>
-      _hasComposerContent && !_isSubmitting && !_isOverCharacterLimit;
+      _hasComposerContent &&
+      !_isSubmitting &&
+      !_isOverCharacterLimit &&
+      (_isEditing || (!_isEditing && !_isDefaultVisibilityLoading));
+
+  bool get _isEditing => widget.post != null;
 
   @override
   void initState() {
     super.initState();
+    final post = widget.post;
+    if (post != null) {
+      _controller.text = post.content ?? '';
+      _charCount = _controller.text.length;
+      _selectedVisibility = normalizePostVisibilityForEdit(
+        post.visibility,
+        legacyIsPublic: post.isPublic,
+      );
+      _selectedDisplayRoleType = post.displayRoleType;
+    }
     _controller.addListener(() {
-      setState(() => _charCount = _controller.text.length);
+      if (mounted) setState(() => _charCount = _controller.text.length);
     });
-    _restoreDraft();
+    if (post == null) {
+      _restoreDraft();
+      _loadDefaultVisibility();
+    }
+  }
+
+  Future<void> _loadDefaultVisibility() async {
+    String? value;
+    try {
+      final resp = await AuthService().getPrivacy();
+      value = resp.success && resp.data is Map
+          ? (resp.data as Map)['post_default_visibility']?.toString()
+          : null;
+    } catch (_) {
+      // Public is the product default when privacy settings are unavailable.
+    }
+    if (!mounted) return;
+    setState(() {
+      if (!_visibilityChangedByUser) {
+        _selectedVisibility = normalizeDefaultPostVisibility(value);
+      }
+      _isDefaultVisibilityLoading = false;
+    });
   }
 
   @override
@@ -283,8 +324,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   Future<void> _submitPost() async {
     final content = _controller.text.trim();
-    if (content.isEmpty && _selectedImages.isEmpty && _selectedVideo == null) {
+    if (!_hasComposerContent) {
       setState(() => _error = '帖子内容或媒体不能为空');
+      return;
+    }
+
+    if (_isEditing) {
+      await _updatePost(content);
       return;
     }
 
@@ -398,10 +444,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       // 3. 创建帖子
       final resp = await PostService().createPost(
         content: content,
+        visibility: _selectedVisibility,
         imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
         videoPath: videoUrl,
         thumbnailUrl: thumbnailUrl,
-        contentCategory: _selectedContentCategory,
         displayRoleType: _selectedDisplayRoleType,
         communityId: widget.communityId,
       );
@@ -424,13 +470,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         final selectedRoleIndex = _selectedDisplayRoleType == null
             ? -1
             : currentUser.verifiedRoles.indexOf(_selectedDisplayRoleType!);
-        final selectedRoleLabel =
-            selectedRoleIndex >= 0 && selectedRoleIndex < currentUser.verifiedRoleLabels.length
-                ? currentUser.verifiedRoleLabels[selectedRoleIndex]
-                : null;
+        final selectedRoleLabel = selectedRoleIndex >= 0 &&
+                selectedRoleIndex < currentUser.verifiedRoleLabels.length
+            ? currentUser.verifiedRoleLabels[selectedRoleIndex]
+            : null;
         if (serverPost?.displayRoleLabel == null && selectedRoleLabel != null) {
           serverPost = serverPost?.copyWith(
-            contentCategory: _selectedContentCategory,
             displayRoleType: _selectedDisplayRoleType,
             displayRoleLabel: selectedRoleLabel,
           );
@@ -441,7 +486,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               content: content,
               videoUrl: videoUrl,
               thumbnailUrl: thumbnailUrl,
-              contentCategory: _selectedContentCategory,
+              visibility: _selectedVisibility,
               displayRoleType: _selectedDisplayRoleType,
               displayRoleLabel: selectedRoleLabel,
               userId: currentUser.id,
@@ -475,6 +520,49 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         setState(() {
           _isSubmitting = false;
           _error = '网络错误，请稍后重试（草稿已保存）';
+        });
+      }
+    }
+  }
+
+  Future<void> _updatePost(String content) async {
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+    try {
+      final resp = await PostService().updatePost(
+        widget.post!.id,
+        content: content,
+        visibility: _selectedVisibility,
+      );
+      if (!mounted) return;
+      if (resp.success) {
+        var updatedPost = widget.post!.mergeJson(<String, dynamic>{
+          'content': content,
+          'visibility': _selectedVisibility,
+        }).copyWith(updatedAt: DateTime.now());
+        final data = resp.data;
+        if (data is Map) {
+          final rawPost = data['post'] ?? data;
+          if (rawPost is Map) {
+            updatedPost = updatedPost.mergeJson(
+              Map<String, dynamic>.from(rawPost),
+            );
+          }
+        }
+        Navigator.of(context).pop(updatedPost);
+        return;
+      }
+      setState(() {
+        _isSubmitting = false;
+        _error = resp.message ?? '保存失败';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _error = '网络错误，请稍后重试';
         });
       }
     }
@@ -898,10 +986,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   strokeWidth: 2,
                 ),
               )
-            : const Text(
-                '发布',
-                key: ValueKey('publish'),
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            : Text(
+                _isEditing ? '保存' : '发布',
+                key: ValueKey(_isEditing ? 'save' : 'publish'),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
       ),
     );
@@ -967,61 +1058,68 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
   }
 
-  Widget _buildIdentityAndCategorySelector(User? user) {
+  Widget _buildPostOptions(User? user) {
     final roles = user?.verifiedRoles ?? const <String>[];
     final labels = user?.verifiedRoleLabels ?? const <String>[];
     final selectedIndex = _selectedDisplayRoleType == null
         ? -1
         : roles.indexOf(_selectedDisplayRoleType!);
-    final selectedRoleLabel = selectedIndex >= 0 && selectedIndex < labels.length
-        ? labels[selectedIndex]
-        : _selectedDisplayRoleType;
+    final selectedRoleLabel =
+        selectedIndex >= 0 && selectedIndex < labels.length
+            ? labels[selectedIndex]
+            : _selectedDisplayRoleType;
+    final visibilityLabel = postVisibilityOptions
+        .firstWhere((option) => option.value == _selectedVisibility)
+        .label;
 
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
         PopupMenuButton<String>(
-          initialValue: _selectedContentCategory,
-          onSelected: (value) => setState(() => _selectedContentCategory = value),
-          itemBuilder: (context) => _contentCategories
+          initialValue: _selectedVisibility,
+          onSelected: (value) {
+            _visibilityChangedByUser = true;
+            setState(() => _selectedVisibility = value);
+          },
+          itemBuilder: (context) => postVisibilityOptions
               .map(
-                (item) => PopupMenuItem<String>(
-                  value: item['value']!,
-                  child: Text(item['label']!),
+                (option) => PopupMenuItem<String>(
+                  value: option.value,
+                  child: Text(option.label),
                 ),
               )
               .toList(),
           child: _SelectorChip(
-            icon: Icons.category_outlined,
-            label: _contentCategories.firstWhere(
-              (item) => item['value'] == _selectedContentCategory,
-              orElse: () => _contentCategories.first,
-            )['label']!,
+            icon: _selectedVisibility == 'public'
+                ? Icons.public_outlined
+                : Icons.people_outline,
+            label: visibilityLabel,
           ),
         ),
-        PopupMenuButton<String>(
-          initialValue: _selectedDisplayRoleType ?? _hideIdentityValue,
-          onSelected: (value) => setState(() => _selectedDisplayRoleType =
-              value == _hideIdentityValue ? null : value),
-          itemBuilder: (context) => [
-            const PopupMenuItem<String>(
-              value: _hideIdentityValue,
-              child: Text('不展示身份'),
-            ),
-            for (var i = 0; i < roles.length; i++)
-              PopupMenuItem<String>(
-                value: roles[i],
-                child: Text(i < labels.length ? labels[i] : roles[i]),
+        if (!_isEditing)
+          PopupMenuButton<String>(
+            initialValue: _selectedDisplayRoleType ?? _hideIdentityValue,
+            onSelected: (value) => setState(() => _selectedDisplayRoleType =
+                value == _hideIdentityValue ? null : value),
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
+                value: _hideIdentityValue,
+                child: Text('不展示身份'),
               ),
-          ],
-          child: _SelectorChip(
-            icon: Icons.verified_outlined,
-            label: _selectedDisplayRoleType == null
-                ? '不展示身份'
-                : (selectedRoleLabel ?? _selectedDisplayRoleType!),
+              for (var i = 0; i < roles.length; i++)
+                PopupMenuItem<String>(
+                  value: roles[i],
+                  child: Text(i < labels.length ? labels[i] : roles[i]),
+                ),
+            ],
+            child: _SelectorChip(
+              icon: Icons.verified_outlined,
+              label: _selectedDisplayRoleType == null
+                  ? '不展示身份'
+                  : (selectedRoleLabel ?? _selectedDisplayRoleType!),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -1040,7 +1138,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         leading: IconButton(
           icon: Icon(Icons.close, color: _primaryTextColor, size: 24),
           onPressed: () {
-            _saveDraft();
+            if (!_isEditing) _saveDraft();
             Navigator.of(context).pop();
           },
         ),
@@ -1126,7 +1224,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ),
                   ],
                   const SizedBox(height: 12),
-                  _buildIdentityAndCategorySelector(user),
+                  _buildPostOptions(user),
                   const SizedBox(height: 12),
                   // Text field
                   TextField(
@@ -1181,8 +1279,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               ),
             ),
           ),
-          // Bottom toolbar — horizontally scrollable
-          _buildComposerToolbar(isOverLimit: _isOverCharacterLimit),
+          // Editing preserves existing media; media changes are create-only.
+          if (!_isEditing)
+            _buildComposerToolbar(isOverLimit: _isOverCharacterLimit),
         ],
       ),
     );
@@ -1242,7 +1341,8 @@ class _SelectorChip extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 2),
-          Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
+          Icon(Icons.keyboard_arrow_down,
+              size: 16, color: AppColors.textSecondary),
         ],
       ),
     );

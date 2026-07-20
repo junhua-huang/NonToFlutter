@@ -63,28 +63,40 @@ void main() {
       expect(
         model,
         contains(
-            "case 'community_join_request': return NotificationType.communityJoinRequest;"),
+          "case 'community_join_request': return NotificationType.communityJoinRequest;",
+        ),
       );
-      expect(model, isNot(contains('default: return NotificationType.message;')));
+      expect(
+          model, isNot(contains('default: return NotificationType.message;')));
       expect(
         tab,
         contains(
-            "import 'package:nonto/screens/community/community_manage_screen.dart';"),
+          "import 'package:nonto/screens/community/community_manage_screen.dart';",
+        ),
       );
       expect(tab, contains('NotificationType.communityJoinRequest'));
-      expect(tab, contains('CommunityManageScreen(communityId: n.relatedId!)'));
+      expect(
+        tab,
+        contains('CommunityManageScreen(communityId: n.relatedId!)'),
+      );
     });
 
-    test('push deep links community review notifications to manage route', () {
+    test('community review route supports notification-open navigation', () {
       final routes = read('lib/routes/app_routes.dart');
       final routeGenerator = read('lib/routes/route_generator.dart');
-      final pushService = read('lib/services/push_service.dart');
 
       expect(routes, contains('communityManageId(String id)'));
-      expect(pushService, contains("case 'community_join_request':"));
-      expect(pushService, contains('AppRoutes.communityManageId(relatedId)'));
+      expect(
+        routes,
+        contains("'/communities/\$id/manage'"),
+      );
       expect(routeGenerator, contains('segments.length == 3 &&'));
+      expect(routeGenerator, contains("segments[0] == 'communities'"));
       expect(routeGenerator, contains("segments[2] == 'manage'"));
+      expect(
+        routeGenerator,
+        contains('CommunityManageScreen(communityId: communityId)'),
+      );
     });
   });
 }

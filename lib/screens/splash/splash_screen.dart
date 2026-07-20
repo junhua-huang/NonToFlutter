@@ -156,7 +156,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     try {
       final ws = WebSocketService();
       debugPrint(
-          '[Splash] _verifyWsConnection: isConnected=${ws.isConnected}, token=${ApiClient.token?.substring(0, 12)}...');
+        '[Splash] _verifyWsConnection: isConnected=${ws.isConnected}, '
+        'tokenPresent=${ApiClient.token?.isNotEmpty == true}',
+      );
       if (ws.isConnected) return true;
       debugPrint('[Splash] _verifyWsConnection: calling ws.connect()');
       await ws.connect();

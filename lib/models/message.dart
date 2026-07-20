@@ -61,32 +61,72 @@ class Message {
     this.tempBytes,
   });
 
-  factory Message.fromJson(Map<String, dynamic> json) => Message(
-        id: _p(json['id']),
-        conversationId: _p(json['conversation_id']),
-        senderId: _p(json['sender_id']),
-        content: json['content'],
-        messageType: _messageTypeFromJson(json),
-        mediaUrl: json['media_url']?.toString() ?? json['file_url']?.toString(),
-        relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
-        isRead: json['is_read'] ?? false,
-        createdAt: AppDateUtils.parseServerTime(json['created_at']?.toString()),
-        requestId: json['request_id']?.toString(),
-        clientMsgId: json['client_msg_id']?.toString() ??
-            json['clientMsgId']?.toString(),
-        seq: json['seq'] != null ? _p(json['seq']) : null,
-        status: json['status'] ?? 'sent',
-        uploadProgress: json['upload_progress'] is num
-            ? (json['upload_progress'] as num).toDouble()
-            : double.tryParse(json['upload_progress']?.toString() ?? ''),
-        quoteMessageId: json['quote_message_id'] != null
-            ? _p(json['quote_message_id'])
-            : (json['related_type'] == 'quote' && json['related_id'] != null
-                ? _p(json['related_id'])
-                : null),
-        quotePreview: json['quote_preview']?.toString(),
-        isRecalled: json['is_recalled'] == true || json['status'] == 'recalled',
-      );
+  factory Message.fromJson(Map<String, dynamic> json) {
+    final data = normalizeJson(json);
+    return Message(
+      id: _p(data['id']),
+      conversationId: _p(data['conversation_id']),
+      senderId: _p(data['sender_id']),
+      content: data['content'],
+      messageType: _messageTypeFromJson(data),
+      mediaUrl: data['media_url']?.toString() ?? data['file_url']?.toString(),
+      relatedId: data['related_id'] != null ? _p(data['related_id']) : null,
+      isRead: data['is_read'] ?? false,
+      createdAt: _serverTime(data),
+      requestId: data['request_id']?.toString(),
+      clientMsgId:
+          data['client_msg_id']?.toString() ?? data['clientMsgId']?.toString(),
+      seq: data['seq'] != null ? _p(data['seq']) : null,
+      status: data['status'] ?? 'sent',
+      uploadProgress: data['upload_progress'] is num
+          ? (data['upload_progress'] as num).toDouble()
+          : double.tryParse(data['upload_progress']?.toString() ?? ''),
+      quoteMessageId: data['quote_message_id'] != null
+          ? _p(data['quote_message_id'])
+          : (data['related_type'] == 'quote' && data['related_id'] != null
+              ? _p(data['related_id'])
+              : null),
+      quotePreview: data['quote_preview']?.toString(),
+      isRecalled: data['is_recalled'] == true || data['status'] == 'recalled',
+    );
+  }
+
+  static Map<String, dynamic> normalizeJson(Map<String, dynamic> json) {
+    final data = Map<String, dynamic>.from(json);
+    final canonicalTime = data['created_at'] ??
+        data['createdAt'] ??
+        data['sent_at'] ??
+        data['sentAt'] ??
+        data['timestamp'] ??
+        data['time'];
+    data
+      ..remove('createdAt')
+      ..remove('sent_at')
+      ..remove('sentAt')
+      ..remove('timestamp')
+      ..remove('time');
+    if (canonicalTime != null) {
+      data['created_at'] = canonicalTime;
+    }
+    return data;
+  }
+
+  static DateTime? _serverTime(Map<String, dynamic> json) {
+    final raw = json['created_at'];
+    if (raw is num) {
+      final value = raw.toInt();
+      final milliseconds = value > 1000000000000 ? value : value * 1000;
+      return DateTime.fromMillisecondsSinceEpoch(milliseconds).toLocal();
+    }
+    final text = raw?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    final numeric = int.tryParse(text);
+    if (numeric != null) {
+      final milliseconds = numeric > 1000000000000 ? numeric : numeric * 1000;
+      return DateTime.fromMillisecondsSinceEpoch(milliseconds).toLocal();
+    }
+    return AppDateUtils.parseServerTime(text);
+  }
 
   static int _p(dynamic v) =>
       v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;

@@ -719,13 +719,24 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                                     fontSize: 15,
                                     color: AppColors.textSecondary),
                               ),
+                              if (profileEmailFor(user, isOwnProfile: true) !=
+                                  null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  profileEmailFor(user, isOwnProfile: true)!,
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textSecondary),
+                                ),
+                              ],
                               if (user.verifiedRoleLabels.isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 Wrap(
                                   spacing: 6,
                                   runSpacing: 6,
                                   children: user.verifiedRoleLabels
-                                      .map((label) => IdentityBadge(label: label))
+                                      .map((label) =>
+                                          IdentityBadge(label: label))
                                       .toList(),
                                 ),
                               ],

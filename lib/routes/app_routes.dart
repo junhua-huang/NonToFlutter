@@ -13,6 +13,7 @@ class AppRoutes {
   static const String topics = '/topics';
   static const String friends = '/friends';
   static const String settings = '/settings';
+  static const String blockedUsers = '/blocked-users';
   static const String createPost = '/create-post';
   static const String editProfile = '/edit-profile';
   static const String identityApplication = '/identity-application';

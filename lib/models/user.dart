@@ -1,10 +1,41 @@
 import 'package:nonto/utils/date_utils.dart';
 
+String? profileEmailFor(User user, {required bool isOwnProfile}) {
+  if (user.email.isEmpty) return null;
+  if (isOwnProfile || user.showEmail == true) return user.email;
+  return null;
+}
+
+User userFromAuthPayload(Map<String, dynamic> data) {
+  final rawUser = data['user'] ?? data;
+  return User.fromJson(Map<String, dynamic>.from(rawUser as Map));
+}
+
+User userFromDetailResponse(Map<String, dynamic> data) {
+  return userFromAuthPayload(data);
+}
+
+User failClosedPublicUser(User user) {
+  final json = user.toJson()
+    ..['email'] = ''
+    ..remove('show_email');
+  return User.fromJson(json);
+}
+
+class UserDetailRequestGate {
+  int _generation = 0;
+
+  int begin() => ++_generation;
+
+  bool accepts(int generation) => generation == _generation;
+}
+
 /// 用户模型
 class User {
   final int id;
   final String username;
   final String email;
+  final bool? showEmail;
   final String? displayName;
   final String? bio;
   final String? avatarUrl;
@@ -24,6 +55,7 @@ class User {
     required this.id,
     required this.username,
     required this.email,
+    this.showEmail,
     this.displayName,
     this.bio,
     this.avatarUrl,
@@ -62,6 +94,7 @@ class User {
           : int.tryParse(json['id'].toString()) ?? 0,
       username: json['username'] ?? '',
       email: json['email'] ?? '',
+      showEmail: json['show_email'] is bool ? json['show_email'] as bool : null,
       displayName: json['display_name'],
       bio: json['bio'],
       avatarUrl: json['avatar_url'],
@@ -82,6 +115,7 @@ class User {
       'id': id,
       'username': username,
       'email': email,
+      if (showEmail != null) 'show_email': showEmail,
       'display_name': displayName,
       'bio': bio,
       'avatar_url': avatarUrl,
@@ -97,6 +131,8 @@ class User {
   }
 
   User copyWith({
+    bool? showEmail,
+    bool clearShowEmail = false,
     String? displayName,
     String? bio,
     String? avatarUrl,
@@ -111,6 +147,7 @@ class User {
       id: id,
       username: username,
       email: email,
+      showEmail: clearShowEmail ? null : (showEmail ?? this.showEmail),
       displayName: displayName ?? this.displayName,
       bio: bio ?? this.bio,
       avatarUrl: avatarUrl ?? this.avatarUrl,

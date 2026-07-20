@@ -3,6 +3,7 @@
 import 'package:nonto/models/post.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/recommendation_service.dart';
+import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:flutter/material.dart';
@@ -71,13 +72,19 @@ class FeedNotifier extends StateNotifier<FeedState> {
   final Set<int> _likingPostIds = {};
   StreamSubscription? _sub;
   bool _loadInProgress = false;
+  final DataLayer _dataLayer;
 
-  FeedNotifier() : super(const FeedState()) {
-    _loadCached();
-    _sub = DataLayer().changeStream.listen((key) {
+  FeedNotifier({
+    FeedState initialState = const FeedState(),
+    DataLayer? dataLayer,
+    bool loadOnInit = true,
+  })  : _dataLayer = dataLayer ?? DataLayer(),
+        super(initialState) {
+    if (loadOnInit) _loadCached();
+    _sub = _dataLayer.changeStream.listen((key) {
       if (key == '__auth:logout') {
         reset();
-      } else if (key == 'feed:1:posts') {
+      } else if (key == CacheKeys.feedPosts) {
         _loadCached();
       }
     });
@@ -88,8 +95,8 @@ class FeedNotifier extends StateNotifier<FeedState> {
     if (state.posts.isNotEmpty || _loadInProgress) return;
     _loadInProgress = true;
     try {
-      final result = await DataLayer()
-          .query('feed:1:posts', () async => null)
+      final result = await _dataLayer
+          .query(CacheKeys.feedPosts, () async => null)
           .timeout(const Duration(seconds: 2));
       final cached = result.data;
       if (cached is List && cached.isNotEmpty) {
@@ -282,11 +289,18 @@ class FeedNotifier extends StateNotifier<FeedState> {
     state = state.copyWith(posts: updatedPosts);
   }
 
-  /// Sync current posts to DataLayer cache (always uses canonical 'feed:1:posts' key).
-  void _syncFeedToCache() {
-    if (state.posts.isEmpty) return;
+  /// Remove blocked-user posts from memory and persist even an empty result.
+  Future<void> removePostsByUser(int userId) async {
+    final filtered = state.posts.where((post) => post.userId != userId).toList();
+    if (filtered.length == state.posts.length) return;
+    state = state.copyWith(posts: filtered);
+    await _syncFeedToCache();
+  }
+
+  /// Sync current posts to the canonical feed cache, including empty lists.
+  Future<void> _syncFeedToCache() {
     final data = state.posts.map((p) => p.toJson()).toList();
-    DataLayer().write('feed:1:posts', data);
+    return _dataLayer.write(CacheKeys.feedPosts, data);
   }
 
   /// Reset to initial state.

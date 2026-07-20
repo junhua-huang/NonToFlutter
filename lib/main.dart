@@ -6,10 +6,12 @@ import 'package:nonto/providers/theme_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/routes/route_generator.dart';
 import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/aliyun_push_service.dart';
+import 'package:nonto/services/app_lifecycle_keepalive_service.dart';
 import 'package:nonto/services/prefs_migrator.dart';
 import 'package:nonto/services/sound_service.dart';
 import 'package:nonto/services/connectivity_service.dart';
-import 'package:nonto/services/push_service.dart';
+import 'package:nonto/services/local_notification_service.dart';
 import 'package:nonto/services/web_utils.dart'
     if (dart.library.html) 'package:nonto/services/web_utils_web.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -73,9 +75,13 @@ void main() async {
   // ── SharedPreferences 结构迁移（幂等，runApp 前执行） ──
   await PrefsMigrator.run();
 
-  // 极光推送初始化（仅 Android/iOS 生效，Web/鸿蒙在 PushService 内部跳过）。
-  // 在 runApp 前调用，确保 SDK 尽早就绪，登录后能尽快拿到 registrationId。
-  await PushService().init();
+  // Local notifications are retained for Android notification permission and explicit diagnostic test notifications only.
+  // Vendor push handles delivery while the app is backgrounded or terminated.
+  await LocalNotificationService().init();
+  await AliyunPushService().init();
+
+  // Observe lifecycle for the foreground-only Flutter WebSocket.
+  AppLifecycleKeepAliveService().start();
 
   runApp(
     ProviderScope(

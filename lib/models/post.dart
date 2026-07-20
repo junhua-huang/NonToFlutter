@@ -1,7 +1,49 @@
 import 'package:nonto/utils/date_utils.dart';
 import 'user.dart';
 
-enum PostVisibility { public, friends, private, custom }
+enum PostVisibility { public, friends }
+
+class PostVisibilityOption {
+  final String value;
+  final String label;
+
+  const PostVisibilityOption(this.value, this.label);
+}
+
+const List<PostVisibilityOption> postVisibilityOptions = [
+  PostVisibilityOption('public', '公开'),
+  PostVisibilityOption('friends', '仅好友'),
+];
+
+/// Canonicalizes the user's saved publishing default.
+///
+/// The product default is public. Legacy non-canonical restrictive defaults
+/// cannot be represented by the current API, so unknown defaults fall back to
+/// that product default instead of inventing custom audience semantics.
+String normalizeDefaultPostVisibility(String? value) {
+  switch (value) {
+    case 'friends':
+    case 'friends_only':
+      return 'friends';
+    case 'public':
+    default:
+      return 'public';
+  }
+}
+
+/// Chooses a canonical value when editing a legacy post.
+///
+/// A known public post remains public. Any legacy non-public/unknown value is
+/// represented as friends so opening the editor never broadens its audience.
+/// The caller only persists this value after an explicit save.
+String normalizePostVisibilityForEdit(
+  String? value, {
+  bool? legacyIsPublic,
+}) {
+  if (value == 'public') return 'public';
+  if (value == null) return legacyIsPublic == false ? 'friends' : 'public';
+  return 'friends';
+}
 
 class Post {
   final int id;
@@ -136,6 +178,92 @@ class Post {
         'images': images,
         'image_urls': images,
       };
+
+  /// Applies a partial API response while preserving every absent field.
+  ///
+  /// Presence is checked independently from value so an explicit JSON null can
+  /// clear nullable fields, while omitted owner/media/community/timestamp data
+  /// remains unchanged.
+  Post mergeJson(Map<String, dynamic> json) {
+    T? nullableValue<T>(String key, T? current) =>
+        json.containsKey(key) ? json[key] as T? : current;
+
+    String? nullableString(String key, String? current) =>
+        json.containsKey(key) ? json[key]?.toString() : current;
+
+    DateTime? nullableDate(String key, DateTime? current) =>
+        json.containsKey(key) ? _parseDate(json[key]) : current;
+
+    List<String>? nullableStringList(String key, List<String>? current) {
+      if (!json.containsKey(key)) return current;
+      final raw = json[key];
+      if (raw == null) return null;
+      if (raw is List) return raw.map((value) => value.toString()).toList();
+      return current;
+    }
+
+    User? mergedUser = user;
+    if (json.containsKey('author') || json.containsKey('user')) {
+      final rawUser =
+          json.containsKey('author') ? json['author'] : json['user'];
+      mergedUser = rawUser is Map
+          ? User.fromJson(Map<String, dynamic>.from(rawUser))
+          : null;
+    }
+
+    List<String>? mergedImages = images;
+    if (json.containsKey('images')) {
+      mergedImages = nullableStringList('images', images);
+    } else if (json.containsKey('image_urls')) {
+      mergedImages = nullableStringList('image_urls', images);
+    }
+
+    final mergedTopics = json.containsKey('topics')
+        ? (json['topics'] is List
+            ? (json['topics'] as List).map((value) {
+                if (value is Map) return (value['name'] ?? '').toString();
+                return value.toString();
+              }).toList()
+            : <String>[])
+        : topics;
+
+    return Post(
+      id: json.containsKey('id') ? _parseInt(json['id']) : id,
+      content: nullableString('content', content),
+      videoUrl: nullableString('video_url', videoUrl),
+      thumbnailUrl: json.containsKey('thumbnail_url')
+          ? json['thumbnail_url']?.toString()
+          : nullableString('cover_url', thumbnailUrl),
+      postType: nullableString('post_type', postType),
+      contentCategory: nullableString('content_category', contentCategory),
+      displayRoleType: nullableString('display_role_type', displayRoleType),
+      displayRoleLabel: nullableString('display_role_label', displayRoleLabel),
+      userId: json.containsKey('user_id') ? _parseInt(json['user_id']) : userId,
+      visibility: nullableString('visibility', visibility),
+      isPublic: nullableValue<bool>('is_public', isPublic),
+      user: mergedUser,
+      likeCount: json.containsKey('like_count')
+          ? _parseInt(json['like_count'])
+          : likeCount,
+      commentCount: json.containsKey('comment_count')
+          ? _parseInt(json['comment_count'])
+          : commentCount,
+      viewCount: json.containsKey('view_count')
+          ? _parseInt(json['view_count'])
+          : viewCount,
+      isLiked: nullableValue<bool>('is_liked', isLiked),
+      createdAt: nullableDate('created_at', createdAt),
+      updatedAt: nullableDate('updated_at', updatedAt),
+      topics: mergedTopics,
+      images: mergedImages,
+      communityId: json.containsKey('community_id')
+          ? (json['community_id'] == null
+              ? null
+              : _parseInt(json['community_id']))
+          : communityId,
+      communityOnly: nullableValue<bool>('community_only', communityOnly),
+    );
+  }
 
   Post copyWith(
       {String? content,

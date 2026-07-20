@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:nonto/models/notification.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/notification_service.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
@@ -52,11 +53,16 @@ class NotificationsState {
 class NotificationsNotifier extends StateNotifier<NotificationsState> {
   final NotificationService _service = NotificationService();
   final WebSocketService _ws = WebSocketService();
+  final Future<ApiResponse> Function() _getUnreadCount;
   StreamSubscription? _wsSub;
   StreamSubscription? _dataSub;
   bool _loadInProgress = false;
+  Future<void>? _unreadCountRefreshInFlight;
 
-  NotificationsNotifier() : super(const NotificationsState()) {
+  NotificationsNotifier({Future<ApiResponse> Function()? getUnreadCount})
+      : _getUnreadCount =
+            getUnreadCount ?? NotificationService().getUnreadCount,
+        super(const NotificationsState()) {
     _wsSub = _ws.notificationStream.listen(_onWsNotification);
     _loadCached();
     _dataSub = DataLayer().changeStream.listen((key) {
@@ -148,6 +154,41 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
     }
   }
 
+  Future<void> refreshUnreadCount() {
+    final inFlight = _unreadCountRefreshInFlight;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> refresh;
+    refresh = _performUnreadCountRefresh().whenComplete(() {
+      if (identical(_unreadCountRefreshInFlight, refresh)) {
+        _unreadCountRefreshInFlight = null;
+      }
+    });
+    _unreadCountRefreshInFlight = refresh;
+    return refresh;
+  }
+
+  Future<void> _performUnreadCountRefresh() async {
+    try {
+      final response = await _getUnreadCount();
+      if (!response.success || response.data == null) return;
+
+      final data = response.data is String
+          ? jsonDecode(response.data as String)
+          : response.data;
+      if (data is! Map) return;
+
+      final raw = data['unread_count'] ?? data['count'];
+      final unreadCount =
+          raw is int ? raw : int.tryParse(raw?.toString() ?? '');
+      if (unreadCount != null && mounted) {
+        state = state.copyWith(unreadCount: unreadCount);
+      }
+    } catch (_) {
+      // Keep the cached unread count when the request or payload is invalid.
+    }
+  }
+
   /// 移除所有指定类型的通知（如好友请求被处理后清理）
   void removeByType(String notificationType) {
     state = state.copyWith(
@@ -197,9 +238,9 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
             .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
             .toList();
         final hasMore = serverHasMore ?? list.length >= 20;
-        final mergedNotifications = refresh ? list : [...state.notifications, ...list];
-        final localUnread =
-            mergedNotifications.where((n) => !n.isRead).length;
+        final mergedNotifications =
+            refresh ? list : [...state.notifications, ...list];
+        final localUnread = mergedNotifications.where((n) => !n.isRead).length;
         final unreadCount = serverUnread ?? localUnread;
         state = state.copyWith(
           notifications: mergedNotifications,

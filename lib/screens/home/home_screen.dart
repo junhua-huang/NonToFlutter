@@ -8,10 +8,8 @@ import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/services/cache_keys.dart';
-import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/screens/community/community_list_screen.dart';
 import 'package:nonto/services/data_layer.dart';
-import 'package:nonto/services/push_service.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/app_transitions.dart';
 import 'package:nonto/utils/image_utils.dart';
@@ -43,8 +41,7 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen>
-    with WidgetsBindingObserver {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final List<Widget> _tabs = const [
     FeedTab(),
     SearchTab(),
@@ -55,38 +52,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     if (widget.initialTab != null) {
       ref.read(currentTabIndexProvider.notifier).state = widget.initialTab!;
     }
     _listenFriendOnline();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      PushService().requestPermission();
-      PushService().reportAppState('foreground');
-    });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 应用回到前台时，WS socket 多半已被系统挂起（看似 authenticated 实则僵死）。
-    // 用 forceReconnect 强制重建，绕过 connect() 的「已连接」短路——
-    // 这是「有网就不断 WS」的关键：回前台必须立即恢复实时通道。
-    if (state == AppLifecycleState.resumed) {
-      PushService().reportAppState('foreground');
-      final ws = WebSocketService();
-      if (ApiClient.token != null && ApiClient.token!.isNotEmpty) {
-        debugPrint('[Home] app resumed, force reconnecting WebSocket');
-        ws.forceReconnect();
-      }
-      return;
-    }
-
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.detached ||
-        state == AppLifecycleState.hidden) {
-      PushService().reportAppState('background');
-    }
   }
 
   StreamSubscription? _friendOnlineSub;
@@ -130,7 +99,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _friendOnlineSub?.cancel();
     super.dispose();
   }

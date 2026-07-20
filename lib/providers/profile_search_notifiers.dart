@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/search_service.dart';
+import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,7 +121,7 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
   Future<void> loadLikes() async {
     state = state.copyWith(isLoadingLikes: true);
     try {
-      final cacheKey = 'user:$userId:likes';
+      final cacheKey = CacheKeys.userLikeCount(userId);
       final result = await DataLayer().query(cacheKey, () async {
         final resp = await _postService.getUserLikedPosts(userId);
         if (resp.success && resp.data != null) {

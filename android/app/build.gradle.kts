@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.File
 import java.io.FileInputStream
 
 plugins {
@@ -14,20 +15,48 @@ val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+val releaseStoreFilePath = keystoreProperties.getProperty("storeFile", "")
+val releaseStoreFile = if (releaseStoreFilePath.isBlank()) {
+    null
+} else if (File(releaseStoreFilePath).isAbsolute) {
+    File(releaseStoreFilePath)
+} else {
+    keystorePropertiesFile.parentFile.resolve(releaseStoreFilePath)
+}
 
-fun gradleOrEnv(name: String): String = providers.gradleProperty(name)
-    .orElse(providers.environmentVariable(name))
-    .orElse("")
-    .get()
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+fun aliyunPushProperty(name: String): String =
+    localProperties.getProperty(name)?.trim().orEmpty()
+
+fun quotedBuildConfigValue(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+val aliyunPushAppKey = aliyunPushProperty("aliyun.push.appKey")
+val aliyunPushAppSecret = aliyunPushProperty("aliyun.push.appSecret")
+val huaweiPushAppId = aliyunPushProperty("huawei.push.appId")
+val oppoPushAppKey = aliyunPushProperty("oppo.push.appKey")
+val oppoPushAppSecret = aliyunPushProperty("oppo.push.appSecret")
+val vivoPushAppId = aliyunPushProperty("vivo.push.appId")
+val vivoPushAppKey = aliyunPushProperty("vivo.push.appKey")
 
 android {
     namespace = "com.nonto.nonto"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -43,31 +72,30 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        // ── 极光推送 manifestPlaceholders ──
-        // JPUSH_APPKEY: 极光应用 AppKey；JPUSH_CHANNEL: 渠道名（统计用）
-        // 厂商通道证书在极光控制台配置；华为通道还需要把 HMS AppID 注入 Manifest。
-        // 本地/CI 可通过 Gradle 属性或环境变量 HUAWEI_APPID 传入（常见格式：appid=123456）。
-        manifestPlaceholders["JPUSH_APPKEY"] = "c9c5db77d7cb1a466951e774"
-        manifestPlaceholders["JPUSH_CHANNEL"] = "nonto-default"
-        manifestPlaceholders["HUAWEI_APPID"] = gradleOrEnv("HUAWEI_APPID")
-        manifestPlaceholders["XIAOMI_APPID"] = gradleOrEnv("XIAOMI_APPID")
-        manifestPlaceholders["XIAOMI_APPKEY"] = gradleOrEnv("XIAOMI_APPKEY")
-        manifestPlaceholders["OPPO_APPKEY"] = gradleOrEnv("OPPO_APPKEY")
-        manifestPlaceholders["OPPO_APPID"] = gradleOrEnv("OPPO_APPID")
-        manifestPlaceholders["OPPO_APPSECRET"] = gradleOrEnv("OPPO_APPSECRET")
-        manifestPlaceholders["VIVO_APPKEY"] = gradleOrEnv("VIVO_APPKEY")
-        manifestPlaceholders["VIVO_APPID"] = gradleOrEnv("VIVO_APPID")
-        manifestPlaceholders["MEIZU_APPID"] = gradleOrEnv("MEIZU_APPID")
-        manifestPlaceholders["MEIZU_APPKEY"] = gradleOrEnv("MEIZU_APPKEY")
+        manifestPlaceholders += mapOf(
+            "ALIYUN_PUSH_APP_KEY" to aliyunPushAppKey,
+            "ALIYUN_PUSH_APP_SECRET" to aliyunPushAppSecret,
+            "HUAWEI_PUSH_APP_ID" to if (huaweiPushAppId.isBlank()) "" else "appid=$huaweiPushAppId",
+            "OPPO_PUSH_APP_KEY" to oppoPushAppKey,
+            "OPPO_PUSH_APP_SECRET" to oppoPushAppSecret,
+            "VIVO_PUSH_APP_ID" to vivoPushAppId,
+            "VIVO_PUSH_APP_KEY" to vivoPushAppKey,
+        )
+        buildConfigField("String", "ALIYUN_PUSH_APP_KEY", quotedBuildConfigValue(aliyunPushAppKey))
+        buildConfigField("String", "ALIYUN_PUSH_APP_SECRET", quotedBuildConfigValue(aliyunPushAppSecret))
+        buildConfigField("String", "HUAWEI_PUSH_APP_ID", quotedBuildConfigValue(huaweiPushAppId))
+        buildConfigField("String", "OPPO_PUSH_APP_KEY", quotedBuildConfigValue(oppoPushAppKey))
+        buildConfigField("String", "OPPO_PUSH_APP_SECRET", quotedBuildConfigValue(oppoPushAppSecret))
+        buildConfigField("String", "VIVO_PUSH_APP_ID", quotedBuildConfigValue(vivoPushAppId))
+        buildConfigField("String", "VIVO_PUSH_APP_KEY", quotedBuildConfigValue(vivoPushAppKey))
     }
 
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
+        if (keystorePropertiesFile.exists() && releaseStoreFile?.exists() == true) {
             create("release") {
                 keyAlias = keystoreProperties.getProperty("keyAlias", "")
                 keyPassword = keystoreProperties.getProperty("keyPassword", "")
-                storeFile = file(keystoreProperties.getProperty("storeFile", ""))
+                storeFile = releaseStoreFile
                 storePassword = keystoreProperties.getProperty("storePassword", "")
             }
         }
@@ -90,10 +118,6 @@ flutter {
 }
 
 dependencies {
-    val jpushVendorPluginVersion = "6.1.0"
-    implementation("cn.jiguang.sdk.plugin:huawei:$jpushVendorPluginVersion")
-    implementation("cn.jiguang.sdk.plugin:xiaomi:$jpushVendorPluginVersion")
-    implementation("cn.jiguang.sdk.plugin:oppo:$jpushVendorPluginVersion")
-    implementation("cn.jiguang.sdk.plugin:vivo:$jpushVendorPluginVersion")
-    implementation("cn.jiguang.sdk.plugin:meizu:$jpushVendorPluginVersion")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    testImplementation("junit:junit:4.13.2")
 }

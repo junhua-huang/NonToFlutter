@@ -4,11 +4,12 @@ import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/blocking_notifier.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
-import 'package:nonto/services/api/block_service.dart';
+import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/friend_service.dart';
 import 'package:nonto/services/api/post_service.dart';
@@ -23,6 +24,8 @@ import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
+
+enum UserProfileResult { blocked }
 
 /// Nonto 他人资料页：资料、关系操作、内容列表与安全操作入口。
 class UserProfileScreen extends ConsumerStatefulWidget {
@@ -58,6 +61,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   bool _statusLoaded = false;
 
   final RefreshController _refreshController = RefreshController();
+  final UserDetailRequestGate _detailRequestGate = UserDetailRequestGate();
 
   String? _error;
 
@@ -66,7 +70,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   @override
   void initState() {
     super.initState();
-    _user = widget.user;
+    _user = failClosedPublicUser(widget.user);
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
@@ -86,12 +90,49 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     super.dispose();
   }
 
-  Future<void> _loadInitialUserProfileData() async {
+  Future<void> _loadInitialUserProfileData({
+    bool forceRefreshDetail = false,
+  }) async {
     await Future.wait([
+      _loadUserDetail(forceRefresh: forceRefreshDetail),
       _loadStats(),
       _checkFriendStatus(),
       _loadUserPosts(),
     ], eagerError: false);
+  }
+
+  Future<void> _loadUserDetail({bool forceRefresh = false}) async {
+    final userId = widget.user.id;
+    final generation = _detailRequestGate.begin();
+    try {
+      final response = await AuthService().getUser(
+        userId,
+        forceRefresh: forceRefresh,
+      );
+      if (!_detailRequestGate.accepts(generation) ||
+          !response.success ||
+          response.data == null) {
+        return;
+      }
+      final data = response.data is Map<String, dynamic>
+          ? response.data as Map<String, dynamic>
+          : response.data is Map
+              ? Map<String, dynamic>.from(response.data as Map)
+              : null;
+      if (data == null) return;
+      final user = userFromDetailResponse(data);
+      if (!_detailRequestGate.accepts(generation) ||
+          !mounted ||
+          user.id != userId) {
+        return;
+      }
+      setState(() => _user = user);
+    } catch (error) {
+      debugPrint(
+        'UserProfile detail load failed '
+        '(exception_type=${error.runtimeType})',
+      );
+    }
   }
 
   Future<void> _loadStats() async {
@@ -192,8 +233,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   }
 
   Future<void> _onRefresh() async {
-    await _loadInitialUserProfileData();
-    _refreshController.refreshCompleted();
+    await _loadInitialUserProfileData(forceRefreshDetail: true);
+    if (mounted) _refreshController.refreshCompleted();
   }
 
   // ========== Friend Actions ==========
@@ -470,34 +511,29 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         ],
       ),
     );
-    if (confirmed == true && mounted) {
-      try {
-        final resp = await BlockService().blockUser(_user!.id);
-        if (resp.success) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('已屏蔽该用户'), backgroundColor: Colors.green),
-            );
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(resp.message ?? '操作失败'),
-                  backgroundColor: Colors.red),
-            );
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('操作失败，请重试'), backgroundColor: Colors.red),
-          );
-        }
-      }
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final result =
+        await ref.read(blockCoordinatorProvider).blockUser(_user!.id);
+    if (!mounted) return;
+    if (!result.success) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(result.error ?? '操作失败'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('已屏蔽该用户'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    Navigator.of(context).pop(UserProfileResult.blocked);
   }
 
   Future<void> _startChat() async {
@@ -581,6 +617,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                       Text('@${user.username}',
                           style: TextStyle(
                               fontSize: 15, color: AppColors.textSecondary)),
+                      if (profileEmailFor(user, isOwnProfile: false) !=
+                          null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          profileEmailFor(user, isOwnProfile: false)!,
+                          style: TextStyle(
+                              fontSize: 14, color: AppColors.textSecondary),
+                        ),
+                      ],
                       if (user.verifiedRoleLabels.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Wrap(

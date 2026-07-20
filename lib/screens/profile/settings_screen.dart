@@ -1,10 +1,13 @@
 import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/post.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/auth_state.dart';
 import 'package:nonto/providers/theme_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/auth/login_screen.dart';
+import 'package:nonto/screens/profile/background_permission_guide_screen.dart';
+import 'package:nonto/screens/profile/push_diagnostics_screen.dart';
 import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/api/notification_service.dart';
 import 'package:flutter/material.dart';
@@ -303,11 +306,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               _buildSettingsDivider(),
               _buildListTile(
+                title: '已屏蔽用户',
+                subtitle: '查看和管理你屏蔽的用户',
+                icon: Icons.block_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.blockedUsers),
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
                 title: '身份认证',
                 subtitle: '申请 Coser、摄影师、妆娘等展示身份',
                 icon: Icons.verified_outlined,
                 trailing: const Icon(Icons.chevron_right, size: 20),
-                onTap: () => Navigator.pushNamed(context, AppRoutes.identityApplication),
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.identityApplication),
               ),
               _buildSettingsDivider(),
               _buildListTile(
@@ -338,6 +351,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   setState(() => _pushNotifications = v);
                   _updateNotificationSetting('notify_push', v);
                 },
+                onLongPress: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PushDiagnosticsScreen(),
+                  ),
+                ),
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
+                title: '厂商推送通知设置',
+                subtitle: '影响后台和应用被结束后的厂商推送送达',
+                icon: Icons.phonelink_setup_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BackgroundPermissionGuideScreen(),
+                  ),
+                ),
               ),
               _buildSettingsDivider(),
               _buildSwitchTile(
@@ -484,6 +516,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required ValueChanged<bool> onChanged,
     String? subtitle,
     bool enabled = true,
+    VoidCallback? onLongPress,
   }) {
     return ListTile(
       leading: Icon(icon, color: AppColors.textPrimary),
@@ -501,6 +534,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         activeThumbColor: AppColors.primary,
       ),
       onTap: enabled ? () => onChanged(!value) : null,
+      onLongPress: onLongPress,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       minLeadingWidth: 32,
     );
@@ -752,13 +786,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 // ═══════════════════════════════════════════════════════════════
 // 隐私设置子页面
 // ═══════════════════════════════════════════════════════════════
-class _PrivacySettingsPage extends StatefulWidget {
+class _PrivacySettingsPage extends ConsumerStatefulWidget {
   const _PrivacySettingsPage();
   @override
-  State<_PrivacySettingsPage> createState() => _PrivacySettingsPageState();
+  ConsumerState<_PrivacySettingsPage> createState() =>
+      _PrivacySettingsPageState();
 }
 
-class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
+class _PrivacySettingsPageState extends ConsumerState<_PrivacySettingsPage> {
   final AuthService _authService = AuthService();
   bool _isLoading = true;
   bool _isSaving = false;
@@ -778,10 +813,12 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     try {
       final resp = await _authService.getPrivacy();
       if (resp.success && resp.data != null) {
+        if (!mounted) return;
         setState(() {
           _profileVisibility = resp.data['profile_visibility'] ?? 'public';
-          _postDefaultVisibility =
-              resp.data['post_default_visibility'] ?? 'public';
+          _postDefaultVisibility = normalizeDefaultPostVisibility(
+            resp.data['post_default_visibility']?.toString(),
+          );
           _showEmail = resp.data['show_email'] ?? false;
           _allowSearch = resp.data['allow_search'] ?? true;
           _allowFriendRequests =
@@ -797,15 +834,23 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
   }
 
   Future<void> _saveSettings() async {
+    if (_isLoading || _isSaving) return;
     setState(() => _isSaving = true);
     try {
-      final resp = await _authService.updatePrivacy({
-        'profile_visibility': _profileVisibility,
-        'post_default_visibility': _postDefaultVisibility,
-        'show_email': _showEmail,
-        'allow_search': _allowSearch,
-        'allow_friend_requests': _allowFriendRequests,
-      });
+      _postDefaultVisibility =
+          normalizeDefaultPostVisibility(_postDefaultVisibility);
+      final resp = await savePrivacyAndSynchronizeEmail(
+        data: {
+          'profile_visibility': _profileVisibility,
+          'post_default_visibility': _postDefaultVisibility,
+          'show_email': _showEmail,
+          'allow_search': _allowSearch,
+          'allow_friend_requests': _allowFriendRequests,
+        },
+        updatePrivacy: _authService.updatePrivacy,
+        synchronizeShowEmail:
+            ref.read(authProvider.notifier).synchronizeShowEmail,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -844,7 +889,7 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
         ),
         actions: [
           TextButton(
-            onPressed: _isSaving ? null : _saveSettings,
+            onPressed: _isLoading || _isSaving ? null : _saveSettings,
             child: _isSaving
                 ? const SizedBox(
                     width: 18,
@@ -861,82 +906,87 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                _buildSettingsSection('个人主页', [
-                  _buildOptionTile(
-                    title: '谁可以查看你的主页',
-                    subtitle: _profileVisibilityLabel(_profileVisibility),
-                    icon: Icons.visibility_outlined,
-                    onTap: () => _showPicker(
+          : AbsorbPointer(
+              absorbing: _isSaving,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _buildSettingsSection('个人主页', [
+                    _buildOptionTile(
                       title: '谁可以查看你的主页',
-                      options: [
-                        const _Option('public', '所有人', '任何人都可以看到你的主页'),
-                        const _Option('friends_only', '仅好友', '只有你的好友可以看到你的主页'),
-                        const _Option('private', '仅自己', '只有你自己可以看到你的主页'),
-                      ],
-                      currentValue: _profileVisibility,
-                      onSelected: (v) => setState(() => _profileVisibility = v),
+                      subtitle: _profileVisibilityLabel(_profileVisibility),
+                      icon: Icons.visibility_outlined,
+                      onTap: () => _showPicker(
+                        title: '谁可以查看你的主页',
+                        options: [
+                          const _Option('public', '所有人', '任何人都可以看到你的主页'),
+                          const _Option(
+                              'friends_only', '仅好友', '只有你的好友可以看到你的主页'),
+                          const _Option('private', '仅自己', '只有你自己可以看到你的主页'),
+                        ],
+                        currentValue: _profileVisibility,
+                        onSelected: (v) =>
+                            setState(() => _profileVisibility = v),
+                      ),
                     ),
-                  ),
-                  _buildSettingsDivider(),
-                  _buildSwitchTileFull(
-                    title: '在主页展示邮箱',
-                    subtitle: '开启后你的邮箱将对他人可见',
-                    icon: Icons.email_outlined,
-                    value: _showEmail,
-                    onChanged: (v) => setState(() => _showEmail = v),
-                  ),
-                ]),
-                const SizedBox(height: 24),
-                _buildSettingsSection('帖子', [
-                  _buildOptionTile(
-                    title: '默认帖子可见范围',
-                    subtitle: _postVisibilityLabel(_postDefaultVisibility),
-                    icon: Icons.public_outlined,
-                    onTap: () => _showPicker(
+                    _buildSettingsDivider(),
+                    _buildSwitchTileFull(
+                      title: '在主页展示邮箱',
+                      subtitle: '开启后你的邮箱将对他人可见',
+                      icon: Icons.email_outlined,
+                      value: _showEmail,
+                      onChanged: (v) => setState(() => _showEmail = v),
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
+                  _buildSettingsSection('帖子', [
+                    _buildOptionTile(
                       title: '默认帖子可见范围',
-                      options: [
-                        const _Option('public', '公开', '所有人可见'),
-                        const _Option('friends_only', '仅好友', '仅好友可见'),
-                      ],
-                      currentValue: _postDefaultVisibility,
-                      onSelected: (v) =>
-                          setState(() => _postDefaultVisibility = v),
+                      subtitle: _postVisibilityLabel(_postDefaultVisibility),
+                      icon: Icons.public_outlined,
+                      onTap: () => _showPicker(
+                        title: '默认帖子可见范围',
+                        options: [
+                          const _Option('public', '公开', '所有人可见'),
+                          const _Option('friends', '仅好友', '仅好友可见'),
+                        ],
+                        currentValue: _postDefaultVisibility,
+                        onSelected: (v) =>
+                            setState(() => _postDefaultVisibility = v),
+                      ),
                     ),
-                  ),
-                ]),
-                const SizedBox(height: 24),
-                _buildSettingsSection('社交', [
-                  _buildOptionTile(
-                    title: '谁可以向你发送好友请求',
-                    subtitle: _friendRequestLabel(_allowFriendRequests),
-                    icon: Icons.person_add_outlined,
-                    onTap: () => _showPicker(
+                  ]),
+                  const SizedBox(height: 24),
+                  _buildSettingsSection('社交', [
+                    _buildOptionTile(
                       title: '谁可以向你发送好友请求',
-                      options: [
-                        const _Option('everyone', '所有人', '任何人都可以向你发送好友请求'),
-                        const _Option(
-                            'friends_of_friends', '好友的好友', '仅好友的好友可以向你发送请求'),
-                        const _Option('none', '关闭', '不接受任何好友请求'),
-                      ],
-                      currentValue: _allowFriendRequests,
-                      onSelected: (v) =>
-                          setState(() => _allowFriendRequests = v),
+                      subtitle: _friendRequestLabel(_allowFriendRequests),
+                      icon: Icons.person_add_outlined,
+                      onTap: () => _showPicker(
+                        title: '谁可以向你发送好友请求',
+                        options: [
+                          const _Option('everyone', '所有人', '任何人都可以向你发送好友请求'),
+                          const _Option(
+                              'friends_of_friends', '好友的好友', '仅好友的好友可以向你发送请求'),
+                          const _Option('none', '关闭', '不接受任何好友请求'),
+                        ],
+                        currentValue: _allowFriendRequests,
+                        onSelected: (v) =>
+                            setState(() => _allowFriendRequests = v),
+                      ),
                     ),
-                  ),
-                  _buildSettingsDivider(),
-                  _buildSwitchTileFull(
-                    title: '允许通过搜索找到我',
-                    subtitle: '关闭后，其他用户无法通过用户名或邮箱搜索到你',
-                    icon: Icons.search_outlined,
-                    value: _allowSearch,
-                    onChanged: (v) => setState(() => _allowSearch = v),
-                  ),
-                ]),
-                const SizedBox(height: 32),
-              ],
+                    _buildSettingsDivider(),
+                    _buildSwitchTileFull(
+                      title: '允许通过搜索找到我',
+                      subtitle: '关闭后，其他用户无法通过用户名或邮箱搜索到你',
+                      icon: Icons.search_outlined,
+                      value: _allowSearch,
+                      onChanged: (v) => setState(() => _allowSearch = v),
+                    ),
+                  ]),
+                  const SizedBox(height: 32),
+                ],
+              ),
             ),
     );
   }
@@ -1050,7 +1100,8 @@ class _PrivacySettingsPageState extends State<_PrivacySettingsPage> {
     }
   }
 
-  String _postVisibilityLabel(String v) => v == 'friends_only' ? '仅好友' : '公开';
+  String _postVisibilityLabel(String v) =>
+      normalizeDefaultPostVisibility(v) == 'friends' ? '仅好友' : '公开';
   String _friendRequestLabel(String v) {
     switch (v) {
       case 'friends_of_friends':

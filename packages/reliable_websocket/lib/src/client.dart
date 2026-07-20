@@ -83,8 +83,10 @@ class ReliableWebSocketConfig {
 
   /// 认证失败回调（可选）
   final AuthFailedHandler? onAuthFailed;
+
   /// 非序号消息回调（可选）
   final CustomMessageHandler? onCustomMessage;
+
   /// ACK message_id 回调（可选）
   final AckMessageIdHandler? onAckMessageId;
   final Duration connectTimeout;
@@ -184,7 +186,7 @@ class ReliableWebSocketClient {
     int maxOutboxSize = 1000,
     Duration syncTimeout = const Duration(seconds: 30),
     int syncMaxRetries = 3,
-  }) : _config = ReliableWebSocketConfig(
+  })  : _config = ReliableWebSocketConfig(
           url: url,
           getToken: getToken,
           onMessage: onMessage,
@@ -232,7 +234,7 @@ class ReliableWebSocketClient {
       maxPingMissCount: _config.maxPingMissCount,
       onStateChange: _config.onConnectionStateChange,
       onFrameReceived: _handleFrame,
-      onSocketReady: _onSocketReady,   // 重连后也触发，自动重发 auth
+      onSocketReady: _onSocketReady, // 重连后也触发，自动重发 auth
       onSessionInvalid: (code, reason) {
         // 4001 = JWT 失效，1000 = 被踢下线
         _log.warning('Session invalid: code=$code reason=$reason');
@@ -278,7 +280,7 @@ class ReliableWebSocketClient {
   ///
   /// 建立 WebSocket 连接 → 自动发送 auth → 等待认证 → 执行同步恢复。
   Future<void> connect() async {
-    _log.info('Connecting to ${_config.url}');
+    _log.info('Connecting to WebSocket endpoint');
 
     // 加载本地序号状态（失败不阻塞连接）
     try {
@@ -370,8 +372,11 @@ class ReliableWebSocketClient {
       final token = await _config.getToken();
       _connection.sendFrame(ProtocolCodec.auth(token));
       _log.info('Auth sent via onSocketReady');
-    } catch (e) {
-      _log.severe('Failed to get token for auth: $e');
+    } catch (error) {
+      _log.severe(
+        'Failed to prepare WebSocket authentication '
+        '(exception_type=${error.runtimeType})',
+      );
       await _connection.disconnect();
     }
   }
@@ -408,7 +413,8 @@ class ReliableWebSocketClient {
 
       case MessageType.typing:
       case MessageType.stopTyping:
-        _config.onCustomMessage?.call(frame.payload ?? const <String, dynamic>{});
+        _config.onCustomMessage
+            ?.call(frame.payload ?? const <String, dynamic>{});
         break;
 
       default:
@@ -418,7 +424,7 @@ class ReliableWebSocketClient {
 
   /// 处理认证结果（v1.0: 读 payload.success / payload.user_id）
   Future<void> _onAuthResult(ProtocolFrame frame) async {
-    _log.info('[Auth] result: success=${frame.success}, userId=${frame.userId}, payload=${frame.payload}');
+    _log.info('[Auth] result: success=${frame.success}');
     if (frame.success == true) {
       _log.info('[Auth] ✅ Authenticated');
       _connection.onAuthenticated();

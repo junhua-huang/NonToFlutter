@@ -12,12 +12,9 @@ void main() {
 
       expect(screen, contains('final int? communityId;'));
       expect(screen, contains('final String? communityName;'));
-      expect(
-        screen,
-        contains(
-          'const CreatePostScreen({super.key, this.communityId, this.communityName});',
-        ),
-      );
+      expect(screen, contains('const CreatePostScreen({'));
+      expect(screen, contains('this.communityId,'));
+      expect(screen, contains('this.communityName,'));
       expect(screen, contains('communityId: widget.communityId'));
       expect(screen, contains('if (widget.communityName != null)'));
       expect(screen, contains(r'发布到 ${widget.communityName}'));

@@ -95,8 +95,9 @@ dependencies:
   # ── 音频播放（三端通过条件导入选择实现） ──
   audioplayers: ^5.2.1
 
-  # ── 极光推送（仅 Android/iOS 生效，Web/HarmonyOS 在 PushService 里 platform check 跳过） ──
-  jpush_flutter: ^3.0.2
+  # ── Android 通知权限与用户主动触发的诊断通知 ──
+  flutter_local_notifications: ^17.2.4
+  aliyun_push_flutter: ^1.3.7
 
 dependency_overrides:
   # ── 鸿蒙适配版（基于上游源码 + 鸿蒙端实现，iOS/Android 行为不变） ──

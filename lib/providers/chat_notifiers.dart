@@ -6,7 +6,6 @@ import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/chat_service.dart';
-import 'package:nonto/services/api/notification_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/chat_send_queue.dart';
@@ -64,9 +63,14 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   bool _loadInProgress = false;
   int? _currentUserId;
 
-  ConversationsNotifier() : super(const ConversationsState()) {
-    _loadCurrentUserId();
-    _loadData();
+  ConversationsNotifier({
+    ConversationsState initialState = const ConversationsState(),
+    bool loadOnInit = true,
+  }) : super(initialState) {
+    if (loadOnInit) {
+      _loadCurrentUserId();
+      _loadData();
+    }
     _wsMsgSub = _ws.messageStream.listen(_onWsMessage);
     _wsSessionSub = _ws.sessionListStream.listen(_onSessionList);
     _wsFriendOnlineSub = _ws.friendOnlineStream.listen(_onFriendOnline);
@@ -611,30 +615,10 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       clearError: true,
     );
     try {
-      // 并发请求：会话列表 + 未读数量（各自独立超时，不互相影响）
-      final results = await Future.wait([
-        _chatService
-            .getConversations()
-            .timeout(const Duration(seconds: 25))
-            .catchError((_) => null as dynamic),
-        NotificationService()
-            .getUnreadCount()
-            .timeout(const Duration(seconds: 10))
-            .catchError((_) => null as dynamic),
-      ]);
-
-      // 会话列表
-      // results[0] 来自 .catchError((_) => null)，运行时确实可能为 null；
-      // 分析器因 dynamic 推断为 non-null 误报，这里显式 cast 让语义清晰且消警告。
-      final response = results[0] as dynamic;
-      if (response == null) {
-        debugPrint('[Conv] getConversations timed out or failed');
-        state = state.copyWith(
-          isLoading: false,
-          error: state.conversations.isEmpty ? '加载超时，下拉重试' : null,
-        );
-        return;
-      }
+      final response = await _chatService
+          .getConversations()
+          .timeout(const Duration(seconds: 25))
+          .catchError((_) => null as dynamic);
       debugPrint(
           '[Conv] getConversations success=${response.success}, statusCode=${response.statusCode}, msg=${response.message}, dataType=${response.data?.runtimeType}');
       if (response.success) {
@@ -673,30 +657,13 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
               '[Conv] conv[0] otherUser=${c.otherUser?.username} displayName=${c.otherUser?.displayName} avatar=${c.otherUser?.avatarUrl}');
         }
 
-        // 提取未读通知数量（独立 try/catch，单个超时不影响会话列表）
-        int unread = state.unreadCount;
-        final unreadResp = results[1];
-        try {
-          debugPrint(
-              '[Conv] getUnreadCount success=${unreadResp.success}, data=${unreadResp.data}');
-          if (unreadResp.success && unreadResp.data != null) {
-            final unreadData = unreadResp.data;
-            if (unreadData is Map) {
-              unread = unreadData['unread_count'] ?? unreadData['count'] ?? 0;
-            } else if (unreadData is int) {
-              unread = unreadData;
-            }
-          }
-        } catch (_) {}
-
         state = state.copyWith(
           conversations: conversations,
-          unreadCount: unread,
           isLoading: false,
           error: null,
         );
         debugPrint(
-            '[Conv] STATE SET: conversations=${conversations.length}, unread=$unread, isLoading=false, error=null');
+            '[Conv] STATE SET: conversations=${conversations.length}, isLoading=false, error=null');
         // 持久化操作独立 try/catch：数据库异常不影响内存中的会话列表
         try {
           await DataLayer().persistConversations(conversations);
@@ -753,6 +720,35 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     state = const ConversationsState();
   }
 
+  Future<List<int>> removeDirectConversationsWithUser(int userId) async {
+    final removed = state.conversations
+        .where((conversation) =>
+            !conversation.isCommunity && conversation.otherUser?.id == userId)
+        .map((conversation) => conversation.id)
+        .toList();
+    if (removed.isEmpty) return const [];
+
+    final removedIds = removed.toSet();
+    state = state.copyWith(
+      conversations: state.conversations
+          .where((conversation) => !removedIds.contains(conversation.id))
+          .toList(),
+    );
+    for (final conversationId in removed) {
+      await LocalDbService().deleteConversation(conversationId);
+      await DataLayer().invalidate(CacheKeys.msgWarmup(conversationId));
+      await DataLayer().invalidate(CacheKeys.msgRecent(conversationId));
+      await DataLayer().invalidate(
+        CacheKeys.msgRecentByUser(conversationId, '*'),
+      );
+    }
+    await DataLayer().write(
+      CacheKeys.convFullList,
+      state.conversations.map((conversation) => conversation.toJson()).toList(),
+    );
+    return removed;
+  }
+
   /// 清除所有会话的未读数（仅用于外层总角标归零；不会错误改写服务端每个会话未读）
   void clearAllUnreadCounts() {
     state = state.copyWith(unreadCount: 0);
@@ -800,6 +796,7 @@ class MessagesState {
   final bool wsConnected;
   final bool otherUserTyping;
   final bool? otherUserIsOnline;
+
   /// 命中 jumpToMessage 后，需要被高亮 + 滚动定位的消息 id。
   /// UI 在 ensureVisible 完成并播放高亮动画后调用 clearHighlight 清掉。
   final int? highlightMessageId;
@@ -844,7 +841,9 @@ class MessagesState {
       wsConnected: wsConnected ?? this.wsConnected,
       otherUserTyping: otherUserTyping ?? this.otherUserTyping,
       otherUserIsOnline: otherUserIsOnline ?? this.otherUserIsOnline,
-      highlightMessageId: clearHighlight ? null : (highlightMessageId ?? this.highlightMessageId),
+      highlightMessageId: clearHighlight
+          ? null
+          : (highlightMessageId ?? this.highlightMessageId),
     );
   }
 }
@@ -862,6 +861,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   final int conversationId;
   final ChatService _chatService = ChatService();
   final WebSocketService _ws = WebSocketService();
+  final Future<ApiResponse> Function(int userId) _loadUserStatus;
+  final Stream<bool> _connectionStream;
+  final Stream<Map<String, dynamic>> _friendOnlineStream;
+  final Stream<Map<String, dynamic>> _friendOfflineStream;
+  final bool _loadMessagesOnInit;
   late final ChatSendQueue _sendQueue;
   StreamSubscription? _wsMsgSub;
   StreamSubscription? _wsTypingSub;
@@ -871,23 +875,44 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   StreamSubscription? _wsAckSub;
   StreamSubscription? _wsFriendOnlineSub;
   StreamSubscription? _wsFriendOfflineSub;
+  Future<void>? _statusRefreshInFlight;
+  int? _statusRefreshUserId;
+  int _statusRefreshGeneration = 0;
   Timer? _typingTimer;
   int? _currentUserId;
+  int? _otherUserId;
   bool _initialized = false;
   bool _suppressRecentCacheSync = false;
 
   final void Function(int convId, String content, String msgType, DateTime now)?
       _onMessageSent;
 
-  MessagesNotifier(this.conversationId,
-      {void Function(int convId, String content, String msgType, DateTime now)?
-          onMessageSent})
-      : _onMessageSent = onMessageSent,
+  MessagesNotifier(
+    this.conversationId, {
+    void Function(int convId, String content, String msgType, DateTime now)?
+        onMessageSent,
+    @visibleForTesting Future<ApiResponse> Function(int userId)? loadUserStatus,
+    @visibleForTesting Stream<bool>? connectionStream,
+    @visibleForTesting Stream<Map<String, dynamic>>? friendOnlineStream,
+    @visibleForTesting Stream<Map<String, dynamic>>? friendOfflineStream,
+    @visibleForTesting bool loadMessagesOnInit = true,
+  })  : _onMessageSent = onMessageSent,
+        _loadUserStatus = loadUserStatus ?? ChatService().getUserStatus,
+        _connectionStream =
+            connectionStream ?? WebSocketService().connectionStream,
+        _friendOnlineStream =
+            friendOnlineStream ?? WebSocketService().friendOnlineStream,
+        _friendOfflineStream =
+            friendOfflineStream ?? WebSocketService().friendOfflineStream,
+        _loadMessagesOnInit = loadMessagesOnInit,
         super(const MessagesState()) {
     _wsMsgSub = _ws.messageStream.listen(_onWsMessage);
     _wsTypingSub = _ws.typingStream.listen(_onWsTyping);
-    _wsConnSub = _ws.connectionStream.listen((connected) {
+    _wsConnSub = _connectionStream.listen((connected) {
       if (mounted) state = state.copyWith(wsConnected: connected);
+      if (connected && _otherUserId != null) {
+        unawaited(refreshOtherUserStatus(_otherUserId!));
+      }
     });
     _wsErrorSub = _ws.errorStream.listen(_onWsError);
     // 监听发送错误（携带 clientMsgId），用于通知 ChatSendQueue 标记消息失败
@@ -929,11 +954,21 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   /// 表现为：对方已读回执不下发、typing 不显示。
   /// 因此把「重复进入也要做的事」放到守卫之前。
   void init(int currentUserId, {int? otherUserId}) {
-    // 1) 每次进入都必须做的事：加房间 + 上报已读
+    // 1) 每次进入都必须做的事：加房间 + 上报已读 + 刷新对方权威在线状态
     _ws.joinConversation(conversationId);
     _sendMarkRead();
+    if (_otherUserId != otherUserId) {
+      _otherUserId = otherUserId;
+      _statusRefreshGeneration++;
+      _statusRefreshInFlight = null;
+      _statusRefreshUserId = null;
+    }
+    _replacePresenceSubscriptions();
+    if (otherUserId != null) {
+      unawaited(refreshOtherUserStatus(otherUserId));
+    }
 
-    // 2) 已初始化过的实例：只补发 join/markRead，跳过订阅 / 队列重建 / 首次加载
+    // 2) 已初始化过的实例：只补发 join/markRead，跳过队列重建 / 首次加载
     if (_initialized) {
       // 数据已在内存，触发一次轻量增量同步即可填补离线期间空档
       if (state.messages.isNotEmpty) {
@@ -944,31 +979,86 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _initialized = true;
     _currentUserId = currentUserId;
 
-    // 监听好友在线/离线事件，实时更新 AppBar 状态
-    if (otherUserId != null) {
-      _wsFriendOnlineSub = _ws.friendOnlineStream.listen((data) {
-        final uid = data['user_id'];
-        final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
-        if (id == otherUserId && mounted) {
-          state = state.copyWith(otherUserIsOnline: true);
-        }
-      });
-      _wsFriendOfflineSub = _ws.friendOfflineStream.listen((data) {
-        final uid = data['user_id'];
-        final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
-        if (id == otherUserId && mounted) {
-          state = state.copyWith(otherUserIsOnline: false);
-        }
-      });
-    }
-
     _sendQueue = ChatSendQueue(
       conversationId: conversationId,
       senderId: currentUserId,
     );
     _sendQueue.onAck = _onQueueAck;
     _sendQueue.onFailed = _onQueueFailed;
-    _loadMessages();
+    if (_loadMessagesOnInit) {
+      _loadMessages();
+    }
+  }
+
+  void _replacePresenceSubscriptions() {
+    _wsFriendOnlineSub?.cancel();
+    _wsFriendOfflineSub?.cancel();
+    _wsFriendOnlineSub = null;
+    _wsFriendOfflineSub = null;
+
+    final otherUserId = _otherUserId;
+    if (otherUserId == null) return;
+
+    // offline 事件可能只是对方进入后台；再次拉取后端产品在线状态作为权威值。
+    _wsFriendOnlineSub = _friendOnlineStream.listen((data) {
+      final uid = data['user_id'];
+      final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
+      if (id == _otherUserId && mounted) {
+        state = state.copyWith(otherUserIsOnline: true);
+      }
+    });
+    _wsFriendOfflineSub = _friendOfflineStream.listen((data) {
+      final uid = data['user_id'];
+      final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
+      if (id == _otherUserId && mounted) {
+        unawaited(refreshOtherUserStatus(otherUserId));
+      }
+    });
+  }
+
+  Future<void> refreshOtherUserStatus(int userId) {
+    final inFlight = _statusRefreshInFlight;
+    if (inFlight != null && _statusRefreshUserId == userId) {
+      return inFlight;
+    }
+
+    final generation = ++_statusRefreshGeneration;
+    late final Future<void> refresh;
+    refresh = _performStatusRefresh(userId, generation).whenComplete(() {
+      if (identical(_statusRefreshInFlight, refresh)) {
+        _statusRefreshInFlight = null;
+        _statusRefreshUserId = null;
+      }
+    });
+    _statusRefreshUserId = userId;
+    _statusRefreshInFlight = refresh;
+    return refresh;
+  }
+
+  Future<void> _performStatusRefresh(int userId, int generation) async {
+    try {
+      final response = await _loadUserStatus(userId);
+      if (!mounted ||
+          generation != _statusRefreshGeneration ||
+          userId != _otherUserId ||
+          !response.success ||
+          response.data == null) {
+        return;
+      }
+      final data = response.data is String
+          ? jsonDecode(response.data as String)
+          : response.data;
+      if (data is! Map) return;
+      final isOnline = data['is_online'];
+      if (isOnline is bool &&
+          mounted &&
+          generation == _statusRefreshGeneration &&
+          userId == _otherUserId) {
+        state = state.copyWith(otherUserIsOnline: isOnline);
+      }
+    } catch (_) {
+      // Keep the previous known value when status refresh fails.
+    }
   }
 
   // ── 数据加载 ──
@@ -1104,7 +1194,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
               .where((m) =>
                   m.id >= 1000000000000 &&
                   !serverIds.contains(m.id) &&
-                  (m.clientMsgId == null || m.clientMsgId!.isEmpty || !serverClientMsgIds.contains(m.clientMsgId)))
+                  (m.clientMsgId == null ||
+                      m.clientMsgId!.isEmpty ||
+                      !serverClientMsgIds.contains(m.clientMsgId)))
               .toList();
           final merged = <Message>[
             ...serverMessages,
@@ -1300,7 +1392,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     // 2) 拉上下文窗口
     state = state.copyWith(isLoading: true);
     try {
-      final resp = await _chatService.getMessagesAround(conversationId, targetId);
+      final resp =
+          await _chatService.getMessagesAround(conversationId, targetId);
       if (!resp.success || resp.data == null) {
         state = state.copyWith(isLoading: false);
         return false;
@@ -1311,9 +1404,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         return false;
       }
       final list = (data['messages'] as List?) ?? [];
-      final window = list
-          .map((e) => Message.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final window =
+          list.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
       if (!window.any((m) => m.id == targetId)) {
         state = state.copyWith(isLoading: false);
         return false;
@@ -1916,6 +2008,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   @override
   void dispose() {
+    _statusRefreshGeneration++;
+    _statusRefreshInFlight = null;
+    _statusRefreshUserId = null;
+    _otherUserId = null;
     _ws.leaveConversation(conversationId);
     _wsMsgSub?.cancel();
     _wsTypingSub?.cancel();

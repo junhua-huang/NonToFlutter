@@ -2,9 +2,9 @@ import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/blocking_notifier.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
-import 'package:nonto/services/api/block_service.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/report_service.dart';
 import 'package:nonto/utils/date_utils.dart';
@@ -23,7 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
 /// 统一帖子卡片组件 — 首页 Feed、他人主页、我的主页共用
-class PostCard extends StatelessWidget {
+class PostCard extends ConsumerWidget {
   final Post post;
   final VoidCallback onTap;
   final VoidCallback? onLike;
@@ -170,7 +170,11 @@ class PostCard extends StatelessWidget {
     }
   }
 
-  Future<void> _showBlockConfirmDialog(BuildContext context, Post post) async {
+  Future<void> _showBlockConfirmDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Post post,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -194,29 +198,22 @@ class PostCard extends StatelessWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    try {
-      final resp = await BlockService().blockUser(post.userId);
-      if (!context.mounted) return;
-      if (resp.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('已屏蔽@${post.user?.username ?? '该用户'}'),
-              duration: const Duration(seconds: 2)),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(resp.message ?? '屏蔽失败'),
-              duration: const Duration(seconds: 2)),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('屏蔽失败，请稍后重试'), duration: Duration(seconds: 2)),
-      );
-    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final result =
+        await ref.read(blockCoordinatorProvider).blockUser(post.userId);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? '已屏蔽@${post.user?.username ?? '该用户'}'
+              : result.error ?? '屏蔽失败',
+        ),
+        backgroundColor: result.success ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _showDeleteConfirmDialog(BuildContext context, Post post) async {
@@ -273,7 +270,7 @@ class PostCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -391,7 +388,7 @@ class PostCard extends StatelessWidget {
                         _showReportDialog(context, post);
                         break;
                       case 'block':
-                        _showBlockConfirmDialog(context, post);
+                        _showBlockConfirmDialog(context, ref, post);
                         break;
                       case 'delete':
                         _showDeleteConfirmDialog(context, post);

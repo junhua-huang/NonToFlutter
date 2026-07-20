@@ -109,7 +109,7 @@ class ConnectionManager {
     }
 
     try {
-      _log.info('Opening WebSocket to $_url');
+      _log.info('Opening WebSocket connection');
       final channel = WebSocketChannel.connect(Uri.parse(_url));
       _channel = channel;
 
@@ -126,7 +126,7 @@ class ConnectionManager {
       _connectTimer?.cancel();
       _connectTimer = null;
 
-      _log.info('WebSocket connected to $_url');
+      _log.info('WebSocket connected');
 
       // 必须先监听再发 auth，避免服务端极快返回 auth_result/session_list 时监听尚未建立而丢帧。
       channel.stream.listen(
@@ -137,8 +137,10 @@ class ConnectionManager {
       );
 
       await _onSocketReady?.call();
-    } catch (e, _) {
-      _log.severe('Connect failed: $e');
+    } catch (error, _) {
+      _log.severe(
+        'Connect failed (exception_type=${error.runtimeType})',
+      );
       _closeChannel();
       _startReconnect();
     }
@@ -167,7 +169,7 @@ class ConnectionManager {
   void sendFrame(ProtocolFrame frame) {
     final data = _codec.encode(frame);
     if (frame.type != MessageType.ping) {
-      _log.info('→ ${frame.type.name}: $data');
+      _log.info('→ ${frame.type.name}');
     }
     _channel?.sink.add(data);
   }
@@ -187,22 +189,26 @@ class ConnectionManager {
         _pingMissCount = 0;
         return;
       }
-      _log.info('← ${frame.type.name}: $rawStr');
+      _log.info('← ${frame.type.name}');
 
       _onFrameReceived(frame);
-    } catch (e) {
-      _log.warning('Failed to decode message: $e');
+    } catch (error) {
+      _log.warning(
+        'Failed to decode message (exception_type=${error.runtimeType})',
+      );
     }
   }
 
   void _onError(dynamic error) {
-    _log.warning('WebSocket error: $error');
+    _log.warning(
+      'WebSocket transport error (exception_type=${error.runtimeType})',
+    );
     // Stream 错误不直接触发重连，由 onDone 统一处理
   }
 
   void _onDone() {
     // 在关闭 channel 前读取关闭码
-    final channel = _channel;  // 局部变量防止异步竞态
+    final channel = _channel; // 局部变量防止异步竞态
     final closeCode = channel?.closeCode;
     final closeReason = channel?.closeReason ?? '';
     _log.warning('WebSocket closed: code=$closeCode reason=$closeReason');
@@ -258,14 +264,16 @@ class ConnectionManager {
     final clamped = delay > _reconnectMaxDelay ? _reconnectMaxDelay : delay;
 
     _reconnectAttempt++;
-    _log.info('Reconnecting in ${clamped.inSeconds}s (attempt $_reconnectAttempt)');
+    _log.info(
+        'Reconnecting in ${clamped.inSeconds}s (attempt $_reconnectAttempt)');
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(clamped, () {
       // 重连时若仍卡在 connecting（上一次 connect 未超时），强制复位状态再连，
       // 避免 connect() 的「已在 connecting」短路让重连请求被静默吞掉。
       if (_state == ConnectionState.connecting) {
-        _log.warning('Reconnect fired but still connecting, force-reset to reconnecting');
+        _log.warning(
+            'Reconnect fired but still connecting, force-reset to reconnecting');
         _closeChannel();
         _connectTimer?.cancel();
         _connectTimer = null;

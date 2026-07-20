@@ -272,6 +272,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   }
 
   Future<void> _sendMessage() async {
+    if (_isSending) return;
     final content = _msgCtrl.text.trim();
     if (content.isEmpty) return;
     final mentionUserIds = _mentionUserIds.toList();
@@ -289,15 +290,16 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       clientMsgId: clientMsgId,
     );
     setState(() {
+      _isSending = true;
       _messages.add(optimistic);
       _quotedMessage = null;
     });
     _mentionUserIds.clear();
-    _syncConversationPreview(content, 'text');
-    unawaited(SoundService().playSendSound());
-    await _writeMessagesCache();
 
     try {
+      _syncConversationPreview(content, 'text');
+      unawaited(SoundService().playSendSound());
+      await _writeMessagesCache();
       final resp = await CommunityApiService().sendMessage(
         widget.communityId,
         content: content,
@@ -315,6 +317,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       }
     } finally {
       await _writeMessagesCache();
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -633,14 +636,14 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     if (isRecalled || isFailed || messageType == 'system') return;
 
     final canRecall = isMine;
-    final options = <TwitterSheetOption<String>>[
-      const TwitterSheetOption(
+    final options = <NontoSheetOption<String>>[
+      const NontoSheetOption(
           icon: Icons.format_quote, label: '回复', value: 'reply'),
       if (messageType == 'text')
-        const TwitterSheetOption(
+        const NontoSheetOption(
             icon: Icons.copy, label: '复制文字', value: 'copy'),
       if (canRecall)
-        const TwitterSheetOption(
+        const NontoSheetOption(
           icon: Icons.undo,
           label: '撤回',
           value: 'recall',
@@ -650,7 +653,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     if (options.isEmpty) return;
 
     final action =
-        await TwitterBottomSheet.show<String>(context, options: options);
+        await NontoBottomSheet.show<String>(context, options: options);
     if (!mounted) return;
     switch (action) {
       case 'reply':
@@ -1981,7 +1984,7 @@ class _MessageBubble extends StatelessWidget {
       width: 220,
       height: 132,
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: AppColors.backgroundSecondary,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Stack(

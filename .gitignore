@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Vendor push configuration contains environment-specific credentials
+/android/app/agconnect-services.json

@@ -37,15 +37,28 @@ class CommentSectionKey {
 ///   - Expand replies
 ///   - Reply targeting
 class CommentNotifier extends StateNotifier<CommentState> {
+  static final Set<CommentNotifier> _activeNotifiers = {};
+
+  static void removeUserFromActiveSections(int userId) {
+    for (final notifier in List<CommentNotifier>.from(_activeNotifiers)) {
+      notifier.removeCommentsByUser(userId);
+    }
+  }
+
   final CommentSectionKey key;
   final CommentService _commentService = CommentService();
   final ComicService _comicService = ComicService();
   final User? _currentUser; // 用于乐观更新显示头像和名称
 
-  CommentNotifier(this.key, {User? currentUser})
-      : _currentUser = currentUser,
-        super(const CommentState()) {
-    loadComments();
+  CommentNotifier(
+    this.key, {
+    User? currentUser,
+    CommentState initialState = const CommentState(),
+    bool loadOnInit = true,
+  })  : _currentUser = currentUser,
+        super(initialState) {
+    _activeNotifiers.add(this);
+    if (loadOnInit) loadComments();
   }
 
   bool get _isPost => key.targetType == 'post';
@@ -565,6 +578,20 @@ class CommentNotifier extends StateNotifier<CommentState> {
     );
   }
 
+  void removeCommentsByUser(int userId) {
+    List<Comment> filter(List<Comment> comments) {
+      return comments.where((comment) => comment.userId != userId).map((comment) {
+        final replies = filter(comment.replies);
+        return comment.copyWith(
+          replies: replies,
+          replyCount: replies.length,
+        );
+      }).toList();
+    }
+
+    state = state.copyWith(comments: filter(state.comments));
+  }
+
   /// Helper: notifier is still mounted after dispose.
   @override
   bool get mounted {
@@ -577,6 +604,7 @@ class CommentNotifier extends StateNotifier<CommentState> {
 
   @override
   void dispose() {
+    _activeNotifiers.remove(this);
     _mounted = false;
     super.dispose();
   }

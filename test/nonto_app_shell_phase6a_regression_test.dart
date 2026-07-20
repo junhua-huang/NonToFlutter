@@ -49,14 +49,18 @@ void main() {
       expect(source, contains('FloatingActionButton'));
     });
 
-    test('unread badge remains provider derived and capped', () {
-      final source = read('lib/screens/home/home_screen.dart');
+    test('unread badges remain provider derived and capped', () {
+      final homeSource = read('lib/screens/home/home_screen.dart');
+      final messagesSource = read('lib/screens/messages/messages_tab.dart');
 
-      expect(source, contains('unreadNotificationsCountProvider'));
-      expect(source, contains('unreadMessagesCountProvider'));
-      expect(source, contains('String _formatBadgeCount(int count)'));
-      expect(source, contains("count > 99 ? '99+' : '\$count'"));
-      expect(source, contains('Badge('));
+      expect(homeSource, contains('unreadMessagesCountProvider'));
+      expect(homeSource, isNot(contains('unreadNotificationsCountProvider')));
+      expect(homeSource, contains('String _formatBadgeCount(int count)'));
+      expect(homeSource, contains("count > 99 ? '99+' : '\$count'"));
+      expect(homeSource, contains('Badge('));
+      expect(messagesSource, contains('unreadNotificationsCountProvider'));
+      expect(messagesSource, contains('unreadNotifications > 99'));
+      expect(messagesSource, contains("? '99+'"));
     });
 
     test('known HomeScreen analyzer noise is removed', () {

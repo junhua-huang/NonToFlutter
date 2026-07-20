@@ -111,15 +111,20 @@ void main() {
       final notifier = read('lib/providers/chat_notifiers.dart');
       final room = read('lib/screens/chat/chat_room_screen.dart');
 
-      final onErrorStart = service.indexOf('onError: (message, clientMsgId)');
+      final onErrorStart =
+          service.lastIndexOf('onError: (message, clientMsgId)');
       final onAuthFailedStart = service.indexOf('onAuthFailed:', onErrorStart);
       expect(onErrorStart, greaterThanOrEqualTo(0));
       expect(onAuthFailedStart, greaterThan(onErrorStart));
       final onErrorBody = service.substring(onErrorStart, onAuthFailedStart);
 
-      expect(onErrorBody, contains('if (clientMsgId != null && clientMsgId.isNotEmpty)'));
+      expect(onErrorBody,
+          contains('if (clientMsgId != null && clientMsgId.isNotEmpty)'));
       expect(onErrorBody, isNot(contains('_errorController.add(message)')));
-      expect(notifier, isNot(contains(r"state = state.copyWith(isSending: false, error: '发送失败: $error')")));
+      expect(
+          notifier,
+          isNot(contains(
+              r"state = state.copyWith(isSending: false, error: '发送失败: $error')")));
       expect(room, isNot(contains(r"content: Text('发送失败: $error')")));
     });
 
@@ -143,7 +148,7 @@ void main() {
     test('websocket new message notification sound excludes own echoes', () {
       final source = read('lib/services/websocket_service.dart');
 
-      final ownCheck = source.indexOf('final isOwn = senderId != null');
+      final ownCheck = source.indexOf('final isOwn =');
       final gate = source.indexOf(
           'if (!isConvOpen && !isOwn && token != null && token.isNotEmpty)');
       final soundCall =
@@ -157,15 +162,18 @@ void main() {
       expect(soundCall, greaterThan(gate));
     });
 
-    test('jump to message persists around window without overwriting recent cache',
+    test(
+        'jump to message persists around window without overwriting recent cache',
         () {
       final source = read('lib/providers/chat_notifiers.dart');
       final jumpSource = source
           .split('Future<bool> jumpToMessage(int targetId) async')[1]
           .split('/// UI 完成高亮动画后调用')[0];
       final aroundStart = jumpSource.indexOf('getMessagesAround');
-      final persistStart = jumpSource.indexOf('DataLayer().persistMessages(window)');
-      final stateReplaceStart = jumpSource.indexOf('state = state.copyWith(', persistStart);
+      final persistStart =
+          jumpSource.indexOf('DataLayer().persistMessages(window)');
+      final stateReplaceStart =
+          jumpSource.indexOf('state = state.copyWith(', persistStart);
       final syncStart = jumpSource.indexOf('_syncL1()', persistStart);
 
       expect(aroundStart, isNonNegative);

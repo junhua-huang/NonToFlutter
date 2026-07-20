@@ -21,7 +21,9 @@ void main() {
       expect(payload['role_labels'], isNot(contains('普通用户')));
     });
 
-    test('User ignores legacy role labels when verified identity fields are absent', () {
+    test(
+        'User ignores legacy role labels when verified identity fields are absent',
+        () {
       final user = User.fromJson({
         'id': 2,
         'username': 'bob',
@@ -64,32 +66,42 @@ void main() {
       expect(payload['display_role_label'], 'Coser');
     });
 
-    test('PostService createPost sends identity form fields', () {
-      final source = File('lib/services/api/post_service.dart').readAsStringSync();
+    test('PostService createPost sends identity but no content category', () {
+      final source =
+          File('lib/services/api/post_service.dart').readAsStringSync();
 
-      expect(source, contains('String? contentCategory'));
       expect(source, contains('String? displayRoleType'));
-      expect(source, contains("'content_category': contentCategory"));
       expect(source, contains("'display_role_type': displayRoleType"));
+      expect(source, isNot(contains('contentCategory')));
+      expect(source, isNot(contains('content_category')));
     });
 
-    test('CreatePostScreen exposes hide-identity option and sends selected identity', () {
-      final source = File('lib/screens/post/create_post_screen.dart').readAsStringSync();
+    test(
+        'CreatePostScreen exposes hide-identity option and sends selected identity',
+        () {
+      final source =
+          File('lib/screens/post/create_post_screen.dart').readAsStringSync();
 
-      expect(source, contains("_selectedDisplayRoleType"));
+      expect(source, contains('_selectedDisplayRoleType'));
       expect(source, contains('不展示身份'));
-      expect(source, contains("_hideIdentityValue"));
-      expect(source, isNot(contains('value: null,\n              child: Text(\'不展示身份\')')));
+      expect(source, contains('_hideIdentityValue'));
+      expect(
+        source,
+        isNot(contains("value: null,\n              child: Text('不展示身份')")),
+      );
       expect(source, contains('displayRoleType: _selectedDisplayRoleType'));
-      expect(source, contains('contentCategory: _selectedContentCategory'));
+      expect(source, isNot(contains('contentCategory')));
       expect(source, contains('serverPost?.displayRoleLabel == null'));
     });
 
     test('Identity application screen is routable from settings', () {
       final routeSource = File('lib/routes/app_routes.dart').readAsStringSync();
-      final generatorSource = File('lib/routes/route_generator.dart').readAsStringSync();
-      final settingsSource = File('lib/screens/profile/settings_screen.dart').readAsStringSync();
-      final screenFile = File('lib/screens/profile/identity_application_screen.dart');
+      final generatorSource =
+          File('lib/routes/route_generator.dart').readAsStringSync();
+      final settingsSource =
+          File('lib/screens/profile/settings_screen.dart').readAsStringSync();
+      final screenFile =
+          File('lib/screens/profile/identity_application_screen.dart');
 
       expect(routeSource, contains('identityApplication'));
       expect(generatorSource, contains('IdentityApplicationScreen'));
@@ -104,7 +116,8 @@ void main() {
 
       final cardSource = File('lib/widgets/post_card.dart').readAsStringSync();
       expect(cardSource, contains("identity_badge.dart"));
-      expect(cardSource, contains('IdentityBadge(label: post.displayRoleLabel'));
+      expect(
+          cardSource, contains('IdentityBadge(label: post.displayRoleLabel'));
     });
   });
 }

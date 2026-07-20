@@ -11,3 +11,4 @@ export 'topic_service.dart';
 export 'upload_service.dart';
 export 'comment_service.dart';
 export 'community_service.dart';
+export 'block_service.dart';

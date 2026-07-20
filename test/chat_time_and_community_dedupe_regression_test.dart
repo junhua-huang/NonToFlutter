@@ -35,35 +35,115 @@ void main() {
       expect(message.createdAt, isNull);
     });
 
-    test('websocket normalization does not replace missing server timestamps with current time', () {
+    test('Message accepts common WebSocket server time aliases', () {
+      final createdAtCamel = Message.fromJson({
+        'id': 1,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'content': 'camel time',
+        'createdAt': '2026-06-26T13:00:00',
+      });
+      final sentAt = Message.fromJson({
+        'id': 2,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'content': 'sent time',
+        'sent_at': '2026-06-26T13:01:00',
+      });
+      final timestamp = Message.fromJson({
+        'id': 3,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'content': 'timestamp time',
+        'timestamp': '2026-06-26T13:02:00Z',
+      });
+
+      expect(createdAtCamel.createdAt,
+          DateTime.parse('2026-06-26T13:00:00Z').toLocal());
+      expect(
+          sentAt.createdAt, DateTime.parse('2026-06-26T13:01:00Z').toLocal());
+      expect(timestamp.createdAt,
+          DateTime.parse('2026-06-26T13:02:00Z').toLocal());
+    });
+
+    test('Message.normalizeJson exposes one canonical created_at field', () {
+      final normalized = Message.normalizeJson({
+        'id': 1,
+        'conversation_id': 2,
+        'sender_id': 3,
+        'createdAt': '2026-06-26T13:00:00',
+        'sent_at': '2026-06-26T13:01:00',
+        'timestamp': '2026-06-26T13:02:00Z',
+      });
+
+      expect(normalized['created_at'], '2026-06-26T13:00:00');
+      expect(normalized.containsKey('createdAt'), isFalse);
+      expect(normalized.containsKey('sent_at'), isFalse);
+      expect(normalized.containsKey('sentAt'), isFalse);
+      expect(normalized.containsKey('timestamp'), isFalse);
+      expect(normalized.containsKey('time'), isFalse);
+    });
+
+    test('websocket normalization preserves server time aliases as created_at',
+        () {
       final source = read('lib/services/websocket_service.dart');
       final newMessageStart = source.indexOf("case 'new_message':");
-      final notifierComment = source.indexOf('// Notifier 需要 event 字段', newMessageStart);
+      final notifierComment =
+          source.indexOf('// Notifier 需要 event 字段', newMessageStart);
       expect(newMessageStart, greaterThanOrEqualTo(0));
       expect(notifierComment, greaterThan(newMessageStart));
-      final newMessageSource = source.substring(newMessageStart, notifierComment);
+      final newMessageSource =
+          source.substring(newMessageStart, notifierComment);
 
-      expect(newMessageSource, isNot(contains('DateTime.now().toIso8601String()')));
+      expect(newMessageSource, contains('Message.normalizeJson(normalized)'));
+      expect(newMessageSource, isNot(contains("normalized['createdAt']")));
+      expect(newMessageSource, isNot(contains("normalized['sent_at']")));
+      expect(newMessageSource, isNot(contains("normalized['sentAt']")));
+      expect(newMessageSource, isNot(contains("normalized['timestamp']")));
+      expect(newMessageSource, isNot(contains("normalized['time']")));
+    });
+
+    test(
+        'websocket normalization does not replace missing server timestamps with current time',
+        () {
+      final source = read('lib/services/websocket_service.dart');
+      final newMessageStart = source.indexOf("case 'new_message':");
+      final notifierComment =
+          source.indexOf('// Notifier 需要 event 字段', newMessageStart);
+      expect(newMessageStart, greaterThanOrEqualTo(0));
+      expect(notifierComment, greaterThan(newMessageStart));
+      final newMessageSource =
+          source.substring(newMessageStart, notifierComment);
+
+      expect(newMessageSource,
+          isNot(contains('DateTime.now().toIso8601String()')));
       expect(newMessageSource, isNot(contains("normalized['created_at'] =")));
     });
   });
 
   group('private chat ordering and optimistic de-duplication', () {
-    test('private chat merges server refresh with pending optimistic messages by client_msg_id', () {
+    test(
+        'private chat merges server refresh with pending optimistic messages by client_msg_id',
+        () {
       final source = read('lib/providers/chat_notifiers.dart');
-      final mergeStart = source.indexOf('final serverIds = serverMessages.map((m) => m.id).toSet();');
-      final persistStart = source.indexOf('await DataLayer().persistMessages(serverMessages);', mergeStart);
+      final mergeStart = source.indexOf(
+          'final serverIds = serverMessages.map((m) => m.id).toSet();');
+      final persistStart = source.indexOf(
+          'await DataLayer().persistMessages(serverMessages);', mergeStart);
       expect(mergeStart, greaterThanOrEqualTo(0));
       expect(persistStart, greaterThan(mergeStart));
       final mergeSource = source.substring(mergeStart, persistStart);
 
       expect(mergeSource, contains('serverClientMsgIds'));
       expect(mergeSource, contains('m.clientMsgId'));
-      expect(mergeSource, contains('!serverClientMsgIds.contains(m.clientMsgId)'));
+      expect(
+          mergeSource, contains('!serverClientMsgIds.contains(m.clientMsgId)'));
       expect(mergeSource, contains('_compareMessagesForTimeline'));
     });
 
-    test('private chat uses a single timeline comparator with seq, createdAt, and id fallback', () {
+    test(
+        'private chat uses a single timeline comparator with seq, createdAt, and id fallback',
+        () {
       final source = read('lib/providers/chat_notifiers.dart');
       final helperStart = source.indexOf('int _compareMessagesForTimeline');
       expect(helperStart, greaterThanOrEqualTo(0));
@@ -74,20 +154,25 @@ void main() {
       );
 
       expect(helperSource, contains('a.seq != null && b.seq != null'));
-      expect(helperSource, contains('a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)'));
+      expect(helperSource,
+          contains('a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)'));
       expect(helperSource, contains('return a.id.compareTo(b.id);'));
     });
 
-    test('private sqlite fallback keeps timeline order instead of reversing twice', () {
+    test(
+        'private sqlite fallback keeps timeline order instead of reversing twice',
+        () {
       final source = read('lib/providers/chat_notifiers.dart');
       final sqliteStart = source.indexOf('// Step 2: SQLite 持久层');
-      final networkStart = source.indexOf('// Step 3: DataLayer 标准缓存', sqliteStart);
+      final networkStart =
+          source.indexOf('// Step 3: DataLayer 标准缓存', sqliteStart);
       expect(sqliteStart, greaterThanOrEqualTo(0));
       expect(networkStart, greaterThan(sqliteStart));
       final sqliteSource = source.substring(sqliteStart, networkStart);
 
       expect(sqliteSource, isNot(contains('localMessages.reversed.toList()')));
-      expect(sqliteSource, contains('localTimeline.sort(_compareMessagesForTimeline)'));
+      expect(sqliteSource,
+          contains('localTimeline.sort(_compareMessagesForTimeline)'));
     });
   });
 
@@ -129,10 +214,14 @@ void main() {
       expect(matchSource, contains('return true;'));
     });
 
-    test('community deduplicates by normalized id when merging and loading history', () {
+    test(
+        'community deduplicates by normalized id when merging and loading history',
+        () {
       final source = read('lib/screens/community/community_chat_screen.dart');
-      final mergeStart = source.indexOf('List<Map<String, dynamic>> _mergeServerMessages');
-      final cacheStart = source.indexOf('Future<void> _writeMessagesCache', mergeStart);
+      final mergeStart =
+          source.indexOf('List<Map<String, dynamic>> _mergeServerMessages');
+      final cacheStart =
+          source.indexOf('Future<void> _writeMessagesCache', mergeStart);
       final loadMoreStart = source.indexOf('Future<void> _loadMoreHistory()');
       final quoteStart = source.indexOf('/// 点击引用预览条', loadMoreStart);
       expect(mergeStart, greaterThanOrEqualTo(0));
@@ -152,7 +241,8 @@ void main() {
     test('community media sends carry stable client message ids', () {
       final source = read('lib/screens/community/community_chat_screen.dart');
       final mediaStart = source.indexOf('Future<void> _sendMediaMessage');
-      final previewStart = source.indexOf('void _syncConversationPreview', mediaStart);
+      final previewStart =
+          source.indexOf('void _syncConversationPreview', mediaStart);
       expect(mediaStart, greaterThanOrEqualTo(0));
       expect(previewStart, greaterThan(mediaStart));
       final mediaSource = source.substring(mediaStart, previewStart);

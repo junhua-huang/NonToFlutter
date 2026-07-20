@@ -4,6 +4,7 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/post_service.dart';
@@ -265,6 +266,16 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     }
   }
 
+  Future<void> _editPost(Post post) async {
+    final updatedPost = await Navigator.push<Post>(
+      context,
+      MaterialPageRoute(builder: (_) => CreatePostScreen(post: post)),
+    );
+    if (updatedPost != null && mounted) {
+      setState(() => _post = updatedPost);
+    }
+  }
+
   /// 删除帖子
   Future<void> _deletePost() async {
     final confirmed = await showDialog<bool>(
@@ -507,6 +518,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       final options = <TwitterSheetOption<String>>[
                         if (isOwner)
                           const TwitterSheetOption(
+                            icon: Icons.edit_outlined,
+                            label: '编辑',
+                            value: 'edit',
+                          ),
+                        if (isOwner)
+                          const TwitterSheetOption(
                               icon: Icons.delete_outline,
                               label: '删除',
                               value: 'delete',
@@ -518,7 +535,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       ];
                       final action = await TwitterBottomSheet.show<String>(ctx,
                           options: options);
-                      if (action == 'delete') {
+                      if (action == 'edit') {
+                        _editPost(post);
+                      } else if (action == 'delete') {
                         _deletePost();
                       } else if (action == 'report') {
                         _reportPost();

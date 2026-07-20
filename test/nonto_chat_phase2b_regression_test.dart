@@ -46,12 +46,12 @@ void main() {
       expect(source, isNot(contains('0xFF1E2732')));
     });
 
-    test('composer uses animated keyed send and sending states', () {
+    test('composer uses animated keyed send and empty states', () {
       final source =
           File('lib/screens/chat/chat_room_screen.dart').readAsStringSync();
 
       expect(source, contains('AnimatedSwitcher'));
-      expect(source, contains("ValueKey('chat-send-progress')"));
+      expect(source, contains("ValueKey('chat-send-empty')"));
       expect(source, contains("ValueKey('chat-send-button')"));
     });
   });

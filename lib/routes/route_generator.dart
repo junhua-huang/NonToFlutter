@@ -12,6 +12,7 @@ import 'package:nonto/screens/comic/comic_timeline_page.dart';
 import 'package:nonto/screens/comic/comic_upload_page.dart';
 import 'package:nonto/screens/friends/friends_screen.dart';
 import 'package:nonto/screens/home/home_screen.dart';
+import 'package:nonto/screens/notifications/notifications_tab.dart';
 import 'package:nonto/screens/community/community_list_screen.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/screens/community/community_create_screen.dart';
@@ -19,6 +20,7 @@ import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/screens/profile/blocked_users_screen.dart';
 import 'package:nonto/screens/profile/edit_profile_screen.dart';
 import 'package:nonto/screens/profile/identity_application_screen.dart';
 import 'package:nonto/screens/profile/open_source_screen.dart';
@@ -50,11 +52,11 @@ class RouteGenerator {
       case AppRoutes.profile:
         return _authGuard(builder: (_) => const HomeScreen(initialTab: 3));
       case AppRoutes.chat:
-        return _authGuard(builder: (_) => const HomeScreen(initialTab: 1));
-      case AppRoutes.notifications:
         return _authGuard(builder: (_) => const HomeScreen(initialTab: 2));
+      case AppRoutes.notifications:
+        return _authGuard(builder: (_) => const NotificationsTab());
       case AppRoutes.search:
-        return _authGuard(builder: (_) => const HomeScreen(initialTab: 4));
+        return _authGuard(builder: (_) => const HomeScreen(initialTab: 1));
       case AppRoutes.friends:
         return _authGuard(builder: (_) => const FriendsScreen());
       case AppRoutes.createPost:
@@ -71,6 +73,8 @@ class RouteGenerator {
         return _authGuard(builder: (_) => const IdentityApplicationScreen());
       case AppRoutes.settings:
         return _authGuard(builder: (_) => const SettingsScreen());
+      case AppRoutes.blockedUsers:
+        return _authGuard(builder: (_) => const BlockedUsersScreen());
       case AppRoutes.forgotPassword:
         return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
       case AppRoutes.privacyPolicy:
@@ -111,8 +115,8 @@ class RouteGenerator {
       }
 
       if (segments.length == 2 && segments[0] == 'chat') {
-        // 极光推送点击跳转：/chat/:id 打开指定会话。
-        // 先进入 HomeScreen(initialTab:1) 保证底部导航回退栈正确，
+        // 通知点击跳转：/chat/:id 打开指定会话。
+        // 先进入 HomeScreen(initialTab:2) 保证底部导航回退栈正确，
         // 再用 postFrame 推入 ChatRoomScreen。
         // 用 stub Conversation（仅 id）—— ChatRoomScreen 会通过 messagesProvider
         // 加载该会话的真实数据；otherUser 为 null 时顶栏显示「聊天」占位。
@@ -202,7 +206,7 @@ class RouteGenerator {
   }
 }
 
-/// 极光推送点击「私信」通知后的落地页：先建好 HomeScreen（消息 Tab）回退栈，
+/// 点击「私信」通知后的落地页：先建好 HomeScreen（消息 Tab）回退栈，
 /// 首帧后推入 ChatRoomScreen。
 /// convId 为空时只进入消息 Tab（兼容旧调用）。
 class _ChatDeepLinkScreen extends StatefulWidget {
@@ -235,6 +239,6 @@ class _ChatDeepLinkScreenState extends State<_ChatDeepLinkScreen> {
         ));
       });
     }
-    return const HomeScreen(initialTab: 1);
+    return const HomeScreen(initialTab: 2);
   }
 }

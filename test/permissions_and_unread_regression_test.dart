@@ -21,22 +21,28 @@ void main() {
       expect(pubspec, isNot(contains('permission_handler:')));
     });
 
-    test('push notification permission is requested from the home shell once',
+    test('vendor push and notification test support start from app bootstrap',
         () {
-      final push = read('lib/services/push_service.dart');
+      final main = read('lib/main.dart');
       final home = read('lib/screens/home/home_screen.dart');
+      final localNotification =
+          read('lib/services/local_notification_service.dart');
 
-      expect(push, contains('bool _permissionRequested = false;'));
+      expect(main, contains('LocalNotificationService().init()'));
+      expect(main, contains('AliyunPushService().init()'));
+      expect(main, contains('AppLifecycleKeepAliveService().start()'));
+      final compactMain = main.replaceAll(RegExp(r'\s+'), ' ');
       expect(
-          push,
-          contains(
-              'if (!_supported || !_initialized || _permissionRequested) return;'));
-      expect(push, contains('_permissionRequested = true;'));
-      expect(push, contains('_jpush.requestRequiredPermission();'));
-      expect(
-          home, contains("import 'package:nonto/services/push_service.dart';"));
-      expect(home, contains('addPostFrameCallback'));
-      expect(home, contains('PushService().requestPermission()'));
+        compactMain,
+        contains('notification permission and explicit diagnostic test'),
+      );
+      expect(compactMain, contains('foreground-only Flutter WebSocket'));
+      expect(localNotification, contains('requestNotificationsPermission'));
+      expect(localNotification, contains('showTestNotification'));
+      expect(localNotification, isNot(contains('showMessageNotification')));
+      expect(localNotification, isNot(contains('showInteractionNotification')));
+      expect(home, isNot(contains("services/push_service.dart")));
+      expect(home, isNot(contains('PushService().requestPermission()')));
     });
 
     test('picker failures show user-facing permission guidance', () {
@@ -73,16 +79,24 @@ void main() {
     test('cached notification pages derive unread count from local list', () {
       final notifier = read('lib/providers/notifications_notifier.dart');
 
-      expect(notifier, contains('final mergedNotifications = refresh'));
-      expect(notifier, contains('final localUnread ='));
-      expect(notifier,
-          contains('mergedNotifications.where((n) => !n.isRead).length'));
-      expect(notifier,
-          contains('final unreadCount = serverUnread ?? localUnread;'));
+      final compact = notifier.replaceAll(RegExp(r'\s+'), '');
       expect(
-          notifier,
-          isNot(contains(
-              'final unreadCount = serverUnread ?? state.unreadCount;')));
+        compact,
+        contains(
+          'finalmergedNotifications=refresh?list:[...state.notifications,...list];',
+        ),
+      );
+      expect(
+        compact,
+        contains(
+          'finallocalUnread=mergedNotifications.where((n)=>!n.isRead).length;',
+        ),
+      );
+      expect(compact, contains('finalunreadCount=serverUnread??localUnread;'));
+      expect(
+        compact,
+        isNot(contains('finalunreadCount=serverUnread??state.unreadCount;')),
+      );
     });
 
     test('notifications tab refreshes stale unread badges without unread rows',
@@ -94,49 +108,95 @@ void main() {
       expect(tab, contains('loadNotifications(refresh: true)'));
     });
 
-    test('push service reports app foreground and background state', () {
-      final push = read('lib/services/push_service.dart');
-      final home = read('lib/screens/home/home_screen.dart');
+    test('notification deep links land on the correct home tabs', () {
+      final routes = read('lib/routes/route_generator.dart');
 
-      expect(push, contains('Future<void> reportAppState(String appState)'));
-      expect(push, contains("'/push/device-state'"));
-      expect(push, contains("'registration_id': registrationId"));
-      expect(push, contains("'app_state': appState"));
-      expect(push, contains('String? _lastReportedAppState;'));
-      expect(push, contains('if (_lastReportedAppState == appState) return;'));
-      expect(home, contains("PushService().reportAppState('foreground')"));
-      expect(home, contains("PushService().reportAppState('background')"));
+      expect(routes, contains('case AppRoutes.chat:'));
+      expect(
+          routes,
+          contains(
+              'return _authGuard(builder: (_) => const HomeScreen(initialTab: 2));'));
+      expect(routes, contains('case AppRoutes.notifications:'));
+      expect(
+          routes,
+          contains(
+              'return _authGuard(builder: (_) => const NotificationsTab());'));
+      expect(routes, contains('case AppRoutes.search:'));
+      expect(
+          routes,
+          contains(
+              'return _authGuard(builder: (_) => const HomeScreen(initialTab: 1));'));
+      expect(routes, contains('return const HomeScreen(initialTab: 2);'));
     });
 
-    test(
-        'Huawei push channel app id is injected from Gradle property or environment',
+    test('lifecycle keeps Flutter WebSocket foreground-only', () {
+      final home = read('lib/screens/home/home_screen.dart');
+      final lifecycle =
+          read('lib/services/app_lifecycle_keepalive_service.dart');
+
+      expect(home, isNot(contains('PushService().reportAppState')));
+      expect(lifecycle, contains('foreground-only Flutter WebSocket'));
+      expect(lifecycle, contains('_setAppForeground(foreground)'));
+      expect(lifecycle, contains('await _forceReconnect()'));
+      expect(lifecycle, contains('await _disconnect()'));
+      expect(
+          lifecycle, contains('AliyunPushService().updateBackendDeviceState'));
+      expect(lifecycle, isNot(contains('ForegroundServiceManager')));
+      expect(lifecycle, isNot(contains('startMessageKeepAlive')));
+      expect(lifecycle, isNot(contains('native_ws_')));
+    });
+
+    test('Android vendor push wiring uses Aliyun without legacy vendor files',
         () {
       final manifest = read('android/app/src/main/AndroidManifest.xml');
       final gradle = read('android/app/build.gradle.kts');
+      final rootGradle = read('android/build.gradle.kts');
+      final pubspec = read('pubspec.yaml');
 
-      expect(manifest, contains('com.huawei.hms.client.appid'));
-      expect(manifest, contains('\${HUAWEI_APPID}'));
-      expect(gradle, contains('gradleProperty("HUAWEI_APPID")'));
-      expect(gradle, contains('environmentVariable("HUAWEI_APPID")'));
-      expect(gradle,
-          contains('manifestPlaceholders["HUAWEI_APPID"] = huaweiAppId'));
+      expect(pubspec, contains('aliyun_push_flutter:'));
       expect(
-          gradle, isNot(contains('manifestPlaceholders["HUAWEI_APPID"] = ""')));
+          rootGradle,
+          contains(
+              'https://maven.aliyun.com/nexus/content/repositories/releases/'));
+      expect(rootGradle, contains('https://developer.huawei.com/repo/'));
+      expect(manifest, contains('com.alibaba.app.appkey'));
+      expect(manifest, contains('com.alibaba.app.appsecret'));
+      expect(manifest, contains('.NontoAliyunPushMessageReceiver'));
+      expect(manifest, contains('com.aliyun.ams.push.PushPopupActivity'));
+      expect(manifest, contains('com.alibaba.sdk.android.push.RECEIVE'));
+      expect(manifest, contains('com.huawei.hms.client.appid'));
+      expect(manifest, contains('com.oppo.push.key'));
+      expect(manifest, contains('com.vivo.push.app_id'));
+      expect(gradle, contains('aliyunPushProperty("aliyun.push.appKey")'));
+      expect(gradle, contains('"ALIYUN_PUSH_APP_KEY" to aliyunPushAppKey'));
+      expect(gradle, contains('"HUAWEI_PUSH_APP_ID" to'));
+      expect(gradle, contains(r'appid=$huaweiPushAppId'));
+      expect(manifest, isNot(contains('JPUSH_')));
+      expect(gradle, isNot(contains('manifestPlaceholders["HUAWEI_APPID"]')));
+      expect(gradle, isNot(contains('apply(plugin = "com.huawei.agconnect")')));
+      expect(
+          gradle,
+          isNot(contains(
+              'implementation("com.huawei.agconnect:agconnect-core:')));
     });
 
-    test('push registration upload has bounded retry state', () {
-      final push = read('lib/services/push_service.dart');
+    test(
+        'settings expose vendor notification guidance without keepalive claims',
+        () {
+      final settings = read('lib/screens/profile/settings_screen.dart');
+      final guide =
+          read('lib/screens/profile/background_permission_guide_screen.dart');
 
-      expect(push, contains('bool _registerRetryScheduled = false;'));
-      expect(
-          push, contains('static const List<Duration> _registerRetryDelays'));
-      expect(push, contains('Future<bool> _uploadRegistrationId()'));
-      expect(push, contains('_scheduleRegisterRetry()'));
-      expect(push, contains('Timer? _registerRetryTimer;'));
-      expect(push, contains('_registerRetryTimer?.cancel();'));
-      expect(push, contains('Duration(seconds: 5)'));
-      expect(push, contains('Duration(seconds: 15)'));
-      expect(push, contains('Duration(seconds: 60)'));
+      expect(settings, contains('厂商推送通知设置'));
+      expect(settings, contains('影响后台和应用被结束后的厂商推送送达'));
+      expect(settings, isNot(contains('foreground_keepalive_enabled')));
+      expect(settings, isNot(contains('后台消息保活')));
+      expect(settings, isNot(contains('_keepaliveEnabled')));
+      expect(guide, contains('厂商推送'));
+      expect(guide, contains('不用于维持 WebSocket 连接'));
+      expect(guide, isNot(contains('关闭电池优化')));
+      expect(guide, isNot(contains('后台 WebSocket')));
+      expect(guide, isNot(contains('保持 WebSocket')));
     });
   });
 }
