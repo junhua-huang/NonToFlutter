@@ -3,6 +3,8 @@
 /// 所有消息遵循统一信封：{type, request_id?, seq?, payload:{...}}
 library;
 
+import '../models/send_failure.dart';
+
 /// WebSocket 消息类型枚举
 enum MessageType {
   // ---- 客户端 → 服务端 ----
@@ -122,10 +124,15 @@ class ProtocolFrame {
         return {
           if (json.containsKey('client_msg_id'))
             'client_msg_id': json['client_msg_id'],
+          if (json.containsKey('clientMsgId'))
+            'clientMsgId': json['clientMsgId'],
           if (json.containsKey('server_seq')) 'server_seq': json['server_seq'],
           if (json.containsKey('message_id')) 'message_id': json['message_id'],
           if (json.containsKey('status')) 'status': json['status'],
+          if (json.containsKey('code')) 'code': json['code'],
+          if (json.containsKey('retryable')) 'retryable': json['retryable'],
           if (json.containsKey('msg')) 'msg': json['msg'],
+          if (json.containsKey('message')) 'message': json['message'],
         };
       case MessageType.error:
         return {
@@ -173,17 +180,50 @@ class ProtocolFrame {
           as String?)
       : null;
 
-  /// ack: payload.client_msg_id
-  String? get ackClientMsgId =>
-      payload is Map ? payload!['client_msg_id'] as String? : null;
+  Object? _ackValue(String key) => payload?[key] ?? rawJson?[key];
+
+  int? _readInt(Object? value) {
+    if (value is int) return value;
+    return int.tryParse('$value');
+  }
+
+  /// ack: payload.client_msg_id / clientMsgId
+  String? get ackClientMsgId {
+    final value = _ackValue('client_msg_id') ?? _ackValue('clientMsgId');
+    return value?.toString();
+  }
+
+  /// ack: payload.status
+  int get ackStatus => _readInt(_ackValue('status')) ?? 200;
+
+  /// ack: payload.code
+  String? get ackCode => _ackValue('code')?.toString();
+
+  /// ack: payload.retryable
+  bool? get ackRetryable {
+    final value = _ackValue('retryable');
+    return value is bool ? value : null;
+  }
 
   /// ack: payload.message_id
-  int? get ackMessageId =>
-      payload is Map ? payload!['message_id'] as int? : null;
+  int? get ackMessageId => _readInt(_ackValue('message_id'));
 
   /// ack: payload.server_seq
-  int? get ackServerSeq =>
-      payload is Map ? payload!['server_seq'] as int? : null;
+  int? get ackServerSeq => _readInt(_ackValue('server_seq'));
+
+  /// ack: non-200 status as terminal send failure
+  SendFailure? get ackFailure {
+    final clientMsgId = ackClientMsgId;
+    if (clientMsgId == null || ackStatus == 200) return null;
+    final message = (_ackValue('msg') ?? _ackValue('message'))?.toString();
+    return SendFailure(
+      clientMsgId: clientMsgId,
+      status: ackStatus,
+      code: ackCode,
+      retryable: ackRetryable ?? false,
+      message: message?.trim().isNotEmpty == true ? message! : '发送失败',
+    );
+  }
 
   /// sync_result: payload.list
   List<dynamic>? get syncList =>

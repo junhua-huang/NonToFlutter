@@ -24,6 +24,7 @@ import 'package:logging/logging.dart';
 import 'connection/connection_manager.dart';
 import 'database/database.dart';
 import 'models/connection_state.dart';
+import 'models/send_failure.dart';
 import 'outbox/outbox_manager.dart';
 import 'protocol/codec.dart';
 import 'protocol/message.dart';
@@ -44,7 +45,7 @@ typedef ConnectionStateHandler = void Function(ConnectionState state);
 typedef MessageSentHandler = void Function(String clientMsgId);
 
 /// 消息发送失败回调
-typedef MessageFailedHandler = void Function(String clientMsgId, String error);
+typedef MessageFailedHandler = void Function(SendFailure failure);
 
 /// 服务端错误回调
 typedef ErrorHandler = void Function(String message, String? clientMsgId);
@@ -438,12 +439,19 @@ class ReliableWebSocketClient {
 
   /// 处理 ACK 确认（v1.0: 读 payload.client_msg_id / payload.message_id）
   Future<void> _onAck(ProtocolFrame frame) async {
+    final failure = frame.ackFailure;
+    if (failure != null) {
+      await _sender.onFailedAck(failure);
+      return;
+    }
+
     final clientMsgId = frame.ackClientMsgId;
+    var settled = false;
     if (clientMsgId != null) {
-      await _sender.onAck(clientMsgId);
+      settled = await _sender.onAck(clientMsgId);
     }
     final msgId = frame.ackMessageId;
-    if (msgId != null && clientMsgId != null) {
+    if (settled && msgId != null && clientMsgId != null) {
       _config.onAckMessageId?.call(clientMsgId, msgId);
     }
   }

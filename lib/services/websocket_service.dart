@@ -44,7 +44,7 @@ class WebSocketClientCallbacks {
 
   final void Function(Map<String, dynamic> payload, int seq)? onMessage;
   final void Function(String clientMsgId, int messageId)? onAckMessageId;
-  final void Function(String clientMsgId, String error)? onMessageFailed;
+  final void Function(SendFailure failure)? onMessageFailed;
   final void Function(ConnectionState state)? onConnectionStateChange;
   final void Function(String message, String? clientMsgId)? onError;
   final void Function(String? error)? onAuthFailed;
@@ -362,9 +362,9 @@ class WebSocketConnectionCoordinator {
           _callbacks.onAckMessageId?.call(clientMsgId, messageId);
         }
       },
-      onMessageFailed: (clientMsgId, error) {
+      onMessageFailed: (failure) {
         if (acceptsInboundData()) {
-          _callbacks.onMessageFailed?.call(clientMsgId, error);
+          _callbacks.onMessageFailed?.call(failure);
         }
       },
       onConnectionStateChange: (state) {
@@ -599,15 +599,19 @@ class WebSocketService {
           'message_id': messageId,
         });
       },
-      onMessageFailed: (clientMsgId, error) {
+      onMessageFailed: (failure) {
         if (_isDisposed) return;
         debugPrint(
           '[WS] reliable send failed '
-          '(clientMsgId=$clientMsgId, exception_type=SendFailure)',
+          '(clientMsgId=${failure.clientMsgId}, status=${failure.status}, '
+          'code=${failure.code ?? 'none'})',
         );
         _sendErrorController.add({
-          'clientMsgId': clientMsgId,
-          'error': error,
+          'clientMsgId': failure.clientMsgId,
+          'error': failure.message,
+          'status': failure.status,
+          'code': failure.code,
+          'retryable': failure.retryable,
         });
       },
       onConnectionStateChange: _onConnectionStateChange,

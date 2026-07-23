@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/websocket_service.dart';
+import 'package:reliable_websocket/reliable_websocket.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeWebSocketClient implements WebSocketClientAdapter {
@@ -34,7 +35,15 @@ class _FakeWebSocketClient implements WebSocketClientAdapter {
   }
 
   void emitSendError(String clientMsgId, String error) {
-    callbacks.onMessageFailed?.call(clientMsgId, error);
+    callbacks.onMessageFailed?.call(
+      SendFailure(
+        clientMsgId: clientMsgId,
+        status: 0,
+        code: 'TEST_FAILURE',
+        retryable: false,
+        message: error,
+      ),
+    );
   }
 
   @override
@@ -145,11 +154,9 @@ void main() {
     );
     expect(
       await sendError,
-      <String, dynamic>{
-        'clientMsgId': 'client-2',
-        'error': 'delivery failed',
-      },
+      containsPair('clientMsgId', 'client-2'),
     );
+    expect(await sendError, containsPair('error', 'delivery failed'));
     expect(fixture.notificationSounds, 0);
     expect(fixture.onlineSounds, 0);
     expect(fixture.lightImpacts, 0);

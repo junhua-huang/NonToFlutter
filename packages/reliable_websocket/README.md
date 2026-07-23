@@ -50,8 +50,8 @@ final client = ReliableWebSocketClient(
   onMessageSent: (clientMsgId) {
     print('消息已发送: $clientMsgId');
   },
-  onMessageFailed: (clientMsgId, error) {
-    print('发送失败: $clientMsgId - $error');
+  onMessageFailed: (failure) {
+    print('发送失败: ${failure.clientMsgId} - ${failure.message}');
   },
   onAuthFailed: (error) {
     print('认证失败: $error');
@@ -84,7 +84,7 @@ ReliableWebSocketClient(
 
   // 可选回调
   onMessageSent: (id) {},           // 消息确认送达
-  onMessageFailed: (id, err) {},    // 消息最终失败
+  onMessageFailed: (failure) {},    // 消息最终失败
   onAuthFailed: (err) {},           // 认证失败
 
   // 超时控制（以下均为默认值）

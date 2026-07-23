@@ -11,6 +11,7 @@ import 'package:logging/logging.dart';
 import 'package:uuid/uuid.dart';
 
 import '../connection/connection_manager.dart';
+import '../models/send_failure.dart';
 import '../outbox/outbox_manager.dart';
 import '../protocol/codec.dart';
 
@@ -27,7 +28,7 @@ enum SendResult {
 typedef OnMessageSent = void Function(String clientMsgId);
 
 /// 发送失败回调
-typedef OnMessageFailed = void Function(String clientMsgId, String error);
+typedef OnMessageFailed = void Function(SendFailure failure);
 
 /// 可靠发送器
 ///
@@ -128,7 +129,8 @@ class ReliableSender {
   ) async {
     // 检查连接状态
     if (!_connection.isConnected) {
-      _log.info('ACK timeout for $clientMsgId but not connected, will retry on reconnect');
+      _log.info(
+          'ACK timeout for $clientMsgId but not connected, will retry on reconnect');
       return;
     }
 
@@ -137,15 +139,17 @@ class ReliableSender {
 
     if (currentRetry >= maxRetries) {
       // 超过最大重试，标记失败
-      await _outbox.markFailed(clientMsgId);
+      final settled = await _outbox.markPendingFailed(clientMsgId);
+      if (!settled) return;
       _ackTimers.remove(clientMsgId);
       _log.warning('Max retries exceeded: $clientMsgId');
-      _onFailed?.call(clientMsgId, 'Max retries exceeded');
+      _onFailed?.call(_maxRetriesFailure(clientMsgId, 'Max retries exceeded'));
       return;
     }
 
     // 增加重试计数
-    final newCount = await _outbox.incrementRetry(clientMsgId);
+    final newCount = await _outbox.incrementPendingRetry(clientMsgId);
+    if (newCount == null) return;
     _log.info('Retry $clientMsgId (attempt $newCount)');
 
     // 重新发送
@@ -157,13 +161,40 @@ class ReliableSender {
   }
 
   /// 收到 ACK 确认
-  Future<void> onAck(String clientMsgId) async {
+  Future<bool> onAck(String clientMsgId) async {
     _ackTimers[clientMsgId]?.cancel();
     _ackTimers.remove(clientMsgId);
 
-    await _outbox.markAcked(clientMsgId);
+    final settled = await _outbox.markPendingAcked(clientMsgId);
+    if (!settled) return false;
     _log.fine('Acked: $clientMsgId');
     _onSent?.call(clientMsgId);
+    return true;
+  }
+
+  /// 收到服务端终态失败 ACK
+  Future<void> onFailedAck(SendFailure failure) async {
+    _ackTimers[failure.clientMsgId]?.cancel();
+    _ackTimers.remove(failure.clientMsgId);
+
+    final settled = await _outbox.markPendingFailed(failure.clientMsgId);
+    if (!settled) return;
+
+    _log.warning(
+      'Failed ACK settled: ${failure.clientMsgId} '
+      'status=${failure.status} code=${failure.code ?? 'none'}',
+    );
+    _onFailed?.call(failure);
+  }
+
+  SendFailure _maxRetriesFailure(String clientMsgId, String message) {
+    return SendFailure(
+      clientMsgId: clientMsgId,
+      status: 0,
+      code: 'MAX_RETRIES_EXCEEDED',
+      retryable: false,
+      message: message,
+    );
   }
 
   /// 重连后重发所有 pending 消息
@@ -178,7 +209,12 @@ class ReliableSender {
     for (final item in pending) {
       if (item.retryCount >= maxRetries) {
         await _outbox.markFailed(item.clientMsgId);
-        _onFailed?.call(item.clientMsgId, 'Max retries exceeded on reconnect');
+        _onFailed?.call(
+          _maxRetriesFailure(
+            item.clientMsgId,
+            'Max retries exceeded on reconnect',
+          ),
+        );
         continue;
       }
 

@@ -68,7 +68,15 @@ class _FakeWebSocketClient implements WebSocketClientAdapter {
   }
 
   void emitSendError(String clientMsgId, String error) {
-    callbacks.onMessageFailed?.call(clientMsgId, error);
+    callbacks.onMessageFailed?.call(
+      SendFailure(
+        clientMsgId: clientMsgId,
+        status: 0,
+        code: 'TEST_FAILURE',
+        retryable: false,
+        message: error,
+      ),
+    );
   }
 
   void emitError(String message, String? clientMsgId) {
@@ -148,8 +156,11 @@ void main() {
             'messageId': messageId,
           },
         ),
-        onMessageFailed: (clientMsgId, error) => sendErrors.add(
-          <String, String>{'clientMsgId': clientMsgId, 'error': error},
+        onMessageFailed: (failure) => sendErrors.add(
+          <String, String>{
+            'clientMsgId': failure.clientMsgId,
+            'error': failure.message,
+          },
         ),
         onConnectionStateChange: states.add,
         onError: (message, clientMsgId) => errors.add(
