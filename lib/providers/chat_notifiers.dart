@@ -1851,12 +1851,18 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _syncL1();
   }
 
-  void _onQueueFailed(int optimisticMsgId, String reason) {
+  void _onQueueFailed(int optimisticMsgId, ChatSendFailure failure) {
     if (!mounted) return;
     final idx = state.messages.indexWhere((m) => m.id == optimisticMsgId);
     if (idx < 0) return;
     final updated = List<Message>.from(state.messages);
-    updated[idx] = updated[idx].copyWith(status: 'failed');
+    updated[idx] = updated[idx].copyWith(
+      clientMsgId: failure.clientMsgId.isNotEmpty ? failure.clientMsgId : null,
+      status: 'failed',
+      failureCode: failure.code,
+      failureMessage: failure.message,
+      failureRetryable: failure.retryable,
+    );
     state = state.copyWith(messages: updated, isSending: false);
     DataLayer().persistMessage(updated[idx]);
     _syncL1();
@@ -1955,14 +1961,13 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     debugPrint('[Chat] websocket notice: $error');
   }
 
-  void _onSendError(Map<String, dynamic> data) {
+  void _onSendError(ChatSendFailure failure) {
     if (!mounted) return;
-    final clientMsgId = data['clientMsgId'] as String?;
-    final error = data['error'] as String? ?? '未知错误';
-    if (clientMsgId == null) return;
+    final clientMsgId = failure.clientMsgId;
+    if (clientMsgId.isEmpty) return;
 
     // 通知 ChatSendQueue 立即标记该消息为失败
-    if (_sendQueue.handleSendError(clientMsgId, error)) {
+    if (_sendQueue.handleSendFailure(failure)) {
       return;
     }
 
@@ -1970,7 +1975,12 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final idx = state.messages.indexWhere((m) => m.clientMsgId == clientMsgId);
     if (idx >= 0) {
       final updated = List<Message>.from(state.messages);
-      updated[idx] = updated[idx].copyWith(status: 'failed');
+      updated[idx] = updated[idx].copyWith(
+        status: 'failed',
+        failureCode: failure.code,
+        failureMessage: failure.message,
+        failureRetryable: failure.retryable,
+      );
       state = state.copyWith(messages: updated, isSending: false);
       DataLayer().persistMessage(updated[idx]);
     }

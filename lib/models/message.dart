@@ -28,6 +28,17 @@ class Message {
   /// 本地上传进度：0.0 - 1.0，仅用于上传中的乐观消息
   final double? uploadProgress;
 
+  /// 发送失败的稳定错误码（如 CONTENT_REJECTED / MODERATION_UNAVAILABLE）
+  String? failureCode;
+
+  /// 发送失败的安全用户提示
+  String? failureMessage;
+
+  /// 失败消息是否允许用户手动重试
+  bool? failureRetryable;
+
+  bool get canRetry => status == 'failed' && failureRetryable == true;
+
   /// 引用的消息 ID
   final int? quoteMessageId;
 
@@ -55,6 +66,9 @@ class Message {
     this.seq,
     this.status = 'sent',
     this.uploadProgress,
+    this.failureCode,
+    this.failureMessage,
+    this.failureRetryable,
     this.quoteMessageId,
     this.quotePreview,
     this.isRecalled = false,
@@ -81,6 +95,11 @@ class Message {
       uploadProgress: data['upload_progress'] is num
           ? (data['upload_progress'] as num).toDouble()
           : double.tryParse(data['upload_progress']?.toString() ?? ''),
+      failureCode: data['failure_code']?.toString(),
+      failureMessage: data['failure_message']?.toString(),
+      failureRetryable: data['failure_retryable'] is bool
+          ? data['failure_retryable'] as bool
+          : null,
       quoteMessageId: data['quote_message_id'] != null
           ? _p(data['quote_message_id'])
           : (data['related_type'] == 'quote' && data['related_id'] != null
@@ -161,6 +180,9 @@ class Message {
         'seq': seq,
         'status': status,
         if (uploadProgress != null) 'upload_progress': uploadProgress,
+        if (failureCode != null) 'failure_code': failureCode,
+        if (failureMessage != null) 'failure_message': failureMessage,
+        if (failureRetryable != null) 'failure_retryable': failureRetryable,
         if (quoteMessageId != null) 'quote_message_id': quoteMessageId,
         if (quotePreview != null) 'quote_preview': quotePreview,
         'is_recalled': isRecalled,
@@ -181,6 +203,9 @@ class Message {
     int? seq,
     String? status,
     double? uploadProgress,
+    String? failureCode,
+    String? failureMessage,
+    bool? failureRetryable,
     int? quoteMessageId,
     String? quotePreview,
     bool? isRecalled,
@@ -202,6 +227,9 @@ class Message {
         seq: seq ?? this.seq,
         status: status ?? this.status,
         uploadProgress: uploadProgress ?? this.uploadProgress,
+        failureCode: failureCode ?? this.failureCode,
+        failureMessage: failureMessage ?? this.failureMessage,
+        failureRetryable: failureRetryable ?? this.failureRetryable,
         quoteMessageId: quoteMessageId ?? this.quoteMessageId,
         quotePreview: quotePreview ?? this.quotePreview,
         isRecalled: isRecalled ?? this.isRecalled,

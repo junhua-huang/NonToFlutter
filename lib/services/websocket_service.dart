@@ -24,6 +24,29 @@ typedef WebSocketConnectionCoordinatorFactory = WebSocketConnectionCoordinator
   WebSocketClientCallbacks callbacks,
 );
 
+class ChatSendFailure {
+  final String clientMsgId;
+  final String code;
+  final String message;
+  final bool retryable;
+
+  const ChatSendFailure({
+    required this.clientMsgId,
+    required this.code,
+    required this.message,
+    required this.retryable,
+  });
+
+  factory ChatSendFailure.fromReliable(SendFailure failure) {
+    return ChatSendFailure(
+      clientMsgId: failure.clientMsgId,
+      code: failure.code ?? 'SEND_FAILED',
+      message: failure.message.trim().isNotEmpty ? failure.message : '发送失败',
+      retryable: failure.retryable,
+    );
+  }
+}
+
 abstract interface class WebSocketClientAdapter {
   Future<void> connect();
   Future<void> disconnect();
@@ -606,13 +629,7 @@ class WebSocketService {
           '(clientMsgId=${failure.clientMsgId}, status=${failure.status}, '
           'code=${failure.code ?? 'none'})',
         );
-        _sendErrorController.add({
-          'clientMsgId': failure.clientMsgId,
-          'error': failure.message,
-          'status': failure.status,
-          'code': failure.code,
-          'retryable': failure.retryable,
-        });
+        _sendErrorController.add(ChatSendFailure.fromReliable(failure));
       },
       onConnectionStateChange: _onConnectionStateChange,
       onError: (message, clientMsgId) {
@@ -622,10 +639,12 @@ class WebSocketService {
           '(clientMsgId=$clientMsgId, exception_type=ServerError)',
         );
         if (clientMsgId != null && clientMsgId.isNotEmpty) {
-          _sendErrorController.add({
-            'clientMsgId': clientMsgId,
-            'error': message,
-          });
+          _sendErrorController.add(ChatSendFailure(
+            clientMsgId: clientMsgId,
+            code: 'SEND_FAILED',
+            message: message.trim().isNotEmpty ? message : '发送失败',
+            retryable: false,
+          ));
         }
       },
       onAuthFailed: (error) {
@@ -687,8 +706,7 @@ class WebSocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   final _ackMessageIdController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final _sendErrorController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  final _sendErrorController = StreamController<ChatSendFailure>.broadcast();
 
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get notificationStream =>
@@ -723,8 +741,7 @@ class WebSocketService {
       _ackMessageIdController.stream;
 
   /// 发送错误流（携带 clientMsgId，用于 ChatSendQueue 匹配失败消息）
-  Stream<Map<String, dynamic>> get sendErrorStream =>
-      _sendErrorController.stream;
+  Stream<ChatSendFailure> get sendErrorStream => _sendErrorController.stream;
 
   bool get isConnected => _isConnected;
 

@@ -152,11 +152,9 @@ void main() {
       await ack,
       <String, dynamic>{'clientMsgId': 'client-1', 'message_id': 404},
     );
-    expect(
-      await sendError,
-      containsPair('clientMsgId', 'client-2'),
-    );
-    expect(await sendError, containsPair('error', 'delivery failed'));
+    final failure = await sendError;
+    expect(failure.clientMsgId, 'client-2');
+    expect(failure.message, 'delivery failed');
     expect(fixture.notificationSounds, 0);
     expect(fixture.onlineSounds, 0);
     expect(fixture.lightImpacts, 0);
@@ -171,7 +169,7 @@ void main() {
     final staleClient = fixture.client;
     final messages = <Map<String, dynamic>>[];
     final acknowledgements = <Map<String, dynamic>>[];
-    final sendErrors = <Map<String, dynamic>>[];
+    final sendErrors = <ChatSendFailure>[];
     fixture.service.messageStream.listen(messages.add);
     fixture.service.ackMessageIdStream.listen(acknowledgements.add);
     fixture.service.sendErrorStream.listen(sendErrors.add);
