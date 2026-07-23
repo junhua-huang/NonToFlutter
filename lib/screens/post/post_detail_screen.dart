@@ -9,6 +9,7 @@ import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/report_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
@@ -112,8 +113,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         });
         // 记录浏览
         try {
-          await PostService().recordView(widget.postId);
-          if (mounted) {
+          final resp = await PostService().recordView(widget.postId);
+          if (resp.success && mounted) {
             setState(() {
               _post = _post!.copyWith(viewCount: _post!.viewCount + 1);
             });
@@ -149,25 +150,55 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     }
 
     _isLikingPost = true;
+    final postId = _post!.id;
     final wasLiked = _post!.isLiked ?? false;
-    final oldPost = _post!;
+    final likeDelta = wasLiked ? -1 : 1;
 
-    setState(() {
-      _post = _post!.copyWith(
-        isLiked: !wasLiked,
-        likeCount: wasLiked ? _post!.likeCount - 1 : _post!.likeCount + 1,
-      );
-    });
-    try {
-      if (wasLiked) {
-        await PostService().unlikePost(_post!.id);
-      } else {
-        await PostService().likePost(_post!.id);
+    void apply(bool isLiked, int delta, {bool? onlyIfLiked}) {
+      final current = _post;
+      if (current == null || current.id != postId) return;
+      if (onlyIfLiked != null && (current.isLiked ?? false) != onlyIfLiked) {
+        return;
       }
-      PostInteractionNotifier()
-          .notifyLikeChanged(_post!.id, !wasLiked, _post!.likeCount);
-    } catch (e) {
-      setState(() => _post = oldPost);
+      final count = current.likeCount + delta;
+      _post = current.copyWith(
+        isLiked: isLiked,
+        likeCount: count < 0 ? 0 : count,
+      );
+    }
+
+    setState(() => apply(!wasLiked, likeDelta));
+    try {
+      final resp = wasLiked
+          ? await PostService().unlikePost(postId)
+          : await PostService().likePost(postId);
+      if (!resp.success) {
+        if (mounted) {
+          setState(() => apply(wasLiked, -likeDelta, onlyIfLiked: !wasLiked));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+      PostInteractionNotifier().notifyLikeChanged(
+        postId,
+        !wasLiked,
+        _post!.likeCount,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => apply(wasLiked, -likeDelta, onlyIfLiked: !wasLiked));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('操作失败，请重试'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     } finally {
       _isLikingPost = false;
     }
@@ -314,7 +345,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(resp.message ?? '删除失败'),
+                  content: Text(apiFailureMessage(resp, fallback: '删除失败，请重试')),
                   backgroundColor: Colors.red),
             );
           }
@@ -360,7 +391,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(resp.message ?? '举报失败'),
+                  content: Text(apiFailureMessage(resp, fallback: '举报失败，请重试')),
                   backgroundColor: Colors.red),
             );
           }

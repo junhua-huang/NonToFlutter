@@ -446,9 +446,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // 通过 statusCode + 关键词双重判定，避免与其它 429 语义混淆。
       final requiresOtp =
           resp.statusCode == 429 && (resp.message ?? '').contains('登录失败次数过多');
+      final message = apiFailureMessage(resp, fallback: '登录失败，请重试');
       state = state.copyWith(
         isLoading: false,
-        error: resp.message ?? 'Login failed',
+        error: message,
         requiresEmailCode: requiresOtp,
         // 一旦进入验证码流程，清掉历史 requiresEmailCode=false 的兜底
         clearRequiresEmailCode: !requiresOtp,
@@ -510,8 +511,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
             isLoading: false, clearError: true, clearRequiresEmailCode: true);
         return true;
       }
-      state = state.copyWith(
-          isLoading: false, error: resp.message ?? 'Registration failed');
+      final message = apiFailureMessage(resp, fallback: '注册失败，请重试');
+      state = state.copyWith(isLoading: false, error: message);
       return false;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: _userFriendlyError(e));
@@ -522,7 +523,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> updateProfile(Map<String, dynamic> data) async {
     try {
       final resp = await _authService.updateProfile(data);
-      if (resp.success && state.user != null) {
+      if (!resp.success) {
+        final message = apiFailureMessage(resp, fallback: '资料更新失败，请重试');
+        state = state.copyWith(error: message);
+        return false;
+      }
+      if (state.user != null) {
         // 清除旧头像缓存，确保更新后重新下载
         final oldAvatarUrl = state.user!.avatarUrl;
         if (oldAvatarUrl != null && oldAvatarUrl.isNotEmpty) {

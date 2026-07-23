@@ -32,6 +32,40 @@ class ApiResponse<T> {
   });
 }
 
+String apiFailureMessage(ApiResponse response, {required String fallback}) {
+  switch (response.errorCode) {
+    case ApiErrorCodes.contentRejected:
+      return '内容未通过审核';
+    case ApiErrorCodes.moderationUnavailable:
+      return '内容审核服务暂不可用，请稍后重试';
+    case ApiErrorCodes.accountDisabled:
+      return '账号已停用';
+    default:
+      final message = response.message?.trim();
+      if (message == null || message.isEmpty) return fallback;
+      if (_looksUnsafeUserMessage(message)) return fallback;
+      return message;
+  }
+}
+
+bool _looksUnsafeUserMessage(String message) {
+  final normalized = message.toLowerCase();
+  return normalized.contains('exception') ||
+      normalized.contains('traceback') ||
+      normalized.contains('stack trace') ||
+      normalized.contains('sensitive') ||
+      normalized.contains('moderation') ||
+      normalized.contains('regex') ||
+      normalized.contains('threshold') ||
+      normalized.contains('hit term') ||
+      message.contains('敏感词') ||
+      message.contains('违规词') ||
+      message.contains('命中') ||
+      message.contains('未通过审核') ||
+      message.contains('内容审核') ||
+      message.contains('审核服务');
+}
+
 class ApiClient {
   static final ApiClient _instance = ApiClient._();
   factory ApiClient() => _instance;
@@ -549,7 +583,12 @@ class ApiClient {
       return result;
     }
     return ApiResponse(
-        success: false, message: '获取上传链接失败', statusCode: result.statusCode);
+      success: false,
+      message: '获取上传链接失败',
+      statusCode: result.statusCode,
+      errorCode: result.errorCode,
+      isRetryable: result.isRetryable,
+    );
   }
 
   /// 直接上传文件到 COS（使用预签名 URL）
@@ -711,7 +750,12 @@ class ApiClient {
   }) async {
     if (!presignResp.success || presignResp.data == null) {
       return ApiResponse(
-          success: false, message: presignResp.message ?? '获取上传链接失败');
+        success: false,
+        message: presignResp.message ?? '获取上传链接失败',
+        statusCode: presignResp.statusCode,
+        errorCode: presignResp.errorCode,
+        isRetryable: presignResp.isRetryable,
+      );
     }
 
     final presignedUrl = presignResp.data!['upload_url'] as String? ??
@@ -733,17 +777,25 @@ class ApiClient {
 
       if (cosKey.isNotEmpty) {
         try {
-          final confirmResp = await post('/upload/confirm', data: {
-            'cos_key': cosKey,
-            'final_filename': fileName,
-          });
-          if (confirmResp.success &&
-              confirmResp.data != null &&
-              confirmResp.data['url'] != null) {
-            publicUrl = confirmResp.data['url'] as String;
+          final confirmResp = await post<Map<String, dynamic>>(
+            '/upload/confirm',
+            data: {
+              'cos_key': cosKey,
+              'final_filename': fileName,
+            },
+          );
+          if (!confirmResp.success) {
+            return _wrapUploadConfirmFailure(
+              confirmResp,
+              fallback: '上传确认失败，请重试',
+            );
+          }
+          if (confirmResp.data != null && confirmResp.data!['url'] != null) {
+            publicUrl = confirmResp.data!['url'] as String;
           }
         } catch (e) {
           debugPrint('Upload confirm failed errorType=${e.runtimeType}');
+          return ApiResponse(success: false, message: '上传确认失败，请重试');
         }
       }
 
@@ -757,9 +809,19 @@ class ApiClient {
       // 头像/封面需要调用专属 confirm 端点更新数据库
       if (uploadType == 'avatar') {
         try {
-          await post('/upload/avatar/confirm', data: {'url': publicUrl});
+          final avatarConfirmResp = await post(
+            '/upload/avatar/confirm',
+            data: {'url': publicUrl},
+          );
+          if (!avatarConfirmResp.success) {
+            return _wrapUploadConfirmFailure(
+              avatarConfirmResp,
+              fallback: '头像上传确认失败，请重试',
+            );
+          }
         } catch (e) {
           debugPrint('Avatar confirm failed errorType=${e.runtimeType}');
+          return ApiResponse(success: false, message: '头像上传确认失败，请重试');
         }
         return ApiResponse(
           success: true,
@@ -768,9 +830,19 @@ class ApiClient {
         );
       } else if (uploadType == 'cover') {
         try {
-          await post('/upload/cover/confirm', data: {'url': publicUrl});
+          final coverConfirmResp = await post(
+            '/upload/cover/confirm',
+            data: {'url': publicUrl},
+          );
+          if (!coverConfirmResp.success) {
+            return _wrapUploadConfirmFailure(
+              coverConfirmResp,
+              fallback: '背景图上传确认失败，请重试',
+            );
+          }
         } catch (e) {
           debugPrint('Cover confirm failed errorType=${e.runtimeType}');
+          return ApiResponse(success: false, message: '背景图上传确认失败，请重试');
         }
         return ApiResponse(
           success: true,
@@ -787,6 +859,19 @@ class ApiClient {
     }
 
     return cosResp;
+  }
+
+  ApiResponse<T> _wrapUploadConfirmFailure<T>(
+    ApiResponse response, {
+    required String fallback,
+  }) {
+    return ApiResponse<T>(
+      success: false,
+      message: apiFailureMessage(response, fallback: fallback),
+      statusCode: response.statusCode,
+      errorCode: response.errorCode,
+      isRetryable: response.isRetryable,
+    );
   }
 
   /// 从路径中提取上传类型（与后端 upload_type: avatar/cover/post/comic 对齐）

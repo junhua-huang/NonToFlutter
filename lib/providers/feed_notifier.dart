@@ -1,6 +1,7 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:nonto/models/post.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/recommendation_service.dart';
 import 'package:nonto/services/cache_keys.dart';
@@ -100,8 +101,9 @@ class FeedNotifier extends StateNotifier<FeedState> {
           .timeout(const Duration(seconds: 2));
       final cached = result.data;
       if (cached is List && cached.isNotEmpty) {
-        final posts =
-            cached.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+        final posts = cached
+            .map((e) => Post.fromJson(e as Map<String, dynamic>))
+            .toList();
         state = state.copyWith(posts: posts, page: 2, isInitialLoading: false);
         _loadInProgress = false;
         return;
@@ -134,7 +136,8 @@ class FeedNotifier extends StateNotifier<FeedState> {
     final isFirstPage = state.page == 1;
     final nextCursor = data['next_cursor'] as String?;
     final feedStatus = data['feed_status'] as String?;
-    final newPosts = isFirstPage ? posts : _mergeUniquePosts(state.posts, posts);
+    final newPosts =
+        isFirstPage ? posts : _mergeUniquePosts(state.posts, posts);
     state = state.copyWith(
       posts: newPosts,
       hasMore: data['has_more'] == true ||
@@ -234,6 +237,32 @@ class FeedNotifier extends StateNotifier<FeedState> {
     state = state.copyWith(posts: [post, ...state.posts]);
   }
 
+  void _rollbackLikeMutation(
+    int postId, {
+    required bool expectedLiked,
+    required int likeDelta,
+    String? error,
+  }) {
+    final currentIdx = state.posts.indexWhere((p) => p.id == postId);
+    if (currentIdx == -1) {
+      if (error != null) state = state.copyWith(error: error);
+      return;
+    }
+    final currentPost = state.posts[currentIdx];
+    if ((currentPost.isLiked ?? false) != expectedLiked) {
+      if (error != null) state = state.copyWith(error: error);
+      return;
+    }
+    final nextCount = currentPost.likeCount - likeDelta;
+    final rollbackPosts = List<Post>.from(state.posts);
+    rollbackPosts[currentIdx] = currentPost.copyWith(
+      isLiked: !expectedLiked,
+      likeCount: nextCount < 0 ? 0 : nextCount,
+    );
+    state = state.copyWith(posts: rollbackPosts, error: error);
+    _syncFeedToCache();
+  }
+
   /// Toggle like with optimistic update.
   Future<void> toggleLike(int postId) async {
     if (_likingPostIds.contains(postId)) return;
@@ -247,9 +276,11 @@ class FeedNotifier extends StateNotifier<FeedState> {
 
     final post = state.posts[idx];
     final wasLiked = post.isLiked ?? false;
+    final likeDelta = wasLiked ? -1 : 1;
+    final nextLikeCount = post.likeCount + likeDelta;
     final updatedPost = post.copyWith(
       isLiked: !wasLiked,
-      likeCount: wasLiked ? post.likeCount - 1 : post.likeCount + 1,
+      likeCount: nextLikeCount < 0 ? 0 : nextLikeCount,
     );
 
     // Optimistic update
@@ -259,22 +290,30 @@ class FeedNotifier extends StateNotifier<FeedState> {
     _syncFeedToCache();
 
     try {
-      if (wasLiked) {
-        await PostService().unlikePost(postId);
-      } else {
-        await PostService().likePost(postId);
+      final resp = wasLiked
+          ? await PostService().unlikePost(postId)
+          : await PostService().likePost(postId);
+      if (!resp.success) {
+        _rollbackLikeMutation(
+          postId,
+          expectedLiked: !wasLiked,
+          likeDelta: likeDelta,
+          error: apiFailureMessage(resp, fallback: '操作失败，请重试'),
+        );
+        return;
       }
       PostInteractionNotifier().notifyLikeChanged(
         postId,
         !wasLiked,
-        wasLiked ? post.likeCount - 1 : post.likeCount + 1,
+        updatedPost.likeCount,
       );
-    } catch (e) {
-      // Rollback
-      final rollbackPosts = List<Post>.from(state.posts);
-      rollbackPosts[idx] = post;
-      state = state.copyWith(posts: rollbackPosts);
-      _syncFeedToCache();
+    } catch (_) {
+      _rollbackLikeMutation(
+        postId,
+        expectedLiked: !wasLiked,
+        likeDelta: likeDelta,
+        error: '操作失败，请重试',
+      );
     } finally {
       _likingPostIds.remove(postId);
     }
@@ -291,7 +330,8 @@ class FeedNotifier extends StateNotifier<FeedState> {
 
   /// Remove blocked-user posts from memory and persist even an empty result.
   Future<void> removePostsByUser(int userId) async {
-    final filtered = state.posts.where((post) => post.userId != userId).toList();
+    final filtered =
+        state.posts.where((post) => post.userId != userId).toList();
     if (filtered.length == state.posts.length) return;
     state = state.copyWith(posts: filtered);
     await _syncFeedToCache();
@@ -316,7 +356,6 @@ class FeedNotifier extends StateNotifier<FeedState> {
   }
 }
 
-final feedProvider =
-    StateNotifierProvider<FeedNotifier, FeedState>((ref) {
+final feedProvider = StateNotifierProvider<FeedNotifier, FeedState>((ref) {
   return FeedNotifier();
 });

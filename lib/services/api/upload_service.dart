@@ -92,9 +92,13 @@ class UploadService {
         if (url != null) uploadedUrls.add(url);
       } else {
         return ApiResponse(
-            success: false,
-            message: '上传失败: ${resp.message}',
-            data: uploadedUrls);
+          success: false,
+          message: resp.message ?? '上传失败',
+          data: uploadedUrls,
+          statusCode: resp.statusCode,
+          errorCode: resp.errorCode,
+          isRetryable: resp.isRetryable,
+        );
       }
     }
     return ApiResponse(

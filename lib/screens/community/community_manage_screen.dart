@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/community.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 
 /// 社群管理页 — 管理后台
 /// Tab 1: 待审核 | Tab 2: 公告 | Tab 3: 成员 | Tab 4: 黑名单
@@ -28,6 +29,7 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
   bool _loadingAnn = true;
   bool _loadingMembers = true;
   bool _loadingBans = true;
+  final Set<int> _reviewingRequestIds = {};
 
   @override
   void initState() {
@@ -47,6 +49,37 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
     _loadAnnouncements();
     _loadMembers();
     _loadBans();
+  }
+
+  void _showFailure(ApiResponse resp, {String fallback = '操作失败，请重试'}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(apiFailureMessage(resp, fallback: fallback))),
+    );
+  }
+
+  void _showPlainFailure(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<bool> _requireSuccess(
+    Future<ApiResponse> future, {
+    String fallback = '操作失败，请重试',
+  }) async {
+    try {
+      final resp = await future;
+      if (!resp.success) {
+        _showFailure(resp, fallback: fallback);
+        return false;
+      }
+      return true;
+    } catch (_) {
+      _showPlainFailure(fallback);
+      return false;
+    }
   }
 
   Future<void> _loadRequests() async {
@@ -140,6 +173,7 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
       itemCount: _requests.length,
       itemBuilder: (_, i) {
         final r = _requests[i];
+        final isReviewing = _reviewingRequestIds.contains(r.id);
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
@@ -158,11 +192,11 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
               children: [
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.red),
-                  onPressed: () => _handleReject(r.id),
+                  onPressed: isReviewing ? null : () => _handleReject(r.id),
                 ),
                 IconButton(
                   icon: const Icon(Icons.check, color: Colors.green),
-                  onPressed: () => _handleApprove(r.id),
+                  onPressed: isReviewing ? null : () => _handleApprove(r.id),
                 ),
               ],
             ),
@@ -173,26 +207,28 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
   }
 
   Future<void> _handleApprove(int reqId) async {
+    if (_reviewingRequestIds.contains(reqId)) return;
+    setState(() => _reviewingRequestIds.add(reqId));
     try {
-      await _api.approveJoin(widget.communityId, reqId);
-      _loadRequests();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('操作失败: $e')));
-      }
+      final ok = await _requireSuccess(
+        _api.approveJoin(widget.communityId, reqId),
+      );
+      if (ok) _loadRequests();
+    } finally {
+      if (mounted) setState(() => _reviewingRequestIds.remove(reqId));
     }
   }
 
   Future<void> _handleReject(int reqId) async {
+    if (_reviewingRequestIds.contains(reqId)) return;
+    setState(() => _reviewingRequestIds.add(reqId));
     try {
-      await _api.rejectJoin(widget.communityId, reqId);
-      _loadRequests();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('操作失败: $e')));
-      }
+      final ok = await _requireSuccess(
+        _api.rejectJoin(widget.communityId, reqId),
+      );
+      if (ok) _loadRequests();
+    } finally {
+      if (mounted) setState(() => _reviewingRequestIds.remove(reqId));
     }
   }
 
@@ -306,16 +342,29 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
               onPressed: () async {
                 if (titleCtrl.text.trim().isEmpty) return;
                 try {
-                  await _api.createAnnouncement(widget.communityId,
+                  final resp = await _api.createAnnouncement(widget.communityId,
                       title: titleCtrl.text.trim(),
                       content: contentCtrl.text.trim(),
                       isPinned: pin);
+                  if (!resp.success) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            apiFailureMessage(resp, fallback: '发布失败，请重试'),
+                          ),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   if (ctx.mounted) Navigator.pop(ctx);
                   _loadAnnouncements();
-                } catch (e) {
+                } catch (_) {
                   if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx)
-                        .showSnackBar(SnackBar(content: Text('发布失败: $e')));
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('发布失败，请重试')),
+                    );
                   }
                 }
               },
@@ -330,15 +379,11 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
   }
 
   Future<void> _handleDeleteAnnouncement(int aid) async {
-    try {
-      await _api.deleteAnnouncement(widget.communityId, aid);
-      _loadAnnouncements();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('删除失败: $e')));
-      }
-    }
+    final ok = await _requireSuccess(
+      _api.deleteAnnouncement(widget.communityId, aid),
+      fallback: '删除失败，请重试',
+    );
+    if (ok) _loadAnnouncements();
   }
 
   // ── 成员 Tab ──
@@ -367,8 +412,7 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
                   ? PopupMenuButton<String>(
                       onSelected: (v) {
                         if (v == 'remove_admin') {
-                          _api.setRole(widget.communityId, m.userId, 'member');
-                          _loadMembers();
+                          _handleSetRole(m.userId, 'member');
                         }
                       },
                       itemBuilder: (_) => [
@@ -379,11 +423,9 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
                   : PopupMenuButton<String>(
                       onSelected: (v) {
                         if (v == 'set_admin') {
-                          _api.setRole(widget.communityId, m.userId, 'admin');
-                          _loadMembers();
+                          _handleSetRole(m.userId, 'admin');
                         } else if (v == 'kick') {
-                          _api.kick(widget.communityId, m.userId);
-                          _loadMembers();
+                          _handleKick(m.userId);
                         }
                       },
                       itemBuilder: (_) => [
@@ -398,6 +440,20 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
         );
       },
     );
+  }
+
+  Future<void> _handleSetRole(int userId, String role) async {
+    final ok = await _requireSuccess(
+      _api.setRole(widget.communityId, userId, role),
+    );
+    if (ok) _loadMembers();
+  }
+
+  Future<void> _handleKick(int userId) async {
+    final ok = await _requireSuccess(
+      _api.kick(widget.communityId, userId),
+    );
+    if (ok) _loadMembers();
   }
 
   // ── 黑名单 Tab ──
@@ -478,14 +534,27 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
               final uid = int.tryParse(uidCtrl.text.trim());
               if (uid == null) return;
               try {
-                await _api.banUser(widget.communityId,
+                final resp = await _api.banUser(widget.communityId,
                     userId: uid, reason: reasonCtrl.text.trim());
+                if (!resp.success) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          apiFailureMessage(resp, fallback: '拉黑失败，请重试'),
+                        ),
+                      ),
+                    );
+                  }
+                  return;
+                }
                 if (ctx.mounted) Navigator.pop(ctx);
                 _loadBans();
-              } catch (e) {
+              } catch (_) {
                 if (ctx.mounted) {
-                  ScaffoldMessenger.of(ctx)
-                      .showSnackBar(SnackBar(content: Text('拉黑失败: $e')));
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('拉黑失败，请重试')),
+                  );
                 }
               }
             },
@@ -499,15 +568,11 @@ class _CommunityManageScreenState extends ConsumerState<CommunityManageScreen>
   }
 
   Future<void> _handleUnban(int userId) async {
-    try {
-      await _api.unbanUser(widget.communityId, userId);
-      _loadBans();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('解封失败: $e')));
-      }
-    }
+    final ok = await _requireSuccess(
+      _api.unbanUser(widget.communityId, userId),
+      fallback: '解封失败，请重试',
+    );
+    if (ok) _loadBans();
   }
 
   // ── 工具 ──

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:nonto/models/post.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/post_share_target_resolver.dart';
@@ -80,9 +81,15 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
     try {
       final response = await action();
       if (!mounted) return;
-      Navigator.of(context).pop();
       final success = response?.success == true;
-      final message = success ? '已发送帖子' : (response?.message ?? '发送失败');
+      final message = success
+          ? '已发送帖子'
+          : response is ApiResponse
+              ? apiFailureMessage(response, fallback: '发送失败，请重试')
+              : '发送失败，请重试';
+      if (success) {
+        Navigator.of(context).pop();
+      }
       messenger.showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
@@ -114,7 +121,8 @@ class _PostShareToChatSheetState extends State<PostShareToChatSheet> {
                 child: Center(
                   child: Text(
                     '加载分享对象失败',
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
               );

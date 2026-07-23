@@ -213,7 +213,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                                 targetType: widget.targetType,
                                 isOwner: false,
                                 onReply: () => _notifier.startReply(
-                                  r.id.toString(),
+                                  comment.id.toString(),
                                   r.user?.displayName ??
                                       r.user?.username ??
                                       '用户',

@@ -5,6 +5,7 @@ import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/blocking_notifier.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/report_service.dart';
 import 'package:nonto/utils/date_utils.dart';
@@ -157,7 +158,7 @@ class PostCard extends ConsumerWidget {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(resp.message ?? '举报失败'),
+              content: Text(apiFailureMessage(resp, fallback: '举报失败，请重试')),
               duration: const Duration(seconds: 2)),
         );
       }
@@ -253,7 +254,7 @@ class PostCard extends ConsumerWidget {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(resp.message ?? '删除失败'),
+              content: Text(apiFailureMessage(resp, fallback: '删除失败，请重试')),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 2)),
         );

@@ -5,6 +5,7 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/screens/profile/image_crop_screen.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/api/upload_service.dart';
@@ -26,6 +27,7 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final ImagePicker _picker = ImagePicker();
+  late final AuthNotifier _authNotifier;
 
   // ── 各字段独立加载/上传状态 ──
   bool _isUploadingAvatar = false;
@@ -54,6 +56,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _authNotifier = ref.read(authProvider.notifier);
     final user = ref.read(authProvider).user;
     _nameController = TextEditingController(text: user?.displayName ?? '');
     _bioController = TextEditingController(text: user?.bio ?? '');
@@ -72,6 +75,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   void _writeUserToCache(User user) {
     DataLayer().write('user:${user.id}:profile', user.toJson());
+  }
+
+  void _rollbackName(int userId, String? originalName) {
+    final current = ref.read(authProvider).user;
+    if (current == null || current.id != userId) return;
+    final json = current.toJson()..['display_name'] = originalName;
+    final restored = User.fromJson(json);
+    _authNotifier.updateUser(restored);
+    _writeUserToCache(restored);
+  }
+
+  void _rollbackBio(int userId, String? originalBio) {
+    final current = ref.read(authProvider).user;
+    if (current == null || current.id != userId) return;
+    final json = current.toJson()..['bio'] = originalBio;
+    final restored = User.fromJson(json);
+    _authNotifier.updateUser(restored);
+    _writeUserToCache(restored);
   }
 
   // ─── 头像：选择 → 裁剪 → 立即上传 ─────────────────────────
@@ -149,7 +170,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(resp.message ?? '头像上传失败'),
+                content: Text(apiFailureMessage(resp, fallback: '头像上传失败，请重试')),
                 backgroundColor: Colors.red),
           );
         }
@@ -158,7 +179,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       debugPrint('Change avatar error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('头像更新失败: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('头像更新失败，请重试'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -248,7 +270,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(resp.message ?? '背景图上传失败'),
+                content: Text(apiFailureMessage(resp, fallback: '背景图上传失败，请重试')),
                 backgroundColor: Colors.red),
           );
         }
@@ -257,7 +279,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       debugPrint('Change cover error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('背景图更新失败: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('背景图更新失败，请重试'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -304,7 +327,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // 乐观写入
     final originalName = user.displayName;
     final optimistic = user.copyWith(displayName: newName);
-    ref.read(authProvider.notifier).updateUser(optimistic);
+    _authNotifier.updateUser(optimistic);
     _writeUserToCache(optimistic);
 
     try {
@@ -317,6 +340,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         updateData['bio'] = user.bio;
       }
       final resp = await AuthService().updateProfile(updateData);
+      if (!resp.success) {
+        _rollbackName(user.id, originalName);
+      }
       if (!mounted) return;
 
       if (resp.success) {
@@ -332,29 +358,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           );
         }
       } else {
-        // 回滚
-        ref
-            .read(authProvider.notifier)
-            .updateUser(user.copyWith(displayName: originalName));
-        _writeUserToCache(user.copyWith(displayName: originalName));
         setState(() => _isSavingName = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(resp.message ?? '名称更新失败'),
+                content: Text(apiFailureMessage(resp, fallback: '名称更新失败，请重试')),
                 backgroundColor: Colors.red),
           );
         }
       }
     } catch (e) {
-      ref
-          .read(authProvider.notifier)
-          .updateUser(user.copyWith(displayName: originalName));
-      _writeUserToCache(user.copyWith(displayName: originalName));
+      _rollbackName(user.id, originalName);
+      if (!mounted) return;
       setState(() => _isSavingName = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('保存失败，请重试'), backgroundColor: Colors.red),
         );
       }
     }
@@ -393,7 +413,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // 乐观写入
     final originalBio = user.bio;
     final optimistic = user.copyWith(bio: newBio);
-    ref.read(authProvider.notifier).updateUser(optimistic);
+    _authNotifier.updateUser(optimistic);
     _writeUserToCache(optimistic);
 
     try {
@@ -405,6 +425,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         updateData['display_name'] = user.displayName;
       }
       final resp = await AuthService().updateProfile(updateData);
+      if (!resp.success) {
+        _rollbackBio(user.id, originalBio);
+      }
       if (!mounted) return;
 
       if (resp.success) {
@@ -420,28 +443,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           );
         }
       } else {
-        ref
-            .read(authProvider.notifier)
-            .updateUser(user.copyWith(bio: originalBio));
-        _writeUserToCache(user.copyWith(bio: originalBio));
         setState(() => _isSavingBio = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(resp.message ?? '简介更新失败'),
+                content: Text(apiFailureMessage(resp, fallback: '简介更新失败，请重试')),
                 backgroundColor: Colors.red),
           );
         }
       }
     } catch (e) {
-      ref
-          .read(authProvider.notifier)
-          .updateUser(user.copyWith(bio: originalBio));
-      _writeUserToCache(user.copyWith(bio: originalBio));
+      _rollbackBio(user.id, originalBio);
+      if (!mounted) return;
       setState(() => _isSavingBio = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('保存失败，请重试'), backgroundColor: Colors.red),
         );
       }
     }

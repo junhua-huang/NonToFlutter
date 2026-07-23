@@ -380,10 +380,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           if (!uploadResp.success) {
             // 上传失败：保存草稿
             await _saveDraft();
+            final message =
+                apiFailureMessage(uploadResp, fallback: '图片上传失败，请重试');
             if (mounted) {
               setState(() {
                 _isSubmitting = false;
-                _error = '第 ${i + 1} 张图片上传失败: ${uploadResp.message}（草稿已保存）';
+                _error = '第 ${i + 1} 张图片上传失败：$message（草稿已保存）';
               });
             }
             return;
@@ -412,10 +414,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         );
         if (!uploadResp.success) {
           await _saveDraft();
+          final message = apiFailureMessage(uploadResp, fallback: '视频上传失败，请重试');
           if (mounted) {
             setState(() {
               _isSubmitting = false;
-              _error = '视频上传失败: ${uploadResp.message}（草稿已保存）';
+              _error = '视频上传失败：$message（草稿已保存）';
             });
           }
           return;
@@ -507,10 +510,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         Navigator.of(context).pop(true);
       } else {
         await _saveDraft();
+        final message = apiFailureMessage(resp, fallback: '发布失败，请重试');
         if (mounted) {
           setState(() {
             _isSubmitting = false;
-            _error = resp.message ?? '发布失败（草稿已保存）';
+            _error = '$message（草稿已保存）';
           });
         }
       }
@@ -554,9 +558,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         Navigator.of(context).pop(updatedPost);
         return;
       }
+      final message = apiFailureMessage(resp, fallback: '保存失败，请重试');
       setState(() {
         _isSubmitting = false;
-        _error = resp.message ?? '保存失败';
+        _error = message;
       });
     } catch (_) {
       if (mounted) {

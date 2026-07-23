@@ -14,6 +14,7 @@ import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
@@ -308,12 +309,21 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         quoteMessageId: quoteMessageId,
         clientMsgId: clientMsgId,
       );
+      if (!resp.success) {
+        if (mounted) {
+          _markOptimisticFailed(optimistic['id']);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '发送失败，请重试')),
+          ));
+        }
+        return;
+      }
       _replaceOptimisticWithResponse(optimistic, resp.data);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         _markOptimisticFailed(optimistic['id']);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('发送失败: $e')));
+            .showSnackBar(const SnackBar(content: Text('发送失败，请重试')));
       }
     } finally {
       await _writeMessagesCache();
@@ -428,12 +438,21 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           mentionUserIds: mentionUserIds,
           clientMsgId: clientMsgId,
         );
+        if (!resp.success) {
+          if (mounted) {
+            _markOptimisticFailed(optimistic['id']);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '重试失败，请重试')),
+            ));
+          }
+          return;
+        }
         _replaceOptimisticWithResponse(optimistic, resp.data);
-      } catch (e) {
+      } catch (_) {
         if (mounted) {
           _markOptimisticFailed(optimistic['id']);
           ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('重试失败: $e')));
+              .showSnackBar(const SnackBar(content: Text('重试失败，请重试')));
         }
       } finally {
         await _writeMessagesCache();
@@ -444,12 +463,21 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   Future<void> _recallMessage(int messageId, bool isMine) async {
     if (!isMine) return;
     try {
-      await CommunityApiService().recallMessage(widget.communityId, messageId);
+      final resp = await CommunityApiService()
+          .recallMessage(widget.communityId, messageId);
+      if (!resp.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '撤回失败，请重试')),
+          ));
+        }
+        return;
+      }
       _loadMessages();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('撤回失败: $e')));
+            .showSnackBar(const SnackBar(content: Text('撤回失败，请重试')));
       }
     }
   }
@@ -640,8 +668,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       const NontoSheetOption(
           icon: Icons.format_quote, label: '回复', value: 'reply'),
       if (messageType == 'text')
-        const NontoSheetOption(
-            icon: Icons.copy, label: '复制文字', value: 'copy'),
+        const NontoSheetOption(icon: Icons.copy, label: '复制文字', value: 'copy'),
       if (canRecall)
         const NontoSheetOption(
           icon: Icons.undo,
@@ -913,10 +940,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   Future<void> _showMentionMemberPicker() async {
     try {
       await _ensureMembersLoaded();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('成员加载失败: $e')));
+            .showSnackBar(const SnackBar(content: Text('成员加载失败，请重试')));
       }
       return;
     }
@@ -1116,26 +1143,42 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   }
 
   Future<void> _sendMediaMessage({
-    required Future<dynamic> Function() upload,
+    required Future<ApiResponse> Function() upload,
     required String messageType,
   }) async {
     if (_isSending) return;
     setState(() => _isSending = true);
+    Map<String, dynamic>? optimistic;
     try {
       final uploadResp = await upload();
+      if (!uploadResp.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              apiFailureMessage(uploadResp, fallback: '发送媒体失败，请重试'),
+            ),
+          ));
+        }
+        return;
+      }
       final url = _extractUploadUrl(uploadResp);
       if (url == null || url.isEmpty) {
-        throw Exception(uploadResp.message ?? '上传失败');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('发送媒体失败，请重试')),
+          );
+        }
+        return;
       }
       final clientMsgId = _newClientMsgId();
-      final optimistic = _buildOptimisticMessage(
+      optimistic = _buildOptimisticMessage(
         content: url,
         messageType: messageType,
         mediaUrl: url,
         clientMsgId: clientMsgId,
       );
       if (mounted) {
-        setState(() => _messages.add(optimistic));
+        setState(() => _messages.add(optimistic!));
       }
       _syncConversationPreview(url, messageType);
       unawaited(SoundService().playSendSound());
@@ -1147,13 +1190,25 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         mediaUrl: url,
         clientMsgId: clientMsgId,
       );
+      if (!resp.success) {
+        if (mounted) {
+          _markOptimisticFailed(optimistic['id']);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '发送媒体失败，请重试')),
+          ));
+        }
+        return;
+      }
       _replaceOptimisticWithResponse(optimistic, resp.data);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('发送媒体失败: $e')));
+        if (optimistic != null) _markOptimisticFailed(optimistic['id']);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('发送媒体失败，请重试')),
+        );
       }
     } finally {
+      await _writeMessagesCache();
       if (mounted) setState(() => _isSending = false);
     }
   }
@@ -1255,10 +1310,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   Future<void> _showOnlineMembers() async {
     try {
       await _ensureMembersLoaded();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('在线成员加载失败: $e')));
+            .showSnackBar(const SnackBar(content: Text('在线成员加载失败，请重试')));
       }
       return;
     }

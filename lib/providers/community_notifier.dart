@@ -74,8 +74,8 @@ class CommunityListNotifier extends StateNotifier<CommunityListState> {
         hasMore: discoList.length >= 20,
         offset: discoList.length,
       );
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: '社群加载失败，请重试');
     }
   }
 
@@ -90,8 +90,8 @@ class CommunityListNotifier extends StateNotifier<CommunityListState> {
           : <Community>[];
       state = state.copyWith(
           discovered: list, isLoading: false, hasMore: false, offset: 0);
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: '社群加载失败，请重试');
     }
   }
 
@@ -173,8 +173,8 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
         sortBy: currentSortBy,
       );
       await loadPosts(communityId, hot: currentSortBy == 'hot');
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: '社群加载失败，请重试');
     }
   }
 
@@ -205,8 +205,8 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
           isPostsLoading: false,
         );
       }
-    } catch (e) {
-      state = state.copyWith(isPostsLoading: false, error: e.toString());
+    } catch (_) {
+      state = state.copyWith(isPostsLoading: false, error: '帖子加载失败，请重试');
     }
   }
 
@@ -233,6 +233,27 @@ class CommunityDetailNotifier extends StateNotifier<CommunityDetailState> {
               ? post.copyWith(isLiked: isLiked, likeCount: likeCount)
               : post)
           .toList(),
+    );
+  }
+
+  void applyPostLikeDelta(
+    int postId,
+    bool isLiked,
+    int delta, {
+    bool? onlyIfLiked,
+  }) {
+    state = state.copyWith(
+      posts: state.posts.map((post) {
+        if (post.id != postId) return post;
+        if (onlyIfLiked != null && (post.isLiked ?? false) != onlyIfLiked) {
+          return post;
+        }
+        final count = post.likeCount + delta;
+        return post.copyWith(
+          isLiked: isLiked,
+          likeCount: count < 0 ? 0 : count,
+        );
+      }).toList(),
     );
   }
 
@@ -316,8 +337,8 @@ class CommunityChatNotifier extends StateNotifier<CommunityChatState> {
             .toList(),
         isLoading: false,
       );
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: '社群加载失败，请重试');
     }
   }
 
@@ -326,6 +347,12 @@ class CommunityChatNotifier extends StateNotifier<CommunityChatState> {
     try {
       final resp = await _api.sendMessage(communityId,
           content: content, mentionUserIds: mentions);
+      if (!resp.success) {
+        state = state.copyWith(
+          error: apiFailureMessage(resp, fallback: '发送失败，请重试'),
+        );
+        return false;
+      }
       if (resp.data is Map) {
         final msg =
             Map<String, dynamic>.from(resp.data['message'] ?? resp.data);
@@ -333,15 +360,23 @@ class CommunityChatNotifier extends StateNotifier<CommunityChatState> {
       }
       return true;
     } catch (_) {
+      state = state.copyWith(error: '发送失败，请重试');
       return false;
     }
   }
 
   Future<bool> recallMessage(int communityId, int messageId) async {
     try {
-      await _api.recallMessage(communityId, messageId);
+      final resp = await _api.recallMessage(communityId, messageId);
+      if (!resp.success) {
+        state = state.copyWith(
+          error: apiFailureMessage(resp, fallback: '撤回失败，请重试'),
+        );
+        return false;
+      }
       return true;
     } catch (_) {
+      state = state.copyWith(error: '撤回失败，请重试');
       return false;
     }
   }

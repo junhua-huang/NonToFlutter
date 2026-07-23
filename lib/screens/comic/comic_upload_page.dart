@@ -135,31 +135,34 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
     }
   }
 
-  Future<List<String>> _uploadImages() async {
+  Future<List<String>?> _uploadImages() async {
     final urls = <String>[];
     for (int i = 0; i < _imageFiles.length; i++) {
       final file = _imageFiles[i];
       try {
-        final filename = file.name;
-        final ext = filename.contains('.') ? filename.split('.').last : 'jpg';
-        final presignResp = await ApiClient().post('/upload/presign', data: {
-          'filename': filename,
-          'file_type': ext,
-          'upload_type': 'comic',
-        });
-        if (presignResp.statusCode == 200) {
-          final data = presignResp.data;
-          final putUrl =
-              data['presigned_url'] ?? data['put_url'] ?? data['url'];
-          final finalUrl =
-              data['public_url'] ?? data['file_url'] ?? data['url'];
-          await ApiClient().dio.put(putUrl, data: await file.readAsBytes());
-          urls.add(finalUrl);
-        } else {
-          if (mounted) _showSnack('图片 ${i + 1} 上传失败');
+        final uploadResp = await ApiClient().upload<Map<String, dynamic>>(
+          '/upload/comic',
+          file,
+        );
+        if (!uploadResp.success || uploadResp.data == null) {
+          final message = apiFailureMessage(
+            uploadResp,
+            fallback: '图片 ${i + 1} 上传失败，请重试',
+          );
+          if (mounted) _showSnack(message);
+          return null;
         }
-      } catch (e) {
-        if (mounted) _showSnack('图片 ${i + 1} 上传失败: $e');
+
+        final finalUrl = uploadResp.data!['url'];
+        if (finalUrl is! String || finalUrl.isEmpty) {
+          if (mounted) _showSnack('图片 ${i + 1} 上传失败，请重试');
+          return null;
+        }
+
+        urls.add(finalUrl);
+      } catch (_) {
+        if (mounted) _showSnack('图片 ${i + 1} 上传失败，请重试');
+        return null;
       }
     }
     return urls;
@@ -181,7 +184,9 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
     try {
       List<String> imageUrls = [];
       if (_imageFiles.isNotEmpty) {
-        imageUrls = await _uploadImages();
+        final uploadedImageUrls = await _uploadImages();
+        if (uploadedImageUrls == null) return;
+        imageUrls = uploadedImageUrls;
       }
 
       final data = <String, dynamic>{
@@ -218,10 +223,10 @@ class _ComicUploadPageState extends State<ComicUploadPage> {
       if (resp.success && mounted) {
         Navigator.pop(context, true);
       } else if (mounted) {
-        _showSnack(resp.message ?? '提交失败');
+        _showSnack(apiFailureMessage(resp, fallback: '提交失败，请重试'));
       }
-    } catch (e) {
-      if (mounted) _showSnack('提交失败: $e');
+    } catch (_) {
+      if (mounted) _showSnack('提交失败，请重试');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

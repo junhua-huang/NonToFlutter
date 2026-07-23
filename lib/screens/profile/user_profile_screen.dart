@@ -10,6 +10,7 @@ import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/auth_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/services/api/friend_service.dart';
 import 'package:nonto/services/api/post_service.dart';
@@ -50,6 +51,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   int _friendCount = 0;
   final List<Post> _userPosts = [];
   final List<Post> _likedPosts = [];
+  final Set<int> _likingPostIds = {};
   bool _isLoadingPosts = false;
   bool _isLoadingLikes = false;
   bool _isLoadingStats = true;
@@ -261,7 +263,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(resp.message ?? '发送失败'),
+                content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
                 duration: const Duration(seconds: 2)),
           );
         }
@@ -281,7 +283,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     if (_isActionLoading || _pendingRequestId == null) return;
     setState(() => _isActionLoading = true);
     try {
-      await FriendService().cancelRequest(_pendingRequestId!);
+      final resp = await FriendService().cancelRequest(_pendingRequestId!);
+      if (!resp.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
       setState(() {
         _friendStatus = _FriendStatus.none;
         _pendingRequestId = null;
@@ -304,33 +317,40 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     setState(() => _isActionLoading = true);
     try {
       final resp = await FriendService().acceptRequest(_pendingRequestId!);
-      if (resp.success) {
-        setState(() {
-          _friendStatus = _FriendStatus.friends;
-          _pendingRequestId = null;
-          _friendCount++;
-        });
-        // 与 friend_requests_screen._accept 保持一致：接受好友后主动刷新会话列表，
-        // 让本端（点接受的人）本地立即出现新会话 + Hi 消息，不依赖 WS 推送
-        // （WS 的 friend_accepted_chat 推送给对方）。之前从这里接受好友后
-        // 会话列表没有新会话，就是因为缺这两步。
-        try {
-          ref.read(conversationsProvider.notifier).loadConversations();
-        } catch (_) {}
-        // 清除通知列表中的好友请求通知
-        try {
-          ref
-              .read(notificationsProvider.notifier)
-              .removeByType('friend_request');
-        } catch (_) {}
+      if (!resp.success) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('你们已成为好友！'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2)),
+            SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+              duration: const Duration(seconds: 2),
+            ),
           );
         }
+        return;
+      }
+      setState(() {
+        _friendStatus = _FriendStatus.friends;
+        _pendingRequestId = null;
+        _friendCount++;
+      });
+      // 与 friend_requests_screen._accept 保持一致：接受好友后主动刷新会话列表，
+      // 让本端（点接受的人）本地立即出现新会话 + Hi 消息，不依赖 WS 推送
+      // （WS 的 friend_accepted_chat 推送给对方）。之前从这里接受好友后
+      // 会话列表没有新会话，就是因为缺这两步。
+      try {
+        ref.read(conversationsProvider.notifier).loadConversations();
+      } catch (_) {}
+      // 清除通知列表中的好友请求通知
+      try {
+        ref.read(notificationsProvider.notifier).removeByType('friend_request');
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('你们已成为好友！'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2)),
+        );
       }
     } catch (e) {
       debugPrint('Accept request error: $e');
@@ -343,7 +363,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     if (_isActionLoading || _pendingRequestId == null) return;
     setState(() => _isActionLoading = true);
     try {
-      await FriendService().rejectRequest(_pendingRequestId!);
+      final resp = await FriendService().rejectRequest(_pendingRequestId!);
+      if (!resp.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
       setState(() {
         _friendStatus = _FriendStatus.none;
         _pendingRequestId = null;
@@ -385,7 +416,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     if (confirm == true) {
       setState(() => _isActionLoading = true);
       try {
-        await FriendService().deleteFriend(_user!.id);
+        final resp = await FriendService().deleteFriend(_user!.id);
+        if (!resp.success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        }
         setState(() {
           _friendStatus = _FriendStatus.none;
           _pendingRequestId = null;
@@ -474,7 +516,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(resp.message ?? '举报失败'),
+                  content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
                   backgroundColor: Colors.red),
             );
           }
@@ -554,7 +596,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(resp.message ?? '无法创建聊天'),
+                content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
                 backgroundColor: Colors.red),
           );
         }
@@ -1183,7 +1225,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         final post = posts[i];
         return PostCard(
           post: post,
-          onLike: () => _togglePostLike(post, i, posts),
+          onLike: () => _togglePostLike(post, posts),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1195,33 +1237,60 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     );
   }
 
-  Future<void> _togglePostLike(
-      Post post, int index, List<Post> postList) async {
+  Future<void> _togglePostLike(Post post, List<Post> postList) async {
+    if (_likingPostIds.contains(post.id)) return;
+    _likingPostIds.add(post.id);
     final currentIsLiked = post.isLiked ?? false;
-    final currentCount = post.likeCount;
-    setState(() {
-      postList[index] = post.copyWith(
-        isLiked: !currentIsLiked,
-        likeCount: currentIsLiked ? currentCount - 1 : currentCount + 1,
-      );
-    });
-    try {
-      if (currentIsLiked) {
-        await PostService().unlikePost(post.id);
-      } else {
-        await PostService().likePost(post.id);
+    final likeDelta = currentIsLiked ? -1 : 1;
+
+    void apply(bool isLiked, int delta, {bool? onlyIfLiked}) {
+      final currentIndex = postList.indexWhere((item) => item.id == post.id);
+      if (currentIndex == -1) return;
+      final currentPost = postList[currentIndex];
+      if (onlyIfLiked != null &&
+          (currentPost.isLiked ?? false) != onlyIfLiked) {
+        return;
       }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        postList[index] = post.copyWith(
-          isLiked: currentIsLiked,
-          likeCount: currentCount,
-        );
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+      final count = currentPost.likeCount + delta;
+      postList[currentIndex] = currentPost.copyWith(
+        isLiked: isLiked,
+        likeCount: count < 0 ? 0 : count,
       );
+    }
+
+    setState(() => apply(!currentIsLiked, likeDelta));
+    try {
+      final resp = currentIsLiked
+          ? await PostService().unlikePost(post.id)
+          : await PostService().likePost(post.id);
+      if (!resp.success) {
+        if (!mounted) return;
+        setState(() => apply(
+              currentIsLiked,
+              -likeDelta,
+              onlyIfLiked: !currentIsLiked,
+            ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => apply(
+            currentIsLiked,
+            -likeDelta,
+            onlyIfLiked: !currentIsLiked,
+          ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
+      );
+    } finally {
+      _likingPostIds.remove(post.id);
     }
   }
 }

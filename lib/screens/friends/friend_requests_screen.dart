@@ -3,6 +3,7 @@ import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/friend_service.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/utils/date_utils.dart';
@@ -206,7 +207,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
         _showSnackBar('已添加 $name 为好友');
       } else {
         setState(() => _pendingRequestIds.remove(requestId));
-        _showSnackBar(resp.message ?? '操作失败，请重试', error: true);
+        _showSnackBar(apiFailureMessage(resp, fallback: '操作失败，请重试'),
+            error: true);
       }
     } catch (_) {
       if (mounted) {
@@ -235,7 +237,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
         _showSnackBar('已拒绝');
       } else {
         setState(() => _pendingRequestIds.remove(requestId));
-        _showSnackBar(resp.message ?? '操作失败，请重试', error: true);
+        _showSnackBar(apiFailureMessage(resp, fallback: '操作失败，请重试'),
+            error: true);
       }
     } catch (_) {
       if (mounted) {
@@ -259,7 +262,8 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen>
         _showSnackBar('已取消');
       } else {
         setState(() => _pendingRequestIds.remove(requestId));
-        _showSnackBar(resp.message ?? '操作失败，请重试', error: true);
+        _showSnackBar(apiFailureMessage(resp, fallback: '操作失败，请重试'),
+            error: true);
       }
     } catch (_) {
       if (mounted) {
