@@ -41,8 +41,8 @@ void main() {
 
     test('auth lifecycle uses serialized binding and invalidates WS first', () {
       final source = read('lib/providers/auth_notifier.dart');
-      final endSessionStart = source.indexOf('Future<void> _endSession()');
-      final endSessionEnd = source.indexOf('Future<void> _clearLocalSession()');
+      final endSessionStart = source.indexOf('Future<void> _endSession(');
+      final endSessionEnd = source.indexOf('Future<void> _clearLocalSession(');
       final endSession = source.substring(endSessionStart, endSessionEnd);
 
       expect(source, contains('AliyunPushService'));

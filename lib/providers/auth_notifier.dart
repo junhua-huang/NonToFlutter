@@ -54,6 +54,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final Future<void> Function()? _clearLocalSessionOverride;
   final bool _manageLocalData;
   StreamSubscription? _authExpiredSub;
+  Future<void>? _endingSession;
   late final Future<void> restoredSessionReady;
 
   AuthNotifier(this._prefs)
@@ -309,16 +310,38 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _clearSession() => _endSession();
 
-  Future<void> _endSession() async {
+  Future<void> _endSession({bool force = false}) {
+    final ending = _endingSession;
+    if (ending != null) {
+      if (!force) return ending;
+      return ending.then((_) => _endSession(force: true));
+    }
+    final tokenToEnd = state.token ?? _prefs.getString('access_token');
+    late final Future<void> tracked;
+    tracked = _endSessionForToken(tokenToEnd, force: force).whenComplete(() {
+      if (identical(_endingSession, tracked)) {
+        _endingSession = null;
+      }
+    });
+    _endingSession = tracked;
+    return tracked;
+  }
+
+  Future<void> _endSessionForToken(
+    String? tokenToEnd, {
+    required bool force,
+  }) async {
     state = AuthState.initial;
     // Invalidate reconnect eligibility synchronously before any network wait.
     _setAppForeground(false);
     final disconnecting = _disconnectWebSocket();
     // Keep the old token active until the serialized unregister attempt finishes.
     await _pushService.reconcileBackendBinding(authenticated: false);
+    if (!force && _hasNewerSession(tokenToEnd)) return;
     _setToken(null);
     await disconnecting;
-    await _clearLocalSession();
+    if (!force && _hasNewerSession(tokenToEnd)) return;
+    await _clearLocalSession(tokenToEnd, force: force);
     // 跳转登录页
     ApiClient.navigatorKey.currentState?.pushNamedAndRemoveUntil(
       AppRoutes.login,
@@ -326,7 +349,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
-  Future<void> _clearLocalSession() async {
+  bool _hasNewerSession(String? tokenToEnd) {
+    final currentToken = state.token;
+    if (currentToken != null && currentToken != tokenToEnd) {
+      return true;
+    }
+    final persistedToken = _prefs.getString('access_token');
+    return persistedToken != null && persistedToken != tokenToEnd;
+  }
+
+  Future<void> _clearLocalSession(
+    String? tokenToEnd, {
+    required bool force,
+  }) async {
+    var persistedToken = _prefs.getString('access_token');
+    if (!force && persistedToken != tokenToEnd) return;
     final override = _clearLocalSessionOverride;
     if (override != null) {
       await override();
@@ -335,9 +372,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       ApiClient.requestManager.clearAll();
       await DataLayer().closeDb();
     }
-    await _prefs.remove('access_token');
+    persistedToken = _prefs.getString('access_token');
+    if (!force && persistedToken != tokenToEnd) return;
     await _prefs.remove('current_user_id');
+    persistedToken = _prefs.getString('access_token');
+    if (!force && persistedToken != tokenToEnd) return;
     await _prefs.remove('current_user_json');
+    persistedToken = _prefs.getString('access_token');
+    if (!force && persistedToken != tokenToEnd) return;
+    await _prefs.remove('access_token');
   }
 
   Future<void> _saveUserToPrefs(User user) async {
@@ -361,6 +404,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           state = state.copyWith(isLoading: false, error: '登录失败：服务器未返回 token');
           return false;
         }
+        await _endingSession;
 
         User? user = _extractUser(data);
         ApiClient.printToken('HTTP POST /auth/login (网络登录)', token);
@@ -439,6 +483,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           state = state.copyWith(isLoading: false, error: '注册失败：服务器未返回 token');
           return false;
         }
+        await _endingSession;
 
         User? user = _extractUser(data);
         state = state.copyWith(token: token, user: user, isLoading: true);
@@ -524,7 +569,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _saveUserToPrefs(updated);
   }
 
-  Future<void> logout() => _endSession();
+  @visibleForTesting
+  Future<void> expireSessionForTesting() => _clearSession();
+
+  Future<void> logout() => _endSession(force: true);
 
   /// 将技术异常映射为用户可读的错误提示
   String _userFriendlyError(Object e) {

@@ -8,20 +8,43 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'request_manager.dart';
 
+class ApiErrorCodes {
+  static const contentRejected = 'CONTENT_REJECTED';
+  static const moderationUnavailable = 'MODERATION_UNAVAILABLE';
+  static const accountDisabled = 'ACCOUNT_DISABLED';
+}
+
 class ApiResponse<T> {
   final bool success;
   final T? data;
   final String? message;
   final int? statusCode;
+  final String? errorCode;
+  final bool isRetryable;
 
-  ApiResponse(
-      {required this.success, this.data, this.message, this.statusCode});
+  const ApiResponse({
+    required this.success,
+    this.data,
+    this.message,
+    this.statusCode,
+    this.errorCode,
+    this.isRetryable = false,
+  });
 }
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._();
   factory ApiClient() => _instance;
-  ApiClient._();
+  ApiClient._({Dio? dio}) : _dio = dio ?? _createDio();
+
+  @visibleForTesting
+  factory ApiClient.test({required Dio dio, Dio? refreshDio}) {
+    if (refreshDio != null) {
+      _refreshDio = refreshDio;
+    }
+    _installInterceptors(dio);
+    return ApiClient._(dio: dio);
+  }
 
   static String? token;
 
@@ -34,6 +57,7 @@ class ApiClient {
 
   /// 防止并发刷新 token
   static bool _isRefreshing = false;
+  static bool _sessionClearNotified = false;
 
   /// token 刷新失败回调（供 auth_notifier 注册，触发跳转登录页）
   static VoidCallback? onTokenExpired;
@@ -52,10 +76,10 @@ class ApiClient {
   static Future<void> Function()? onTokenActivated;
   static Future<void> Function()? onTokenCleared;
 
-  late final Dio _dio = _createDio();
+  final Dio _dio;
 
   /// 专用于刷新 token 的 Dio（无拦截器，避免无限循环）
-  static final Dio _refreshDio = _createRefreshDio();
+  static Dio _refreshDio = _createRefreshDio();
 
   Dio get dio => _dio;
 
@@ -75,27 +99,73 @@ class ApiClient {
       receiveTimeout: const Duration(seconds: 30),
       headers: {'Content-Type': 'application/json'},
     ));
+    _installInterceptors(dio);
+    return dio;
+  }
+
+  @visibleForTesting
+  static String safeRequestPathForLog(String path) {
+    final uri = Uri.tryParse(path);
+    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
+      return '${uri.scheme}://${uri.host}/...';
+    }
+    final queryIndex = path.indexOf('?');
+    return queryIndex == -1 ? path : path.substring(0, queryIndex);
+  }
+
+  static const _requestAccessTokenKey = 'api_client_access_token';
+
+  static String? _requestAccessToken(RequestOptions options) {
+    final extraToken = options.extra[_requestAccessTokenKey];
+    if (extraToken is String && extraToken.isNotEmpty) return extraToken;
+    final queryToken = options.queryParameters['access_token'];
+    if (queryToken is String && queryToken.isNotEmpty) return queryToken;
+    return null;
+  }
+
+  static void _installInterceptors(Dio dio) {
+    dio.interceptors.clear();
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
-        if (token != null && token!.isNotEmpty) {
-          final url = options.uri.toString();
+        final authToken = token;
+        if (authToken != null && authToken.isNotEmpty) {
+          final url = options.path;
           // 仅对自身 API 请求注入 token，COS / 第三方 URL 不注入
           if (!url.startsWith('http') || url.startsWith(AppConfig.baseUrl)) {
             // 通过 query 参数传递 token，兼容 Web 端无自定义请求头的限制
-            options.queryParameters.addAll({'access_token': token});
+            options.queryParameters.addAll({'access_token': authToken});
+            options.extra[_requestAccessTokenKey] = authToken;
           }
         }
         return handler.next(options);
       },
       onError: (error, handler) async {
         try {
+          final parsed = parseErrorResponse(
+            statusCode: error.response?.statusCode,
+            data: error.response?.data,
+            fallbackMessage: error.message,
+          );
+          final safePath = safeRequestPathForLog(error.requestOptions.path);
+          debugPrint(
+            '[ApiClient] request failed path=$safePath '
+            'status=${error.response?.statusCode} code=${parsed.errorCode ?? "none"} '
+            'errorType=${error.type.name}',
+          );
+
+          final requestToken = _requestAccessToken(error.requestOptions);
+          if (parsed.errorCode == ApiErrorCodes.accountDisabled) {
+            await _clearSessionAndNotify(requestToken);
+            return handler.next(error);
+          }
+
           if (error.response?.statusCode == 401) {
             debugPrint(
-                '[ApiClient] 401 caught on ${error.requestOptions.path}, isRefreshing=$_isRefreshing');
+                '[ApiClient] 401 caught on $safePath, isRefreshing=$_isRefreshing');
             // 跳过刷新端点自身，避免无限循环
             if (error.requestOptions.path == '/auth/refresh') {
               debugPrint('[ApiClient] 401 on /auth/refresh itself — giving up');
-              _handleRefreshFailed();
+              await _clearSessionAndNotify(requestToken);
               return handler.next(error);
             }
 
@@ -115,7 +185,10 @@ class ApiClient {
                     debugPrint('[ApiClient] retry succeeded');
                     return handler.resolve(response);
                   } catch (retryErr) {
-                    debugPrint('[ApiClient] retry also failed: $retryErr');
+                    debugPrint(
+                      '[ApiClient] retry failed path=${safeRequestPathForLog(opts.path)} '
+                      'errorType=${retryErr.runtimeType}',
+                    );
                     if (retryErr is DioException) {
                       return handler.next(retryErr);
                     }
@@ -131,7 +204,7 @@ class ApiClient {
               }
               // 刷新失败，清理 token
               if (token != null) {
-                _handleRefreshFailed();
+                await _clearSessionAndNotify(requestToken);
               }
             } else {
               debugPrint(
@@ -141,7 +214,9 @@ class ApiClient {
           return handler.next(error);
         } catch (unexpected) {
           debugPrint(
-              '[ApiClient] FATAL: onError interceptor threw: $unexpected');
+            '[ApiClient] onError interceptor failed '
+            'path=${safeRequestPathForLog(error.requestOptions.path)} errorType=${unexpected.runtimeType}',
+          );
           // 兜底：保证 handler 一定被调用，避免请求永久挂起
           return handler.next(DioException(
             requestOptions: error.requestOptions,
@@ -151,7 +226,6 @@ class ApiClient {
         }
       },
     ));
-    return dio;
   }
 
   /// 仅记录凭据是否存在及长度，不输出原文或解码后的声明。
@@ -180,6 +254,7 @@ class ApiClient {
     final activated = t != null && t.trim().isNotEmpty;
     token = activated ? t : null;
     if (activated) {
+      _sessionClearNotified = false;
       printToken('ApiClient.setToken (内存写入)', t);
       // 解出 token 中的用户 ID 并通知业务层做一致性校验
       final uid = _extractUserIdFromToken(t);
@@ -187,7 +262,8 @@ class ApiClient {
         try {
           onUserIdDetected?.call(uid);
         } catch (e) {
-          debugPrint('[ApiClient] onUserIdDetected callback threw: $e');
+          debugPrint(
+              '[ApiClient] onUserIdDetected callback failed errorType=${e.runtimeType}');
         }
       } else {
         debugPrint(
@@ -203,15 +279,20 @@ class ApiClient {
     Future<void> Function()? hook,
     String operation,
   ) {
+    unawaited(_runTokenHookNow(hook, operation));
+  }
+
+  static Future<void> _runTokenHookNow(
+    Future<void> Function()? hook,
+    String operation,
+  ) async {
     if (hook == null) return;
-    unawaited(() async {
-      try {
-        await hook();
-      } catch (error, stack) {
-        debugPrint('[ApiClient] token $operation hook failed: $error');
-        debugPrint(stack.toString());
-      }
-    }());
+    try {
+      await hook();
+    } catch (error) {
+      debugPrint(
+          '[ApiClient] token $operation hook failed errorType=${error.runtimeType}');
+    }
   }
 
   /// 从 JWT 中解出 `sub` 字段（即用户 ID），失败返回 null。
@@ -264,7 +345,8 @@ class ApiClient {
             await prefs.setString('access_token', newToken);
             debugPrint('[ApiClient] _doRefreshToken: step6 persisted OK');
           } catch (e) {
-            debugPrint('[ApiClient] _doRefreshToken: step6 persist failed: $e');
+            debugPrint(
+                '[ApiClient] _doRefreshToken: step6 persist failed errorType=${e.runtimeType}');
           }
           debugPrint(
               '[ApiClient] token refreshed (total ${DateTime.now().difference(t0).inMilliseconds}ms)');
@@ -278,37 +360,71 @@ class ApiClient {
       }
     } catch (e) {
       final elapsed = DateTime.now().difference(t0).inMilliseconds;
-      debugPrint('[ApiClient] _doRefreshToken failed after ${elapsed}ms: $e');
+      debugPrint(
+          '[ApiClient] _doRefreshToken failed after ${elapsed}ms errorType=${e.runtimeType}');
     }
     return null;
   }
 
-  /// 刷新失败后的统一清理：置空 token + 清除持久化 + 断开 WS
-  static void _handleRefreshFailed() {
+  /// 刷新失败或账号停用后的统一清理：置空 token + 清除持久化 + 断开 WS
+  static Future<void> _clearSessionAndNotify(String? tokenToClear) async {
+    final shouldNotify = !_sessionClearNotified;
+    _sessionClearNotified = true;
+    final currentToken = token;
     debugPrint(
-        '[ApiClient] _handleRefreshFailed: clearing token (was=${token != null ? "set" : "null"})');
-    final oldToken = token;
-    setToken(null);
-    // 异步清除 SharedPreferences 中的过期 token
-    unawaited(Future(() async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        if (prefs.getString('access_token') == oldToken) {
-          await prefs.remove('access_token');
-          await prefs.remove('current_user_id');
+        '[ApiClient] clearing session (was=${currentToken != null ? "set" : "null"})');
+    if (tokenToClear == null || currentToken != tokenToClear) {
+      _sessionClearNotified = false;
+      debugPrint('[ApiClient] skipped stale in-memory session cleanup');
+      return;
+    }
+    token = null;
+    await _runTokenHookNow(onTokenCleared, 'clear');
+    var hasNewerSession = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var persistedToken = prefs.getString('access_token');
+      hasNewerSession = token != null ||
+          (persistedToken != null && persistedToken != tokenToClear);
+      if (!hasNewerSession && persistedToken == tokenToClear) {
+        await prefs.remove('current_user_id');
+        persistedToken = prefs.getString('access_token');
+        if (persistedToken == tokenToClear) {
           await prefs.remove('current_user_json');
-          debugPrint(
-              '[ApiClient] _handleRefreshFailed: cleared expired token from prefs');
-        } else {
-          debugPrint(
-              '[ApiClient] _handleRefreshFailed: prefs token already different, skip');
         }
-      } catch (e) {
-        debugPrint('[ApiClient] _handleRefreshFailed: prefs cleanup error: $e');
+        persistedToken = prefs.getString('access_token');
+        if (persistedToken == tokenToClear) {
+          await prefs.remove('access_token');
+        }
+        hasNewerSession = token != null ||
+            (prefs.getString('access_token') != null &&
+                prefs.getString('access_token') != tokenToClear);
+        debugPrint('[ApiClient] cleared persisted session');
+      } else {
+        debugPrint('[ApiClient] skipped stale persisted session cleanup');
       }
-    }));
+    } catch (e) {
+      debugPrint('[ApiClient] prefs cleanup failed errorType=${e.runtimeType}');
+    }
+    if (hasNewerSession) {
+      _sessionClearNotified = false;
+    }
     // 通知 UI 层跳转登录页
-    onTokenExpired?.call();
+    if (shouldNotify && !hasNewerSession && token == null) {
+      onTokenExpired?.call();
+    }
+  }
+
+  @visibleForTesting
+  static void resetTestHooks() {
+    token = null;
+    _isRefreshing = false;
+    _sessionClearNotified = false;
+    _refreshDio = _createRefreshDio();
+    onTokenExpired = null;
+    onUserIdDetected = null;
+    onTokenActivated = null;
+    onTokenCleared = null;
   }
 
   Future<ApiResponse<T>> get<T>(String path,
@@ -603,8 +719,7 @@ class ApiClient {
         presignResp.data!['url'] as String? ??
         '';
     if (presignedUrl.isEmpty) {
-      debugPrint(
-          '_handlePresignAndUpload: presigned URL is empty. presignResp.data=${presignResp.data}');
+      debugPrint('_handlePresignAndUpload: presigned URL is empty');
       return ApiResponse(success: false, message: '上传服务暂不可用，请检查 COS 配置或稍后重试');
     }
 
@@ -628,7 +743,7 @@ class ApiClient {
             publicUrl = confirmResp.data['url'] as String;
           }
         } catch (e) {
-          debugPrint('Upload confirm failed: $e');
+          debugPrint('Upload confirm failed errorType=${e.runtimeType}');
         }
       }
 
@@ -636,7 +751,7 @@ class ApiClient {
       if (publicUrl.isEmpty) {
         publicUrl = presignedUrl.split('?').first;
         debugPrint(
-            '_handlePresignAndUpload: public_url is empty, fallback to presigned base URL: $publicUrl');
+            '_handlePresignAndUpload: public_url is empty, using presigned base URL');
       }
 
       // 头像/封面需要调用专属 confirm 端点更新数据库
@@ -644,7 +759,7 @@ class ApiClient {
         try {
           await post('/upload/avatar/confirm', data: {'url': publicUrl});
         } catch (e) {
-          debugPrint('Avatar confirm failed: $e');
+          debugPrint('Avatar confirm failed errorType=${e.runtimeType}');
         }
         return ApiResponse(
           success: true,
@@ -655,7 +770,7 @@ class ApiClient {
         try {
           await post('/upload/cover/confirm', data: {'url': publicUrl});
         } catch (e) {
-          debugPrint('Cover confirm failed: $e');
+          debugPrint('Cover confirm failed errorType=${e.runtimeType}');
         }
         return ApiResponse(
           success: true,
@@ -715,13 +830,26 @@ class ApiClient {
     }
   }
 
-  ApiResponse<T> _handleError<T>(DioException e) {
-    final data = e.response?.data;
+  static ApiResponse<T> parseErrorResponse<T>({
+    required int? statusCode,
+    dynamic data,
+    String? fallbackMessage,
+  }) {
     String? msg;
+    String? code;
+    bool? retryable;
+
     if (data is Map) {
       // FastAPI returns errors with 'detail' field
       final detail = data['detail'];
-      if (detail is String) {
+      if (detail is Map) {
+        code = detail['code']?.toString();
+        msg = detail['message']?.toString();
+        final detailRetryable = detail['retryable'];
+        if (detailRetryable is bool) {
+          retryable = detailRetryable;
+        }
+      } else if (detail is String) {
         msg = detail;
       } else if (detail is List && detail.isNotEmpty) {
         // Pydantic validation errors: [{loc, msg, type}, ...]
@@ -734,8 +862,44 @@ class ApiClient {
       }
       msg ??= data['message']?.toString();
     }
-    msg ??= e.message ?? 'Network error';
-    return ApiResponse(
-        success: false, message: msg, statusCode: e.response?.statusCode);
+
+    switch (code) {
+      case ApiErrorCodes.contentRejected:
+        retryable = false;
+        msg = msg?.trim().isNotEmpty == true ? msg : '内容未通过审核';
+        break;
+      case ApiErrorCodes.moderationUnavailable:
+        retryable = true;
+        msg = msg?.trim().isNotEmpty == true ? msg : '内容审核服务暂不可用，请稍后重试';
+        break;
+      case ApiErrorCodes.accountDisabled:
+        retryable = false;
+        msg = msg?.trim().isNotEmpty == true ? msg : '账号已停用';
+        break;
+      default:
+        retryable ??= statusCode == null || statusCode >= 500;
+    }
+
+    if (msg == null || msg.trim().isEmpty) {
+      msg = fallbackMessage;
+    }
+    if (msg == null || msg.trim().isEmpty) {
+      msg = 'Network error';
+    }
+    return ApiResponse<T>(
+      success: false,
+      message: msg,
+      statusCode: statusCode,
+      errorCode: code,
+      isRetryable: retryable,
+    );
+  }
+
+  ApiResponse<T> _handleError<T>(DioException e) {
+    return parseErrorResponse<T>(
+      statusCode: e.response?.statusCode,
+      data: e.response?.data,
+      fallbackMessage: e.message,
+    );
   }
 }

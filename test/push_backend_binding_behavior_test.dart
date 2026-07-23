@@ -251,5 +251,107 @@ void main() {
       );
       expect(token, isNull);
     });
+
+    test('logout clears a refreshed token written during unregister', () async {
+      String? token = 'test-token';
+      final unregisterGate = Completer<void>();
+      final events = <String>[];
+      final pushService = _bindingService(
+        hasAuthToken: () => token != null,
+        registerDevice: (deviceId) async => true,
+        unregisterDevice: (deviceId) async {
+          events.add('unregister:$token');
+          await unregisterGate.future;
+          return true;
+        },
+      );
+      final notifier = AuthNotifier.forTesting(
+        prefs,
+        pushService: pushService,
+        setAppForeground: (foreground) {
+          events.add('foreground:$foreground');
+        },
+        disconnectWebSocket: () async {
+          events.add('disconnect');
+        },
+        setToken: (value, {connectWs = true}) {
+          token = value;
+          events.add('token:${value == null ? 'cleared' : 'active'}');
+        },
+        clearLocalSession: () async {
+          events.add('local-clear');
+        },
+      );
+      addTearDown(notifier.dispose);
+      await notifier.restoredSessionReady;
+      events.clear();
+
+      final logout = notifier.logout();
+      await _flushAsyncWork();
+      token = 'new-token';
+      await prefs.setString('access_token', 'new-token');
+      await prefs.setString('current_user_id', '9');
+      await prefs.setString('current_user_json', '{"id":9}');
+
+      unregisterGate.complete();
+      await logout;
+
+      expect(events, contains('token:cleared'));
+      expect(events, contains('local-clear'));
+      expect(token, isNull);
+      expect(prefs.containsKey('access_token'), isFalse);
+      expect(prefs.containsKey('current_user_id'), isFalse);
+      expect(prefs.containsKey('current_user_json'), isFalse);
+    });
+
+    test('stale session cleanup preserves a newly persisted session', () async {
+      String? token = 'test-token';
+      final unregisterGate = Completer<void>();
+      final events = <String>[];
+      final pushService = _bindingService(
+        hasAuthToken: () => token != null,
+        registerDevice: (deviceId) async => true,
+        unregisterDevice: (deviceId) async {
+          events.add('unregister:$token');
+          await unregisterGate.future;
+          return true;
+        },
+      );
+      final notifier = AuthNotifier.forTesting(
+        prefs,
+        pushService: pushService,
+        setAppForeground: (foreground) {
+          events.add('foreground:$foreground');
+        },
+        disconnectWebSocket: () async {
+          events.add('disconnect');
+        },
+        setToken: (value, {connectWs = true}) {
+          token = value;
+          events.add('token:${value == null ? 'cleared' : 'active'}');
+        },
+        clearLocalSession: () async {
+          events.add('local-clear');
+        },
+      );
+      addTearDown(notifier.dispose);
+      await notifier.restoredSessionReady;
+      events.clear();
+
+      final staleCleanup = notifier.expireSessionForTesting();
+      await _flushAsyncWork();
+      await prefs.setString('access_token', 'new-token');
+      await prefs.setString('current_user_id', '9');
+      await prefs.setString('current_user_json', '{"id":9}');
+
+      unregisterGate.complete();
+      await staleCleanup;
+
+      expect(events, isNot(contains('token:cleared')));
+      expect(events, isNot(contains('local-clear')));
+      expect(prefs.getString('access_token'), 'new-token');
+      expect(prefs.getString('current_user_id'), '9');
+      expect(prefs.getString('current_user_json'), '{"id":9}');
+    });
   });
 }
