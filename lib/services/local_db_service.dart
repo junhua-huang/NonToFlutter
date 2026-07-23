@@ -211,6 +211,9 @@ class LocalDbService {
       quoteMessageId: Value(msg.quoteMessageId),
       quotePreview: Value(msg.quotePreview),
       isRecalled: Value(msg.isRecalled),
+      failureCode: Value(msg.failureCode),
+      failureMessage: Value(msg.failureMessage),
+      retryable: Value(msg.retryable),
     );
   }
 
@@ -238,6 +241,9 @@ class LocalDbService {
       quoteMessageId: row.quoteMessageId,
       quotePreview: row.quotePreview,
       isRecalled: row.isRecalled,
+      failureCode: row.failureCode,
+      failureMessage: row.failureMessage,
+      retryable: row.retryable,
     );
   }
 
@@ -251,7 +257,8 @@ class LocalDbService {
       otherUserAvatar: Value(conv.otherUser?.avatarUrl),
       otherUserUsername: Value(conv.otherUser?.username),
       lastMessage: Value(conv.lastMessage?.content),
-      lastMessageType: Value(conv.lastMessage?.messageType.name ?? MessageType.text.name),
+      lastMessageType:
+          Value(conv.lastMessage?.messageType.name ?? MessageType.text.name),
       lastMessageMediaUrl: Value(conv.lastMessage?.mediaUrl),
       lastMessageRelatedId: Value(conv.lastMessage?.relatedId),
       lastMessageIsRecalled: Value(conv.lastMessage?.isRecalled ?? false),

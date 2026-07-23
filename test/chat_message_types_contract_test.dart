@@ -176,10 +176,11 @@ void main() {
       expect(source, contains('quotePreview: Value(msg.quotePreview)'));
       expect(source, contains('isRecalled: Value(msg.isRecalled)'));
       expect(source, contains('uploadProgress: Value(msg.uploadProgress)'));
+      expect(source, contains('lastMessageType:'));
       expect(
           source,
           contains(
-              'lastMessageType: Value(conv.lastMessage?.messageType.name ?? MessageType.text.name)'));
+              'Value(conv.lastMessage?.messageType.name ?? MessageType.text.name)'));
       expect(source,
           contains('lastMessageMediaUrl: Value(conv.lastMessage?.mediaUrl)'));
       expect(source,
@@ -282,15 +283,16 @@ void main() {
     });
 
     test('post share target resolver falls back to SQLite conversations', () {
-      final source =
-          File('lib/services/post_share_target_resolver.dart').readAsStringSync();
+      final source = File('lib/services/post_share_target_resolver.dart')
+          .readAsStringSync();
       final cacheIndex = source.indexOf('CacheKeys.convFullList');
       final dbFallbackIndex =
           source.indexOf('DataLayer().loadConversationsFromDb()');
 
       expect(cacheIndex, greaterThanOrEqualTo(0));
       expect(dbFallbackIndex, greaterThan(cacheIndex),
-          reason: 'Missing/empty convFullList cache should use SQLite history.');
+          reason:
+              'Missing/empty convFullList cache should use SQLite history.');
       expect(source, contains('data.isNotEmpty'));
     });
 
@@ -337,7 +339,8 @@ void main() {
     });
 
     test('post share community list cache is registered in manifest', () {
-      final source = File('lib/services/cache_manifest.dart').readAsStringSync();
+      final source =
+          File('lib/services/cache_manifest.dart').readAsStringSync();
       expect(source, contains('community:my:list'));
       expect(source, contains("domain: 'community'"));
       expect(source, contains('我的社群列表'));

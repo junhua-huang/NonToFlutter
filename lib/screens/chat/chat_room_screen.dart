@@ -1091,13 +1091,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
     Widget imageChild;
     if (isFailed) {
-      // ── 上传失败：显示占位图 + 重试提示 ──
+      final failureText = msg.failureMessage?.trim();
+      final reason = failureText?.isNotEmpty == true ? failureText! : '上传失败';
+      // ── 上传失败：终态失败只显示原因，可重试失败才暴露重试入口 ──
       imageChild = GestureDetector(
-        onTap: () {
-          ref
-              .read(messagesProvider(widget.conversation.id).notifier)
-              .retryImageUpload(msg.id);
-        },
+        onTap: msg.canRetry
+            ? () {
+                ref
+                    .read(messagesProvider(widget.conversation.id).notifier)
+                    .retryImageUpload(msg.id);
+              }
+            : null,
         child: Container(
           width: 240,
           height: 180,
@@ -1108,7 +1112,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
               Icon(Icons.cloud_off, size: 36, color: Colors.grey[600]),
               const SizedBox(height: 8),
               Text(
-                '上传失败，点击重试',
+                msg.canRetry ? '$reason，点击重试' : reason,
                 style: TextStyle(fontSize: 13, color: Colors.grey[700]),
               ),
             ],
@@ -1179,9 +1183,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       borderRadius: BorderRadius.circular(12),
       child: GestureDetector(
         onTap: isFailed
-            ? () => ref
-                .read(messagesProvider(widget.conversation.id).notifier)
-                .retryImageUpload(msg.id)
+            ? (msg.canRetry
+                ? () => ref
+                    .read(messagesProvider(widget.conversation.id).notifier)
+                    .retryImageUpload(msg.id)
+                : null)
             : (url.startsWith('http') && !isUploading
                 ? () => _showImageViewer(url)
                 : null),
@@ -1752,16 +1758,33 @@ class _SendStatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!isMe) return const SizedBox.shrink();
     if (message.status == 'failed') {
-      return TextButton.icon(
-        onPressed: onRetry,
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          foregroundColor: Colors.redAccent,
-        ),
-        icon: const Icon(Icons.refresh_rounded, size: 14),
-        label: const Text('重试', style: TextStyle(fontSize: 11)),
+      final failureText = message.failureMessage?.trim();
+      final reason = failureText?.isNotEmpty == true ? failureText! : '发送失败';
+      if (!message.canRetry) {
+        return Text(
+          reason,
+          style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+        );
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            reason,
+            style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+          ),
+          TextButton.icon(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: Colors.redAccent,
+            ),
+            icon: const Icon(Icons.refresh_rounded, size: 14),
+            label: const Text('重试', style: TextStyle(fontSize: 11)),
+          ),
+        ],
       );
     }
     // 上传/发送中（乐观消息）

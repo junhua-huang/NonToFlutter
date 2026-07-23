@@ -38,12 +38,38 @@ class ChatSendFailure {
   });
 
   factory ChatSendFailure.fromReliable(SendFailure failure) {
+    final code = failure.code ?? 'SEND_FAILED';
     return ChatSendFailure(
       clientMsgId: failure.clientMsgId,
-      code: failure.code ?? 'SEND_FAILED',
-      message: failure.message.trim().isNotEmpty ? failure.message : '发送失败',
-      retryable: failure.retryable,
+      code: code,
+      message: safeChatFailureMessage(code, failure.message),
+      retryable: safeChatFailureRetryable(code, failure.retryable),
     );
+  }
+}
+
+String safeChatFailureMessage(String code, String? message) {
+  switch (code) {
+    case ApiErrorCodes.contentRejected:
+      return '内容未通过审核';
+    case ApiErrorCodes.moderationUnavailable:
+      return '内容审核服务暂不可用，请稍后重试';
+    case 'MAX_RETRIES_EXCEEDED':
+      return '发送失败：已达最大重试次数';
+    default:
+      final text = message?.trim();
+      return text == '发送失败' ? text! : '发送失败';
+  }
+}
+
+bool safeChatFailureRetryable(String code, bool retryable) {
+  switch (code) {
+    case ApiErrorCodes.contentRejected:
+      return false;
+    case ApiErrorCodes.moderationUnavailable:
+      return true;
+    default:
+      return retryable;
   }
 }
 
@@ -642,7 +668,7 @@ class WebSocketService {
           _sendErrorController.add(ChatSendFailure(
             clientMsgId: clientMsgId,
             code: 'SEND_FAILED',
-            message: message.trim().isNotEmpty ? message : '发送失败',
+            message: safeChatFailureMessage('SEND_FAILED', message),
             retryable: false,
           ));
         }

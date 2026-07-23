@@ -154,7 +154,7 @@ void main() {
     );
     final failure = await sendError;
     expect(failure.clientMsgId, 'client-2');
-    expect(failure.message, 'delivery failed');
+    expect(failure.message, '发送失败');
     expect(fixture.notificationSounds, 0);
     expect(fixture.onlineSounds, 0);
     expect(fixture.lightImpacts, 0);

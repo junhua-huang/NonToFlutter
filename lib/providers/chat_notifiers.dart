@@ -1457,7 +1457,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final now = DateTime.now();
 
     debugPrint(
-        '[Chat] sendMessage conv=$conversationId content="$content" type=$messageType qDepth=${_sendQueue.pendingCount}');
+        '[Chat] sendMessage conv=$conversationId type=$messageType length=${content.length} qDepth=${_sendQueue.pendingCount}');
 
     // 乐观消息（先落本地再入队）
     final optimisticMsg = Message(
@@ -1542,6 +1542,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             mediaUrl: url,
             status: 'sending',
             uploadProgress: 1.0,
+            clearFailure: true,
             clearTempBytes: true, // 上传成功后清除临时 bytes
           );
           final updated = state.messages
@@ -1556,11 +1557,17 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           _sendQueue.enqueue(queuedMsg);
         }
       } else {
-        // 上传失败，标记为 failed 但保留 tempBytes 用于重试
-        _markUploadFailed(optimisticMsg.id, bytes);
+        // 上传失败，标记为 failed 但保留 tempBytes 用于允许的手动重试
+        _markUploadFailed(
+          optimisticMsg.id,
+          bytes,
+          failureCode: uploadResp.errorCode,
+          failureMessage: apiFailureMessage(uploadResp, fallback: '上传失败，请重试'),
+          retryable: uploadResp.isRetryable != false,
+        );
       }
     } catch (e) {
-      debugPrint('Send image error: $e');
+      debugPrint('[Chat] image upload failed');
       // 上传失败，标记为 failed 但保留 tempBytes 用于重试
       _markUploadFailed(optimisticMsg.id, bytes);
     }
@@ -1615,6 +1622,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             mediaUrl: url,
             status: 'sending',
             uploadProgress: 1.0,
+            clearFailure: true,
             clearTempBytes: true,
           );
           final updated = state.messages
@@ -1628,24 +1636,48 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           _sendQueue.enqueue(queuedMsg);
         }
       } else {
-        _markUploadFailed(optimisticMsg.id, bytes);
+        _markUploadFailed(
+          optimisticMsg.id,
+          bytes,
+          failureCode: uploadResp.errorCode,
+          failureMessage: apiFailureMessage(uploadResp, fallback: '上传失败，请重试'),
+          retryable: uploadResp.isRetryable != false,
+        );
       }
     } catch (e) {
-      debugPrint('Send video error: $e');
+      debugPrint('[Chat] video upload failed');
       _markUploadFailed(optimisticMsg.id, bytes);
     }
   }
 
-  /// 标记图片/视频上传失败（保留 tempBytes 以便重试）
-  void _markUploadFailed(int optimisticId, Uint8List bytes) {
+  /// 标记图片/视频上传失败（仅 retryable=true 时允许手动重试）
+  void _markUploadFailed(
+    int optimisticId,
+    Uint8List bytes, {
+    String? failureCode,
+    String? failureMessage,
+    bool retryable = true,
+  }) {
     if (!mounted) return;
+    Message? failedMessage;
     final updated = state.messages.map((m) {
       if (m.id == optimisticId) {
-        return m.copyWith(status: 'failed', tempBytes: bytes);
+        failedMessage = m.copyWith(
+          status: 'failed',
+          tempBytes: bytes,
+          failureCode: failureCode,
+          failureMessage: failureMessage ?? '上传失败，请重试',
+          retryable: retryable,
+        );
+        return failedMessage!;
       }
       return m;
     }).toList();
     state = state.copyWith(messages: updated, isSending: false);
+    if (failedMessage != null) {
+      DataLayer().persistMessage(failedMessage!);
+      _syncL1();
+    }
   }
 
   /// 重试失败的普通消息。媒体上传失败继续走专门的上传重试。
@@ -1653,7 +1685,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final msgIdx = state.messages.indexWhere((m) => m.id == msgId);
     if (msgIdx < 0) return;
     final failed = state.messages[msgIdx];
-    if (failed.status != 'failed') return;
+    if (failed.status != 'failed' || !failed.canRetry) return;
 
     if (failed.messageType == MessageType.image && failed.tempBytes != null) {
       unawaited(retryImageUpload(msgId));
@@ -1678,7 +1710,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final msgIdx = state.messages.indexWhere((m) => m.id == msgId);
     if (msgIdx < 0) return;
     final msg = state.messages[msgIdx];
-    if (msg.status != 'failed' || msg.tempBytes == null) return;
+    if (msg.status != 'failed' || !msg.canRetry || msg.tempBytes == null) {
+      return;
+    }
 
     // 恢复为上传中状态
     final updated = state.messages.map((m) {
@@ -1687,6 +1721,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           status: 'uploading',
           uploadProgress: 0.0,
           tempBytes: msg.tempBytes,
+          clearFailure: true,
         );
       }
       return m;
@@ -1719,6 +1754,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             mediaUrl: url,
             status: 'sending',
             uploadProgress: 1.0,
+            clearFailure: true,
             clearTempBytes: true,
           );
           final finalUpdated =
@@ -1732,10 +1768,16 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           _sendQueue.enqueue(queuedMsg);
         }
       } else {
-        _markUploadFailed(msgId, msg.tempBytes!);
+        _markUploadFailed(
+          msgId,
+          msg.tempBytes!,
+          failureCode: uploadResp.errorCode,
+          failureMessage: apiFailureMessage(uploadResp, fallback: '上传失败，请重试'),
+          retryable: uploadResp.isRetryable != false,
+        );
       }
     } catch (e) {
-      debugPrint('Retry image upload error: $e');
+      debugPrint('[Chat] retry image upload failed');
       _markUploadFailed(msgId, msg.tempBytes!);
     }
   }
@@ -1861,7 +1903,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       status: 'failed',
       failureCode: failure.code,
       failureMessage: failure.message,
-      failureRetryable: failure.retryable,
+      retryable: failure.retryable,
     );
     state = state.copyWith(messages: updated, isSending: false);
     DataLayer().persistMessage(updated[idx]);
@@ -1979,7 +2021,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         status: 'failed',
         failureCode: failure.code,
         failureMessage: failure.message,
-        failureRetryable: failure.retryable,
+        retryable: failure.retryable,
       );
       state = state.copyWith(messages: updated, isSending: false);
       DataLayer().persistMessage(updated[idx]);

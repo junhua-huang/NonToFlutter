@@ -198,15 +198,16 @@ class ChatSendQueue {
     }
   }
 
-  void _applyFailure(Message msg, ChatSendFailure failure) {
+  Message _failedMessage(Message msg, ChatSendFailure failure) {
     if (failure.clientMsgId.isNotEmpty) {
-      msg.clientMsgId = failure.clientMsgId;
       _failedClientMsgIds.add(failure.clientMsgId);
+      msg.clientMsgId = failure.clientMsgId;
     }
     msg.status = 'failed';
     msg.failureCode = failure.code;
     msg.failureMessage = failure.message;
-    msg.failureRetryable = failure.retryable;
+    msg.retryable = failure.retryable;
+    return msg;
   }
 
   /// 收到服务端失败 ACK / error 帧 → 匹配 clientMsgId 并立即标记失败
@@ -225,8 +226,8 @@ class ChatSendQueue {
         debugPrint(
             '[SendQ] failed ACK for waiting msgId=${entry.message.id} code=${failure.code}');
         _waiting.remove(entry);
+        entry.message = _failedMessage(entry.message, failure);
         final msg = entry.message;
-        _applyFailure(msg, failure);
         DataLayer().persistMessage(msg).catchError((_) {});
         onFailed?.call(msg.id, failure);
         _drain();
@@ -246,8 +247,8 @@ class ChatSendQueue {
   void _failCurrent(ChatSendFailure failure) {
     _ackTimer?.cancel();
     _ackTimer = null;
+    _current!.message = _failedMessage(_current!.message, failure);
     final msg = _current!.message;
-    _applyFailure(msg, failure);
     DataLayer().persistMessage(msg).catchError((_) {});
     onFailed?.call(msg.id, failure);
     _current = null;
@@ -401,14 +402,14 @@ class ChatSendQueue {
       _processNext();
     } else {
       debugPrint('[SendQ] msgId=${entry.message.id} FAILED');
-      final msg = entry.message;
       final failure = ChatSendFailure(
-        clientMsgId: msg.clientMsgId ?? '',
+        clientMsgId: entry.message.clientMsgId ?? '',
         code: 'MAX_RETRIES_EXCEEDED',
         message: '发送失败：已达最大重试次数',
         retryable: true,
       );
-      _applyFailure(msg, failure);
+      entry.message = _failedMessage(entry.message, failure);
+      final msg = entry.message;
       try {
         await DataLayer().persistMessage(msg);
       } catch (_) {}
@@ -432,7 +433,7 @@ class ChatSendQueue {
 }
 
 class _SendEntry {
-  final Message message;
+  Message message;
   final DateTime enqueuedAt;
   int retries = 0;
 

@@ -35,9 +35,9 @@ class Message {
   String? failureMessage;
 
   /// 失败消息是否允许用户手动重试
-  bool? failureRetryable;
+  bool? retryable;
 
-  bool get canRetry => status == 'failed' && failureRetryable == true;
+  bool get canRetry => status == 'failed' && retryable == true;
 
   /// 引用的消息 ID
   final int? quoteMessageId;
@@ -68,7 +68,7 @@ class Message {
     this.uploadProgress,
     this.failureCode,
     this.failureMessage,
-    this.failureRetryable,
+    this.retryable,
     this.quoteMessageId,
     this.quotePreview,
     this.isRecalled = false,
@@ -97,9 +97,7 @@ class Message {
           : double.tryParse(data['upload_progress']?.toString() ?? ''),
       failureCode: data['failure_code']?.toString(),
       failureMessage: data['failure_message']?.toString(),
-      failureRetryable: data['failure_retryable'] is bool
-          ? data['failure_retryable'] as bool
-          : null,
+      retryable: _parseBool(data['retryable']),
       quoteMessageId: data['quote_message_id'] != null
           ? _p(data['quote_message_id'])
           : (data['related_type'] == 'quote' && data['related_id'] != null
@@ -150,6 +148,15 @@ class Message {
   static int _p(dynamic v) =>
       v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
 
+  static bool? _parseBool(dynamic v) {
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final text = v?.toString().trim().toLowerCase();
+    if (text == 'true' || text == '1') return true;
+    if (text == 'false' || text == '0') return false;
+    return null;
+  }
+
   static MessageType _messageTypeFromJson(Map<String, dynamic> json) {
     final raw = (json['message_type'] ?? json['type'] ?? 'text').toString();
     return MessageType.values.firstWhere(
@@ -182,7 +189,7 @@ class Message {
         if (uploadProgress != null) 'upload_progress': uploadProgress,
         if (failureCode != null) 'failure_code': failureCode,
         if (failureMessage != null) 'failure_message': failureMessage,
-        if (failureRetryable != null) 'failure_retryable': failureRetryable,
+        if (retryable != null) 'retryable': retryable,
         if (quoteMessageId != null) 'quote_message_id': quoteMessageId,
         if (quotePreview != null) 'quote_preview': quotePreview,
         'is_recalled': isRecalled,
@@ -205,7 +212,8 @@ class Message {
     double? uploadProgress,
     String? failureCode,
     String? failureMessage,
-    bool? failureRetryable,
+    bool? retryable,
+    bool clearFailure = false,
     int? quoteMessageId,
     String? quotePreview,
     bool? isRecalled,
@@ -227,9 +235,10 @@ class Message {
         seq: seq ?? this.seq,
         status: status ?? this.status,
         uploadProgress: uploadProgress ?? this.uploadProgress,
-        failureCode: failureCode ?? this.failureCode,
-        failureMessage: failureMessage ?? this.failureMessage,
-        failureRetryable: failureRetryable ?? this.failureRetryable,
+        failureCode: clearFailure ? null : (failureCode ?? this.failureCode),
+        failureMessage:
+            clearFailure ? null : (failureMessage ?? this.failureMessage),
+        retryable: clearFailure ? null : (retryable ?? this.retryable),
         quoteMessageId: quoteMessageId ?? this.quoteMessageId,
         quotePreview: quotePreview ?? this.quotePreview,
         isRecalled: isRecalled ?? this.isRecalled,

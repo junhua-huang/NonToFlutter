@@ -119,6 +119,27 @@ class $MessagesTableTable extends MessagesTable
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("is_recalled" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _failureCodeMeta =
+      const VerificationMeta('failureCode');
+  @override
+  late final GeneratedColumn<String> failureCode = GeneratedColumn<String>(
+      'failure_code', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _failureMessageMeta =
+      const VerificationMeta('failureMessage');
+  @override
+  late final GeneratedColumn<String> failureMessage = GeneratedColumn<String>(
+      'failure_message', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _retryableMeta =
+      const VerificationMeta('retryable');
+  @override
+  late final GeneratedColumn<bool> retryable = GeneratedColumn<bool>(
+      'retryable', aliasedName, true,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("retryable" IN (0, 1))'));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -137,7 +158,10 @@ class $MessagesTableTable extends MessagesTable
         uploadProgress,
         quoteMessageId,
         quotePreview,
-        isRecalled
+        isRecalled,
+        failureCode,
+        failureMessage,
+        retryable
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -234,6 +258,22 @@ class $MessagesTableTable extends MessagesTable
           isRecalled.isAcceptableOrUnknown(
               data['is_recalled']!, _isRecalledMeta));
     }
+    if (data.containsKey('failure_code')) {
+      context.handle(
+          _failureCodeMeta,
+          failureCode.isAcceptableOrUnknown(
+              data['failure_code']!, _failureCodeMeta));
+    }
+    if (data.containsKey('failure_message')) {
+      context.handle(
+          _failureMessageMeta,
+          failureMessage.isAcceptableOrUnknown(
+              data['failure_message']!, _failureMessageMeta));
+    }
+    if (data.containsKey('retryable')) {
+      context.handle(_retryableMeta,
+          retryable.isAcceptableOrUnknown(data['retryable']!, _retryableMeta));
+    }
     return context;
   }
 
@@ -277,6 +317,12 @@ class $MessagesTableTable extends MessagesTable
           .read(DriftSqlType.string, data['${effectivePrefix}quote_preview']),
       isRecalled: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_recalled'])!,
+      failureCode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}failure_code']),
+      failureMessage: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}failure_message']),
+      retryable: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}retryable']),
     );
   }
 
@@ -305,6 +351,9 @@ class MessagesTableData extends DataClass
   final int? quoteMessageId;
   final String? quotePreview;
   final bool isRecalled;
+  final String? failureCode;
+  final String? failureMessage;
+  final bool? retryable;
   const MessagesTableData(
       {required this.id,
       required this.conversationId,
@@ -322,7 +371,10 @@ class MessagesTableData extends DataClass
       this.uploadProgress,
       this.quoteMessageId,
       this.quotePreview,
-      required this.isRecalled});
+      required this.isRecalled,
+      this.failureCode,
+      this.failureMessage,
+      this.retryable});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -363,6 +415,15 @@ class MessagesTableData extends DataClass
       map['quote_preview'] = Variable<String>(quotePreview);
     }
     map['is_recalled'] = Variable<bool>(isRecalled);
+    if (!nullToAbsent || failureCode != null) {
+      map['failure_code'] = Variable<String>(failureCode);
+    }
+    if (!nullToAbsent || failureMessage != null) {
+      map['failure_message'] = Variable<String>(failureMessage);
+    }
+    if (!nullToAbsent || retryable != null) {
+      map['retryable'] = Variable<bool>(retryable);
+    }
     return map;
   }
 
@@ -403,6 +464,15 @@ class MessagesTableData extends DataClass
           ? const Value.absent()
           : Value(quotePreview),
       isRecalled: Value(isRecalled),
+      failureCode: failureCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureCode),
+      failureMessage: failureMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureMessage),
+      retryable: retryable == null && nullToAbsent
+          ? const Value.absent()
+          : Value(retryable),
     );
   }
 
@@ -427,6 +497,9 @@ class MessagesTableData extends DataClass
       quoteMessageId: serializer.fromJson<int?>(json['quoteMessageId']),
       quotePreview: serializer.fromJson<String?>(json['quotePreview']),
       isRecalled: serializer.fromJson<bool>(json['isRecalled']),
+      failureCode: serializer.fromJson<String?>(json['failureCode']),
+      failureMessage: serializer.fromJson<String?>(json['failureMessage']),
+      retryable: serializer.fromJson<bool?>(json['retryable']),
     );
   }
   @override
@@ -450,6 +523,9 @@ class MessagesTableData extends DataClass
       'quoteMessageId': serializer.toJson<int?>(quoteMessageId),
       'quotePreview': serializer.toJson<String?>(quotePreview),
       'isRecalled': serializer.toJson<bool>(isRecalled),
+      'failureCode': serializer.toJson<String?>(failureCode),
+      'failureMessage': serializer.toJson<String?>(failureMessage),
+      'retryable': serializer.toJson<bool?>(retryable),
     };
   }
 
@@ -470,7 +546,10 @@ class MessagesTableData extends DataClass
           Value<double?> uploadProgress = const Value.absent(),
           Value<int?> quoteMessageId = const Value.absent(),
           Value<String?> quotePreview = const Value.absent(),
-          bool? isRecalled}) =>
+          bool? isRecalled,
+          Value<String?> failureCode = const Value.absent(),
+          Value<String?> failureMessage = const Value.absent(),
+          Value<bool?> retryable = const Value.absent()}) =>
       MessagesTableData(
         id: id ?? this.id,
         conversationId: conversationId ?? this.conversationId,
@@ -492,6 +571,10 @@ class MessagesTableData extends DataClass
         quotePreview:
             quotePreview.present ? quotePreview.value : this.quotePreview,
         isRecalled: isRecalled ?? this.isRecalled,
+        failureCode: failureCode.present ? failureCode.value : this.failureCode,
+        failureMessage:
+            failureMessage.present ? failureMessage.value : this.failureMessage,
+        retryable: retryable.present ? retryable.value : this.retryable,
       );
   MessagesTableData copyWithCompanion(MessagesTableCompanion data) {
     return MessagesTableData(
@@ -523,6 +606,12 @@ class MessagesTableData extends DataClass
           : this.quotePreview,
       isRecalled:
           data.isRecalled.present ? data.isRecalled.value : this.isRecalled,
+      failureCode:
+          data.failureCode.present ? data.failureCode.value : this.failureCode,
+      failureMessage: data.failureMessage.present
+          ? data.failureMessage.value
+          : this.failureMessage,
+      retryable: data.retryable.present ? data.retryable.value : this.retryable,
     );
   }
 
@@ -545,7 +634,10 @@ class MessagesTableData extends DataClass
           ..write('uploadProgress: $uploadProgress, ')
           ..write('quoteMessageId: $quoteMessageId, ')
           ..write('quotePreview: $quotePreview, ')
-          ..write('isRecalled: $isRecalled')
+          ..write('isRecalled: $isRecalled, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('failureMessage: $failureMessage, ')
+          ..write('retryable: $retryable')
           ..write(')'))
         .toString();
   }
@@ -568,7 +660,10 @@ class MessagesTableData extends DataClass
       uploadProgress,
       quoteMessageId,
       quotePreview,
-      isRecalled);
+      isRecalled,
+      failureCode,
+      failureMessage,
+      retryable);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -589,7 +684,10 @@ class MessagesTableData extends DataClass
           other.uploadProgress == this.uploadProgress &&
           other.quoteMessageId == this.quoteMessageId &&
           other.quotePreview == this.quotePreview &&
-          other.isRecalled == this.isRecalled);
+          other.isRecalled == this.isRecalled &&
+          other.failureCode == this.failureCode &&
+          other.failureMessage == this.failureMessage &&
+          other.retryable == this.retryable);
 }
 
 class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
@@ -610,6 +708,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
   final Value<int?> quoteMessageId;
   final Value<String?> quotePreview;
   final Value<bool> isRecalled;
+  final Value<String?> failureCode;
+  final Value<String?> failureMessage;
+  final Value<bool?> retryable;
   const MessagesTableCompanion({
     this.id = const Value.absent(),
     this.conversationId = const Value.absent(),
@@ -628,6 +729,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     this.quoteMessageId = const Value.absent(),
     this.quotePreview = const Value.absent(),
     this.isRecalled = const Value.absent(),
+    this.failureCode = const Value.absent(),
+    this.failureMessage = const Value.absent(),
+    this.retryable = const Value.absent(),
   });
   MessagesTableCompanion.insert({
     this.id = const Value.absent(),
@@ -647,6 +751,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     this.quoteMessageId = const Value.absent(),
     this.quotePreview = const Value.absent(),
     this.isRecalled = const Value.absent(),
+    this.failureCode = const Value.absent(),
+    this.failureMessage = const Value.absent(),
+    this.retryable = const Value.absent(),
   })  : conversationId = Value(conversationId),
         senderId = Value(senderId);
   static Insertable<MessagesTableData> custom({
@@ -667,6 +774,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     Expression<int>? quoteMessageId,
     Expression<String>? quotePreview,
     Expression<bool>? isRecalled,
+    Expression<String>? failureCode,
+    Expression<String>? failureMessage,
+    Expression<bool>? retryable,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -686,6 +796,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       if (quoteMessageId != null) 'quote_message_id': quoteMessageId,
       if (quotePreview != null) 'quote_preview': quotePreview,
       if (isRecalled != null) 'is_recalled': isRecalled,
+      if (failureCode != null) 'failure_code': failureCode,
+      if (failureMessage != null) 'failure_message': failureMessage,
+      if (retryable != null) 'retryable': retryable,
     });
   }
 
@@ -706,7 +819,10 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       Value<double?>? uploadProgress,
       Value<int?>? quoteMessageId,
       Value<String?>? quotePreview,
-      Value<bool>? isRecalled}) {
+      Value<bool>? isRecalled,
+      Value<String?>? failureCode,
+      Value<String?>? failureMessage,
+      Value<bool?>? retryable}) {
     return MessagesTableCompanion(
       id: id ?? this.id,
       conversationId: conversationId ?? this.conversationId,
@@ -725,6 +841,9 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
       quoteMessageId: quoteMessageId ?? this.quoteMessageId,
       quotePreview: quotePreview ?? this.quotePreview,
       isRecalled: isRecalled ?? this.isRecalled,
+      failureCode: failureCode ?? this.failureCode,
+      failureMessage: failureMessage ?? this.failureMessage,
+      retryable: retryable ?? this.retryable,
     );
   }
 
@@ -782,6 +901,15 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
     if (isRecalled.present) {
       map['is_recalled'] = Variable<bool>(isRecalled.value);
     }
+    if (failureCode.present) {
+      map['failure_code'] = Variable<String>(failureCode.value);
+    }
+    if (failureMessage.present) {
+      map['failure_message'] = Variable<String>(failureMessage.value);
+    }
+    if (retryable.present) {
+      map['retryable'] = Variable<bool>(retryable.value);
+    }
     return map;
   }
 
@@ -804,7 +932,10 @@ class MessagesTableCompanion extends UpdateCompanion<MessagesTableData> {
           ..write('uploadProgress: $uploadProgress, ')
           ..write('quoteMessageId: $quoteMessageId, ')
           ..write('quotePreview: $quotePreview, ')
-          ..write('isRecalled: $isRecalled')
+          ..write('isRecalled: $isRecalled, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('failureMessage: $failureMessage, ')
+          ..write('retryable: $retryable')
           ..write(')'))
         .toString();
   }
@@ -2510,6 +2641,9 @@ typedef $$MessagesTableTableCreateCompanionBuilder = MessagesTableCompanion
   Value<int?> quoteMessageId,
   Value<String?> quotePreview,
   Value<bool> isRecalled,
+  Value<String?> failureCode,
+  Value<String?> failureMessage,
+  Value<bool?> retryable,
 });
 typedef $$MessagesTableTableUpdateCompanionBuilder = MessagesTableCompanion
     Function({
@@ -2530,6 +2664,9 @@ typedef $$MessagesTableTableUpdateCompanionBuilder = MessagesTableCompanion
   Value<int?> quoteMessageId,
   Value<String?> quotePreview,
   Value<bool> isRecalled,
+  Value<String?> failureCode,
+  Value<String?> failureMessage,
+  Value<bool?> retryable,
 });
 
 class $$MessagesTableTableFilterComposer
@@ -2594,6 +2731,16 @@ class $$MessagesTableTableFilterComposer
 
   ColumnFilters<bool> get isRecalled => $composableBuilder(
       column: $table.isRecalled, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get failureCode => $composableBuilder(
+      column: $table.failureCode, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get failureMessage => $composableBuilder(
+      column: $table.failureMessage,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get retryable => $composableBuilder(
+      column: $table.retryable, builder: (column) => ColumnFilters(column));
 }
 
 class $$MessagesTableTableOrderingComposer
@@ -2659,6 +2806,16 @@ class $$MessagesTableTableOrderingComposer
 
   ColumnOrderings<bool> get isRecalled => $composableBuilder(
       column: $table.isRecalled, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get failureCode => $composableBuilder(
+      column: $table.failureCode, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get failureMessage => $composableBuilder(
+      column: $table.failureMessage,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get retryable => $composableBuilder(
+      column: $table.retryable, builder: (column) => ColumnOrderings(column));
 }
 
 class $$MessagesTableTableAnnotationComposer
@@ -2720,6 +2877,15 @@ class $$MessagesTableTableAnnotationComposer
 
   GeneratedColumn<bool> get isRecalled => $composableBuilder(
       column: $table.isRecalled, builder: (column) => column);
+
+  GeneratedColumn<String> get failureCode => $composableBuilder(
+      column: $table.failureCode, builder: (column) => column);
+
+  GeneratedColumn<String> get failureMessage => $composableBuilder(
+      column: $table.failureMessage, builder: (column) => column);
+
+  GeneratedColumn<bool> get retryable =>
+      $composableBuilder(column: $table.retryable, builder: (column) => column);
 }
 
 class $$MessagesTableTableTableManager extends RootTableManager<
@@ -2765,6 +2931,9 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             Value<int?> quoteMessageId = const Value.absent(),
             Value<String?> quotePreview = const Value.absent(),
             Value<bool> isRecalled = const Value.absent(),
+            Value<String?> failureCode = const Value.absent(),
+            Value<String?> failureMessage = const Value.absent(),
+            Value<bool?> retryable = const Value.absent(),
           }) =>
               MessagesTableCompanion(
             id: id,
@@ -2784,6 +2953,9 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             quoteMessageId: quoteMessageId,
             quotePreview: quotePreview,
             isRecalled: isRecalled,
+            failureCode: failureCode,
+            failureMessage: failureMessage,
+            retryable: retryable,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -2803,6 +2975,9 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             Value<int?> quoteMessageId = const Value.absent(),
             Value<String?> quotePreview = const Value.absent(),
             Value<bool> isRecalled = const Value.absent(),
+            Value<String?> failureCode = const Value.absent(),
+            Value<String?> failureMessage = const Value.absent(),
+            Value<bool?> retryable = const Value.absent(),
           }) =>
               MessagesTableCompanion.insert(
             id: id,
@@ -2822,6 +2997,9 @@ class $$MessagesTableTableTableManager extends RootTableManager<
             quoteMessageId: quoteMessageId,
             quotePreview: quotePreview,
             isRecalled: isRecalled,
+            failureCode: failureCode,
+            failureMessage: failureMessage,
+            retryable: retryable,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

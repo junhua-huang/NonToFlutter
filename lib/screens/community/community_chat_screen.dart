@@ -202,7 +202,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       final status = message['status']?.toString();
       final id = _messageIdentity(message);
       final clientMsgId = message['client_msg_id']?.toString();
-      return status == 'sending' &&
+      return (status == 'sending' || status == 'failed') &&
           (id == null || !serverIds.contains(id)) &&
           (clientMsgId == null ||
               clientMsgId.isEmpty ||
@@ -311,9 +311,14 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       );
       if (!resp.success) {
         if (mounted) {
-          _markOptimisticFailed(optimistic['id']);
+          final message = apiFailureMessage(resp, fallback: '发送失败，请重试');
+          _markOptimisticFailed(
+            optimistic['id'],
+            failureMessage: message,
+            retryable: resp.isRetryable != false,
+          );
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(apiFailureMessage(resp, fallback: '发送失败，请重试')),
+            content: Text(message),
           ));
         }
         return;
@@ -386,10 +391,19 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     return null;
   }
 
-  void _markOptimisticFailed(dynamic optimisticId) {
+  void _markOptimisticFailed(
+    dynamic optimisticId, {
+    String? failureMessage,
+    bool retryable = true,
+  }) {
     final updated = _messages.map((message) {
       if (message['id'] == optimisticId) {
-        return {...message, 'status': 'failed'};
+        return {
+          ...message,
+          'status': 'failed',
+          'failure_message': failureMessage ?? '发送失败，请重试',
+          'retryable': retryable,
+        };
       }
       return message;
     }).toList();
@@ -401,10 +415,16 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   }
 
   void _retryMessage(Map<String, dynamic> message) {
+    if (message['retryable'] != true) return;
     final content = message['content']?.toString() ?? '';
     if (content.trim().isEmpty) return;
     final messageType = message['message_type']?.toString() ?? 'text';
     final mediaUrl = message['media_url']?.toString();
+    final quoteMessageId = int.tryParse(
+        message['quote_message_id']?.toString() ??
+            message['quoteMessageId']?.toString() ??
+            '');
+    final quotePreview = message['quote_preview']?.toString();
     final mentionUserIds = (message['mention_user_ids'] is List)
         ? (message['mention_user_ids'] as List)
             .map((id) => int.tryParse(id?.toString() ?? ''))
@@ -421,6 +441,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       messageType: messageType,
       mediaUrl: mediaUrl?.isNotEmpty == true ? mediaUrl : null,
       mentionUserIds: mentionUserIds,
+      quoteMessageId: quoteMessageId,
+      quotePreview: quotePreview,
       clientMsgId: clientMsgId,
     );
     setState(() => _messages.add(optimistic));
@@ -436,13 +458,19 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           messageType: messageType,
           mediaUrl: mediaUrl?.isNotEmpty == true ? mediaUrl : null,
           mentionUserIds: mentionUserIds,
+          quoteMessageId: quoteMessageId,
           clientMsgId: clientMsgId,
         );
         if (!resp.success) {
           if (mounted) {
-            _markOptimisticFailed(optimistic['id']);
+            final message = apiFailureMessage(resp, fallback: '重试失败，请重试');
+            _markOptimisticFailed(
+              optimistic['id'],
+              failureMessage: message,
+              retryable: resp.isRetryable != false,
+            );
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(apiFailureMessage(resp, fallback: '重试失败，请重试')),
+              content: Text(message),
             ));
           }
           return;
@@ -1192,9 +1220,14 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       );
       if (!resp.success) {
         if (mounted) {
-          _markOptimisticFailed(optimistic['id']);
+          final message = apiFailureMessage(resp, fallback: '发送媒体失败，请重试');
+          _markOptimisticFailed(
+            optimistic['id'],
+            failureMessage: message,
+            retryable: resp.isRetryable != false,
+          );
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(apiFailureMessage(resp, fallback: '发送媒体失败，请重试')),
+            content: Text(message),
           ));
         }
         return;
@@ -1749,6 +1782,10 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final recalled = message['is_recalled'] == true;
     final bool isFailed = message['status']?.toString() == 'failed';
+    final failureText = message['failure_message']?.toString().trim();
+    final failureReason =
+        failureText?.isNotEmpty == true ? failureText! : '发送失败';
+    final canRetry = message['retryable'] == true;
     final content = message['content'] ?? '';
     final messageType = message['message_type']?.toString() ?? 'text';
     final mediaUrl = message['media_url']?.toString().isNotEmpty == true
@@ -1858,18 +1895,35 @@ class _MessageBubble extends StatelessWidget {
                         color: isMine ? Colors.white70 : AppColors.textTertiary,
                       ),
                     ),
-                    if (isMine && isFailed)
-                      TextButton.icon(
-                        onPressed: onRetry,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 2),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor: Colors.white,
-                        ),
-                        icon: const Icon(Icons.refresh_rounded, size: 14),
-                        label: const Text('重试', style: TextStyle(fontSize: 11)),
+                    if (isMine && isFailed && !canRetry)
+                      Text(
+                        failureReason,
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.white70),
+                      ),
+                    if (isMine && isFailed && canRetry)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            failureReason,
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.white70),
+                          ),
+                          TextButton.icon(
+                            onPressed: onRetry,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 2),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: Colors.white,
+                            ),
+                            icon: const Icon(Icons.refresh_rounded, size: 14),
+                            label: const Text('重试',
+                                style: TextStyle(fontSize: 11)),
+                          ),
+                        ],
                       ),
                   ],
                 ),
