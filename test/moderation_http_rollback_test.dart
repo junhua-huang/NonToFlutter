@@ -279,6 +279,21 @@ void main() {
     expect(editProfile, isNot(contains('更新失败: \$e')));
     expect(editProfile, isNot(contains('保存失败: \$e')));
 
+    final identityApplication =
+        _read('lib/screens/profile/identity_application_screen.dart');
+    expect(identityApplication,
+        contains("import 'package:nonto/services/api/api_client.dart';"));
+    expect(identityApplication,
+        contains("apiFailureMessage(resp, fallback: '身份列表加载失败')"));
+    expect(identityApplication,
+        contains("apiFailureMessage(resp, fallback: '证明图片上传失败')"));
+    expect(identityApplication,
+        contains("apiFailureMessage(resp, fallback: '提交失败')"));
+    expect(identityApplication,
+        contains('} on _ProofImageUploadException catch (e) {'));
+    expect(identityApplication, contains('_error = e.message;'));
+    expect(identityApplication, isNot(contains('resp.message ??')));
+
     final postCard = _read('lib/widgets/post_card.dart');
     expect(postCard,
         contains("import 'package:nonto/services/api/api_client.dart';"));

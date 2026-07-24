@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/role_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
 
@@ -10,7 +11,14 @@ class IdentityApplicationScreen extends StatefulWidget {
   const IdentityApplicationScreen({super.key});
 
   @override
-  State<IdentityApplicationScreen> createState() => _IdentityApplicationScreenState();
+  State<IdentityApplicationScreen> createState() =>
+      _IdentityApplicationScreenState();
+}
+
+class _ProofImageUploadException implements Exception {
+  const _ProofImageUploadException(this.message);
+
+  final String message;
 }
 
 class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
@@ -59,7 +67,8 @@ class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
         final roles = rawRoles is List
             ? rawRoles
                 .whereType<Map>()
-                .map((e) => BusinessIdentityRole.fromJson(Map<String, dynamic>.from(e)))
+                .map((e) =>
+                    BusinessIdentityRole.fromJson(Map<String, dynamic>.from(e)))
                 .where((role) => role.name.isNotEmpty && role.label.isNotEmpty)
                 .toList()
             : <BusinessIdentityRole>[];
@@ -71,7 +80,7 @@ class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
       } else {
         setState(() {
           _loading = false;
-          _error = resp.message ?? '身份列表加载失败';
+          _error = apiFailureMessage(resp, fallback: '身份列表加载失败');
         });
       }
     } catch (_) {
@@ -121,7 +130,9 @@ class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
           ? (data['url'] ?? data['file_url'] ?? data['avatar_url'])?.toString()
           : data?.toString();
       if (!resp.success || url == null || url.isEmpty) {
-        throw Exception(resp.message ?? '证明图片上传失败');
+        throw _ProofImageUploadException(
+          apiFailureMessage(resp, fallback: '证明图片上传失败'),
+        );
       }
       uploadedProofImages.add(url);
     }
@@ -166,9 +177,15 @@ class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
       } else {
         setState(() {
           _submitting = false;
-          _error = resp.message ?? '提交失败';
+          _error = apiFailureMessage(resp, fallback: '提交失败');
         });
       }
+    } on _ProofImageUploadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = e.message;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -198,7 +215,8 @@ class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
                 ],
                 Text(
                   '认证通过后，身份仅作为公开展示标签使用，不影响发布作品权限。证明图片可选，最多上传 $_maxProofImages 张。',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 14),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
@@ -217,7 +235,8 @@ class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
                 const SizedBox(height: 12),
                 _buildTextField(_applicationController, '认证说明', maxLines: 5),
                 const SizedBox(height: 12),
-                _buildTextField(_portfolioController, '作品/主页链接（每行一个，可选）', maxLines: 3),
+                _buildTextField(_portfolioController, '作品/主页链接（每行一个，可选）',
+                    maxLines: 3),
                 const SizedBox(height: 12),
                 _buildProofImagesSection(),
                 const SizedBox(height: 12),
