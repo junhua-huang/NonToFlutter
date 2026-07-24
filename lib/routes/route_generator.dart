@@ -1,4 +1,5 @@
 import 'package:nonto/models/user.dart';
+import 'package:nonto/models/post.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
@@ -65,6 +66,8 @@ class RouteGenerator {
           builder: (_) => CreatePostScreen(
             communityId: createPostArgs?['community_id'] as int?,
             communityName: createPostArgs?['community_name'] as String?,
+            quotedPost: (createPostArgs?['quoted_post'] ??
+                createPostArgs?['quotedPost']) as Post?,
           ),
         );
       case AppRoutes.editProfile:

@@ -5,6 +5,12 @@ import 'package:nonto/screens/auth/otp_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+bool isAllowedRegistrationEmail(String value) {
+  final parts = value.trim().toLowerCase().split('@');
+  if (parts.length != 2 || parts.first.isEmpty) return false;
+  return const {'qq.com', 'foxmail.com', 'vip.qq.com'}.contains(parts.last);
+}
+
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
@@ -94,16 +100,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   controller: _usernameController,
                   decoration: const InputDecoration(
                       labelText: '用户名',
+                      helperText: '支持中文、英文、数字、标题符号、emoji',
                       prefixIcon: Icon(Icons.alternate_email)),
-                  validator: (v) => (v?.length ?? 0) < 3 ? '用户名至少3个字符' : null),
+                  validator: (v) =>
+                      (v?.trim().length ?? 0) < 2 ? '用户名至少2个字符' : null),
               const SizedBox(height: 16),
               TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                      labelText: '邮箱', prefixIcon: Icon(Icons.email_outlined)),
-                  validator: (v) =>
-                      v?.contains('@') != true ? '请输入有效邮箱' : null),
+                      labelText: 'QQ邮箱',
+                      helperText: '仅支持 @qq.com、@foxmail.com、@vip.qq.com 注册',
+                      prefixIcon: Icon(Icons.email_outlined)),
+                  validator: (v) => isAllowedRegistrationEmail(v ?? '')
+                      ? null
+                      : '目前仅支持 QQ 邮箱体系注册'),
               const SizedBox(height: 16),
               OtpFieldRow(
                 codeController: _codeController,

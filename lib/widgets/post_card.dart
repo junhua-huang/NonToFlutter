@@ -3,6 +3,7 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/blocking_notifier.dart';
+import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/api_client.dart';
@@ -15,6 +16,7 @@ import 'package:nonto/widgets/identity_badge.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
+import 'package:nonto/widgets/quoted_post_preview.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -423,6 +425,15 @@ class PostCard extends ConsumerWidget {
                 ),
               ),
             ),
+          if (post.quotedPostId != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: QuotedPostPreview(
+                quotedPostId: post.quotedPostId,
+                quotedPost: post.quotedPost,
+                unavailable: post.quotedPostUnavailable,
+              ),
+            ),
           // --- Image ---
           if (post.hasImage)
             Padding(
@@ -496,6 +507,11 @@ class PostCard extends ConsumerWidget {
             onComment: onTap,
             onLike: onLike ?? () {},
             onView: () => _showPostStats(context, post),
+            onQuote: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => CreatePostScreen(quotedPost: post)),
+            ),
             onShare: () => PostShareToChatSheet.show(context, post: post),
           ),
           // Divider

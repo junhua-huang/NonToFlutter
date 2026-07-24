@@ -20,6 +20,7 @@ import 'package:nonto/widgets/comment_section.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
+import 'package:nonto/widgets/quoted_post_preview.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -591,6 +592,15 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               onMentionTap: _navigateToProfile,
             ),
           ),
+        if (post.quotedPostId != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: QuotedPostPreview(
+              quotedPostId: post.quotedPostId,
+              quotedPost: post.quotedPost,
+              unavailable: post.quotedPostUnavailable,
+            ),
+          ),
         // Image (tap to zoom) - single or gallery
         if (post.hasImage)
           Padding(
@@ -665,6 +675,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           },
           onLike: _toggleLike,
           onView: () => _showPostStatsDetail(post),
+          onQuote: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => CreatePostScreen(quotedPost: post)),
+          ),
           onShare: () => PostShareToChatSheet.show(context, post: post),
         ),
       ],

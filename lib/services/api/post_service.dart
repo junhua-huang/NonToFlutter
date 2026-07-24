@@ -35,6 +35,7 @@ class PostService {
     String? thumbnailUrl,
     String? displayRoleType,
     int? communityId,
+    int? quotedPostId,
   }) {
     if (visibility != 'public' && visibility != 'friends') {
       throw ArgumentError.value(
@@ -55,6 +56,7 @@ class PostService {
       if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
         'thumbnail_url': thumbnailUrl,
       if (communityId != null) 'community_id': communityId,
+      if (quotedPostId != null) 'quoted_post_id': quotedPostId,
     };
   }
 
@@ -67,6 +69,7 @@ class PostService {
     String? thumbnailUrl,
     String? displayRoleType,
     int? communityId,
+    int? quotedPostId,
   }) async {
     ApiResponse resp;
     // If local file path provided (mobile), use upload.
@@ -86,6 +89,7 @@ class PostService {
             displayRoleType: displayRoleType,
             imageUrl: uploadedUrl?.toString(),
             communityId: communityId,
+            quotedPostId: quotedPostId,
           ),
         );
         resp = await _api.post('/posts', data: formData);
@@ -107,6 +111,7 @@ class PostService {
         thumbnailUrl: thumbnailUrl,
         displayRoleType: displayRoleType,
         communityId: communityId,
+        quotedPostId: quotedPostId,
       ),
     );
     resp = await _api.post('/posts', data: formData);

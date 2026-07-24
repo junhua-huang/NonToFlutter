@@ -15,6 +15,7 @@ import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
 import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/mention_topic_picker.dart';
+import 'package:nonto/widgets/quoted_post_preview.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -29,12 +30,14 @@ class CreatePostScreen extends ConsumerStatefulWidget {
   final int? communityId;
   final String? communityName;
   final Post? post;
+  final Post? quotedPost;
 
   const CreatePostScreen({
     super.key,
     this.communityId,
     this.communityName,
     this.post,
+    this.quotedPost,
   });
 
   @override
@@ -86,6 +89,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _controller.text.trim().isNotEmpty ||
       _selectedImages.isNotEmpty ||
       _selectedVideo != null ||
+      (!_isEditing && widget.quotedPost != null) ||
       (_isEditing && widget.post!.hasMedia);
 
   bool get _isOverCharacterLimit => _charCount > _maxChars;
@@ -325,7 +329,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   Future<void> _submitPost() async {
     final content = _controller.text.trim();
     if (!_hasComposerContent) {
-      setState(() => _error = '帖子内容或媒体不能为空');
+      setState(() => _error = '帖子内容、媒体或引用不能为空');
       return;
     }
 
@@ -453,6 +457,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         thumbnailUrl: thumbnailUrl,
         displayRoleType: _selectedDisplayRoleType,
         communityId: widget.communityId,
+        quotedPostId: widget.quotedPost?.id,
       );
 
       if (resp.success) {
@@ -483,6 +488,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             displayRoleLabel: selectedRoleLabel,
           );
         }
+        if (serverPost != null &&
+            widget.quotedPost != null &&
+            serverPost.quotedPostId == null) {
+          serverPost = serverPost.copyWith(
+            quotedPostId: widget.quotedPost!.id,
+            quotedPost: widget.quotedPost,
+          );
+        }
         final optimisticPost = serverPost ??
             Post(
               id: -DateTime.now().millisecondsSinceEpoch,
@@ -500,6 +513,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               createdAt: DateTime.now(),
               updatedAt: DateTime.now(),
               images: imageUrls.isNotEmpty ? imageUrls : null,
+              quotedPostId: widget.quotedPost?.id,
+              quotedPost: widget.quotedPost,
             );
 
         FeedTab.newPostNotifier.value = optimisticPost;
@@ -1248,6 +1263,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       counterText: '',
                     ),
                   ),
+                  if (!_isEditing && widget.quotedPost != null)
+                    QuotedPostPreview(
+                      quotedPostId: widget.quotedPost!.id,
+                      quotedPost: widget.quotedPost,
+                      compact: true,
+                    ),
                   // Image grid preview (tap to preview)
                   if (_selectedImages.isNotEmpty && _imageBytesList.isNotEmpty)
                     _buildImageList(),

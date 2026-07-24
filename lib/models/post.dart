@@ -68,6 +68,9 @@ class Post {
   final List<String>? images;
   final int? communityId;
   final bool? communityOnly;
+  final int? quotedPostId;
+  final Post? quotedPost;
+  final bool quotedPostUnavailable;
 
   Post({
     required this.id,
@@ -92,6 +95,9 @@ class Post {
     this.images,
     this.communityId,
     this.communityOnly,
+    this.quotedPostId,
+    this.quotedPost,
+    this.quotedPostUnavailable = false,
   });
 
   bool get hasImage => images != null && images!.isNotEmpty;
@@ -101,6 +107,13 @@ class Post {
   factory Post.fromJson(Map<String, dynamic> json) {
     // 后端返回 author 字段，但兼容 user 字段
     final userJson = json['author'] ?? json['user'];
+    final rawQuotedPost = json['quoted_post'] ?? json['quote_post'];
+    final quotedUnavailable =
+        (rawQuotedPost is Map && rawQuotedPost['unavailable'] == true) ||
+            json['quoted_post_unavailable'] == true;
+    final Post? quotedPost = rawQuotedPost is Map && !quotedUnavailable
+        ? Post.fromJson(Map<String, dynamic>.from(rawQuotedPost))
+        : null;
     return Post(
       id: _parseInt(json['id']),
       content: json['content'],
@@ -147,6 +160,13 @@ class Post {
       }(),
       communityId: json['community_id'],
       communityOnly: json['community_only'] ?? false,
+      quotedPostId: json.containsKey('quoted_post_id')
+          ? (json['quoted_post_id'] == null
+              ? null
+              : _parseInt(json['quoted_post_id']))
+          : null,
+      quotedPost: quotedPost,
+      quotedPostUnavailable: quotedUnavailable,
     );
   }
 
@@ -177,6 +197,9 @@ class Post {
         'topics': topics,
         'images': images,
         'image_urls': images,
+        'quoted_post_id': quotedPostId,
+        'quoted_post': quotedPost?.toJson(),
+        'quoted_post_unavailable': quotedPostUnavailable,
       };
 
   /// Applies a partial API response while preserving every absent field.
@@ -216,6 +239,24 @@ class Post {
       mergedImages = nullableStringList('images', images);
     } else if (json.containsKey('image_urls')) {
       mergedImages = nullableStringList('image_urls', images);
+    }
+
+    Post? mergedQuotedPost = quotedPost;
+    var mergedQuotedUnavailable = quotedPostUnavailable;
+    if (json.containsKey('quoted_post') || json.containsKey('quote_post')) {
+      final rawQuoted = json.containsKey('quoted_post')
+          ? json['quoted_post']
+          : json['quote_post'];
+      if (rawQuoted is Map && rawQuoted['unavailable'] == true) {
+        mergedQuotedPost = null;
+        mergedQuotedUnavailable = true;
+      } else if (rawQuoted is Map) {
+        mergedQuotedPost = Post.fromJson(Map<String, dynamic>.from(rawQuoted));
+        mergedQuotedUnavailable = false;
+      } else if (rawQuoted == null) {
+        mergedQuotedPost = null;
+        mergedQuotedUnavailable = false;
+      }
     }
 
     final mergedTopics = json.containsKey('topics')
@@ -262,6 +303,13 @@ class Post {
               : _parseInt(json['community_id']))
           : communityId,
       communityOnly: nullableValue<bool>('community_only', communityOnly),
+      quotedPostId: json.containsKey('quoted_post_id')
+          ? (json['quoted_post_id'] == null
+              ? null
+              : _parseInt(json['quoted_post_id']))
+          : quotedPostId,
+      quotedPost: mergedQuotedPost,
+      quotedPostUnavailable: mergedQuotedUnavailable,
     );
   }
 
@@ -282,7 +330,10 @@ class Post {
       DateTime? updatedAt,
       List<String>? images,
       int? communityId,
-      bool? communityOnly}) {
+      bool? communityOnly,
+      int? quotedPostId,
+      Post? quotedPost,
+      bool? quotedPostUnavailable}) {
     return Post(
       id: id,
       content: content ?? this.content,
@@ -306,6 +357,10 @@ class Post {
       images: images ?? this.images,
       communityId: communityId ?? this.communityId,
       communityOnly: communityOnly ?? this.communityOnly,
+      quotedPostId: quotedPostId ?? this.quotedPostId,
+      quotedPost: quotedPost ?? this.quotedPost,
+      quotedPostUnavailable:
+          quotedPostUnavailable ?? this.quotedPostUnavailable,
     );
   }
 }
