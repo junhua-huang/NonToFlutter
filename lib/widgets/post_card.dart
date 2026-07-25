@@ -288,179 +288,20 @@ class PostCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- Header ---
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar
                 GestureDetector(
-                  onTap: () {
-                    if (post.user != null) {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: post.user!),
-                          ));
-                    }
-                  },
+                  onTap: () => _openUserProfile(context),
                   child: ImageUtils.buildAvatar(post.user, radius: 20),
                 ),
                 const SizedBox(width: 12),
-                // Name + username/time
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PostAuthorMetaLine(
-                        post: post,
-                        showUsername: false,
-                        onTap: () {
-                          if (post.user != null) {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      UserProfileScreen(user: post.user!),
-                                ));
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                // More button
-                IconButton(
-                  icon: Icon(Icons.more_horiz,
-                      size: 18, color: AppColors.textSecondary),
-                  onPressed: () async {
-                    final currentUserId = ProviderScope.containerOf(context)
-                        .read(authProvider)
-                        .user
-                        ?.id;
-                    final isOwnPost =
-                        currentUserId != null && post.userId == currentUserId;
-
-                    final options = <TwitterSheetOption<String>>[
-                      const TwitterSheetOption(
-                          icon: Icons.report_outlined,
-                          label: '举报帖子',
-                          value: 'report'),
-                      const TwitterSheetOption(
-                          icon: Icons.block_outlined,
-                          label: '屏蔽用户',
-                          value: 'block'),
-                      if (isOwnPost)
-                        const TwitterSheetOption(
-                            icon: Icons.delete_outline,
-                            label: '删除帖子',
-                            value: 'delete',
-                            isDestructive: true),
-                    ];
-
-                    final action = await TwitterBottomSheet.show<String>(
-                        context,
-                        options: options);
-                    if (action == null || !context.mounted) return;
-                    switch (action) {
-                      case 'report':
-                        _showReportDialog(context, post);
-                        break;
-                      case 'block':
-                        _showBlockConfirmDialog(context, ref, post);
-                        break;
-                      case 'delete':
-                        _showDeleteConfirmDialog(context, post);
-                        break;
-                    }
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
-                ),
+                Expanded(child: _buildNormalPostContentColumn(context, ref)),
               ],
             ),
           ),
-          // --- Content ---
-          if (post.content != null && post.content!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(72, 12, 16, 0),
-              child: Builder(
-                builder: (context) => RichTextContent(
-                  text: post.content!,
-                  style: TextStyle(
-                      fontSize: 15, height: 1.4, color: AppColors.textPrimary),
-                  onTopicTap: (topicName) {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              TopicSearchResultsScreen(topicName: topicName),
-                        ));
-                  },
-                ),
-              ),
-            ),
-          // --- Image ---
-          if (post.hasImage)
-            Padding(
-              padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
-              child: () {
-                final allImages = <String>[];
-                if (post.images != null) {
-                  for (final u in post.images!) {
-                    if (u.isNotEmpty) allImages.add(u);
-                  }
-                }
-                if (allImages.isEmpty) return const SizedBox.shrink();
-                return AdaptivePostImageGallery(
-                  imageUrls: allImages,
-                  maxHeight: 400,
-                  post: post,
-                  feedPosts: feedPosts,
-                );
-              }(),
-            ),
-          // --- Video ---
-          if (post.hasVideo && post.videoUrl != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
-              child: kIsWeb
-                  ? _WebVideoPlayer(
-                      videoUrl: post.videoUrl!,
-                      coverUrl: post.thumbnailUrl ??
-                          (post.images != null && post.images!.isNotEmpty
-                              ? post.images![0]
-                              : null),
-                    )
-                  : InlineVideoPlayer(
-                      videoUrl: post.videoUrl!,
-                      coverUrl: post.thumbnailUrl ??
-                          (post.images != null && post.images!.isNotEmpty
-                              ? post.images![0]
-                              : null),
-                      playerPool: videoPlayerPool,
-                      pauseWhenHidden: true,
-                    ),
-            ),
-          // --- Actions ---
-          NontoPostActionBar(
-            commentCount: post.commentCount,
-            likeCount: post.likeCount,
-            viewCount: post.viewCount,
-            isLiked: post.isLiked == true,
-            onComment: onTap,
-            onLike: onLike ?? () {},
-            onView: () => _showPostStats(context, post),
-            onQuote: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => CreatePostScreen(quotedPost: post)),
-            ),
-            onShare: () => PostShareToChatSheet.show(context, post: post),
-          ),
-          // Divider
           Padding(
             padding: const EdgeInsets.only(left: 72, right: 16),
             child: Divider(height: 1, color: AppColors.borderLight),
@@ -468,6 +309,140 @@ class PostCard extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  void _openUserProfile(BuildContext context) {
+    if (post.user == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: post.user!)),
+    );
+  }
+
+  Widget _buildNormalPostContentColumn(BuildContext context, WidgetRef ref) {
+    final images = (post.images ?? const <String>[])
+        .where((url) => url.isNotEmpty)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: PostAuthorMetaLine(
+                post: post,
+                showUsername: false,
+                onTap: () => _openUserProfile(context),
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.more_horiz,
+                  size: 18, color: AppColors.textSecondary),
+              onPressed: () => _showPostActions(context, ref),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+          ],
+        ),
+        if (post.content != null && post.content!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          RichTextContent(
+            text: post.content!,
+            style: TextStyle(
+                fontSize: 15, height: 1.4, color: AppColors.textPrimary),
+            onTopicTap: (topicName) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      TopicSearchResultsScreen(topicName: topicName),
+                ),
+              );
+            },
+          ),
+        ],
+        if (images.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          AdaptivePostImageGallery(
+            imageUrls: images,
+            maxHeight: 400,
+            post: post,
+            feedPosts: feedPosts,
+          ),
+        ],
+        if (post.hasVideo && post.videoUrl != null) ...[
+          const SizedBox(height: 10),
+          kIsWeb
+              ? _WebVideoPlayer(
+                  videoUrl: post.videoUrl!,
+                  coverUrl: post.thumbnailUrl ??
+                      (post.images != null && post.images!.isNotEmpty
+                          ? post.images![0]
+                          : null),
+                )
+              : InlineVideoPlayer(
+                  videoUrl: post.videoUrl!,
+                  coverUrl: post.thumbnailUrl ??
+                      (post.images != null && post.images!.isNotEmpty
+                          ? post.images![0]
+                          : null),
+                  playerPool: videoPlayerPool,
+                  pauseWhenHidden: true,
+                ),
+        ],
+        NontoPostActionBar(
+          padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+          commentCount: post.commentCount,
+          likeCount: post.likeCount,
+          viewCount: post.viewCount,
+          isLiked: post.isLiked == true,
+          onComment: onTap,
+          onLike: onLike ?? () {},
+          onView: () => _showPostStats(context, post),
+          onQuote: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => CreatePostScreen(quotedPost: post)),
+          ),
+          onShare: () => PostShareToChatSheet.show(context, post: post),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showPostActions(BuildContext context, WidgetRef ref) async {
+    final currentUserId =
+        ProviderScope.containerOf(context).read(authProvider).user?.id;
+    final isOwnPost = currentUserId != null && post.userId == currentUserId;
+
+    final options = <TwitterSheetOption<String>>[
+      const TwitterSheetOption(
+          icon: Icons.report_outlined, label: '举报帖子', value: 'report'),
+      const TwitterSheetOption(
+          icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+      if (isOwnPost)
+        const TwitterSheetOption(
+            icon: Icons.delete_outline,
+            label: '删除帖子',
+            value: 'delete',
+            isDestructive: true),
+    ];
+
+    final action =
+        await TwitterBottomSheet.show<String>(context, options: options);
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case 'report':
+        _showReportDialog(context, post);
+        break;
+      case 'block':
+        _showBlockConfirmDialog(context, ref, post);
+        break;
+      case 'delete':
+        _showDeleteConfirmDialog(context, post);
+        break;
+    }
   }
 }
 

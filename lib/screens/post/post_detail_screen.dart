@@ -14,10 +14,9 @@ import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
-import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/comment_section.dart';
-import 'package:nonto/widgets/identity_badge.dart';
+import 'package:nonto/widgets/post_author_meta_line.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
@@ -492,170 +491,63 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         onCurrentLike: _toggleLike,
       );
     }
+    return _buildTwitterDetailPostCard();
+  }
+
+  Widget _buildTwitterDetailPostCard() {
+    final post = _post!;
+    final images = (post.images ?? const <String>[])
+        .where((url) => url.isNotEmpty)
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Author
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GestureDetector(
-                onTap: () {
-                  if (post.user != null) {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => UserProfileScreen(user: post.user!),
-                        ));
-                  }
-                },
-                child: ImageUtils.buildAvatar(post.user, radius: 20),
+                onTap: () => _openAuthorProfile(post),
+                child: ImageUtils.buildAvatar(post.user, radius: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        if (post.user != null) {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    UserProfileScreen(user: post.user!),
-                              ));
-                        }
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(post.user?.displayName ?? '未知用户',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 15,
-                                    color: _xBlack),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          IdentityBadge(label: post.displayRoleLabel),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    GestureDetector(
-                      onTap: () {
-                        if (post.user != null) {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    UserProfileScreen(user: post.user!),
-                              ));
-                        }
-                      },
-                      child: Text(
-                          '@${post.user?.username ?? ''}  ·  ${AppDateUtils.formatTimeAgo(post.createdAt)}',
-                          style: TextStyle(color: _xDarkGrey, fontSize: 13)),
-                    ),
-                  ],
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: PostAuthorMetaLine(
+                    post: post,
+                    showUsername: false,
+                    onTap: () => _openAuthorProfile(post),
+                  ),
                 ),
               ),
-              Builder(
-                builder: (ctx) {
-                  final auth = ref.read(authProvider);
-                  final isOwner = post.userId == auth.user?.id;
-                  return IconButton(
-                    icon: Icon(Icons.more_horiz, size: 18, color: _xDarkGrey),
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 32, minHeight: 32),
-                    onPressed: () async {
-                      final options = <TwitterSheetOption<String>>[
-                        if (isOwner)
-                          const TwitterSheetOption(
-                            icon: Icons.edit_outlined,
-                            label: '编辑',
-                            value: 'edit',
-                          ),
-                        if (isOwner)
-                          const TwitterSheetOption(
-                              icon: Icons.delete_outline,
-                              label: '删除',
-                              value: 'delete',
-                              isDestructive: true),
-                        const TwitterSheetOption(
-                            icon: Icons.flag_outlined,
-                            label: '举报',
-                            value: 'report'),
-                      ];
-                      final action = await TwitterBottomSheet.show<String>(ctx,
-                          options: options);
-                      if (action == 'edit') {
-                        _editPost(post);
-                      } else if (action == 'delete') {
-                        _deletePost();
-                      } else if (action == 'report') {
-                        _reportPost();
-                      }
-                    },
-                  );
-                },
-              ),
+              _buildDetailMoreButton(post),
             ],
           ),
         ),
-        // Content - RichText with #topic and @mention highlighting
         if (post.content != null && post.content!.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(72, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: RichTextContent(
               text: post.content!,
-              style: TextStyle(fontSize: 15, height: 1.45, color: _xBlack),
+              style: TextStyle(fontSize: 17, height: 1.45, color: _xBlack),
               onTopicTap: _navigateToTopic,
               onMentionTap: _navigateToProfile,
             ),
           ),
-        // Image (tap to zoom) - single or gallery
-        if (post.hasImage)
+        if (images.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
-            child: () {
-              final allImages = <String>[];
-              if (post.images != null) {
-                for (final u in post.images!) {
-                  if (u.isNotEmpty) allImages.add(u);
-                }
-              }
-              if (allImages.isEmpty) return const SizedBox.shrink();
-              if (allImages.length == 1) {
-                return GestureDetector(
-                  onTap: () => ImageViewerScreen.show(context, allImages,
-                      heroTag: 'detail_img_${post.id}_0'),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Hero(
-                      tag: 'detail_img_${post.id}_0',
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 400),
-                        child: ImageUtils.buildPostImage(allImages[0],
-                            width: double.infinity),
-                      ),
-                    ),
-                  ),
-                );
-              }
-              return ImageGalleryGrid(
-                  imageUrls: allImages, maxHeight: 300, post: post);
-            }(),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: AdaptivePostImageGallery(
+              imageUrls: images,
+              maxHeight: 420,
+              post: post,
+            ),
           ),
-        // Video
         if (post.hasVideo)
           Padding(
-            padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: kIsWeb
                 ? _WebVideoPlayer(
                     videoUrl: post.videoUrl!,
@@ -674,33 +566,93 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     pauseWhenHidden: true,
                   ),
           ),
-        // Actions
-        NontoPostActionBar(
-          padding: const EdgeInsets.fromLTRB(8, 4, 16, 12),
-          commentCount: post.commentCount,
-          likeCount: post.likeCount,
-          viewCount: post.viewCount,
-          isLiked: post.isLiked == true,
-          onComment: () {
-            // Scroll to comment section
-            if (_scrollController.hasClients) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            }
-          },
-          onLike: _toggleLike,
-          onView: () => _showPostStatsDetail(post),
-          onQuote: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => CreatePostScreen(quotedPost: post)),
-          ),
-          onShare: () => PostShareToChatSheet.show(context, post: post),
-        ),
+        _buildDetailActionBar(post),
       ],
+    );
+  }
+
+  void _openAuthorProfile(Post post) {
+    if (post.user == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: post.user!)),
+    );
+  }
+
+  Widget _buildDetailMoreButton(Post post) {
+    final auth = ref.read(authProvider);
+    final isOwner = post.userId == auth.user?.id;
+    return IconButton(
+      icon: Icon(Icons.more_horiz, size: 18, color: _xDarkGrey),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      onPressed: () async {
+        final options = <TwitterSheetOption<String>>[
+          if (isOwner)
+            const TwitterSheetOption(
+              icon: Icons.edit_outlined,
+              label: '编辑',
+              value: 'edit',
+            ),
+          if (isOwner)
+            const TwitterSheetOption(
+              icon: Icons.delete_outline,
+              label: '删除',
+              value: 'delete',
+              isDestructive: true,
+            ),
+          const TwitterSheetOption(
+            icon: Icons.flag_outlined,
+            label: '举报',
+            value: 'report',
+          ),
+        ];
+        final action =
+            await TwitterBottomSheet.show<String>(context, options: options);
+        if (action == 'edit') {
+          _editPost(post);
+        } else if (action == 'delete') {
+          _deletePost();
+        } else if (action == 'report') {
+          _reportPost();
+        }
+      },
+    );
+  }
+
+  Widget _buildDetailActionBar(Post post) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
+        children: [
+          Divider(height: 1, color: _xLightGrey),
+          NontoPostActionBar(
+            padding: const EdgeInsets.fromLTRB(0, 6, 0, 6),
+            commentCount: post.commentCount,
+            likeCount: post.likeCount,
+            viewCount: post.viewCount,
+            isLiked: post.isLiked == true,
+            onComment: () {
+              if (_scrollController.hasClients) {
+                _scrollController.animateTo(
+                  _scrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                );
+              }
+            },
+            onLike: _toggleLike,
+            onView: () => _showPostStatsDetail(post),
+            onQuote: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => CreatePostScreen(quotedPost: post)),
+            ),
+            onShare: () => PostShareToChatSheet.show(context, post: post),
+          ),
+          Divider(height: 1, color: _xLightGrey),
+        ],
+      ),
     );
   }
 }

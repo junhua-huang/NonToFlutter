@@ -52,6 +52,57 @@ void main() {
           isNot(contains(
               '[PostMediaItem(post: segmentPost, mediaUrls: images)]')));
     });
+
+    test(
+        'normal feed posts keep text media and actions inside the avatar content column',
+        () {
+      final postCard = read('lib/widgets/post_card.dart');
+
+      expect(postCard, contains('_buildNormalPostContentColumn('));
+      expect(postCard, contains('const SizedBox(height: 4)'));
+      expect(postCard,
+          contains('padding: const EdgeInsets.fromLTRB(0, 6, 0, 10)'));
+      expect(postCard,
+          isNot(contains('padding: const EdgeInsets.fromLTRB(72, 12, 16, 0)')));
+      expect(
+          postCard,
+          isNot(contains(
+              'padding: const EdgeInsets.only(top: 10, left: 72, right: 16)')));
+    });
+
+    test(
+        'post detail uses Twitter-style detail layout with shared header and media widgets',
+        () {
+      final detail = read('lib/screens/post/post_detail_screen.dart');
+
+      expect(detail, contains('PostAuthorMetaLine('));
+      expect(detail, contains('AdaptivePostImageGallery('));
+      expect(detail, contains('_buildTwitterDetailPostCard()'));
+      expect(detail, contains('_buildDetailActionBar('));
+      expect(detail,
+          contains('padding: const EdgeInsets.fromLTRB(16, 10, 16, 10)'));
+      expect(
+          detail,
+          isNot(contains(
+              "'@\${post.user?.username ?? ''}  ·  \${AppDateUtils.formatTimeAgo(post.createdAt)}'")));
+    });
+  });
+
+  group('profile scroll and overlay regressions', () {
+    test(
+        'other-user profile uses compact overlay buttons and a single sliver scroll chain',
+        () {
+      final profile = read('lib/screens/profile/user_profile_screen.dart');
+
+      expect(profile, contains('_buildCompactOverlayButton('));
+      expect(profile, contains('width: 36'));
+      expect(profile, contains('height: 36'));
+      expect(profile, contains('_buildCurrentTabSlivers('));
+      expect(profile, contains('_buildPostSlivers('));
+      expect(profile,
+          isNot(contains('height: MediaQuery.of(context).size.height - 200')));
+      expect(profile, isNot(contains('TabBarView(')));
+    });
   });
 
   group('chat room provider timing regressions', () {

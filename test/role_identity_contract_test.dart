@@ -129,13 +129,12 @@ void main() {
       final authorMetaSource =
           File('lib/widgets/post_author_meta_line.dart').readAsStringSync();
       expect(cardSource, contains("post_author_meta_line.dart"));
-      expect(detailSource, contains("identity_badge.dart"));
+      expect(detailSource, contains("post_author_meta_line.dart"));
       expect(authorMetaSource, contains("identity_badge.dart"));
       expect(cardSource, contains('PostAuthorMetaLine('));
+      expect(detailSource, contains('PostAuthorMetaLine('));
       expect(authorMetaSource,
           contains('IdentityBadge(label: post.displayRoleLabel'));
-      expect(
-          detailSource, contains('IdentityBadge(label: post.displayRoleLabel'));
     });
 
     test('comments and profile use compact identity pills', () {

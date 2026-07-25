@@ -584,8 +584,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       if (resp.success && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
         final convJson = Map<String, dynamic>.from(
-          (data['conversation'] is Map ? data['conversation'] : data)
-              as Map,
+          (data['conversation'] is Map ? data['conversation'] : data) as Map,
         );
         if (data['other_user'] != null && convJson['other_user'] == null) {
           convJson['other_user'] = data['other_user'];
@@ -759,35 +758,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                           fontWeight: FontWeight.w700, fontSize: 15),
                       unselectedLabelStyle: const TextStyle(
                           fontWeight: FontWeight.w500, fontSize: 15),
+                      onTap: (_) => setState(() {}),
                       tabs: const [Tab(text: '帖子'), Tab(text: '喜欢')],
                     ),
                   ),
                 ),
               ),
-              // Tab content
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height - 200,
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPostsList(
-                        _userPosts,
-                        _isLoadingPosts,
-                        icon: Icons.article_outlined,
-                        emptyTitle: '还没有发布帖子',
-                        emptySubtitle: 'TA 的新动态会出现在这里',
-                      ),
-                      _buildPostsList(
-                        _likedPosts,
-                        _isLoadingLikes,
-                        icon: Icons.favorite_border,
-                        emptyTitle: '还没有喜欢的帖子',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              ..._buildCurrentTabSlivers(),
             ]),
           ),
           _buildProfileOverlayControls(),
@@ -802,29 +779,36 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
         child: Row(
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.background.withValues(alpha: 0.82),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
+            _buildCompactOverlayButton(
+              icon: Icons.arrow_back,
+              onTap: () => Navigator.of(context).pop(),
             ),
             const Spacer(),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.background.withValues(alpha: 0.82),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: Icon(Icons.more_horiz, color: AppColors.textPrimary),
-                onPressed: _showProfileActions,
-              ),
+            _buildCompactOverlayButton(
+              icon: Icons.more_horiz,
+              onTap: _showProfileActions,
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompactOverlayButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppColors.background.withValues(alpha: 0.82),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: AppColors.textPrimary, size: 20),
       ),
     );
   }
@@ -1200,7 +1184,25 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     );
   }
 
-  Widget _buildPostsList(
+  List<Widget> _buildCurrentTabSlivers() {
+    if (_tabController.index == 1) {
+      return _buildPostSlivers(
+        _likedPosts,
+        _isLoadingLikes,
+        icon: Icons.favorite_border,
+        emptyTitle: '还没有喜欢的帖子',
+      );
+    }
+    return _buildPostSlivers(
+      _userPosts,
+      _isLoadingPosts,
+      icon: Icons.article_outlined,
+      emptyTitle: '还没有发布帖子',
+      emptySubtitle: 'TA 的新动态会出现在这里',
+    );
+  }
+
+  List<Widget> _buildPostSlivers(
     List<Post> posts,
     bool isLoading, {
     required IconData icon,
@@ -1208,32 +1210,40 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     String? emptySubtitle,
   }) {
     if (isLoading) {
-      return _buildProfileLoadingState();
+      return [SliverToBoxAdapter(child: _buildProfileLoadingState())];
     }
     if (posts.isEmpty) {
-      return _buildProfileEmptyState(
-        icon: icon,
-        title: emptyTitle,
-        subtitle: emptySubtitle,
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.only(top: 8),
-      itemCount: posts.length,
-      itemBuilder: (_, i) {
-        final post = posts[i];
-        return PostCard(
-          post: post,
-          onLike: () => _togglePostLike(post, posts),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PostDetailScreen(postId: post.id),
-            ),
+      return [
+        SliverToBoxAdapter(
+          child: _buildProfileEmptyState(
+            icon: icon,
+            title: emptyTitle,
+            subtitle: emptySubtitle,
           ),
-        );
-      },
-    );
+        ),
+      ];
+    }
+    return [
+      const SliverToBoxAdapter(child: SizedBox(height: 8)),
+      SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (_, i) {
+            final post = posts[i];
+            return PostCard(
+              post: post,
+              onLike: () => _togglePostLike(post, posts),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PostDetailScreen(postId: post.id),
+                ),
+              ),
+            );
+          },
+          childCount: posts.length,
+        ),
+      ),
+    ];
   }
 
   Future<void> _togglePostLike(Post post, List<Post> postList) async {

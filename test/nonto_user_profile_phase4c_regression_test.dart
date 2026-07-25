@@ -31,8 +31,10 @@ void main() {
 
       expect(source, contains('CustomScrollView'));
       expect(source, contains('SliverPersistentHeader'));
-      expect(source, contains('TabBarView'));
-      expect(source, contains('ListView.builder'));
+      expect(source, contains('_buildCurrentTabSlivers()'));
+      expect(source, contains('SliverList'));
+      expect(source, isNot(contains('TabBarView(')));
+      expect(source, isNot(contains('ListView.builder')));
       expect(source, contains('_tabController.index == 1'));
       expect(source, contains('_loadLikedPosts()'));
     });
