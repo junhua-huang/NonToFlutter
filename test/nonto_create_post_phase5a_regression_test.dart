@@ -41,7 +41,7 @@ void main() {
         contains('Widget _buildComposerToolbar({required bool isOverLimit})'),
       );
       expect(source, contains("label: '图片 ("));
-      expect(source, contains("label: '视频'"));
+      expect(source, isNot(contains("label: '视频'")));
       expect(source, contains("label: '@好友'"));
       expect(source, contains("label: '#话题'"));
       expect(source, contains("label: '表情'"));

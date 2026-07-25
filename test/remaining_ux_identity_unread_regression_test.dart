@@ -19,12 +19,12 @@ void main() {
       expect(feed, isNot(contains('radius: 10')));
     });
 
-    test('drawer exposes identity application entry', () {
+    test('drawer exposes identity center entry', () {
       final home = read('lib/screens/home/home_screen.dart');
 
-      expect(home, contains('身份认证'));
+      expect(home, contains('我的身份'));
       expect(home, contains('Icons.verified_outlined'));
-      expect(home, contains('AppRoutes.identityApplication'));
+      expect(home, contains('AppRoutes.identityCenter'));
     });
 
     test('search results show a left back button that exits search state', () {
@@ -66,8 +66,18 @@ void main() {
 
       expect(theme, contains('unreadBadge'));
       expect(home, contains('backgroundColor: AppColors.unreadBadge'));
+      expect(home, contains('textColor: Colors.white'));
       expect(messages, contains('AppColors.unreadBadge'));
       expect(tile, contains('AppColors.unreadBadge'));
+    });
+
+    test('global transient surfaces keep readable popup and snackbar text', () {
+      final main = read('lib/main.dart');
+
+      expect(main, contains('contentTextStyle: const TextStyle(color: Colors.white)'));
+      expect(main, contains('actionTextColor: Colors.white'));
+      expect(main, contains('closeIconColor: Colors.white'));
+      expect(main, contains('popupMenuTheme'));
     });
 
     test('identity application supports image selection instead of proof URL text field', () {

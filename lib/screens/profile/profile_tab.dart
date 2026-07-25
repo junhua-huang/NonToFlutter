@@ -7,6 +7,7 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/friends/friends_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/auth_service.dart';
@@ -22,9 +23,9 @@ import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
-import 'package:nonto/widgets/identity_badge.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/post_card.dart';
+import 'package:nonto/widgets/profile_identity_section.dart';
 import 'package:flutter/material.dart';
 import 'package:nonto/utils/bar_scroll_handler.dart';
 import 'package:image_cropper_plus/image_cropper_plus.dart';
@@ -733,17 +734,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                                       color: AppColors.textSecondary),
                                 ),
                               ],
-                              if (user.verifiedRoleLabels.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: user.verifiedRoleLabels
-                                      .map((label) =>
-                                          IdentityBadge(label: label))
-                                      .toList(),
+                              ProfileIdentitySection(
+                                labels: user.verifiedRoleLabels,
+                                isOwnProfile: true,
+                                onManage: () => Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.identityCenter,
                                 ),
-                              ],
+                              ),
                             ],
                           ),
                         ),

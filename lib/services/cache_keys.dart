@@ -37,6 +37,9 @@ class CacheKeys {
   // ── Feed ──
   static const String feedPosts = 'feed:1:posts';
 
+  /// 首页不同轨道的首屏帖子缓存 key。
+  static String feedTrackPosts(String trackKey) => 'feed:$trackKey:posts';
+
   /// 分页 Feed key
   static String feedPage(int page) => 'feed:$page:posts';
 

@@ -7,6 +7,7 @@ import 'package:nonto/data/emoji_data.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/home/home/feed_tab.dart';
 import 'package:nonto/screens/profile/profile_tab.dart';
 import 'package:nonto/services/api/api_client.dart';
@@ -74,7 +75,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   static const String _hideIdentityValue = '__hide_identity__';
   String _selectedVisibility = 'public';
   bool _visibilityChangedByUser = false;
-  bool _isDefaultVisibilityLoading = true;
   String? _selectedDisplayRoleType;
 
   // 草稿 key
@@ -95,10 +95,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool get _isOverCharacterLimit => _charCount > _maxChars;
 
   bool get _canSubmitPost =>
-      _hasComposerContent &&
-      !_isSubmitting &&
-      !_isOverCharacterLimit &&
-      (_isEditing || (!_isEditing && !_isDefaultVisibilityLoading));
+      _hasComposerContent && !_isSubmitting && !_isOverCharacterLimit;
 
   bool get _isEditing => widget.post != null;
 
@@ -139,7 +136,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (!_visibilityChangedByUser) {
         _selectedVisibility = normalizeDefaultPostVisibility(value);
       }
-      _isDefaultVisibilityLoading = false;
     });
   }
 
@@ -255,6 +251,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _pickVideo() async {
     try {
       final picked = await _picker.pickVideo(source: ImageSource.gallery);
@@ -364,8 +361,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           if (!mounted) return;
           final file = _selectedImages[i];
 
-          // 使用 UploadService 压缩
-          final compressed = await UploadService.compressXFile(file);
+          // 使用 UploadService 压缩，并确保文件名/MIME 与实际字节格式一致。
+          late final XFile compressed;
+          try {
+            compressed = await UploadService.compressXFile(file);
+          } on UnsupportedError catch (e) {
+            await _saveDraft();
+            if (mounted) {
+              setState(() {
+                _isSubmitting = false;
+                _error = '第 ${i + 1} 张图片上传失败：${e.message}（草稿已保存）';
+              });
+            }
+            return;
+          }
 
           final uploadResp = await ApiClient().uploadBytes(
             '/upload/post/image',
@@ -534,11 +543,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         }
       }
     } catch (e) {
+      final stackTrace = StackTrace.current;
+      debugPrint('Create post error: $e');
+      debugPrintStack(stackTrace: stackTrace);
       await _saveDraft();
       if (mounted) {
         setState(() {
           _isSubmitting = false;
-          _error = '网络错误，请稍后重试（草稿已保存）';
+          _error = '发布失败，请稍后重试（草稿已保存）';
         });
       }
     }
@@ -1035,12 +1047,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             ),
             const SizedBox(width: 4),
             _ToolbarButton(
-              icon: Icons.videocam_outlined,
-              label: '视频',
-              onTap: _selectedImages.isNotEmpty ? null : _pickVideo,
-            ),
-            const SizedBox(width: 4),
-            _ToolbarButton(
               icon: Icons.alternate_email,
               label: '@好友',
               onTap: _showMentionPicker,
@@ -1092,10 +1098,33 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         .firstWhere((option) => option.value == _selectedVisibility)
         .label;
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          '以什么身份发布',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+        ),
+        if (!_isEditing && roles.isEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            '认证身份可让你的作品更可信',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.identityCenter),
+            child: const Text('申请身份认证'),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
         PopupMenuButton<String>(
           initialValue: _selectedVisibility,
           onSelected: (value) {
@@ -1140,6 +1169,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   : (selectedRoleLabel ?? _selectedDisplayRoleType!),
             ),
           ),
+          ],
+        ),
       ],
     );
   }

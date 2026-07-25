@@ -584,7 +584,7 @@ class ApiClient {
     }
     return ApiResponse(
       success: false,
-      message: '获取上传链接失败',
+      message: result.message ?? '获取上传链接失败',
       statusCode: result.statusCode,
       errorCode: result.errorCode,
       isRetryable: result.isRetryable,

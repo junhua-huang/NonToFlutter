@@ -29,6 +29,8 @@ void main() {
       expect(actionBar, contains('M16.697 5.5c-1.222'));
       expect(actionBar, contains('M20.884 13.19c-1.351'));
       expect(actionBar, contains('M8.75 21V3h2v18h-2z'));
+      expect(actionBar, contains('M4.5 3.88l4.432 4.14'));
+      expect(actionBar, isNot(contains('M4 4h11.5c2.49')));
       expect(actionBar, contains('AnimationController'));
     });
 

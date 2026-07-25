@@ -217,9 +217,17 @@ class NonToApp extends ConsumerWidget {
               ),
               snackBarTheme: SnackBarThemeData(
                 behavior: SnackBarBehavior.floating,
+                backgroundColor: const Color(0xFF202327),
+                contentTextStyle: const TextStyle(color: Colors.white),
+                actionTextColor: Colors.white,
+                closeIconColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+              popupMenuTheme: const PopupMenuThemeData(
+                color: Colors.white,
+                textStyle: TextStyle(color: Color(0xFF0F1419)),
               ),
               dialogTheme: DialogThemeData(
                 shape: RoundedRectangleBorder(
@@ -309,9 +317,17 @@ class NonToApp extends ConsumerWidget {
               ),
               snackBarTheme: SnackBarThemeData(
                 behavior: SnackBarBehavior.floating,
+                backgroundColor: const Color(0xFF202327),
+                contentTextStyle: const TextStyle(color: Colors.white),
+                actionTextColor: Colors.white,
+                closeIconColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+              popupMenuTheme: const PopupMenuThemeData(
+                color: Color(0xFF202327),
+                textStyle: TextStyle(color: Colors.white),
               ),
               dialogTheme: DialogThemeData(
                 shape: RoundedRectangleBorder(

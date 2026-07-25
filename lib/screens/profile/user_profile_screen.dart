@@ -18,7 +18,7 @@ import 'package:nonto/services/api/report_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
-import 'package:nonto/widgets/identity_badge.dart';
+import 'package:nonto/widgets/profile_identity_section.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/post_card.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
@@ -583,9 +583,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       final resp = await ChatService().getOrCreateConversation(_user!.id);
       if (resp.success && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
-        final convJson = data['conversation'] ?? data;
-        final conversation =
-            Conversation.fromJson(convJson as Map<String, dynamic>);
+        final convJson = Map<String, dynamic>.from(
+          (data['conversation'] is Map ? data['conversation'] : data)
+              as Map,
+        );
+        if (data['other_user'] != null && convJson['other_user'] == null) {
+          convJson['other_user'] = data['other_user'];
+        }
+        final conversation = Conversation.fromJson(convJson);
         if (!mounted) return;
         Navigator.push(
             context,
@@ -668,16 +673,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                               fontSize: 14, color: AppColors.textSecondary),
                         ),
                       ],
-                      if (user.verifiedRoleLabels.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: user.verifiedRoleLabels
-                              .map((label) => IdentityBadge(label: label))
-                              .toList(),
-                        ),
-                      ],
+                      ProfileIdentitySection(
+                        labels: user.verifiedRoleLabels,
+                        isOwnProfile: false,
+                      ),
                       const SizedBox(height: 8),
                       // Bio
                       if (user.bio != null && user.bio!.isNotEmpty)

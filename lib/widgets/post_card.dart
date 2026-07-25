@@ -9,14 +9,12 @@ import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/report_service.dart';
-import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
-import 'package:nonto/widgets/enhanced_media_viewer.dart';
-import 'package:nonto/widgets/identity_badge.dart';
+import 'package:nonto/widgets/post_author_meta_line.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
-import 'package:nonto/widgets/quoted_post_preview.dart';
+import 'package:nonto/widgets/quote_thread_card.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -274,6 +272,16 @@ class PostCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (post.quotedPostId != null) {
+      return QuoteThreadCard(
+        post: post,
+        onCurrentTap: onTap,
+        onCurrentLike: onLike,
+        onCurrentLongPress: onLongPress,
+        onCurrentDelete: onDelete,
+        feedPosts: feedPosts,
+      );
+    }
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -305,7 +313,9 @@ class PostCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
+                      PostAuthorMetaLine(
+                        post: post,
+                        showUsername: false,
                         onTap: () {
                           if (post.user != null) {
                             Navigator.push(
@@ -316,39 +326,6 @@ class PostCard extends ConsumerWidget {
                                 ));
                           }
                         },
-                        child: Text(
-                          post.user?.displayName ?? '未知用户',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (post.displayRoleLabel != null &&
-                          post.displayRoleLabel!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        IdentityBadge(label: post.displayRoleLabel),
-                      ],
-                      const SizedBox(height: 2),
-                      GestureDetector(
-                        onTap: () {
-                          if (post.user != null) {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      UserProfileScreen(user: post.user!),
-                                ));
-                          }
-                        },
-                        child: Text(
-                          '@${post.user?.username ?? ''}  ·  ${AppDateUtils.formatTimeAgo(post.createdAt)}',
-                          style: TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
-                        ),
                       ),
                     ],
                   ),
@@ -408,7 +385,7 @@ class PostCard extends ConsumerWidget {
           // --- Content ---
           if (post.content != null && post.content!.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(72, 12, 16, 0),
               child: Builder(
                 builder: (context) => RichTextContent(
                   text: post.content!,
@@ -425,19 +402,10 @@ class PostCard extends ConsumerWidget {
                 ),
               ),
             ),
-          if (post.quotedPostId != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-              child: QuotedPostPreview(
-                quotedPostId: post.quotedPostId,
-                quotedPost: post.quotedPost,
-                unavailable: post.quotedPostUnavailable,
-              ),
-            ),
           // --- Image ---
           if (post.hasImage)
             Padding(
-              padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
+              padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
               child: () {
                 final allImages = <String>[];
                 if (post.images != null) {
@@ -446,29 +414,7 @@ class PostCard extends ConsumerWidget {
                   }
                 }
                 if (allImages.isEmpty) return const SizedBox.shrink();
-                if (allImages.length == 1) {
-                  return GestureDetector(
-                    onTap: () {
-                      final items =
-                          _buildMediaItems(post, allImages, feedPosts);
-                      final index = _indexForPost(items, post.id);
-                      EnhancedImageViewerScreen.show(context, items,
-                          initialPostIndex: index);
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Hero(
-                        tag: 'feed_img_${post.id}_0',
-                        child: ImageUtils.buildPostImage(
-                          allImages[0],
-                          fit: BoxFit.fitWidth,
-                          width: double.infinity,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                return ImageGalleryGrid(
+                return AdaptivePostImageGallery(
                   imageUrls: allImages,
                   maxHeight: 400,
                   post: post,
@@ -479,7 +425,7 @@ class PostCard extends ConsumerWidget {
           // --- Video ---
           if (post.hasVideo && post.videoUrl != null)
             Padding(
-              padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
+              padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
               child: kIsWeb
                   ? _WebVideoPlayer(
                       videoUrl: post.videoUrl!,
@@ -516,7 +462,7 @@ class PostCard extends ConsumerWidget {
           ),
           // Divider
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.only(left: 72, right: 16),
             child: Divider(height: 1, color: AppColors.borderLight),
           ),
         ],
@@ -559,67 +505,6 @@ class _ReportOption {
   final String value;
   final String label;
   const _ReportOption(this.value, this.label);
-}
-
-/// Build a list of PostMediaItem from current post and nearby posts
-int _indexForPost(List<PostMediaItem> items, int postId) {
-  for (int i = 0; i < items.length; i++) {
-    if (items[i].post.id == postId) return i;
-  }
-  return 0;
-}
-
-List<PostMediaItem> _buildMediaItems(
-    Post post, List<String> allImages, List<Post>? feedPosts) {
-  final items = <PostMediaItem>[];
-  // Helper: extract media URLs from a post
-  List<String> mediaUrlsOf(Post p) {
-    final urls = <String>[];
-    if (p.images != null) {
-      for (final u in p.images!) {
-        if (u.isNotEmpty) urls.add(u);
-      }
-    }
-    return urls;
-  }
-
-  if (feedPosts == null || feedPosts.isEmpty) {
-    items.add(PostMediaItem(post: post, mediaUrls: allImages));
-    return items;
-  }
-
-  // Find current post position
-  final currentIdx = feedPosts.indexWhere((p) => p.id == post.id);
-  if (currentIdx < 0) {
-    items.add(PostMediaItem(post: post, mediaUrls: allImages));
-    return items;
-  }
-
-  // Collect before/after posts in feed order (only those with media)
-  final before = <Post>[];
-  final after = <Post>[];
-  for (int i = 0; i < feedPosts.length; i++) {
-    if (i == currentIdx) continue;
-    final p = feedPosts[i];
-    if (p.hasImage || p.hasVideo) {
-      if (i < currentIdx) {
-        before.add(p);
-      } else {
-        after.add(p);
-      }
-    }
-  }
-
-  // Build items: before (feed order) → current → after (feed order)
-  for (final p in before) {
-    items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
-  }
-  items.add(PostMediaItem(post: post, mediaUrls: allImages));
-  for (final p in after) {
-    items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
-  }
-
-  return items;
 }
 
 /// Web 端视频播放器 — media_kit 不支持 Web，改用 video_player（浏览器原生 <video>）

@@ -29,7 +29,6 @@ class PostService {
   static Map<String, dynamic> buildMutationData({
     required String content,
     required String visibility,
-    String? imageUrl,
     List<String>? imageUrls,
     String? videoPath,
     String? thumbnailUrl,
@@ -49,7 +48,6 @@ class PostService {
       'visibility': visibility,
       if (displayRoleType != null && displayRoleType.isNotEmpty)
         'display_role_type': displayRoleType,
-      if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
       if (imageUrls != null && imageUrls.isNotEmpty)
         'image_urls': jsonEncode(imageUrls),
       if (videoPath != null && videoPath.isNotEmpty) 'video_url': videoPath,
@@ -80,14 +78,21 @@ class PostService {
       final uploadResp = await _api.upload('/upload/post/image', file);
       if (uploadResp.success && uploadResp.data != null) {
         final uploadedUrl = uploadResp.data is Map
-            ? uploadResp.data['url'] ?? uploadResp.data['image_url']
+            ? uploadResp.data['url']
             : uploadResp.data;
+        if (uploadedUrl == null || uploadedUrl.toString().isEmpty) {
+          return ApiResponse(
+            success: false,
+            message: '图片上传失败，请重试',
+            statusCode: uploadResp.statusCode,
+          );
+        }
         final formData = FormData.fromMap(
           buildMutationData(
             content: content,
             visibility: visibility,
             displayRoleType: displayRoleType,
-            imageUrl: uploadedUrl?.toString(),
+            imageUrls: [uploadedUrl.toString()],
             communityId: communityId,
             quotedPostId: quotedPostId,
           ),
@@ -125,6 +130,13 @@ class PostService {
   Future<ApiResponse> getFeed({int page = 1, int perPage = 20}) {
     return _api
         .getDeduped('/posts/', params: {'page': page, 'per_page': perPage});
+  }
+
+  Future<ApiResponse> getRelatedToMe({int page = 1, int perPage = 20}) {
+    return _api.getDeduped(
+      '/posts/related-to-me',
+      params: {'page': page, 'per_page': perPage},
+    );
   }
 
   Future<ApiResponse> getUserPosts(

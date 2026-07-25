@@ -103,7 +103,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       ChatService().markRead(widget.conversation.id);
     }
 
-    // 立即清除本地未读气泡（不等服务端确认）
+    // 立即清除本地未读气泡（不等服务端确认），但延迟到首帧后，
+    // 避免在 initState/build 阶段同步修改 Riverpod provider。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _clearConversationUnreadAfterBuild();
+    });
+  }
+
+  void _clearConversationUnreadAfterBuild() {
+    if (!mounted) return;
     ref
         .read(conversationsProvider.notifier)
         .clearConversationUnread(widget.conversation.id);

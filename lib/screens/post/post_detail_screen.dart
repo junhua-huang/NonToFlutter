@@ -17,10 +17,11 @@ import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/comment_section.dart';
+import 'package:nonto/widgets/identity_badge.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
-import 'package:nonto/widgets/quoted_post_preview.dart';
+import 'package:nonto/widgets/quote_thread_card.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -475,6 +476,22 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
   Widget _buildPostCard() {
     final post = _post!;
+    if (post.quotedPostId != null) {
+      return QuoteThreadCard(
+        post: post,
+        onCurrentTap: () {},
+        onCurrentComment: () {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        },
+        onCurrentLike: _toggleLike,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -512,11 +529,21 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                               ));
                         }
                       },
-                      child: Text(post.user?.displayName ?? '未知用户',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                              color: _xBlack)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(post.user?.displayName ?? '未知用户',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: _xBlack),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          IdentityBadge(label: post.displayRoleLabel),
+                        ],
+                      ),
                     ),
                     SizedBox(height: 2),
                     GestureDetector(
@@ -584,7 +611,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         // Content - RichText with #topic and @mention highlighting
         if (post.content != null && post.content!.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(72, 12, 16, 0),
             child: RichTextContent(
               text: post.content!,
               style: TextStyle(fontSize: 15, height: 1.45, color: _xBlack),
@@ -592,19 +619,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               onMentionTap: _navigateToProfile,
             ),
           ),
-        if (post.quotedPostId != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            child: QuotedPostPreview(
-              quotedPostId: post.quotedPostId,
-              quotedPost: post.quotedPost,
-              unavailable: post.quotedPostUnavailable,
-            ),
-          ),
         // Image (tap to zoom) - single or gallery
         if (post.hasImage)
           Padding(
-            padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
+            padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
             child: () {
               final allImages = <String>[];
               if (post.images != null) {
@@ -637,7 +655,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         // Video
         if (post.hasVideo)
           Padding(
-            padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
+            padding: const EdgeInsets.only(top: 10, left: 72, right: 16),
             child: kIsWeb
                 ? _WebVideoPlayer(
                     videoUrl: post.videoUrl!,

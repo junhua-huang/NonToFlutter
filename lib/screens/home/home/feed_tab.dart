@@ -19,6 +19,81 @@ import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:pull_to_refresh_flutter3/pull_to_refresh_flutter3.dart';
 import 'package:nonto/utils/bar_scroll_handler.dart';
 
+enum FeedTrackType { recommended, following }
+
+class FeedTrack {
+  final FeedTrackType type;
+  final String label;
+  final String key;
+
+  const FeedTrack(this.type, this.label, this.key);
+}
+
+class _TwitterFeedTabBar extends StatelessWidget {
+  final List<FeedTrack> tracks;
+  final FeedTrack selectedTrack;
+  final ValueChanged<FeedTrack> onSelect;
+
+  const _TwitterFeedTabBar({
+    required this.tracks,
+    required this.selectedTrack,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderLight),
+        ),
+      ),
+      child: Row(
+        children: tracks.map((track) {
+          final selected = track.key == selectedTrack.key;
+          return Expanded(
+            child: InkWell(
+              onTap: () => onSelect(track),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        track.label,
+                        style: TextStyle(
+                          color: selected
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
+                          fontSize: 15,
+                          fontWeight:
+                              selected ? FontWeight.w800 : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    width: selected ? 28 : 0,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 class FeedTab extends ConsumerStatefulWidget {
   const FeedTab({super.key});
 
@@ -36,6 +111,12 @@ class _FeedTabState extends ConsumerState<FeedTab> {
   /// 刷新节流锁：防止连续下拉触发多次 refreshPosts()，
   /// 否则 SmartRefresher 状态机会错乱，表现为列表无法滑动。
   bool _isRefreshing = false;
+  FeedTrack _selectedTrack =
+      const FeedTrack(FeedTrackType.recommended, '推荐', 'recommended');
+  final List<FeedTrack> _tracks = const [
+    FeedTrack(FeedTrackType.recommended, '推荐', 'recommended'),
+    FeedTrack(FeedTrackType.following, '关注', 'following'),
+  ];
 
   StreamSubscription<PostLikeEvent>? _likeSub;
   StreamSubscription<PostViewEvent>? _viewSub;
@@ -80,6 +161,18 @@ class _FeedTabState extends ConsumerState<FeedTab> {
         _refreshController.refreshCompleted();
       }
     }
+  }
+
+  Widget _buildFeedTrackRail() {
+    return _TwitterFeedTabBar(
+      tracks: _tracks,
+      selectedTrack: _selectedTrack,
+      onSelect: (track) {
+        if (track.key == _selectedTrack.key) return;
+        setState(() => _selectedTrack = track);
+        ref.read(feedProvider.notifier).switchTrack(track.key);
+      },
+    );
   }
 
   /// 构建帖子列表内容 —— 始终返回 ListView.builder，避免 SmartRefresher ScrollController 失联
@@ -158,19 +251,23 @@ class _FeedTabState extends ConsumerState<FeedTab> {
   }
 
   Future<void> _refreshPosts() async {
-    // 节流：上一次刷新还没结束就不再触发，避免连续下拉导致状态机卡死
-    if (_isRefreshing) {
-      if (mounted) _refreshController.refreshCompleted();
-      return;
-    }
+    // 先释放 SmartRefresher 的 header，避免网络刷新期间接管滚动手势。
+    if (_isRefreshing) return;
     _isRefreshing = true;
-    final refreshFuture = ref.read(feedProvider.notifier).refreshPosts();
-    // 先收起 SmartRefresher 的刷新头，再等待网络返回并替换帖子列表。
-    // 否则刷新头仍展开时列表高度/图片布局变化，收起动画会做 offset 补偿，
-    // 表现为帖子列表自动上冲或刷新后跳动。
-    if (mounted) _refreshController.refreshCompleted();
+    _refreshController.refreshCompleted(resetFooterState: true);
+    unawaited(_refreshPostsInBackground());
+  }
+
+  Future<void> _refreshPostsInBackground() async {
     try {
-      await refreshFuture;
+      await ref.read(feedProvider.notifier).refreshPosts();
+    } catch (e) {
+      debugPrint('Feed refresh error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('刷新失败，请重试')),
+        );
+      }
     } finally {
       _isRefreshing = false;
     }
@@ -238,19 +335,23 @@ class _FeedTabState extends ConsumerState<FeedTab> {
             );
           },
         ),
+        _buildFeedTrackRail(),
         Consumer(
           builder: (context, ref, _) {
             final feedState = ref.watch(feedProvider);
             return Expanded(
               child: NotificationListener<ScrollUpdateNotification>(
                 onNotification: (notif) {
+                  if (_refreshController.isRefresh || feedState.isRefreshing) {
+                    return false;
+                  }
                   handleBarScrollNotification(notif, ref);
                   return false;
                 },
                 child: SmartRefresher(
                   controller: _refreshController,
                   enablePullDown: true,
-                  enablePullUp: feedState.hasMore,
+                  enablePullUp: !feedState.isRefreshing && feedState.hasMore,
                   onRefresh: _refreshPosts,
                   onLoading: _loadPosts,
                   header: const ClassicHeader(

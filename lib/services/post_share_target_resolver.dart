@@ -13,10 +13,12 @@ class PostShareTarget {
   final User? friend;
   final Community? community;
   final int fallbackIndex;
+  final bool isRecent;
 
   const PostShareTarget._({
     required this.type,
     required this.fallbackIndex,
+    this.isRecent = false,
     this.friend,
     this.community,
   });
@@ -35,6 +37,16 @@ class PostShareTarget {
       type: PostShareTargetType.community,
       community: community,
       fallbackIndex: fallbackIndex,
+    );
+  }
+
+  PostShareTarget copyWith({bool? isRecent}) {
+    return PostShareTarget._(
+      type: type,
+      fallbackIndex: fallbackIndex,
+      isRecent: isRecent ?? this.isRecent,
+      friend: friend,
+      community: community,
     );
   }
 
@@ -110,6 +122,40 @@ List<dynamic> _extractPostShareItems(dynamic data, List<String> keys) {
   return const [];
 }
 
+List<PostShareTarget> filterPostShareTargets(
+  List<PostShareTarget> targets,
+  String query,
+) {
+  final normalized = query.trim().toLowerCase();
+  if (normalized.isEmpty) return targets;
+  return targets.where((target) {
+    final values = <String>[
+      target.title,
+      target.subtitle,
+      if (target.friend != null) target.friend!.username,
+      if (target.friend?.displayName != null) target.friend!.displayName!,
+      if (target.community?.name != null) target.community!.name,
+    ];
+    return values.any((value) => value.toLowerCase().contains(normalized));
+  }).toList();
+}
+
+List<String> postShareRecentTargetKeys(List<Conversation> conversations) {
+  final keys = <String>[];
+  final seen = <String>{};
+  for (final conversation in conversations) {
+    String? key;
+    if (conversation.isCommunity && conversation.communityId != null) {
+      key = 'community:${conversation.communityId}';
+    } else {
+      final otherUserId = conversation.otherUser?.id;
+      if (otherUserId != null && otherUserId > 0) key = 'friend:$otherUserId';
+    }
+    if (key != null && seen.add(key)) keys.add(key);
+  }
+  return keys;
+}
+
 List<PostShareTarget> sortPostShareTargetsByConversationOrder({
   required List<PostShareTarget> targets,
   required List<Conversation> conversations,
@@ -160,10 +206,14 @@ class PostShareTargetResolver {
         ),
     ];
 
+    final recentKeys = postShareRecentTargetKeys(conversations).toSet();
     return sortPostShareTargetsByConversationOrder(
       targets: targets,
       conversations: conversations,
-    );
+    )
+        .map((target) =>
+            recentKeys.contains(target.stableKey) ? target.copyWith(isRecent: true) : target)
+        .toList();
   }
 
   Future<List<User>> _loadFriends() async {

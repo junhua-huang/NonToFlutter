@@ -94,30 +94,66 @@ void main() {
       expect(source, contains('serverPost?.displayRoleLabel == null'));
     });
 
-    test('Identity application screen is routable from settings', () {
+    test(
+        'Identity center is routable from settings while application remains available',
+        () {
       final routeSource = File('lib/routes/app_routes.dart').readAsStringSync();
       final generatorSource =
           File('lib/routes/route_generator.dart').readAsStringSync();
       final settingsSource =
           File('lib/screens/profile/settings_screen.dart').readAsStringSync();
+      final centerFile =
+          File('lib/screens/profile/identity_center_screen.dart');
       final screenFile =
           File('lib/screens/profile/identity_application_screen.dart');
 
+      expect(routeSource, contains('identityCenter'));
       expect(routeSource, contains('identityApplication'));
+      expect(generatorSource, contains('IdentityCenterScreen'));
       expect(generatorSource, contains('IdentityApplicationScreen'));
-      expect(settingsSource, contains('身份认证'));
-      expect(settingsSource, contains('AppRoutes.identityApplication'));
+      expect(settingsSource, contains('我的身份'));
+      expect(settingsSource, contains('AppRoutes.identityCenter'));
+      expect(centerFile.existsSync(), isTrue);
       expect(screenFile.existsSync(), isTrue);
     });
 
-    test('PostCard renders reusable identity badge for post display role', () {
+    test(
+        'PostCard and detail render reusable identity badge for post display role',
+        () {
       final badgeFile = File('lib/widgets/identity_badge.dart');
       expect(badgeFile.existsSync(), isTrue);
 
       final cardSource = File('lib/widgets/post_card.dart').readAsStringSync();
-      expect(cardSource, contains("identity_badge.dart"));
+      final detailSource =
+          File('lib/screens/post/post_detail_screen.dart').readAsStringSync();
+      final authorMetaSource =
+          File('lib/widgets/post_author_meta_line.dart').readAsStringSync();
+      expect(cardSource, contains("post_author_meta_line.dart"));
+      expect(detailSource, contains("identity_badge.dart"));
+      expect(authorMetaSource, contains("identity_badge.dart"));
+      expect(cardSource, contains('PostAuthorMetaLine('));
+      expect(authorMetaSource,
+          contains('IdentityBadge(label: post.displayRoleLabel'));
       expect(
-          cardSource, contains('IdentityBadge(label: post.displayRoleLabel'));
+          detailSource, contains('IdentityBadge(label: post.displayRoleLabel'));
+    });
+
+    test('comments and profile use compact identity pills', () {
+      final badgeSource =
+          File('lib/widgets/identity_badge.dart').readAsStringSync();
+      final commentsSource =
+          File('lib/widgets/comment_section.dart').readAsStringSync();
+      final profileSource =
+          File('lib/widgets/profile_identity_section.dart').readAsStringSync();
+
+      expect(badgeSource, contains('borderRadius: BorderRadius.circular(999)'));
+      expect(commentsSource, contains("identity_badge.dart"));
+      expect(commentsSource, contains('user?.verifiedRoleLabels'));
+      expect(commentsSource, contains('IdentityBadge(label: identityLabel)'));
+      expect(profileSource,
+          contains("child: Text(labels.isEmpty ? '申请身份' : '管理')"));
+      expect(profileSource, isNot(contains('认证身份会用于主页展示和发帖身份选择')));
+      expect(profileSource, isNot(contains('该用户已通过平台身份认证')));
     });
   });
 }

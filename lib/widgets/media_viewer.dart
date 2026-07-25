@@ -206,14 +206,18 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
 }
 
 /// 多图网格组件（用于帖子中的多图展示）
-class ImageGalleryGrid extends StatelessWidget {
+class AdaptivePostImageGallery extends StatelessWidget {
+  static const double _singleImageAspectRatio = 16 / 10;
+  static const double _twoImageAspectRatio = 2 / 1;
+  static const double _multiImageAspectRatio = 16 / 11;
+
   final List<String> imageUrls;
   final Post? post;
   final VoidCallback? onTap;
   final double maxHeight;
   final List<Post>? feedPosts;
 
-  const ImageGalleryGrid({
+  const AdaptivePostImageGallery({
     super.key,
     required this.imageUrls,
     this.post,
@@ -231,10 +235,10 @@ class ImageGalleryGrid extends StatelessWidget {
       return _buildSingleImage(imageUrls[0], context);
     }
 
-    // Two images: side by side
+    // Two images: side by side, Twitter/X-style fixed row.
     if (imageUrls.length == 2) {
-      return SizedBox(
-        height: maxHeight * 0.8,
+      return AspectRatio(
+        aspectRatio: _twoImageAspectRatio,
         child: Row(
           children: [
             Expanded(child: _buildGridImage(imageUrls[0], 0, context)),
@@ -245,19 +249,15 @@ class ImageGalleryGrid extends StatelessWidget {
       );
     }
 
-    // Three images: one large + two small
+    // Three images: one large + two stacked small images.
     if (imageUrls.length == 3) {
-      return SizedBox(
-        height: maxHeight,
+      return AspectRatio(
+        aspectRatio: _multiImageAspectRatio,
         child: Row(
           children: [
-            Expanded(
-              flex: 1,
-              child: _buildGridImage(imageUrls[0], 0, context),
-            ),
+            Expanded(child: _buildGridImage(imageUrls[0], 0, context)),
             const SizedBox(width: 4),
             Expanded(
-              flex: 1,
               child: Column(
                 children: [
                   Expanded(child: _buildGridImage(imageUrls[1], 1, context)),
@@ -271,39 +271,40 @@ class ImageGalleryGrid extends StatelessWidget {
       );
     }
 
-    // 4+ images: 2x2 grid with "+N" overlay on last
-    final displayCount = imageUrls.length > 4 ? 3 : imageUrls.length;
-    final extraCount = imageUrls.length - displayCount;
+    // 4+ images: 2x2 grid with "+N" overlay on the fourth tile.
+    final visibleUrls = imageUrls.take(4).toList();
+    final extraCount = imageUrls.length - visibleUrls.length;
 
-    return SizedBox(
-      height: maxHeight,
+    return AspectRatio(
+      aspectRatio: _multiImageAspectRatio,
       child: Column(
         children: [
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _buildGridImage(imageUrls[0], 0, context)),
+                Expanded(child: _buildGridImage(visibleUrls[0], 0, context)),
                 const SizedBox(width: 4),
-                Expanded(child: _buildGridImage(imageUrls[1], 1, context)),
+                Expanded(child: _buildGridImage(visibleUrls[1], 1, context)),
               ],
             ),
           ),
-          if (displayCount >= 3) ...[
-            const SizedBox(height: 4),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                      child: _buildGridImage(imageUrls[2], 2, context,
-                          overlay: extraCount > 0 ? '+$extraCount' : null)),
-                  if (displayCount >= 4) ...[
-                    const SizedBox(width: 4),
-                    Expanded(child: _buildGridImage(imageUrls[3], 3, context)),
-                  ],
-                ],
-              ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: _buildGridImage(visibleUrls[2], 2, context)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _buildGridImage(
+                    visibleUrls[3],
+                    3,
+                    context,
+                    overlay: extraCount > 0 ? '+$extraCount' : null,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -313,6 +314,10 @@ class ImageGalleryGrid extends StatelessWidget {
     final resolved = resolveUrl(url);
     return GestureDetector(
       onTap: () {
+        if (onTap != null) {
+          onTap!();
+          return;
+        }
         if (post != null) {
           final items = _buildMediaItems();
           final initialPostIdx = items
@@ -326,23 +331,20 @@ class ImageGalleryGrid extends StatelessWidget {
       },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: CachedNetworkImage(
-          imageUrl: resolved,
-          fit: BoxFit.fitWidth,
-          width: double.infinity,
-          fadeInDuration: const Duration(milliseconds: 300),
-          fadeInCurve: Curves.easeInOut,
-          placeholder: (_, __) => AspectRatio(
-            aspectRatio: 4 / 3,
-            child: Container(
+        child: AspectRatio(
+          aspectRatio: _singleImageAspectRatio,
+          child: CachedNetworkImage(
+            imageUrl: resolved,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            fadeInDuration: const Duration(milliseconds: 300),
+            fadeInCurve: Curves.easeInOut,
+            placeholder: (_, __) => Container(
               color: AppColors.surface,
               child: const Center(
                   child: CircularProgressIndicator(color: AppColors.primary)),
             ),
-          ),
-          errorWidget: (_, __, ___) => AspectRatio(
-            aspectRatio: 4 / 3,
-            child: Container(
+            errorWidget: (_, __, ___) => Container(
               color: AppColors.surface,
               child: Center(
                 child: Icon(Icons.broken_image,
@@ -453,6 +455,17 @@ class ImageGalleryGrid extends StatelessWidget {
 
     return items;
   }
+}
+
+class ImageGalleryGrid extends AdaptivePostImageGallery {
+  const ImageGalleryGrid({
+    super.key,
+    required super.imageUrls,
+    super.post,
+    super.onTap,
+    super.maxHeight,
+    super.feedPosts,
+  });
 }
 
 /// 视频播放组件（带缩略图、播放按钮、错误处理）

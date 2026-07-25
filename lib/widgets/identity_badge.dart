@@ -4,11 +4,13 @@ import 'package:nonto/config/app_theme.dart';
 class IdentityBadge extends StatelessWidget {
   final String? label;
   final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
 
   const IdentityBadge({
     super.key,
     required this.label,
-    this.padding = const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+    this.padding = const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+    this.margin = const EdgeInsets.only(left: 6),
   });
 
   @override
@@ -19,6 +21,7 @@ class IdentityBadge extends StatelessWidget {
     }
 
     return Container(
+      margin: margin,
       padding: padding,
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.10),
@@ -31,7 +34,7 @@ class IdentityBadge extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: AppColors.primary,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w700,
         ),
       ),

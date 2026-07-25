@@ -178,8 +178,11 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
             : <String, dynamic>{};
         final dynamic rawConv = data['conversation'] ?? data;
         final convJson = rawConv is Map
-            ? rawConv as Map<String, dynamic>
+            ? Map<String, dynamic>.from(rawConv)
             : <String, dynamic>{};
+        if (data['other_user'] != null && convJson['other_user'] == null) {
+          convJson['other_user'] = data['other_user'];
+        }
         final conversation = Conversation.fromJson(convJson);
         if (!mounted) return;
         Navigator.push(

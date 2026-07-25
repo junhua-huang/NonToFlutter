@@ -8,7 +8,9 @@ import 'package:nonto/services/api/role_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
 
 class IdentityApplicationScreen extends StatefulWidget {
-  const IdentityApplicationScreen({super.key});
+  final String? initialRoleName;
+
+  const IdentityApplicationScreen({super.key, this.initialRoleName});
 
   @override
   State<IdentityApplicationScreen> createState() =>
@@ -74,7 +76,14 @@ class _IdentityApplicationScreenState extends State<IdentityApplicationScreen> {
             : <BusinessIdentityRole>[];
         setState(() {
           _roles = roles;
-          _selectedRoleName = roles.isNotEmpty ? roles.first.name : null;
+          final initialRoleName = widget.initialRoleName;
+          final hasInitialRole = initialRoleName != null &&
+              roles.any((role) => role.name == initialRoleName);
+          _selectedRoleName = hasInitialRole
+              ? initialRoleName
+              : roles.isNotEmpty
+                  ? roles.first.name
+                  : null;
           _loading = false;
         });
       } else {

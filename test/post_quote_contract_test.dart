@@ -104,8 +104,9 @@ void main() {
     expect(createSource, contains('quotedPost'));
     expect(createSource, contains('quotedPostId: widget.quotedPost?.id'));
     expect(createSource, contains('QuotedPostPreview'));
-    expect(cardSource, contains('QuotedPostPreview'));
-    expect(detailSource, contains('QuotedPostPreview'));
+    expect(createSource, contains('compact: true'));
+    expect(cardSource, contains('QuoteThreadCard'));
+    expect(detailSource, contains('QuoteThreadCard'));
     expect(actionBarSource, contains('onQuote'));
   });
 }

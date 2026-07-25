@@ -252,6 +252,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Badge(
       backgroundColor: AppColors.unreadBadge,
+      textColor: Colors.white,
       label: Text(_formatBadgeCount(badgeCount)),
       child: icon,
     );
@@ -368,11 +369,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ListTile(
               leading:
                   Icon(Icons.verified_outlined, color: AppColors.textPrimary),
-              title: Text('身份认证',
+              title: Text('我的身份',
                   style: TextStyle(fontSize: 15, color: AppColors.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, AppRoutes.identityApplication);
+                Navigator.pushNamed(context, AppRoutes.identityCenter);
               },
             ),
             ListTile(

@@ -99,10 +99,10 @@ void main() {
   test('post share sheet keeps dialog open and shows safe structured failures',
       () {
     final source = _read('lib/widgets/post_share_to_chat_sheet.dart');
-    expect(source, contains('response is ApiResponse'));
+    expect(source, contains('Future<ApiResponse> _sendToTarget'));
     expect(
         source, contains("apiFailureMessage(response, fallback: '发送失败，请重试')"));
-    expect(source, contains('if (success) {'));
+    expect(source, contains('if (_failedMessages.isEmpty && successCount > 0) {'));
     expect(source, contains('Navigator.of(context).pop();'));
   });
 

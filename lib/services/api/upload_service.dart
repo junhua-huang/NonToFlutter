@@ -3,34 +3,99 @@ import 'package:nonto/utils/image_compressor.dart';
 
 import 'api_client.dart';
 
+class ImageUploadFormat {
+  final String extension;
+  final String mimeType;
+
+  const ImageUploadFormat(this.extension, this.mimeType);
+}
+
 class UploadService {
   static final UploadService _i = UploadService._();
   factory UploadService() => _i;
   UploadService._();
   final ApiClient _api = ApiClient();
 
+  static ImageUploadFormat? detectImageUploadFormat(List<int> bytes) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return const ImageUploadFormat('jpg', 'image/jpeg');
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0D &&
+        bytes[5] == 0x0A &&
+        bytes[6] == 0x1A &&
+        bytes[7] == 0x0A) {
+      return const ImageUploadFormat('png', 'image/png');
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return const ImageUploadFormat('webp', 'image/webp');
+    }
+    if (bytes.length >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x38 &&
+        (bytes[4] == 0x37 || bytes[4] == 0x39) &&
+        bytes[5] == 0x61) {
+      return const ImageUploadFormat('gif', 'image/gif');
+    }
+    if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+      return const ImageUploadFormat('bmp', 'image/bmp');
+    }
+    return null;
+  }
+
+  static String uploadFileNameForFormat(String originalName, String extension) {
+    final trimmed = originalName.trim();
+    if (trimmed.isEmpty) {
+      return 'image_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    }
+    final dotIndex = trimmed.lastIndexOf('.');
+    final baseName = dotIndex > 0 ? trimmed.substring(0, dotIndex) : trimmed;
+    return '$baseName.$extension';
+  }
+
+  static String compressedJpegFileName(String originalName) =>
+      uploadFileNameForFormat(originalName, 'jpg');
+
   /// 压缩 XFile 图片（如果为图片格式），返回压缩后的 XFile
   static Future<XFile> _compressIfImage(XFile file) async {
     final ext = (file.name.contains('.') ? file.name.split('.').last : '')
         .toLowerCase();
-    const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'heic', 'heif'];
-    if (!imageExts.contains(ext)) return file;
+    const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'heic', 'heif'];
+    final isImageMime = (file.mimeType ?? '').toLowerCase().startsWith('image/');
+    if (!imageExts.contains(ext) && !isImageMime) return file;
 
-    try {
-      final originalBytes = await file.readAsBytes();
-      final compressedBytes = await ImageCompressor.compressImage(
-        originalBytes,
-        quality: 92,
-        maxWidth: 1920,
-      );
-      return XFile.fromData(
-        compressedBytes,
-        name: file.name,
-        mimeType: 'image/jpeg',
-      );
-    } catch (e) {
-      return file; // 压缩失败回退原图
+    final originalBytes = await file.readAsBytes();
+    final compressedBytes = await ImageCompressor.compressImage(
+      originalBytes,
+      quality: 92,
+      maxWidth: 1920,
+    );
+    final format = detectImageUploadFormat(compressedBytes);
+    if (format == null) {
+      throw UnsupportedError('图片格式暂不支持，请换用 JPG/PNG/WEBP');
     }
+    return XFile.fromData(
+      compressedBytes,
+      name: uploadFileNameForFormat(file.name, format.extension),
+      mimeType: format.mimeType,
+    );
   }
 
   /// 上传通用图片（压缩后上传）

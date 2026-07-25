@@ -1,5 +1,6 @@
 import 'package:nonto/models/user.dart';
 import 'package:nonto/models/post.dart';
+import 'package:nonto/models/identity_application.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
@@ -24,6 +25,8 @@ import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/screens/profile/blocked_users_screen.dart';
 import 'package:nonto/screens/profile/edit_profile_screen.dart';
 import 'package:nonto/screens/profile/identity_application_screen.dart';
+import 'package:nonto/screens/profile/identity_center_screen.dart';
+import 'package:nonto/screens/profile/identity_detail_screen.dart';
 import 'package:nonto/screens/profile/open_source_screen.dart';
 import 'package:nonto/screens/profile/privacy_policy_screen.dart';
 import 'package:nonto/screens/profile/settings_screen.dart';
@@ -72,8 +75,20 @@ class RouteGenerator {
         );
       case AppRoutes.editProfile:
         return _authGuard(builder: (_) => const EditProfileScreen());
+      case AppRoutes.identityCenter:
+        return _authGuard(builder: (_) => const IdentityCenterScreen());
       case AppRoutes.identityApplication:
-        return _authGuard(builder: (_) => const IdentityApplicationScreen());
+        final identityArgs = args is Map ? args : null;
+        return _authGuard(
+          builder: (_) => IdentityApplicationScreen(
+            initialRoleName: identityArgs?['initialRoleName'] as String?,
+          ),
+        );
+      case AppRoutes.identityDetail:
+        if (args is IdentityApplication) {
+          return _authGuard(builder: (_) => IdentityDetailScreen(application: args));
+        }
+        return _errorRoute('IdentityApplication argument is required');
       case AppRoutes.settings:
         return _authGuard(builder: (_) => const SettingsScreen());
       case AppRoutes.blockedUsers:

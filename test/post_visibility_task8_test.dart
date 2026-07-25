@@ -239,8 +239,14 @@ void main() {
       expect(source, contains('normalizePostVisibilityForEdit'));
       expect(source, contains('post_default_visibility'));
       expect(source, contains('visibility: _selectedVisibility'));
-      expect(source, contains('bool _isDefaultVisibilityLoading = true;'));
-      expect(source, contains('(!_isEditing && !_isDefaultVisibilityLoading)'));
+      final canSubmitStart = source.indexOf('bool get _canSubmitPost =>');
+      final canSubmitEnd = source.indexOf('bool get _isEditing', canSubmitStart);
+      expect(canSubmitStart, greaterThanOrEqualTo(0));
+      expect(canSubmitEnd, greaterThan(canSubmitStart));
+      expect(
+        source.substring(canSubmitStart, canSubmitEnd),
+        isNot(contains('_isDefaultVisibilityLoading')),
+      );
       expect(source, isNot(contains('_contentCategories')));
       expect(source, isNot(contains('_selectedContentCategory')));
       expect(source, isNot(contains('contentCategory:')));

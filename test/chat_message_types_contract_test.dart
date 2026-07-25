@@ -257,17 +257,28 @@ void main() {
     });
 
     test(
-        'post share sheet loads friends and creates private conversation before sending',
+        'post share sheet loads targets, supports search multi-select and sends with preview media',
         () {
       final sheetSource =
           File('lib/widgets/post_share_to_chat_sheet.dart').readAsStringSync();
       expect(sheetSource, contains('PostShareTargetResolver().loadTargets()'));
+      expect(sheetSource, contains('TextEditingController'));
+      expect(sheetSource, contains('_selectedKeys'));
+      expect(sheetSource, contains('_sendingKeys'));
+      expect(sheetSource, contains('_failedMessages'));
+      expect(sheetSource, contains('搜索好友或群聊'));
+      expect(sheetSource, contains('已选'));
+      expect(sheetSource, contains('_toggleSelection(target)'));
+      expect(sheetSource, contains('_sendSelected'));
       expect(sheetSource,
           contains('ChatService().getOrCreateConversation(target.friend!.id)'));
       expect(sheetSource, contains("messageType: 'post'"));
       expect(sheetSource, contains('relatedId: post.id'));
+      expect(sheetSource, contains('mediaUrl: _postSharePreviewMediaUrl(post)'));
       expect(sheetSource, contains('PostShareTargetType.friend'));
       expect(sheetSource, contains('PostShareTargetType.community'));
+      expect(sheetSource, contains('加载分享对象失败'));
+      expect(sheetSource, contains('重试'));
       expect(sheetSource, isNot(contains('Future.wait([')));
       expect(sheetSource,
           isNot(contains('.where((community) => community.isMember)')));
@@ -294,6 +305,45 @@ void main() {
           reason:
               'Missing/empty convFullList cache should use SQLite history.');
       expect(source, contains('data.isNotEmpty'));
+    });
+
+    test('post share target search matches friend names usernames and community names', () {
+      final alice = User(
+        id: 1,
+        username: 'alice_cos',
+        email: 'a@example.com',
+        displayName: '小鹿Alice',
+      );
+      const group = Community(id: 10, name: '摄影交流群', ownerId: 1);
+      final targets = [
+        PostShareTarget.friend(alice, fallbackIndex: 0),
+        PostShareTarget.community(group, fallbackIndex: 1),
+      ];
+
+      expect(filterPostShareTargets(targets, ''), targets);
+      expect(filterPostShareTargets(targets, 'alice').single.stableKey,
+          'friend:1');
+      expect(filterPostShareTargets(targets, '小鹿').single.stableKey,
+          'friend:1');
+      expect(filterPostShareTargets(targets, '摄影').single.stableKey,
+          'community:10');
+    });
+
+    test('post share target recent keys are derived from conversation list', () {
+      final alice = User(id: 1, username: 'alice', email: 'a@example.com');
+      final conversations = [
+        Conversation(id: 100, user1Id: 1, user2Id: 2, otherUser: alice),
+        Conversation(
+          id: 101,
+          user1Id: 1,
+          user2Id: 2,
+          type: 'community',
+          communityId: 20,
+          communityName: 'Group B',
+        ),
+      ];
+
+      expect(postShareRecentTargetKeys(conversations), ['friend:1', 'community:20']);
     });
 
     test('post share targets are mixed by conversation list order', () {
