@@ -336,17 +336,11 @@ class PostCard extends ConsumerWidget {
                 onTap: () => _openUserProfile(context),
               ),
             ),
-            IconButton(
-              icon: Icon(Icons.more_horiz,
-                  size: 18, color: AppColors.textSecondary),
-              onPressed: () => _showPostActions(context, ref),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            ),
+            _buildCompactMoreButton(context, ref),
           ],
         ),
         if (post.content != null && post.content!.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           RichTextContent(
             text: post.content!,
             style: TextStyle(
@@ -408,6 +402,22 @@ class PostCard extends ConsumerWidget {
           onShare: () => PostShareToChatSheet.show(context, post: post),
         ),
       ],
+    );
+  }
+
+  Widget _buildCompactMoreButton(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () => _showPostActions(context, ref),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 24,
+        height: 22,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child:
+              Icon(Icons.more_horiz, size: 18, color: AppColors.textSecondary),
+        ),
+      ),
     );
   }
 

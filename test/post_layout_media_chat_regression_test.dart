@@ -59,9 +59,14 @@ void main() {
       final postCard = read('lib/widgets/post_card.dart');
 
       expect(postCard, contains('_buildNormalPostContentColumn('));
-      expect(postCard, contains('const SizedBox(height: 4)'));
+      expect(postCard, contains('_buildCompactMoreButton('));
+      expect(postCard, contains('const SizedBox(height: 2)'));
       expect(postCard,
           contains('padding: const EdgeInsets.fromLTRB(0, 6, 0, 10)'));
+      expect(
+          postCard,
+          isNot(contains(
+              'constraints: const BoxConstraints(minWidth: 32, minHeight: 32)')));
       expect(postCard,
           isNot(contains('padding: const EdgeInsets.fromLTRB(72, 12, 16, 0)')));
       expect(
