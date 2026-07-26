@@ -129,7 +129,7 @@ void main() {
     expect(response.isRetryable, isTrue);
   });
 
-  test('upload confirm sends backend filename field', () async {
+  test('upload confirm sends final cos filename field', () async {
     final adapter = UploadConfirmContractAdapter();
     final dio = Dio(BaseOptions(baseUrl: 'https://api.invalid'))
       ..httpClientAdapter = adapter;
@@ -143,7 +143,7 @@ void main() {
 
     expect(response.success, isTrue);
     expect(adapter.confirmBody?['cos_key'], 'uploads/post.png');
-    expect(adapter.confirmBody?['filename'], 'picked.png');
+    expect(adapter.confirmBody?['filename'], 'post.png');
   });
 
   test('upload emits safe diagnostic logs for each stage', () async {
@@ -288,7 +288,7 @@ class UploadConfirmContractAdapter implements HttpClientAdapter {
     }
     if (options.path == '/upload/confirm') {
       confirmBody = options.data as Map<String, dynamic>?;
-      if (confirmBody?['filename'] != 'picked.png') {
+      if (confirmBody?['filename'] != 'post.png') {
         return _jsonResponse(422, {'detail': 'Upload confirmation failed'});
       }
       return _jsonResponse(
