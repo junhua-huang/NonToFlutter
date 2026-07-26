@@ -74,9 +74,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      // 有 token → 设置到全局（延迟 WS 连接，等 Provider 预热后再连）
+      // 有 token → 设置到全局；DB/Provider/WS 改为后台启动，避免阻塞首屏。
       ApiClient.setToken(token, connectWs: false);
-      await DataLayer().initDb(userId).catchError((_) {});
 
       // 仅发一个请求：校验 token
       final valid = await _verifyToken();
@@ -84,25 +83,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (!mounted) return;
 
       if (valid) {
-        // Token 有效 → 预热 Provider → 建立 WS 并等待认证
-        if (mounted) _prewarmProviders();
-        final wsOk = await _verifyWsConnection();
-        if (!mounted) return;
-        if (!wsOk) {
-          // WS 认证也失败 → 清 token 踢登录
-          debugPrint('[Splash] ❌ WS 认证失败，跳转登录');
-          await _clearLocalAuth(prefs);
-          if (mounted) _doNavigate(false);
-          return;
-        }
-        debugPrint('[Splash] ✅ HTTP + WS 双向验证通过');
-        // 等动画播完（如果还没播完）
-        if (_controller.isCompleted) {
-          _checkCookieAndGo(true);
-        } else {
-          await _controller.forward().catchError((_) {});
-          if (mounted) _checkCookieAndGo(true);
-        }
+        debugPrint('[Splash] ✅ HTTP token 验证通过');
+        _startLoggedInBackgroundServices(userId);
+        await _checkCookieAndGo(true);
       } else {
         // Token 无效 → 清除，进登录
         await _clearLocalAuth(prefs);
@@ -136,18 +119,35 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
   }
 
-  /// 预热四个首页 Tab 的 Provider：在 WS 连接前触发构造和初始数据加载。
-  /// 先 invalidate 强制重建（覆盖旧账号的 Provider 实例），再 read 触发构造。
-  void _prewarmProviders() {
+  void _startLoggedInBackgroundServices(String userId) {
+    unawaited(DataLayer().initDb(userId).catchError((e) {
+      debugPrint('[Splash] background DB init failed: $e');
+    }));
+    unawaited(_warmHomeProvidersInBackground());
+    unawaited(_connectWebSocketInBackground());
+  }
+
+  /// 预热首页 Provider 放到首屏导航之后后台执行，避免阻塞 Web 首次进入。
+  Future<void> _warmHomeProvidersInBackground() async {
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
     ref.invalidate(feedProvider);
     ref.invalidate(exploreProvider);
     ref.invalidate(conversationsProvider);
     ref.invalidate(notificationsProvider);
-    // 读取触发构造，网络请求异步发出
     ref.read(feedProvider);
     ref.read(exploreProvider);
     ref.read(conversationsProvider);
     ref.read(notificationsProvider);
+  }
+
+  Future<void> _connectWebSocketInBackground() async {
+    final wsOk = await _verifyWsConnection();
+    if (!mounted || wsOk) return;
+    debugPrint('[Splash] ❌ 后台 WS 认证失败，跳转登录');
+    final prefs = await SharedPreferences.getInstance();
+    await _clearLocalAuth(prefs);
+    if (mounted) _doNavigate(false);
   }
 
   /// 建立 WS 连接并等待认证完成（10s 超时）

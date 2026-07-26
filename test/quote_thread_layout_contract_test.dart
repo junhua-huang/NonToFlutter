@@ -18,24 +18,37 @@ void main() {
       expect(detail, contains('post.quotedPostId != null'));
     });
 
-    test('QuoteThreadCard renders reply-style segments with connector and actions', () {
+    test(
+        'QuoteThreadCard renders reply-style segments with connector and actions',
+        () {
       final source = read('lib/widgets/quote_thread_card.dart');
 
       expect(source, contains('class QuoteThreadCard'));
       expect(source, contains('_QuoteThreadSegment'));
       expect(source, contains('_QuoteConnectorLine'));
       expect(source, contains('NontoPostActionBar('));
+      expect(source, contains('_buildCompactMoreButton'));
+      expect(source,
+          contains('onMore: () => _showPostActions(context, ref, chain[i])'));
+      expect(
+          source,
+          contains(
+              'TwitterBottomSheet.show<String>(context, options: options)'));
       expect(source, contains('CreatePostScreen(quotedPost: segmentPost)'));
-      expect(source, contains('PostShareToChatSheet.show(context, post: segmentPost)'));
+      expect(source,
+          contains('PostShareToChatSheet.show(context, post: segmentPost)'));
       expect(source, isNot(contains('该原帖还引用了另一条内容')));
       expect(source, contains('原帖不可见或已被隐藏'));
       expect(source, contains('_maxQuotedAncestors = 3'));
-      expect(source, contains('while (next != null && depth < _maxQuotedAncestors)'));
+      expect(source,
+          contains('while (next != null && depth < _maxQuotedAncestors)'));
       expect(source, contains('Expanded(child: _QuoteConnectorLine())'));
       expect(source, isNot(contains('suppressNestedQuote')));
     });
 
-    test('composer keeps compact QuotedPostPreview instead of full thread layout', () {
+    test(
+        'composer keeps compact QuotedPostPreview instead of full thread layout',
+        () {
       final create = read('lib/screens/post/create_post_screen.dart');
 
       expect(create, contains('QuotedPostPreview('));

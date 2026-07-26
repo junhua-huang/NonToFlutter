@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/blocking_notifier.dart';
 import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/report_service.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/enhanced_media_viewer.dart';
 import 'package:nonto/widgets/media_viewer.dart';
@@ -14,6 +18,7 @@ import 'package:nonto/widgets/post_author_meta_line.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
+import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 
 class QuoteThreadCard extends ConsumerStatefulWidget {
   final Post post;
@@ -121,6 +126,189 @@ class _QuoteThreadCardState extends ConsumerState<QuoteThreadCard> {
     PostShareToChatSheet.show(context, post: segmentPost);
   }
 
+  static const List<_ReportOption> _reportReasons = [
+    _ReportOption('spam', '骚扰信息'),
+    _ReportOption('fake', '虚假信息'),
+    _ReportOption('violence', '暴力内容'),
+    _ReportOption('hate', '仇恨言论'),
+    _ReportOption('other', '其他'),
+  ];
+
+  Future<void> _showReportDialog(BuildContext context, Post post) async {
+    final reason = await TwitterBottomSheet.show<String>(
+      context,
+      groupLabel: '选择举报原因',
+      options: _reportReasons
+          .map((r) => TwitterSheetOption(
+                icon: Icons.flag_outlined,
+                label: r.label,
+                value: r.value,
+              ))
+          .toList(),
+    );
+    if (reason == null || !context.mounted) return;
+    try {
+      final resp = await ReportService().reportPost(post.id, reason);
+      if (!context.mounted) return;
+      if (resp.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('举报已提交'), duration: Duration(seconds: 2)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '举报失败，请重试')),
+              duration: const Duration(seconds: 2)),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('举报失败，请稍后重试'), duration: Duration(seconds: 2)),
+      );
+    }
+  }
+
+  Future<void> _showBlockConfirmDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Post post,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('屏蔽用户',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Text(
+            '确定要屏蔽@${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('确认屏蔽'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final result =
+        await ref.read(blockCoordinatorProvider).blockUser(post.userId);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? '已屏蔽@${post.user?.username ?? '该用户'}'
+              : result.error ?? '屏蔽失败',
+        ),
+        backgroundColor: result.success ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _showDeleteConfirmDialog(BuildContext context, Post post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('删除帖子',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Text('确定要删除这条帖子吗？此操作不可撤销。',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final resp = await PostService().deletePost(post.id);
+      if (!context.mounted) return;
+      if (resp.success) {
+        if (post.id == _currentPost.id) widget.onCurrentDelete?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('帖子已删除'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '删除失败，请重试')),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2)),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('删除失败，请重试'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2)),
+      );
+    }
+  }
+
+  Future<void> _showPostActions(
+    BuildContext context,
+    WidgetRef ref,
+    Post segmentPost,
+  ) async {
+    final currentUserId =
+        ProviderScope.containerOf(context).read(authProvider).user?.id;
+    final isOwnPost =
+        currentUserId != null && segmentPost.userId == currentUserId;
+
+    final options = <TwitterSheetOption<String>>[
+      const TwitterSheetOption(
+          icon: Icons.report_outlined, label: '举报帖子', value: 'report'),
+      const TwitterSheetOption(
+          icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+      if (isOwnPost)
+        const TwitterSheetOption(
+            icon: Icons.delete_outline,
+            label: '删除帖子',
+            value: 'delete',
+            isDestructive: true),
+    ];
+
+    final action =
+        await TwitterBottomSheet.show<String>(context, options: options);
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case 'report':
+        _showReportDialog(context, segmentPost);
+        break;
+      case 'block':
+        _showBlockConfirmDialog(context, ref, segmentPost);
+        break;
+      case 'delete':
+        _showDeleteConfirmDialog(context, segmentPost);
+        break;
+    }
+  }
+
   List<Post> _buildQuoteChain() {
     final chain = <Post>[_currentPost];
     var next = _quotedPost;
@@ -172,6 +360,7 @@ class _QuoteThreadCardState extends ConsumerState<QuoteThreadCard> {
                 onView: () => _showSegmentStats(chain[i]),
                 onQuote: () => _quoteSegment(chain[i]),
                 onShare: () => _shareSegment(chain[i]),
+                onMore: () => _showPostActions(context, ref, chain[i]),
                 feedPosts: i == 0 ? widget.feedPosts : const [],
                 quoteChainPosts: chain,
               ),
@@ -196,6 +385,7 @@ class _QuoteThreadSegment extends StatelessWidget {
   final VoidCallback onView;
   final VoidCallback onQuote;
   final VoidCallback onShare;
+  final VoidCallback onMore;
   final List<Post>? feedPosts;
   final List<Post> quoteChainPosts;
 
@@ -208,6 +398,7 @@ class _QuoteThreadSegment extends StatelessWidget {
     required this.onView,
     required this.onQuote,
     required this.onShare,
+    required this.onMore,
     this.feedPosts,
     required this.quoteChainPosts,
   });
@@ -250,10 +441,18 @@ class _QuoteThreadSegment extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      PostAuthorMetaLine(
-                        post: segmentPost,
-                        showUsername: false,
-                        onTap: onTap,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: PostAuthorMetaLine(
+                              post: segmentPost,
+                              showUsername: false,
+                              onTap: onTap,
+                            ),
+                          ),
+                          _buildCompactMoreButton(),
+                        ],
                       ),
                       if (segmentPost.content != null &&
                           segmentPost.content!.isNotEmpty) ...[
@@ -294,6 +493,22 @@ class _QuoteThreadSegment extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompactMoreButton() {
+    return GestureDetector(
+      onTap: onMore,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 24,
+        height: 22,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child:
+              Icon(Icons.more_horiz, size: 18, color: AppColors.textSecondary),
+        ),
       ),
     );
   }
@@ -437,6 +652,12 @@ class _UnavailableQuotedSegment extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ReportOption {
+  final String value;
+  final String label;
+  const _ReportOption(this.value, this.label);
 }
 
 class _StatRow extends StatelessWidget {

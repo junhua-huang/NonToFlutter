@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:nonto/config/app_theme.dart';
@@ -14,7 +15,6 @@ import 'package:nonto/services/connectivity_service.dart';
 import 'package:nonto/services/local_notification_service.dart';
 import 'package:nonto/services/web_utils.dart'
     if (dart.library.html) 'package:nonto/services/web_utils_web.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
@@ -48,12 +48,6 @@ void main() async {
     return true;
   };
 
-  // Drift Web 初始化：加载 sqlite3 WASM
-  if (kIsWeb) {
-    // Web 端 drift 会自动通过 IndexedDB / WASM 工作
-    // 如需自定义 sqlite3.wasm 路径，可在此处配置
-  }
-
   // ── SharedPreferences ──
   // On Web this reads from localStorage; catch any failure to prevent
   // the app from silently dying before runApp().
@@ -75,14 +69,6 @@ void main() async {
   // ── SharedPreferences 结构迁移（幂等，runApp 前执行） ──
   await PrefsMigrator.run();
 
-  // Local notifications are retained for Android notification permission and explicit diagnostic test notifications only.
-  // Vendor push handles delivery while the app is backgrounded or terminated.
-  await LocalNotificationService().init();
-  await AliyunPushService().init();
-
-  // Observe lifecycle for the foreground-only Flutter WebSocket.
-  AppLifecycleKeepAliveService().start();
-
   runApp(
     ProviderScope(
       overrides: [
@@ -94,6 +80,31 @@ void main() async {
 
   // Web: 成功初始化后隐藏 HTML loading overlay（与 index.html 双保险）
   hideWebLoadingOverlay();
+
+  unawaited(_startPostRunAppServices());
+}
+
+Future<void> _startPostRunAppServices() async {
+  // Local notifications are retained for Android notification permission and explicit diagnostic test notifications only.
+  // Vendor push handles delivery while the app is backgrounded or terminated.
+  try {
+    await LocalNotificationService().init();
+  } catch (e) {
+    debugPrint('LocalNotificationService init failed: $e');
+  }
+
+  try {
+    await AliyunPushService().init();
+  } catch (e) {
+    debugPrint('AliyunPushService init failed: $e');
+  }
+
+  // Observe lifecycle for the foreground-only Flutter WebSocket.
+  try {
+    AppLifecycleKeepAliveService().start();
+  } catch (e) {
+    debugPrint('AppLifecycleKeepAliveService start failed: $e');
+  }
 }
 
 class NonToApp extends ConsumerWidget {

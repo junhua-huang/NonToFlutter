@@ -14,10 +14,12 @@ void main() {
       expect(source, contains('Nonto 主框架页'));
       expect(source, contains('首页、发现、消息与我的'));
       expect(source, contains('IndexedStack'));
-      expect(source, contains('FeedTab()'));
-      expect(source, contains('SearchTab()'));
-      expect(source, contains('MessagesTab()'));
-      expect(source, contains('ProfileTab()'));
+      expect(source, contains('late final List<Widget?> _tabCache'));
+      expect(source, contains('Widget _buildLazyTab(int index)'));
+      expect(source, contains('_tabCache[index] ??= _createTab(index)'));
+      expect(
+          source, contains('List.generate(_tabCache.length, _buildLazyTab)'));
+      expect(source, isNot(contains('late final List<Widget> _tabs = const')));
     });
 
     test('bottom navigation chrome is extracted and keeps icons only', () {

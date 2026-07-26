@@ -42,12 +42,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  late final List<Widget> _tabs = const [
-    FeedTab(),
-    SearchTab(),
-    MessagesTab(),
-    ProfileTab(),
-  ];
+  late final List<Widget?> _tabCache = List<Widget?>.filled(4, null);
+  int _visibleTabIndex = 0;
 
   @override
   void initState() {
@@ -103,17 +99,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  Widget _createTab(int index) {
+    return switch (index) {
+      0 => const FeedTab(),
+      1 => const SearchTab(),
+      2 => const MessagesTab(),
+      3 => const ProfileTab(),
+      _ => const SizedBox.shrink(),
+    };
+  }
+
+  Widget _buildLazyTab(int index) {
+    if (index != _visibleTabIndex && _tabCache[index] == null) {
+      return const SizedBox.shrink();
+    }
+    return _tabCache[index] ??= _createTab(index);
+  }
+
   @override
   Widget build(BuildContext context) {
     final barVisible = ref.watch(barVisibleProvider);
     final totalBadge = ref.watch(unreadMessagesCountProvider).toInt();
     final currentIndex = ref.watch(currentTabIndexProvider);
+    _visibleTabIndex = currentIndex;
 
     return Scaffold(
       extendBody: true,
       body: IndexedStack(
         index: currentIndex,
-        children: _tabs,
+        children: List.generate(_tabCache.length, _buildLazyTab),
       ),
       drawer: _buildDrawer(context),
       floatingActionButton: _buildComposeButton(barVisible, currentIndex),
