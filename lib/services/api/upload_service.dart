@@ -102,9 +102,11 @@ class UploadService {
     if (format == null) {
       throw UnsupportedError('图片格式暂不支持，请换用 JPG/PNG/WEBP');
     }
+    final uploadFileName = uploadFileNameForFormat(file.name, format.extension);
     return XFile.fromData(
       compressedBytes,
-      name: uploadFileNameForFormat(file.name, format.extension),
+      name: uploadFileName,
+      path: uploadFileName,
       mimeType: format.mimeType,
     );
   }

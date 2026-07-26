@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nonto/services/api/upload_service.dart';
 import 'package:nonto/utils/image_compressor.dart';
@@ -59,6 +60,19 @@ void main() {
 
     expect(frameInfo.image.width, 1);
     expect(frameInfo.image.height, 1);
+  });
+
+  test('post image compression keeps a non-empty upload filename', () async {
+    final compressed = await UploadService.compressXFile(
+      XFile.fromData(
+        _transparentPng1x1(),
+        name: '',
+        mimeType: 'image/png',
+      ),
+    );
+
+    expect(compressed.name, isNotEmpty);
+    expect(compressed.name, endsWith('.png'));
   });
 
   test('post service does not send legacy single image_url field', () {
