@@ -124,7 +124,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       debugPrint('[Splash] background DB init failed: $e');
     }));
     unawaited(_warmHomeProvidersInBackground());
-    unawaited(_connectWebSocketInBackground());
   }
 
   /// 预热首页 Provider 放到首屏导航之后后台执行，避免阻塞 Web 首次进入。
@@ -139,48 +138,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     ref.read(exploreProvider);
     ref.read(conversationsProvider);
     ref.read(notificationsProvider);
-  }
-
-  Future<void> _connectWebSocketInBackground() async {
-    final wsOk = await _verifyWsConnection();
-    if (!mounted || wsOk) return;
-    debugPrint('[Splash] ❌ 后台 WS 认证失败，跳转登录');
-    final prefs = await SharedPreferences.getInstance();
-    await _clearLocalAuth(prefs);
-    if (mounted) _doNavigate(false);
-  }
-
-  /// 建立 WS 连接并等待认证完成（10s 超时）
-  /// 返回 true = 认证成功，false = 超时（不阻塞放行）
-  Future<bool> _verifyWsConnection() async {
-    try {
-      final ws = WebSocketService();
-      debugPrint(
-        '[Splash] _verifyWsConnection: isConnected=${ws.isConnected}, '
-        'tokenPresent=${ApiClient.token?.isNotEmpty == true}',
-      );
-      if (ws.isConnected) return true;
-      debugPrint('[Splash] _verifyWsConnection: calling ws.connect()');
-      await ws.connect();
-      debugPrint(
-          '[Splash] _verifyWsConnection: ws.connect() returned, isConnected=${ws.isConnected}');
-      // connect() 返回后 auth 可能已经异步完成，先检查再监听
-      if (ws.isConnected) return true;
-      // 等待 connectionStream 变为 true
-      final completer = Completer<bool>();
-      final sub = ws.connectionStream.listen((connected) {
-        if (connected && !completer.isCompleted) {
-          completer.complete(true);
-        }
-      });
-      final result = await completer.future
-          .timeout(const Duration(seconds: 10), onTimeout: () => false);
-      sub.cancel();
-      return result;
-    } catch (e) {
-      debugPrint('[Splash] _verifyWsConnection error: $e');
-      return false;
-    }
   }
 
   Future<void> _clearLocalAuth(SharedPreferences prefs) async {

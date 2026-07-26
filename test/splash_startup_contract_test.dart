@@ -15,7 +15,10 @@ void main() {
       expect(source,
           contains('void _startLoggedInBackgroundServices(String userId)'));
       expect(source, contains('unawaited(DataLayer().initDb(userId)'));
-      expect(source, contains('unawaited(_connectWebSocketInBackground())'));
+      expect(source,
+          isNot(contains('unawaited(_connectWebSocketInBackground())')));
+      expect(source,
+          isNot(contains('Future<void> _connectWebSocketInBackground()')));
       expect(source, contains('unawaited(_warmHomeProvidersInBackground())'));
       expect(validBranch, contains('_startLoggedInBackgroundServices'));
       expect(validBranch, contains('_checkCookieAndGo(true)'));
