@@ -143,7 +143,7 @@ void main() {
 
     expect(response.success, isTrue);
     expect(adapter.confirmBody?['cos_key'], 'uploads/post.png');
-    expect(adapter.confirmBody?['filename'], 'post.png');
+    expect(adapter.confirmBody?['final_filename'], 'post.png');
   });
 
   test('upload emits safe diagnostic logs for each stage', () async {
@@ -288,7 +288,7 @@ class UploadConfirmContractAdapter implements HttpClientAdapter {
     }
     if (options.path == '/upload/confirm') {
       confirmBody = options.data as Map<String, dynamic>?;
-      if (confirmBody?['filename'] != 'post.png') {
+      if (confirmBody?['final_filename'] != 'post.png') {
         return _jsonResponse(422, {'detail': 'Upload confirmation failed'});
       }
       return _jsonResponse(

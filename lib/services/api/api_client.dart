@@ -810,14 +810,14 @@ class ApiClient {
         try {
           final confirmFileName = _uploadFileNameFromCosKey(cosKey, fileName);
           debugPrint(
-            '[Upload] confirm start bodyKeys=cos_key,filename '
-            'cosKey=$cosKey filename=$confirmFileName originalFilename=$fileName',
+            '[Upload] confirm start bodyKeys=cos_key,final_filename '
+            'cosKey=$cosKey finalFilename=$confirmFileName originalFilename=$fileName',
           );
           final confirmResp = await post<Map<String, dynamic>>(
             '/upload/confirm',
             data: {
               'cos_key': cosKey,
-              'filename': confirmFileName,
+              'final_filename': confirmFileName,
             },
           );
           if (!confirmResp.success) {
