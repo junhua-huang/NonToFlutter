@@ -129,6 +129,23 @@ void main() {
     expect(response.isRetryable, isTrue);
   });
 
+  test('upload confirm sends backend filename field', () async {
+    final adapter = UploadConfirmContractAdapter();
+    final dio = Dio(BaseOptions(baseUrl: 'https://api.invalid'))
+      ..httpClientAdapter = adapter;
+    final client = ApiClient.test(dio: dio);
+
+    final response = await client.uploadBytes(
+      '/upload/post/image',
+      Uint8List.fromList([1, 2, 3]),
+      'picked.png',
+    );
+
+    expect(response.success, isTrue);
+    expect(adapter.confirmBody?['cos_key'], 'uploads/post.png');
+    expect(adapter.confirmBody?['filename'], 'picked.png');
+  });
+
   test('generic upload confirm failure returns failed structured response',
       () async {
     final adapter = UploadConfirmFailureAdapter(
@@ -213,6 +230,50 @@ void main() {
     expect(adapter.calls,
         containsAll(['/upload/presign', '/upload/cover/confirm']));
   });
+}
+
+class UploadConfirmContractAdapter implements HttpClientAdapter {
+  Map<String, dynamic>? confirmBody;
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    if (options.path == '/upload/presign') {
+      return _jsonResponse(200, {
+        'upload_url': 'https://cos.invalid/uploads/post.png?signature=secret',
+        'cos_key': 'uploads/post.png',
+        'public_url': 'https://cdn.invalid/uploads/post.png',
+      });
+    }
+    if (options.path.startsWith('https://cos.invalid/')) {
+      return ResponseBody.fromBytes(<int>[], 204);
+    }
+    if (options.path == '/upload/confirm') {
+      confirmBody = options.data as Map<String, dynamic>?;
+      if (confirmBody?['filename'] != 'picked.png') {
+        return _jsonResponse(422, {'detail': 'Upload confirmation failed'});
+      }
+      return _jsonResponse(
+          200, {'url': 'https://cdn.invalid/uploads/post.png'});
+    }
+    return _jsonResponse(404, {'detail': 'unexpected ${options.path}'});
+  }
+
+  ResponseBody _jsonResponse(int statusCode, Object body) {
+    return ResponseBody.fromBytes(
+      utf8.encode(jsonEncode(body)),
+      statusCode,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
 }
 
 class UploadConfirmFailureAdapter implements HttpClientAdapter {

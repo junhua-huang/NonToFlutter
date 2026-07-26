@@ -781,7 +781,7 @@ class ApiClient {
             '/upload/confirm',
             data: {
               'cos_key': cosKey,
-              'final_filename': fileName,
+              'filename': fileName,
             },
           );
           if (!confirmResp.success) {
