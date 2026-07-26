@@ -77,8 +77,18 @@ class UploadService {
   static Future<XFile> _compressIfImage(XFile file) async {
     final ext = (file.name.contains('.') ? file.name.split('.').last : '')
         .toLowerCase();
-    const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'heic', 'heif'];
-    final isImageMime = (file.mimeType ?? '').toLowerCase().startsWith('image/');
+    const imageExts = [
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+      'bmp',
+      'gif',
+      'heic',
+      'heif'
+    ];
+    final isImageMime =
+        (file.mimeType ?? '').toLowerCase().startsWith('image/');
     if (!imageExts.contains(ext) && !isImageMime) return file;
 
     final originalBytes = await file.readAsBytes();
@@ -86,6 +96,7 @@ class UploadService {
       originalBytes,
       quality: 92,
       maxWidth: 1920,
+      allowLargerOutput: true,
     );
     final format = detectImageUploadFormat(compressedBytes);
     if (format == null) {
