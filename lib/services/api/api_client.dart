@@ -808,7 +808,7 @@ class ApiClient {
 
       if (cosKey.isNotEmpty) {
         try {
-          final confirmFileName = _uploadFileNameFromCosKey(cosKey, fileName);
+          final confirmFileName = _uploadFinalFileName(cosKey, fileName);
           debugPrint(
             '[Upload] confirm start bodyKeys=cos_key,final_filename '
             'cosKey=$cosKey finalFilename=$confirmFileName originalFilename=$fileName',
@@ -920,12 +920,12 @@ class ApiClient {
     );
   }
 
-  String _uploadFileNameFromCosKey(String cosKey, String fallbackFileName) {
+  String _uploadFinalFileName(String cosKey, String fileName) {
+    final trimmed = fileName.trim();
+    if (trimmed.isNotEmpty) return trimmed;
     final normalized = cosKey.replaceAll('\\', '/');
     final slashIndex = normalized.lastIndexOf('/');
-    final fileName =
-        slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
-    return fileName.isEmpty ? fallbackFileName : fileName;
+    return slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
   }
 
   bool _presignHasUploadUrl(Map<String, dynamic> data) {
