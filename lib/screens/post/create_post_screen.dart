@@ -364,7 +364,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           // 使用 UploadService 压缩，并确保文件名/MIME 与实际字节格式一致。
           late final XFile compressed;
           try {
-            compressed = await UploadService.compressXFile(file);
+            compressed = await UploadService.compressXFileForPost(file);
           } on UnsupportedError catch (e) {
             await _saveDraft();
             if (mounted) {

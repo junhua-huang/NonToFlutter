@@ -47,6 +47,7 @@ dependencies:
   # ── 图片选择（三端均已适配） ──
   image_picker: ^1.2.0
   cross_file: ^0.3.0
+  image: ^4.0.0
   cached_network_image: ^3.4.1
   visibility_detector: ^0.4.0+2
   photo_view: ^0.15.0

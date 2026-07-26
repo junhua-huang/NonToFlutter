@@ -75,6 +75,22 @@ void main() {
     expect(compressed.name, endsWith('.png'));
   });
 
+  test('post image compression can force JPEG upload format', () async {
+    final compressed = await UploadService.compressXFileForPost(
+      XFile.fromData(
+        _transparentPng1x1(),
+        name: 'picked.png',
+        path: 'picked.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final bytes = await compressed.readAsBytes();
+
+    expect(compressed.name, endsWith('.jpg'));
+    expect(compressed.mimeType, 'image/jpeg');
+    expect(UploadService.detectImageUploadFormat(bytes)?.extension, 'jpg');
+  });
+
   test('post service does not send legacy single image_url field', () {
     final source =
         File('lib/services/api/post_service.dart').readAsStringSync();
@@ -94,6 +110,7 @@ void main() {
     expect(source, contains("debugPrint('Create post error:"));
     expect(source, contains('debugPrintStack(stackTrace: stackTrace)'));
     expect(source, contains('[CreatePost] image upload failed'));
+    expect(source, contains('UploadService.compressXFileForPost(file)'));
   });
 
   test('publish button is not blocked by default visibility loading', () {

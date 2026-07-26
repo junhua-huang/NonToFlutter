@@ -1,4 +1,8 @@
+import 'dart:ui' as ui;
+
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 import 'package:nonto/utils/image_compressor.dart';
 
 import 'api_client.dart';
@@ -111,6 +115,43 @@ class UploadService {
     );
   }
 
+  static Future<Uint8List> _encodeJpegBytes(Uint8List bytes) async {
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frameInfo = await codec.getNextFrame();
+    final image = frameInfo.image;
+    try {
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (byteData == null) {
+        throw UnsupportedError('图片格式暂不支持，请换用 JPG/PNG/WEBP');
+      }
+      final decoded = img.Image.fromBytes(
+        width: image.width,
+        height: image.height,
+        bytes: byteData.buffer,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      );
+      return Uint8List.fromList(img.encodeJpg(decoded, quality: 92));
+    } finally {
+      image.dispose();
+      codec.dispose();
+    }
+  }
+
+  static Future<XFile> _compressPostImage(XFile file) async {
+    final compressed = await _compressIfImage(file);
+    final compressedBytes = await compressed.readAsBytes();
+    final jpegBytes = await _encodeJpegBytes(compressedBytes);
+    final uploadFileName = compressedJpegFileName(file.name);
+    return XFile.fromData(
+      jpegBytes,
+      name: uploadFileName,
+      path: uploadFileName,
+      mimeType: 'image/jpeg',
+    );
+  }
+
   /// 上传通用图片（压缩后上传）
   Future<ApiResponse> uploadImage(XFile file,
       {void Function(int sent, int total)? onProgress}) async {
@@ -126,7 +167,7 @@ class UploadService {
   /// 上传帖子图片（压缩后上传）
   Future<ApiResponse> uploadPostImage(XFile file,
       {void Function(int sent, int total)? onProgress}) async {
-    final compressed = await _compressIfImage(file);
+    final compressed = await _compressPostImage(file);
     return _api.upload('/upload/post/image', compressed,
         onSendProgress: onProgress);
   }
@@ -185,6 +226,10 @@ class UploadService {
 
   /// 压缩 XFile 图片（不通过 Service 上传，供外部使用）
   static Future<XFile> compressXFile(XFile file) => _compressIfImage(file);
+
+  /// 压缩帖子图片为后端帖子上传链路使用的 JPEG。
+  static Future<XFile> compressXFileForPost(XFile file) =>
+      _compressPostImage(file);
 
   /// 批量压缩 XFile 图片列表（不通过 Service 上传，供外部使用）
   static Future<List<XFile>> compressXFiles(List<XFile> files) async {
