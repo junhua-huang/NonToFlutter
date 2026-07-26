@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nonto/services/api/api_client.dart';
 
@@ -144,6 +144,38 @@ void main() {
     expect(response.success, isTrue);
     expect(adapter.confirmBody?['cos_key'], 'uploads/post.png');
     expect(adapter.confirmBody?['filename'], 'picked.png');
+  });
+
+  test('upload emits safe diagnostic logs for each stage', () async {
+    final adapter = UploadConfirmContractAdapter();
+    final dio = Dio(BaseOptions(baseUrl: 'https://api.invalid'))
+      ..httpClientAdapter = adapter;
+    final client = ApiClient.test(dio: dio);
+    final logs = <String>[];
+    final previousDebugPrint = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) logs.add(message);
+    };
+    addTearDown(() => debugPrint = previousDebugPrint);
+
+    await client.uploadBytes(
+      '/upload/post/image',
+      Uint8List.fromList([1, 2, 3]),
+      'picked.png',
+    );
+
+    expect(
+      logs,
+      containsAll(<Matcher>[
+        contains('[Upload] presign start'),
+        contains('[Upload] presign ok'),
+        contains('[Upload] cos put start'),
+        contains('[Upload] cos put ok'),
+        contains('[Upload] confirm start'),
+        contains('[Upload] confirm ok'),
+      ]),
+    );
+    expect(logs.join('\n'), isNot(contains('signature=secret')));
   });
 
   test('generic upload confirm failure returns failed structured response',

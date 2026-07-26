@@ -573,6 +573,9 @@ class ApiClient {
     required String fileExt,
     required String type,
   }) async {
+    debugPrint(
+      '[Upload] presign start type=$type filename=$fileName ext=$fileExt',
+    );
     final result = await post<Map<String, dynamic>>('/upload/presign', data: {
       'filename': fileName,
       'file_type': fileExt,
@@ -580,8 +583,21 @@ class ApiClient {
     });
 
     if (result.success && result.data != null) {
+      final data = result.data!;
+      final cosKey = _safeMapString(data, 'cos_key');
+      final publicUrl = _safeMapString(data, 'public_url');
+      debugPrint(
+        '[Upload] presign ok hasUploadUrl=${_presignHasUploadUrl(data)} '
+        'hasCosKey=${cosKey.isNotEmpty} '
+        'hasPublicUrl=${publicUrl.isNotEmpty} '
+        'cosKey=$cosKey',
+      );
       return result;
     }
+    debugPrint(
+      '[Upload] presign failed status=${result.statusCode} '
+      'code=${result.errorCode ?? "none"} message=${result.message ?? "none"}',
+    );
     return ApiResponse(
       success: false,
       message: result.message ?? '获取上传链接失败',
@@ -605,6 +621,9 @@ class ApiClient {
       final bytes = await file.readAsBytes();
       final fileName = file.name;
       final contentType = _getContentType(fileName);
+      debugPrint(
+        '[Upload] cos put start contentType=$contentType bytes=${bytes.length}',
+      );
 
       // 使用 Dio 直接 PUT 到 COS
       final resp = await _dio.put(
@@ -622,11 +641,13 @@ class ApiClient {
       );
 
       if (resp.statusCode == 200 || resp.statusCode == 204) {
+        debugPrint('[Upload] cos put ok status=${resp.statusCode}');
         return ApiResponse(
             success: true,
             data: {'url': presignedUrl.split('?').first} as T?,
             statusCode: resp.statusCode);
       }
+      debugPrint('[Upload] cos put failed status=${resp.statusCode}');
       return ApiResponse(
           success: false,
           message: 'COS 上传失败: ${resp.statusCode}',
@@ -648,6 +669,9 @@ class ApiClient {
     try {
       final contentType = _getContentType(fileName);
       final isVideo = contentType.startsWith('video/');
+      debugPrint(
+        '[Upload] cos put start contentType=$contentType bytes=${bytes.length}',
+      );
 
       final resp = await _dio.put(
         presignedUrl,
@@ -668,11 +692,13 @@ class ApiClient {
       );
 
       if (resp.statusCode == 200 || resp.statusCode == 204) {
+        debugPrint('[Upload] cos put ok status=${resp.statusCode}');
         return ApiResponse(
             success: true,
             data: {'url': presignedUrl.split('?').first} as T?,
             statusCode: resp.statusCode);
       }
+      debugPrint('[Upload] cos put failed status=${resp.statusCode}');
       return ApiResponse(
           success: false,
           message: 'COS 上传失败: ${resp.statusCode}',
@@ -719,6 +745,11 @@ class ApiClient {
     try {
       final uploadType = _extractUploadType(path);
       final fileExt = fileName.contains('.') ? fileName.split('.').last : '';
+      debugPrint(
+        '[Upload] uploadBytes start path=$path type=$uploadType '
+        'filename=$fileName ext=$fileExt bytes=${bytes.length} '
+        'contentType=${_getContentType(fileName)}',
+      );
       final presignResp = await _getCosPresignedUrlFromName(
           fileName: fileName, fileExt: fileExt, type: uploadType);
       return _handlePresignAndUpload(
@@ -777,6 +808,10 @@ class ApiClient {
 
       if (cosKey.isNotEmpty) {
         try {
+          debugPrint(
+            '[Upload] confirm start bodyKeys=cos_key,filename '
+            'cosKey=$cosKey filename=$fileName',
+          );
           final confirmResp = await post<Map<String, dynamic>>(
             '/upload/confirm',
             data: {
@@ -785,11 +820,17 @@ class ApiClient {
             },
           );
           if (!confirmResp.success) {
+            debugPrint(
+              '[Upload] confirm failed status=${confirmResp.statusCode} '
+              'code=${confirmResp.errorCode ?? "none"} '
+              'message=${confirmResp.message ?? "none"}',
+            );
             return _wrapUploadConfirmFailure(
               confirmResp,
               fallback: '上传确认失败，请重试',
             );
           }
+          debugPrint('[Upload] confirm ok status=${confirmResp.statusCode}');
           if (confirmResp.data != null && confirmResp.data!['url'] != null) {
             publicUrl = confirmResp.data!['url'] as String;
           }
@@ -858,6 +899,10 @@ class ApiClient {
       );
     }
 
+    debugPrint(
+      '[Upload] cos upload failed status=${cosResp.statusCode} '
+      'code=${cosResp.errorCode ?? "none"} message=${cosResp.message ?? "none"}',
+    );
     return cosResp;
   }
 
@@ -872,6 +917,17 @@ class ApiClient {
       errorCode: response.errorCode,
       isRetryable: response.isRetryable,
     );
+  }
+
+  bool _presignHasUploadUrl(Map<String, dynamic> data) {
+    return _safeMapString(data, 'upload_url').isNotEmpty ||
+        _safeMapString(data, 'presigned_url').isNotEmpty ||
+        _safeMapString(data, 'url').isNotEmpty;
+  }
+
+  String _safeMapString(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    return value == null ? '' : value.toString();
   }
 
   /// 从路径中提取上传类型（与后端 upload_type: avatar/cover/post/comic 对齐）

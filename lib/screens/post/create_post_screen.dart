@@ -395,6 +395,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             await _saveDraft();
             final message =
                 apiFailureMessage(uploadResp, fallback: '图片上传失败，请重试');
+            debugPrint(
+              '[CreatePost] image upload failed index=${i + 1} '
+              'filename=${compressed.name} status=${uploadResp.statusCode} '
+              'code=${uploadResp.errorCode ?? "none"} message=$message',
+            );
             if (mounted) {
               setState(() {
                 _isSubmitting = false;

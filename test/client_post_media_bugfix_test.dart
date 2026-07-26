@@ -79,6 +79,7 @@ void main() {
     expect(source, isNot(contains("label: '视频'")));
     expect(source, contains("debugPrint('Create post error:"));
     expect(source, contains('debugPrintStack(stackTrace: stackTrace)'));
+    expect(source, contains('[CreatePost] image upload failed'));
   });
 
   test('publish button is not blocked by default visibility loading', () {
