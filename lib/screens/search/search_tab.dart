@@ -21,6 +21,7 @@ import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/add_friend_button.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/nonto_header_search_bar.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
 import 'package:nonto/widgets/post_card.dart';
 import 'package:nonto/widgets/search_suggestions.dart';
 import 'package:flutter/material.dart';
@@ -376,8 +377,9 @@ class _SearchTabState extends ConsumerState<SearchTab>
                             user: ref.watch(authProvider).user,
                             hintText: '搜索',
                             leading: _buildSearchLeading(),
-                            onAvatarTap: () =>
-                                Scaffold.of(context).openDrawer(),
+                            onAvatarTap: WideShellScope.isWideOf(context)
+                                ? null
+                                : () => Scaffold.of(context).openDrawer(),
                             onChanged: (_) => _onTextChanged(),
                             onSubmitted: _doSearch,
                             suffixIcon: ValueListenableBuilder<bool>(

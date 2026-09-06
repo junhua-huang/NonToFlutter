@@ -11,9 +11,6 @@ class TabActivationNotifier {
 
 /// 应用全局配置
 class AppConfig {
-  // 应用版本号
-  static const String appVersion = '1.0.0';
-
   // 后端 API 基础地址。
   // 默认连接生产环境，本地开发可通过 --dart-define 覆盖。
   static const String baseUrl = String.fromEnvironment(

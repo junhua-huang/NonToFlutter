@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/explore_notifier.dart';
@@ -10,6 +11,7 @@ import 'package:nonto/screens/auth/login_screen.dart';
 import 'package:nonto/screens/home/home_screen.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/data_layer.dart';
+import 'package:nonto/services/app_runtime_info.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -181,6 +183,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
+        settings: RouteSettings(
+          name: isLoggedIn ? AppRoutes.home : AppRoutes.login,
+        ),
         pageBuilder: (context, animation, secondaryAnimation) {
           return FadeTransition(
             opacity: animation,
@@ -388,7 +393,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
                 const SizedBox(height: 32),
                 // 版本号
-                Text('v0.2.8',
+                Text('v${AppRuntimeInfo.current.version}',
                     style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textTertiary,

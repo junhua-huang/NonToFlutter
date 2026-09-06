@@ -1,6 +1,6 @@
-import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
+import 'package:nonto/providers/app_update_notifier.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/auth_state.dart';
 import 'package:nonto/providers/theme_notifier.dart';
@@ -10,6 +10,7 @@ import 'package:nonto/screens/profile/background_permission_guide_screen.dart';
 import 'package:nonto/screens/profile/push_diagnostics_screen.dart';
 import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/api/notification_service.dart';
+import 'package:nonto/services/app_runtime_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -93,6 +94,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _loadNotificationSettings();
+  }
+
+  Future<void> _checkForUpdates() async {
+    await ref.read(appUpdateProvider.notifier).check();
+    if (!mounted) return;
+
+    final updateState = ref.read(appUpdateProvider);
+    final message = switch (updateState.status) {
+      AppUpdateStatus.upToDate => '当前已是最新版本',
+      AppUpdateStatus.failed => updateState.error ?? '暂时无法检查更新，请稍后重试',
+      _ => null,
+    };
+    if (message != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
   }
 
   Future<void> _loadNotificationSettings() async {
@@ -264,6 +282,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final updateState = ref.watch(appUpdateProvider);
+    final isCheckingForUpdates = updateState.status == AppUpdateStatus.checking;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -433,10 +453,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: '版本号',
                 icon: Icons.info_outline,
                 trailing: Text(
-                  'v${AppConfig.appVersion}',
+                  'v${AppRuntimeInfo.current.label}',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
                 onTap: null,
+              ),
+              _buildSettingsDivider(),
+              _buildListTile(
+                title: '检查更新',
+                subtitle: isCheckingForUpdates ? '正在检查最新版本' : '获取最新版本和发布说明',
+                icon: Icons.system_update_outlined,
+                trailing: isCheckingForUpdates
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right, size: 20),
+                onTap: isCheckingForUpdates ? null : _checkForUpdates,
               ),
               _buildSettingsDivider(),
               _buildListTile(
@@ -932,7 +965,7 @@ class _PrivacySettingsPageState extends ConsumerState<_PrivacySettingsPage> {
                     _buildSettingsDivider(),
                     _buildSwitchTileFull(
                       title: '在主页展示邮箱',
-                      subtitle: '开启后你的邮箱将对他人可见',
+                      subtitle: '开启后邮箱会显示在你的主页',
                       icon: Icons.email_outlined,
                       value: _showEmail,
                       onChanged: (v) => setState(() => _showEmail = v),

@@ -4,11 +4,14 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/theme_notifier.dart';
+import 'package:nonto/widgets/app_update_gate.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/routes/route_generator.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/aliyun_push_service.dart';
 import 'package:nonto/services/app_lifecycle_keepalive_service.dart';
+import 'package:nonto/services/app_runtime_info.dart';
 import 'package:nonto/services/prefs_migrator.dart';
 import 'package:nonto/services/sound_service.dart';
 import 'package:nonto/services/connectivity_service.dart';
@@ -47,6 +50,9 @@ void main() async {
     hideWebLoadingOverlay();
     return true;
   };
+
+  // ── Runtime package metadata ──
+  await AppRuntimeInfo.load();
 
   // ── SharedPreferences ──
   // On Web this reads from localStorage; catch any failure to prevent
@@ -131,6 +137,7 @@ class NonToApp extends ConsumerWidget {
             key: const ValueKey('nonto_app'),
             title: 'nonto',
             navigatorKey: ApiClient.navigatorKey,
+            navigatorObservers: [shellRouteObserver],
             debugShowCheckedModeBanner: false,
             builder: (context, child) {
               return Column(
@@ -158,7 +165,13 @@ class NonToApp extends ConsumerWidget {
                         ),
                       ),
                     ),
-                  Expanded(child: child ?? const SizedBox.shrink()),
+                  Expanded(
+                    child: AppUpdateGate(
+                      child: AuthenticatedShell(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
                 ],
               );
             },

@@ -7,6 +7,7 @@ import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/providers/feed_notifier.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/widgets/nonto_header_search_bar.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -313,7 +314,9 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                           child: NontoHeaderAvatar(
                             user: authState.user,
                             radius: 18,
-                            onTap: () => Scaffold.of(context).openDrawer(),
+                            onTap: WideShellScope.isWideOf(context)
+                                ? null
+                                : () => Scaffold.of(context).openDrawer(),
                           ),
                         ),
                         title: Text(

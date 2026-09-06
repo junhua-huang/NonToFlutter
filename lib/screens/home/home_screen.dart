@@ -16,6 +16,7 @@ import 'package:nonto/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
 
 import '../comic/comic_my_events_page.dart';
 import '../comic/comic_timeline_page.dart';
@@ -123,19 +124,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final currentIndex = ref.watch(currentTabIndexProvider);
     _visibleTabIndex = currentIndex;
 
+    final isWide = WideShellScope.isWideOf(context);
+    final tabChildren = List.generate(_tabCache.length, _buildLazyTab);
+    final content = IndexedStack(
+      index: currentIndex,
+      children: tabChildren,
+    );
+
     return Scaffold(
-      extendBody: true,
-      body: IndexedStack(
-        index: currentIndex,
-        children: List.generate(_tabCache.length, _buildLazyTab),
-      ),
-      drawer: _buildDrawer(context),
-      floatingActionButton: _buildComposeButton(barVisible, currentIndex),
-      bottomNavigationBar: _buildBottomNavigationBar(
-        barVisible: barVisible,
-        currentIndex: currentIndex,
-        totalBadge: totalBadge,
-      ),
+      extendBody: !isWide,
+      body: isWide
+          ? _WideTabTransitionStack(
+              index: currentIndex,
+              children: tabChildren,
+            )
+          : content,
+      drawer: isWide ? null : _buildDrawer(context),
+      floatingActionButton:
+          isWide ? null : _buildComposeButton(barVisible, currentIndex),
+      bottomNavigationBar: isWide
+          ? null
+          : _buildBottomNavigationBar(
+              barVisible: barVisible,
+              currentIndex: currentIndex,
+              totalBadge: totalBadge,
+            ),
     );
   }
 
@@ -467,6 +480,160 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 8),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Keeps every cached tab mounted while animating only the wide-screen content.
+class _WideTabTransitionStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const _WideTabTransitionStack({
+    required this.index,
+    required this.children,
+  });
+
+  @override
+  State<_WideTabTransitionStack> createState() =>
+      _WideTabTransitionStackState();
+}
+
+class _WideTabTransitionStackState extends State<_WideTabTransitionStack>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppTransitions.slideDuration,
+  );
+  int? _outgoingIndex;
+  late int _activeIndex = widget.index;
+  int _direction = 1;
+
+  @override
+  void didUpdateWidget(_WideTabTransitionStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index == oldWidget.index) return;
+
+    _outgoingIndex = oldWidget.index;
+    _activeIndex = widget.index;
+    _direction = widget.index >= oldWidget.index ? 1 : -1;
+    _controller
+      ..stop()
+      ..forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final isAnimating = _outgoingIndex != null && _controller.value < 1.0;
+          final progress = Curves.easeOutCubic.transform(_controller.value);
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (isAnimating && _outgoingIndex != null)
+                Positioned.fill(
+                  child: _WideTabLayer(
+                    key: ValueKey(_outgoingIndex),
+                    isActive: false,
+                    isOutgoing: true,
+                    isAnimating: true,
+                    progress: progress,
+                    direction: _direction,
+                    child: widget.children[_outgoingIndex!],
+                  ),
+                ),
+              Positioned.fill(
+                child: _WideTabLayer(
+                  key: ValueKey(_activeIndex),
+                  isActive: true,
+                  isOutgoing: false,
+                  isAnimating: isAnimating,
+                  progress: progress,
+                  direction: _direction,
+                  child: widget.children[_activeIndex],
+                ),
+              ),
+              for (var index = 0; index < widget.children.length; index++)
+                if (index != _activeIndex && index != _outgoingIndex)
+                  Positioned.fill(
+                    child: _WideTabLayer(
+                      key: ValueKey(index),
+                      isActive: false,
+                      isOutgoing: false,
+                      isAnimating: false,
+                      progress: progress,
+                      direction: _direction,
+                      child: widget.children[index],
+                    ),
+                  ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Stable wrapper for one cached tab. Its child never changes parents during a
+/// transition, so scroll positions and other tab-local state remain intact.
+class _WideTabLayer extends StatelessWidget {
+  final Widget child;
+  final bool isActive;
+  final bool isOutgoing;
+  final bool isAnimating;
+  final double progress;
+  final int direction;
+
+  const _WideTabLayer({
+    super.key,
+    required this.child,
+    required this.isActive,
+    required this.isOutgoing,
+    required this.isAnimating,
+    required this.progress,
+    required this.direction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = isActive || isOutgoing;
+    final opacity = !visible
+        ? 0.0
+        : isAnimating && isActive
+            ? progress
+            : isAnimating && isOutgoing
+                ? 1.0 - progress
+                : 1.0;
+    final translation = !visible || !isAnimating
+        ? Offset.zero
+        : isActive
+            ? Offset(direction * 0.12 * (1 - progress), 0)
+            : Offset(-direction * 0.06 * progress, 0);
+
+    return TickerMode(
+      enabled: visible,
+      child: Offstage(
+        offstage: !visible,
+        child: IgnorePointer(
+          ignoring: !isActive || isAnimating,
+          child: Opacity(
+            opacity: opacity,
+            child: FractionalTranslation(
+              translation: translation,
+              child: child,
+            ),
+          ),
         ),
       ),
     );

@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:aliyun_push_flutter/aliyun_push_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:nonto/config/app_config.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/push_device_service.dart';
+import 'package:nonto/services/app_runtime_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Alibaba Cloud Mobile Push setup, diagnostics, and backend device binding.
@@ -303,7 +303,7 @@ class AliyunPushService {
           deviceId: deviceId,
           manufacturer: Platform.operatingSystem,
           model: '',
-          appVersion: AppConfig.appVersion,
+          appVersion: AppRuntimeInfo.current.version,
         );
         success = response.success;
         if (!success) {

@@ -1,4 +1,4 @@
-﻿name: nonto
+name: nonto
 description: "nonto - 南图，发现世界的动态"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -61,7 +61,7 @@ dependencies:
   # ── Web 端视频回退（HTML5 <video>，media_kit 不支持 Web） ──
   video_player: ^2.9.3
   flutter_social_video:
-    path: D:/flutter_social_video
+    path: ../flutter_social_video
 
   # ── 数据库（三端均已适配） ──
   drift: ^2.21.0
@@ -99,6 +99,8 @@ dependencies:
   # ── Android 通知权限与用户主动触发的诊断通知 ──
   flutter_local_notifications: ^17.2.4
   aliyun_push_flutter: ^1.3.7
+  package_info_plus: ^9.0.1
+  url_launcher: ^6.3.2
 
 dependency_overrides:
   # ── 鸿蒙适配版（基于上游源码 + 鸿蒙端实现，iOS/Android 行为不变） ──
@@ -136,7 +138,7 @@ dependency_overrides:
       ref: main
   
   flutter_social_video:
-    path: D:/flutter_social_video
+    path: ../flutter_social_video
 
 dev_dependencies:
   flutter_test:

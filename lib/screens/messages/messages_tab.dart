@@ -8,10 +8,14 @@ import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
 import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/notifications/notifications_tab.dart';
+import 'dart:async';
+
+import 'package:nonto/services/chat_prefetch_service.dart';
 import 'package:nonto/services/local_db_service.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_helpers.dart';
 import 'package:nonto/widgets/nonto/nonto_conversation_tile.dart';
 import 'package:nonto/widgets/nonto_header_search_bar.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
 import 'package:nonto/widgets/shimmer_skeletons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -95,6 +99,9 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
 
   Future<void> _openConversation(Conversation conv) async {
     if (conv.isCommunity && conv.communityId != null) {
+      unawaited(
+        ChatPrefetchService().prefetchCommunityChat(conv.communityId!),
+      );
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -110,6 +117,9 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
       }
       return;
     }
+    unawaited(
+      ChatPrefetchService().prefetchPrivateConversation(conv.id),
+    );
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => ChatRoomScreen(conversation: conv)),
@@ -147,8 +157,10 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
                           focusNode: _searchFocusNode,
                           user: ref.watch(authProvider).user,
                           hintText: '搜索会话',
-                          onAvatarTap: () =>
-                              Scaffold.of(homeScaffoldContext).openDrawer(),
+                          onAvatarTap: WideShellScope.isWideOf(context)
+                              ? null
+                              : () =>
+                                  Scaffold.of(homeScaffoldContext).openDrawer(),
                           onChanged: (value) =>
                               setState(() => _searchQuery = value),
                           suffixIcon: _searchQuery.isEmpty
