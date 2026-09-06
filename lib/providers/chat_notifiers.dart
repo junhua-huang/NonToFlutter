@@ -857,6 +857,57 @@ int _compareMessagesForTimeline(Message a, Message b) {
   return a.id.compareTo(b.id);
 }
 
+/// Message state is newest-first so reverse:true can render the latest item at
+/// offset zero without a first-frame scroll correction.
+int _compareMessagesForLatestFirst(Message a, Message b) =>
+    _compareMessagesForTimeline(b, a);
+
+List<Message> _mergeMessagesLatestFirst(
+  Iterable<Message> current,
+  Iterable<Message> incoming,
+) {
+  final byId = <int, Message>{};
+  for (final message in [...current, ...incoming]) {
+    byId[message.id] = message;
+  }
+  final merged = byId.values.toList()..sort(_compareMessagesForLatestFirst);
+  return merged;
+}
+
+class _CachedMessagePayload {
+  final List<dynamic> messages;
+  final bool hasMore;
+
+  const _CachedMessagePayload(this.messages, {required this.hasMore});
+}
+
+_CachedMessagePayload _cachedMessagePayload(dynamic raw) {
+  dynamic data = raw;
+  if (data is String) {
+    try {
+      data = jsonDecode(data);
+    } catch (_) {
+      return const _CachedMessagePayload([], hasMore: false);
+    }
+  }
+  if (data is Map) {
+    final messages = data['messages'];
+    final messageList = messages is List ? messages : const [];
+    final hasMore = data['has_more'] ?? data['hasMore'];
+    final hasMoreBefore = data['has_more_before'];
+    return _CachedMessagePayload(
+      messageList,
+      hasMore: hasMore is bool
+          ? hasMore
+          : (hasMoreBefore is bool ? hasMoreBefore : messageList.length >= 50),
+    );
+  }
+  if (data is List) {
+    return _CachedMessagePayload(data, hasMore: data.length >= 50);
+  }
+  return const _CachedMessagePayload([], hasMore: false);
+}
+
 class MessagesNotifier extends StateNotifier<MessagesState> {
   final int conversationId;
   final ChatService _chatService = ChatService();
@@ -946,7 +997,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         '[Chat] ack message_id: ${msg.id} → $messageId (clientMsgId=$clientMsgId)');
   }
 
-  /// 由 ChatRoomScreen 在 initState 中调用，传入当前用户 ID 和对方用户 ID 并启动加载。
+  /// 由 ChatRoomScreen 的首帧回调调用，传入当前用户 ID 和对方用户 ID 并启动加载。
   ///
   /// 注意：family Provider 不会随 ChatRoomScreen pop 自动销毁，
   /// 同一会话第二次进入时若直接 `if (_initialized) return;` 会跳过
@@ -1065,6 +1116,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   Future<void> _loadMessages() async {
     _suppressRecentCacheSync = false;
+    if (mounted) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
     debugPrint('[Messages] ═══════════════════════════════════════');
     debugPrint('[Messages] _loadMessages START conv=$conversationId');
 
@@ -1094,14 +1148,21 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       final warmupKey = CacheKeys.msgWarmup(conversationId);
       final warmupSnapshot = await DataLayer()
           .query(warmupKey, () async => null, forceRefresh: false);
-      if (warmupSnapshot.data is List &&
-          (warmupSnapshot.data as List).isNotEmpty) {
-        final messages = (warmupSnapshot.data as List<dynamic>)
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
+      final warmupPayload = _cachedMessagePayload(warmupSnapshot.data);
+      if (warmupPayload.messages.isNotEmpty) {
+        final messages = warmupPayload.messages
+            .whereType<Map>()
+            .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+          ..sort(_compareMessagesForLatestFirst);
+        final hasMoreFromWarmup = warmupPayload.hasMore;
         debugPrint(
-            '[Messages] Step1 warmup HIT: ${messages.length} msgs from $warmupKey');
-        state = state.copyWith(messages: messages, isLoading: false);
+            '[Messages] Step1 warmup HIT: ${messages.length} msgs from $warmupKey hasMore=$hasMoreFromWarmup');
+        state = state.copyWith(
+          messages: messages,
+          isLoading: false,
+          hasMore: hasMoreFromWarmup,
+        );
       }
     } catch (_) {
       // ignore
@@ -1117,10 +1178,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         if (state.messages.isEmpty) {
           debugPrint(
               '[Messages] Step2 → SQLite fallback, ${localMessages.length} msgs');
-          final localTimeline = List<Message>.from(localMessages);
-          localTimeline.sort(_compareMessagesForTimeline);
+          final localTimeline = List<Message>.from(localMessages)
+            ..sort(_compareMessagesForTimeline);
+          final latestFirstTimeline = localTimeline.reversed.toList();
           state = state.copyWith(
-            messages: localTimeline,
+            messages: latestFirstTimeline,
             isLoading: false,
           );
         }
@@ -1164,27 +1226,18 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       }, forceRefresh: state.messages.isEmpty); // 无数据时强制网络
 
       if (result.data != null) {
-        final resultData = result.data;
-        List<dynamic> msgList;
-        bool hasMoreFromLoad = false;
-        if (resultData is Map && resultData.containsKey('messages')) {
-          msgList = resultData['messages'] as List<dynamic>;
-          hasMoreFromLoad = resultData['has_more'] == true;
-        } else if (resultData is List) {
-          msgList = resultData;
-          hasMoreFromLoad = resultData.length >= 50;
-        } else {
-          msgList = [];
-        }
+        final loadedPayload = _cachedMessagePayload(result.data);
+        final msgList = loadedPayload.messages;
+        final hasMoreFromLoad = loadedPayload.hasMore;
         final serverMessages = msgList
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
+            .whereType<Map>()
+            .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+          ..sort(_compareMessagesForLatestFirst);
         if (result.source.name != 'memory' ||
             serverMessages.length != state.messages.length) {
-          // BUG 修复：之前直接 `messages: serverMessages` 会覆盖掉用户刚发出、
-          // 还没收到 ACK 的乐观消息（id >= 1e12），表现为「发完一条消息进入聊天室 /
-          // 拉取增量时自己刚发的消息凭空消失」。这里把仍处于 pending 的乐观消息
-          // 追加到服务端列表末尾，保留「发送中」气泡，等服务端 ACK 回来再替换。
+          // Preserve pending optimistic messages while refreshing the server
+          // window; the merge helper restores newest-first order afterward.
           final serverIds = serverMessages.map((m) => m.id).toSet();
           final serverClientMsgIds = serverMessages
               .map((m) => m.clientMsgId)
@@ -1198,10 +1251,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
                       m.clientMsgId!.isEmpty ||
                       !serverClientMsgIds.contains(m.clientMsgId)))
               .toList();
-          final merged = <Message>[
-            ...serverMessages,
-            ...pendingOptimistic,
-          ]..sort(_compareMessagesForTimeline);
+          final merged = _mergeMessagesLatestFirst(
+            serverMessages,
+            pendingOptimistic,
+          );
           state = state.copyWith(
               messages: merged, isLoading: false, hasMore: hasMoreFromLoad);
           await DataLayer().persistMessages(serverMessages);
@@ -1209,6 +1262,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
               '[Messages] Step3 → updated: ${serverMessages.length} server msgs'
               '${pendingOptimistic.isNotEmpty ? " + ${pendingOptimistic.length} pending optimistic" : ""}'
               ' (source=${result.source.name}) hasMore=$hasMoreFromLoad');
+        } else if (state.hasMore != hasMoreFromLoad || state.isLoading) {
+          state = state.copyWith(isLoading: false, hasMore: hasMoreFromLoad);
         }
       } else if (state.messages.isEmpty) {
         state = state.copyWith(isLoading: false);
@@ -1237,8 +1292,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   Future<void> retry() async {
     // WS 发送失败 → 重发最后一条失败消息
     if ((state.error ?? '').startsWith('发送失败')) {
-      final failedIdx =
-          state.messages.lastIndexWhere((m) => m.id >= 1000000000000);
+      final failedIdx = state.messages.indexWhere((m) => m.id >= 1000000000000);
       if (failedIdx < 0) {
         state = state.copyWith(error: null);
         return;
@@ -1264,7 +1318,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     if (state.messages.isEmpty) return;
 
     int? lastMessageId;
-    for (final m in state.messages.reversed) {
+    for (final m in state.messages) {
       if (m.id < 1000000000000) {
         lastMessageId = m.id;
         break;
@@ -1289,8 +1343,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           serverMsgs.where((m) => !existingIds.contains(m.id)).toList();
 
       if (newMsgs.isNotEmpty) {
-        final List<Message> allMsgs = [...state.messages, ...newMsgs];
-        allMsgs.sort(_compareMessagesForTimeline);
+        final allMsgs = _mergeMessagesLatestFirst(state.messages, newMsgs);
         state = state.copyWith(messages: allMsgs);
         await DataLayer().persistMessages(newMsgs);
         _syncL1();
@@ -1305,70 +1358,104 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     }
   }
 
-  /// 加载更多历史消息：先查本地 SQLite，不足再 HTTP 分页
+  /// 加载更多历史消息：先查本地 SQLite，不足再 HTTP 分页。
   Future<void> loadMore() async {
     if (!state.hasMore || state.isLoading) return;
+    const localPageSize = 50;
+    const optimisticIdFloor = 1000000000000;
     state = state.copyWith(isLoading: true);
 
-    // Step 1: 从本地 SQLite 获取更早的消息
+    // SQLite is newest-first too. Optimistic rows are not persisted server
+    // history, so they must not advance the database offset.
+    final persistedCount =
+        state.messages.where((m) => m.id < optimisticIdFloor).length;
     final localMsgs = await DataLayer().loadMessagesFromDb(
       conversationId,
-      limit: 50,
-      offset: state.messages.length,
+      limit: localPageSize,
+      offset: persistedCount,
     );
 
+    var localPageWasShort = localMsgs.length < localPageSize;
     if (localMsgs.isNotEmpty) {
       final existingIds = state.messages.map((m) => m.id).toSet();
       final newMsgs =
           localMsgs.where((m) => !existingIds.contains(m.id)).toList();
       if (newMsgs.isNotEmpty) {
         state = state.copyWith(
-          messages: [...newMsgs, ...state.messages],
-          hasMore: localMsgs.length >= 50,
-          isLoading: false,
+          messages: _mergeMessagesLatestFirst(state.messages, newMsgs),
         );
-        return;
+        _syncL1();
       }
     }
 
-    // Step 2: 本地不够 → HTTP 分页
+    // A complete local page means the next invocation can continue from the
+    // same server page boundary. A short page must fall through now so a
+    // partially warmed cache cannot hide older messages behind the button.
+    if (!localPageWasShort) {
+      state = state.copyWith(isLoading: false);
+      return;
+    }
+
+    // If the current in-memory window is shorter than one server page, it may
+    // be a partial cache of page 1. Fetch that page first instead of skipping
+    // directly to page 2. Once page 1 is complete, continue with the next page.
+    final loadedCount =
+        state.messages.where((m) => m.id < optimisticIdFloor).length;
+    final requestedPage =
+        loadedCount < localPageSize ? state.page : state.page + 1;
+
     try {
-      final resp =
-          await _chatService.getMessages(conversationId, page: state.page + 1);
-      if (resp.success && resp.data != null) {
-        final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
-        List<dynamic> msgList = [];
-        bool hasMoreFlag = false;
-        if (data is Map) {
-          msgList = data['messages'] ?? [];
-          hasMoreFlag = data['has_more'] == true;
-        } else if (data is List) {
-          msgList = data;
+      final resp = await _chatService.getMessages(
+        conversationId,
+        page: requestedPage,
+        perPage: localPageSize,
+      );
+      if (!resp.success || resp.data == null) {
+        // Network failure should not make already-known history look exhausted.
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+
+      final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
+      List<dynamic> msgList = [];
+      bool hasMoreFlag = false;
+      bool hasMoreKnown = false;
+      if (data is Map) {
+        msgList = data['messages'] is List ? data['messages'] : [];
+        final rawHasMore = data['has_more'];
+        if (rawHasMore is bool) {
+          hasMoreFlag = rawHasMore;
+          hasMoreKnown = true;
         }
-        final messages = msgList
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
-        final existingIds = state.messages.map((m) => m.id).toSet();
-        final newMsgs =
-            messages.where((m) => !existingIds.contains(m.id)).toList();
-        if (newMsgs.isNotEmpty) {
-          final allMsgs = [...newMsgs, ...state.messages];
-          allMsgs.sort(_compareMessagesForTimeline);
-          state = state.copyWith(
-            messages: allMsgs,
-            page: state.page + 1,
-            hasMore: hasMoreFlag || msgList.length >= 50,
-            isLoading: false,
-          );
-          await DataLayer().persistMessages(newMsgs);
-          _syncL1();
-        } else {
-          state = state.copyWith(page: state.page + 1, isLoading: false);
-        }
-      } else {
-        state = state.copyWith(hasMore: false, isLoading: false);
+      } else if (data is List) {
+        msgList = data;
+      }
+
+      final messages = msgList
+          .whereType<Map>()
+          .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final existingIds = state.messages.map((m) => m.id).toSet();
+      final newMsgs =
+          messages.where((m) => !existingIds.contains(m.id)).toList();
+      final nextHasMore =
+          hasMoreKnown ? hasMoreFlag : msgList.length >= localPageSize;
+      final nextPage = requestedPage > state.page ? requestedPage : state.page;
+
+      state = state.copyWith(
+        messages: newMsgs.isEmpty
+            ? state.messages
+            : _mergeMessagesLatestFirst(state.messages, newMsgs),
+        page: nextPage,
+        hasMore: nextHasMore,
+        isLoading: false,
+      );
+      if (newMsgs.isNotEmpty) {
+        await DataLayer().persistMessages(newMsgs);
+        _syncL1();
       }
     } catch (e) {
+      debugPrint('[Messages] loadMore error: $e');
       state = state.copyWith(isLoading: false);
     }
   }
@@ -1404,8 +1491,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         return false;
       }
       final list = (data['messages'] as List?) ?? [];
-      final window =
-          list.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
+      final window = list
+          .map((e) => Message.fromJson(e as Map<String, dynamic>))
+          .toList()
+        ..sort(_compareMessagesForLatestFirst);
       if (!window.any((m) => m.id == targetId)) {
         state = state.copyWith(isLoading: false);
         return false;
@@ -1480,7 +1569,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     );
 
     state = state.copyWith(
-      messages: [...state.messages, optimisticMsg],
+      messages: [optimisticMsg, ...state.messages],
       isSending: true,
     );
     DataLayer().persistMessage(optimisticMsg);
@@ -1512,7 +1601,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     );
 
     state = state.copyWith(
-      messages: [...state.messages, optimisticMsg],
+      messages: [optimisticMsg, ...state.messages],
       isSending: true,
     );
     DataLayer().persistMessage(optimisticMsg);
@@ -1592,7 +1681,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     );
 
     state = state.copyWith(
-      messages: [...state.messages, optimisticMsg],
+      messages: [optimisticMsg, ...state.messages],
       isSending: true,
     );
     DataLayer().persistMessage(optimisticMsg);
@@ -1886,7 +1975,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     if (!filtered.any((m) => m.id == serverMsg.id)) {
       filtered.add(serverMsg);
     }
-    filtered.sort(_compareMessagesForTimeline);
+    filtered.sort(_compareMessagesForLatestFirst);
     state = state.copyWith(messages: filtered, isSending: false);
     DataLayer().persistMessage(serverMsg);
     DataLayer().deletePersistedMessage(optimisticMsgId);
@@ -1969,7 +2058,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     }).toList();
     filtered.add(message);
     // 排序：优先用服务端 seq，无 seq 时按 createdAt
-    filtered.sort(_compareMessagesForTimeline);
+    filtered.sort(_compareMessagesForLatestFirst);
     state = state.copyWith(messages: filtered, isSending: false);
     DataLayer().persistMessage(message);
   }
@@ -2054,7 +2143,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   /// 将当前消息列表同步写入 DataLayer L1
   void _syncL1() {
     if (_suppressRecentCacheSync) return;
-    final l1Data = state.messages.map((m) => m.toJson()).toList();
+    final l1Data = <String, dynamic>{
+      'messages': state.messages.map((m) => m.toJson()).toList(),
+      'has_more': state.hasMore,
+    };
     DataLayer().write(CacheKeys.msgRecent(conversationId), l1Data);
   }
 

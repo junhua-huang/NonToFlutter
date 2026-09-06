@@ -66,16 +66,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   bool _loadingMore = false; // track history loading state
   /// message.id → GlobalKey，用于点击引用时 Scrollable.ensureVisible 定位。
   final Map<int, GlobalKey> _msgAnchors = {};
-  // 上次自动滚动到底部时的消息条数，用于区分“收到新消息”与“ACK 替换乐观消息导致重建”。
-  // 只有真正新增消息时才滚动；ACK 替换（条数不变）不应触发滚动，避免抖动。
-  int _lastScrolledMsgCount = 0;
-  // 记录上一次滚动到底部时「最后一条消息的 id」。
-  // 仅靠 _lastScrolledMsgCount（条数）判断有缺陷：
-  // 当消息被撤回/删除导致条数减少，再回到同一数字时不会再滚动。
-  // 用「末尾消息 id」作为单调变化的指纹，撤回（id 不变）不会误判，
-  // 新消息到达（id 变大）或乐观消息（id 极大）始终能触发一次滚动。
-  int _lastScrolledLastMsgId = 0;
-  bool _didInitialScrollToLatest = false;
+  // reverse:true 的列表首帧已经位于最新消息，不需要初始化滚动。
+  // 这里只记录已渲染快照，用于后续新消息到达时判断是否需要回到最新处。
+  int _lastObservedMsgCount = 0;
+  int _lastObservedLatestMsgId = 0;
+  bool _hasObservedMessageState = false;
 
   @override
   void initState() {
@@ -83,11 +78,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     // 记录当前打开的会话，供未读统计判断（当前会话不产生未读红点）。
     ChatRoomState.setConversation(widget.conversation.id);
 
-    final auth = ref.read(authProvider);
-    final currentUserId = auth.user?.id ?? 0;
-    ref
-        .read(messagesProvider(widget.conversation.id).notifier)
-        .init(currentUserId, otherUserId: widget.conversation.otherUser?.id);
+    // MessagesNotifier loads data and updates provider state; defer its startup
+    // until the first frame has completed to avoid mutating providers in initState.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = ref.read(authProvider);
+      final currentUserId = auth.user?.id ?? 0;
+      ref
+          .read(messagesProvider(widget.conversation.id).notifier)
+          .init(currentUserId, otherUserId: widget.conversation.otherUser?.id);
+    });
 
     _errorSub = WebSocketService().errorStream.listen((error) {
       if (mounted) {
@@ -130,21 +130,40 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   // ── 发送 ──
 
-  void _scrollToBottom({bool animate = true, bool force = false}) {
+  bool _isNearLatest() {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.position.pixels.abs() <= 800;
+  }
+
+  void _followLatestIfNeeded(bool shouldFollow) {
+    if (!shouldFollow) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToLatest();
+    });
+  }
+
+  int _latestServerMessageId(List<Message> messages) {
+    // MessagesNotifier keeps the timeline newest-first.
+    for (final message in messages) {
+      if (message.id < 1000000000000) return message.id;
+    }
+    return 0;
+  }
+
+  /// reverse:true 时 offset=0 就是最新消息所在的视口。
+  /// 首帧不需要从历史位置滚动到底部；只有收到新消息时才在近底部状态下跟随。
+  void _scrollToLatest({bool animate = false}) {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    final maxExtent = position.maxScrollExtent;
     if (!animate) {
-      // 即时定位：发送消息时用，避免与 build 里的动画滚动打架造成抖动
-      _scrollController.jumpTo(maxExtent);
+      _scrollController.jumpTo(0);
       return;
     }
-    // 仅当当前已接近底部时才动画滚动到底部，
-    // 否则用户正在翻看历史消息，自动滚动会打断阅读。
-    final distance = (maxExtent - position.pixels).abs();
-    if (!force && distance > 800) return;
+    // 用户正在查看历史消息时不打断阅读。
+    if (position.pixels.abs() > 800) return;
     _scrollController.animateTo(
-      maxExtent,
+      0,
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
     );
@@ -155,6 +174,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (text.isEmpty) return;
     HapticFeedback.lightImpact();
 
+    final shouldFollowLatest = _isNearLatest();
     final notifier =
         ref.read(messagesProvider(widget.conversation.id).notifier);
     if (_quotedMessage != null) {
@@ -169,9 +189,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
     _messageController.clear();
     setState(() => _quotedMessage = null);
-    // 发送时用即时定位（jumpTo），不动画——否则会和 build 里的 postFrame
-    // 动画滚动冲突，导致消息列表上下抖动。
-    _scrollToBottom(animate: false);
+    // 发送时仅在用户本来接近最新消息时即时跟随；查看历史时不打断阅读。
+    _followLatestIfNeeded(shouldFollowLatest);
   }
 
   void _onTextChanged(String text) {
@@ -190,6 +209,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   }
 
   Future<void> _pickMedia(ImageSource source) async {
+    final shouldFollowLatest = _isNearLatest();
     try {
       if (source == ImageSource.camera) {
         final picked = await _picker.pickImage(
@@ -204,7 +224,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         ref
             .read(messagesProvider(widget.conversation.id).notifier)
             .sendImageMessage(bytes, picked.name);
-        _scrollToBottom(animate: false);
+        _followLatestIfNeeded(shouldFollowLatest);
         return;
       }
 
@@ -221,7 +241,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           notifier.sendImageMessage(bytes, file.name);
         }
       }
-      _scrollToBottom(animate: false);
+      _followLatestIfNeeded(shouldFollowLatest);
     } catch (e) {
       // _picker.pickMultipleMedia may not be available on web, fallback to single
       try {
@@ -237,7 +257,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           ref
               .read(messagesProvider(widget.conversation.id).notifier)
               .sendImageMessage(bytes, picked.name);
-          _scrollToBottom(animate: false);
+          _followLatestIfNeeded(shouldFollowLatest);
         }
       } catch (e2) {
         debugPrint('Pick media error: $e2');
@@ -360,31 +380,26 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final msgState = ref.watch(messagesProvider(widget.conversation.id));
     final otherUser = widget.conversation.otherUser;
 
-    // 仅在「消息列表确实前进」时滚动到底部：
-    // - 条数增加（新增消息）
-    // - 或末尾消息 id 变化（撤回后重发、乐观消息 ACK 替换等条数不变但末尾变化的情况）
-    // 之前只看条数，遇到撤回/删除使条数回退、之后再增长到同一值时不会滚动。
+    // reverse:true 的首帧已经从 offset=0 开始，缓存命中时直接显示最新消息。
+    // 后续新消息只在用户仍接近最新处时跟随，不打断正在查看的历史记录。
     final msgCount = msgState.messages.length;
-    final lastMsgId =
-        msgState.messages.isNotEmpty ? msgState.messages.last.id : 0;
-    if (msgCount > 0 && !_didInitialScrollToLatest) {
-      _didInitialScrollToLatest = true;
-      _lastScrolledMsgCount = msgCount;
-      _lastScrolledLastMsgId = lastMsgId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // 首次进入聊天必须定位到最新消息；后续新消息仍由近底部保护避免打断看历史。
-        _scrollToBottom(animate: false, force: true);
-      });
-    } else if (msgCount > 0 &&
-        (msgCount > _lastScrolledMsgCount ||
-            lastMsgId != _lastScrolledLastMsgId)) {
-      _lastScrolledMsgCount = msgCount;
-      _lastScrolledLastMsgId = lastMsgId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // 收到新消息用动画；_scrollToBottom 内部还会判断距离底部
-        // 是否在 800px 内，用户翻看历史时不打断。
-        _scrollToBottom(animate: true);
-      });
+    final latestMsgId = _latestServerMessageId(msgState.messages);
+    if (msgCount > 0) {
+      if (!_hasObservedMessageState) {
+        _lastObservedMsgCount = msgCount;
+        _lastObservedLatestMsgId = latestMsgId;
+        _hasObservedMessageState = true;
+      } else {
+        final shouldFollowLatest = _isNearLatest();
+        final isAppendedLatestMessage = msgState.highlightMessageId == null &&
+            msgCount > _lastObservedMsgCount &&
+            latestMsgId > _lastObservedLatestMsgId;
+        _lastObservedMsgCount = msgCount;
+        _lastObservedLatestMsgId = latestMsgId;
+        if (isAppendedLatestMessage) {
+          _followLatestIfNeeded(shouldFollowLatest);
+        }
+      }
     }
 
     return Scaffold(
@@ -547,15 +562,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       return _buildError(msgState.error!);
     }
     if (msgState.messages.isEmpty && msgState.isLoading) {
-      return const Center(
-          child: CircularProgressIndicator(color: _NontoChatColors.selfBubble));
+      return _buildLoadingMessages();
     }
     if (msgState.messages.isEmpty && !msgState.isLoading) {
       return _buildEmpty(otherUser);
     }
 
     final grouped = _groupMessages(msgState.messages, currentUserId ?? 0);
-    final lastGroupIdx = grouped.lastIndexWhere((e) => e is _MsgGroup);
+    final latestGroupIdx = grouped.indexWhere((e) => e is _MsgGroup);
+    final showLoadMore = msgState.hasMore || _loadingMore;
 
     return SmartRefresher(
       controller: _refreshController,
@@ -573,14 +588,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       ),
       child: ListView.builder(
         controller: _scrollController,
+        reverse: true,
         padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-        itemCount: grouped.length + (msgState.hasMore || _loadingMore ? 1 : 0),
-        itemBuilder: (_, i) {
-          if ((msgState.hasMore || _loadingMore) && i == 0) {
+        itemCount: grouped.length + (showLoadMore ? 1 : 0),
+        itemBuilder: (_, index) {
+          // reverse:true 下，builder 的最后一项位于视觉顶部。
+          if (showLoadMore && index == grouped.length) {
             return _buildLoadMoreHistory(msgState.hasMore);
           }
-          final offset = (msgState.hasMore || _loadingMore) ? 1 : 0;
-          final item = grouped[i - offset];
+          final item = grouped[index];
           if (item is _TimeSeparatorData) {
             return _buildTimeSeparator(item.label);
           }
@@ -591,7 +607,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           final group = item as _MsgGroup;
           final isMe = group.senderId == currentUserId;
           return _buildMessageGroup(group, isMe, otherUser,
-              isLastInList: i == lastGroupIdx);
+              isLastInList: index == latestGroupIdx);
         },
       ),
     );
@@ -623,6 +639,31 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLoadingMessages() {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
+      itemCount: 5,
+      itemBuilder: (_, index) {
+        final isMe = index.isOdd;
+        return Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 96.0 + (index % 3) * 42,
+            height: 34,
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: _isDark
+                  ? _NontoChatColors.darkOtherBubble
+                  : _NontoChatColors.otherBubble,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1705,7 +1746,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       }
     }
 
-    return result;
+    // Build chronology for grouping, then expose newest group first. Message
+    // order inside each group stays oldest-to-newest for bubble stacking.
+    return result.reversed.toList();
   }
 
   String _formatSeparatorTime(DateTime dt) {

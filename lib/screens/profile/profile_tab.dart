@@ -574,6 +574,24 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
     }
   }
 
+  double _profileHeaderExpandedHeight(User user) {
+    var height = 180.0 // cover
+        +
+        56.0 // avatar overlap spacer
+        +
+        88.0 // name, username, identity baseline
+        +
+        34.0 // join date
+        +
+        48.0 // stats
+        +
+        48.0; // tab bar
+    if (profileEmailFor(user, isOwnProfile: true) != null) height += 24;
+    if (user.verifiedRoleLabels.isNotEmpty) height += 12;
+    if (user.bio != null && user.bio!.isNotEmpty) height += 44;
+    return height.clamp(460.0, 560.0).toDouble();
+  }
+
   /// 将裁剪后的字节数组保存为临时文件，返回文件路径
   Future<String> _saveCroppedToTemp(Uint8List bytes) async {
     final dir = Directory.systemTemp;
@@ -605,7 +623,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
       child: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 420,
+            expandedHeight: _profileHeaderExpandedHeight(user),
             floating: false,
             pinned: true,
             automaticallyImplyLeading: false,

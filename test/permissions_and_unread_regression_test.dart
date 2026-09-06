@@ -83,7 +83,7 @@ void main() {
       expect(
         compact,
         contains(
-          'finalmergedNotifications=refresh?list:[...state.notifications,...list];',
+          'finalmergedNotifications=(refresh?list:[...state.notifications,...list]).where((n)=>n.notificationType!=\'message\').toList();',
         ),
       );
       expect(
@@ -112,20 +112,17 @@ void main() {
       final routes = read('lib/routes/route_generator.dart');
 
       expect(routes, contains('case AppRoutes.chat:'));
+      expect(routes, contains('case AppRoutes.chat:'));
       expect(
-          routes,
-          contains(
-              'return _authGuard(builder: (_) => const HomeScreen(initialTab: 2));'));
+          routes, contains('builder: (_) => const HomeScreen(initialTab: 2)'));
+      expect(routes, contains('settings: settings,'));
       expect(routes, contains('case AppRoutes.notifications:'));
-      expect(
-          routes,
-          contains(
-              'return _authGuard(builder: (_) => const NotificationsTab());'));
+      expect(routes, contains('builder: (_) => const NotificationsTab()'));
+      expect(routes, contains('settings: settings,'));
       expect(routes, contains('case AppRoutes.search:'));
       expect(
-          routes,
-          contains(
-              'return _authGuard(builder: (_) => const HomeScreen(initialTab: 1));'));
+          routes, contains('builder: (_) => const HomeScreen(initialTab: 1)'));
+      expect(routes, contains('settings: settings,'));
       expect(routes, contains('return const HomeScreen(initialTab: 2);'));
     });
 

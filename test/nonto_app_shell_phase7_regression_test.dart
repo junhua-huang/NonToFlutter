@@ -8,7 +8,7 @@ void main() {
       File('$projectRoot/$relativePath').readAsStringSync();
 
   group('app shell avatar and compose polish regressions', () {
-    test('shared header avatar exposes tap callback for drawer opening', () {
+    test('shared header avatar keeps drawer callback for narrow screens', () {
       final header = read('lib/widgets/nonto_header_search_bar.dart');
       final search = read('lib/screens/search/search_tab.dart');
       final messages = read('lib/screens/messages/messages_tab.dart');
@@ -25,12 +25,13 @@ void main() {
           messages, contains('Scaffold.of(homeScaffoldContext).openDrawer()'));
     });
 
-    test('home feed header uses shared avatar builder for drawer avatar', () {
+    test('home feed header disables drawer avatar in the wide shell', () {
       final source = read('lib/screens/home/home/feed_tab.dart');
 
       expect(source, contains('NontoHeaderAvatar('));
-      expect(
-          source, contains('onTap: () => Scaffold.of(context).openDrawer()'));
+      expect(source, contains('WideShellScope.isWideOf(context)'));
+      expect(source, contains('Scaffold.of(context).openDrawer()'));
+      expect(source, contains('? null'));
     });
 
     test('user json preserves avatar and cover cache bust timestamps', () {

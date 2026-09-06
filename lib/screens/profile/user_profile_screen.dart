@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/conversation.dart';
@@ -12,6 +14,7 @@ import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/chat_service.dart';
+import 'package:nonto/services/chat_prefetch_service.dart';
 import 'package:nonto/services/api/friend_service.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/report_service.dart';
@@ -590,6 +593,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           convJson['other_user'] = data['other_user'];
         }
         final conversation = Conversation.fromJson(convJson);
+        unawaited(
+          ChatPrefetchService().prefetchPrivateConversation(conversation.id),
+        );
         if (!mounted) return;
         Navigator.push(
             context,

@@ -26,13 +26,29 @@ void main() {
               'final hasText = _messageController.text.trim().isNotEmpty;')));
     });
 
-    test('initial chat entry forces latest-message scroll once', () {
+    test('initial chat entry starts at the latest-message origin', () {
       final source =
           File('lib/screens/chat/chat_room_screen.dart').readAsStringSync();
 
-      expect(source, contains('bool _didInitialScrollToLatest = false;'));
-      expect(source, contains('_scrollToBottom(animate: false, force: true)'));
-      expect(source, contains('if (!force && distance > 800) return;'));
+      expect(source, contains('reverse: true'));
+      expect(source, contains('void _scrollToLatest'));
+      expect(source, contains('_scrollController.jumpTo(0)'));
+      expect(
+          source, isNot(contains('bool _didInitialScrollToLatest = false;')));
+      expect(source,
+          isNot(contains('_scrollToBottom(animate: false, force: true)')));
+    });
+
+    test('chat provider startup is deferred until after the first frame', () {
+      final source =
+          File('lib/screens/chat/chat_room_screen.dart').readAsStringSync();
+
+      final callbackStart =
+          source.indexOf('WidgetsBinding.instance.addPostFrameCallback((_) {');
+      final initCall = source.indexOf('.init(currentUserId', callbackStart);
+
+      expect(callbackStart, greaterThanOrEqualTo(0));
+      expect(initCall, greaterThan(callbackStart));
     });
 
     test('dark chat chrome uses neutral Nonto semantic colors', () {

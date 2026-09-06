@@ -2,7 +2,7 @@ import 'package:nonto/utils/date_utils.dart';
 
 String? profileEmailFor(User user, {required bool isOwnProfile}) {
   if (user.email.isEmpty) return null;
-  if (isOwnProfile || user.showEmail == true) return user.email;
+  if (user.showEmail == true) return user.email;
   return null;
 }
 

@@ -6,10 +6,12 @@ import 'package:nonto/models/notification.dart' as app_notif;
 import 'package:nonto/providers/core_providers.dart';
 import 'package:nonto/providers/notifications_notifier.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/screens/friends/friend_requests_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/chat_service.dart';
+import 'package:nonto/services/chat_prefetch_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
@@ -53,12 +55,16 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
     super.dispose();
   }
 
+  List<app_notif.AppNotification> _interactionNotifications(
+          List<app_notif.AppNotification> list) =>
+      list.where((n) => n.notificationType != 'message').toList();
+
   List<app_notif.AppNotification> _unread(
           List<app_notif.AppNotification> list) =>
-      list.where((n) => n.isRead == false).toList();
+      _interactionNotifications(list).where((n) => n.isRead == false).toList();
 
   List<app_notif.AppNotification> _read(List<app_notif.AppNotification> list) =>
-      list.where((n) => n.isRead == true).toList();
+      _interactionNotifications(list).where((n) => n.isRead == true).toList();
 
   List<_NotificationFeedEntry> _buildNotificationEntries(
     List<app_notif.AppNotification> unread,
@@ -128,44 +134,33 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
           Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => CommunityManageScreen(communityId: n.relatedId!),
+                builder: (_) =>
+                    CommunityManageScreen(communityId: n.relatedId!),
+              ));
+        }
+        break;
+      case app_notif.NotificationType.communityMention:
+      case app_notif.NotificationType.communityAnnouncement:
+      case app_notif.NotificationType.communityKicked:
+      case app_notif.NotificationType.communityNewAdmin:
+      case app_notif.NotificationType.communityBanned:
+      case app_notif.NotificationType.communityJoinApproved:
+      case app_notif.NotificationType.communityJoinRejected:
+        if (n.relatedId != null) {
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    CommunityDetailScreen(communityId: n.relatedId!),
               ));
         }
         break;
       case app_notif.NotificationType.message:
-        _openMessageNotification(n);
+        // Message notifications are filtered from this interaction feed.
         break;
       case app_notif.NotificationType.system:
         break;
     }
-  }
-
-  void _openMessageNotification(app_notif.AppNotification n) {
-    if (n.relatedId != null && n.sender != null) {
-      final conversation = Conversation(
-        id: n.relatedId!,
-        user1Id: n.userId,
-        user2Id: n.senderId ?? n.sender!.id,
-        otherUser: n.sender!,
-        unreadCount: 0,
-        lastMessageAt: n.createdAt,
-      );
-      Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ChatRoomScreen(conversation: conversation),
-          ));
-      return;
-    }
-
-    if (n.senderId != null) {
-      _startChatFromNotification(n.senderId!);
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('无法打开聊天'), backgroundColor: Colors.red),
-    );
   }
 
   Future<void> _startChatFromNotification(int otherUserId) async {
@@ -184,6 +179,9 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
           convJson['other_user'] = data['other_user'];
         }
         final conversation = Conversation.fromJson(convJson);
+        unawaited(
+          ChatPrefetchService().prefetchPrivateConversation(conversation.id),
+        );
         if (!mounted) return;
         Navigator.push(
             context,
@@ -325,6 +323,13 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
       case app_notif.NotificationType.friendAccept:
         return Icons.people;
       case app_notif.NotificationType.communityJoinRequest:
+      case app_notif.NotificationType.communityMention:
+      case app_notif.NotificationType.communityAnnouncement:
+      case app_notif.NotificationType.communityKicked:
+      case app_notif.NotificationType.communityNewAdmin:
+      case app_notif.NotificationType.communityBanned:
+      case app_notif.NotificationType.communityJoinApproved:
+      case app_notif.NotificationType.communityJoinRejected:
         return Icons.groups;
       case app_notif.NotificationType.message:
         return Icons.mail;
@@ -343,6 +348,13 @@ class _NotificationsTabState extends ConsumerState<NotificationsTab> {
       case app_notif.NotificationType.friendRequest:
       case app_notif.NotificationType.friendAccept:
       case app_notif.NotificationType.communityJoinRequest:
+      case app_notif.NotificationType.communityMention:
+      case app_notif.NotificationType.communityAnnouncement:
+      case app_notif.NotificationType.communityKicked:
+      case app_notif.NotificationType.communityNewAdmin:
+      case app_notif.NotificationType.communityBanned:
+      case app_notif.NotificationType.communityJoinApproved:
+      case app_notif.NotificationType.communityJoinRejected:
         return const Color(0xFF00BA7C);
       case app_notif.NotificationType.message:
         return AppColors.primary;

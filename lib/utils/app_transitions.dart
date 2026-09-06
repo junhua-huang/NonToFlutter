@@ -4,31 +4,37 @@ import 'package:flutter/material.dart';
 class AppTransitions {
   AppTransitions._();
 
-  /// Standard page push with slide + fade
+  /// Standard page push with slide + fade.
+  ///
+  /// [begin] uses the same fractional offset convention as [SlideTransition],
+  /// allowing route and wide-tab transitions to share one visual rhythm.
+  static const slideBegin = Offset(0.12, 0.0);
+  static const slideDuration = Duration(milliseconds: 280);
+
   static PageRouteBuilder slide({
     required Widget page,
-    Duration duration = const Duration(milliseconds: 280),
-    Offset begin = const Offset(0.12, 0.0),
+    RouteSettings? settings,
+    Duration duration = slideDuration,
+    Offset begin = slideBegin,
   }) {
     return PageRouteBuilder(
+      settings: settings,
       transitionDuration: duration,
       reverseTransitionDuration: duration,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved =
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        // single AnimatedBuilder wrapping both transitions — one rebuild per tick
-        return AnimatedBuilder(
-          animation: curved,
-          builder: (context, _) {
-            return Transform.translate(
-              offset: Offset((1.0 - curved.value) * 48, 0),
-              child: Opacity(
-                opacity: curved.value,
-                child: child,
-              ),
-            );
-          },
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position:
+                Tween<Offset>(begin: begin, end: Offset.zero).animate(curved),
+            child: child,
+          ),
         );
       },
     );

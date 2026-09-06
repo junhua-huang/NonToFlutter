@@ -9,6 +9,13 @@ enum NotificationType {
   mention,
   message,
   communityJoinRequest,
+  communityMention,
+  communityAnnouncement,
+  communityKicked,
+  communityNewAdmin,
+  communityBanned,
+  communityJoinApproved,
+  communityJoinRejected,
   system,
 }
 
@@ -26,9 +33,17 @@ class AppNotification {
   final DateTime? createdAt;
 
   AppNotification({
-    required this.id, required this.userId, this.senderId,
-    this.sender, required this.notificationType, this.title, this.content,
-    this.relatedId, this.relatedType, this.isRead = false, this.createdAt,
+    required this.id,
+    required this.userId,
+    this.senderId,
+    this.sender,
+    required this.notificationType,
+    this.title,
+    this.content,
+    this.relatedId,
+    this.relatedType,
+    this.isRead = false,
+    this.createdAt,
   });
 
   AppNotification copyWith({
@@ -59,41 +74,76 @@ class AppNotification {
     );
   }
 
-  factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
-    id: _p(json['id']), userId: _p(json['user_id']),
-    senderId: json['sender_id'] != null ? _p(json['sender_id']) : null,
-    sender: json['sender'] is Map
-        ? User.fromJson(Map<String, dynamic>.from(json['sender']))
-        : null,
-    notificationType: (json['notification_type'] ?? json['type']) ?? '',
-    title: json['title'], content: json['content'],
-    relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
-    relatedType: json['related_type'],
-    isRead: json['is_read'] ?? false,
-    createdAt: json['created_at'] != null ? AppDateUtils.parseBeijingTime(json['created_at'].toString()) : null,
-  );
+  factory AppNotification.fromJson(Map<String, dynamic> json) =>
+      AppNotification(
+        id: _p(json['id']),
+        userId: _p(json['user_id']),
+        senderId: json['sender_id'] != null ? _p(json['sender_id']) : null,
+        sender: json['sender'] is Map
+            ? User.fromJson(Map<String, dynamic>.from(json['sender']))
+            : null,
+        notificationType: (json['notification_type'] ?? json['type']) ?? '',
+        title: json['title'],
+        content: json['content'],
+        relatedId: json['related_id'] != null ? _p(json['related_id']) : null,
+        relatedType: json['related_type'],
+        isRead: json['is_read'] ?? false,
+        createdAt: json['created_at'] != null
+            ? AppDateUtils.parseBeijingTime(json['created_at'].toString())
+            : null,
+      );
 
-  static int _p(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
+  static int _p(dynamic v) =>
+      v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'user_id': userId, 'sender_id': senderId,
-    'sender': sender?.toJson(), 'notification_type': notificationType,
-    'title': title, 'content': content, 'related_id': relatedId,
-    'related_type': relatedType, 'is_read': isRead,
-    'created_at': createdAt?.toIso8601String(),
-  };
+        'id': id,
+        'user_id': userId,
+        'sender_id': senderId,
+        'sender': sender?.toJson(),
+        'notification_type': notificationType,
+        'title': title,
+        'content': content,
+        'related_id': relatedId,
+        'related_type': relatedType,
+        'is_read': isRead,
+        'created_at': createdAt?.toIso8601String(),
+      };
 
   NotificationType get parsedType {
     switch (notificationType) {
-      case 'like': return NotificationType.like;
-      case 'comment': return NotificationType.comment;
-      case 'friend_request': return NotificationType.friendRequest;
-      case 'friend_accept': return NotificationType.friendAccept;
-      case 'mention': return NotificationType.mention;
-      case 'message': return NotificationType.message;
-      case 'community_join_request': return NotificationType.communityJoinRequest;
-      case 'system': return NotificationType.system;
-      default: return NotificationType.system;
+      case 'like':
+        return NotificationType.like;
+      case 'comment':
+        return NotificationType.comment;
+      case 'friend_request':
+        return NotificationType.friendRequest;
+      case 'friend_accept':
+        return NotificationType.friendAccept;
+      case 'mention':
+        return NotificationType.mention;
+      case 'message':
+        return NotificationType.message;
+      case 'community_join_request':
+        return NotificationType.communityJoinRequest;
+      case 'community_mention':
+        return NotificationType.communityMention;
+      case 'community_announcement':
+        return NotificationType.communityAnnouncement;
+      case 'community_kicked':
+        return NotificationType.communityKicked;
+      case 'community_new_admin':
+        return NotificationType.communityNewAdmin;
+      case 'community_banned':
+        return NotificationType.communityBanned;
+      case 'community_join_approved':
+        return NotificationType.communityJoinApproved;
+      case 'community_join_rejected':
+        return NotificationType.communityJoinRejected;
+      case 'system':
+        return NotificationType.system;
+      default:
+        return NotificationType.system;
     }
   }
 }

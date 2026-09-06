@@ -85,6 +85,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       if (result.data is List) {
         final list = (result.data as List<dynamic>)
             .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+            .where((n) => n.notificationType != 'message')
             .toList();
         state = state.copyWith(
           notifications: list,
@@ -131,6 +132,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
         rawNotif is Map ? Map<String, dynamic>.from(rawNotif) : null;
     if (event == 'new_notification' && notification != null) {
       final appNotif = AppNotification.fromJson(notification);
+      if (appNotif.notificationType == 'message') return;
       final val = data['unread_count'];
       final unread = val is int
           ? val
@@ -236,10 +238,13 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       if (result.data != null) {
         final list = (result.data as List<dynamic>)
             .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+            .where((n) => n.notificationType != 'message')
             .toList();
         final hasMore = serverHasMore ?? list.length >= 20;
         final mergedNotifications =
-            refresh ? list : [...state.notifications, ...list];
+            (refresh ? list : [...state.notifications, ...list])
+                .where((n) => n.notificationType != 'message')
+                .toList();
         final localUnread = mergedNotifications.where((n) => !n.isRead).length;
         final unreadCount = serverUnread ?? localUnread;
         state = state.copyWith(

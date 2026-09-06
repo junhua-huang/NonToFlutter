@@ -60,12 +60,8 @@ void main() {
       final tab = read('lib/screens/notifications/notifications_tab.dart');
 
       expect(model, contains('communityJoinRequest'));
-      expect(
-        model,
-        contains(
-          "case 'community_join_request': return NotificationType.communityJoinRequest;",
-        ),
-      );
+      expect(model, contains("case 'community_join_request':"));
+      expect(model, contains('return NotificationType.communityJoinRequest;'));
       expect(
           model, isNot(contains('default: return NotificationType.message;')));
       expect(
@@ -75,6 +71,8 @@ void main() {
         ),
       );
       expect(tab, contains('NotificationType.communityJoinRequest'));
+      expect(tab, contains('NotificationType.communityMention'));
+      expect(tab, contains('_interactionNotifications'));
       expect(
         tab,
         contains('CommunityManageScreen(communityId: n.relatedId!)'),

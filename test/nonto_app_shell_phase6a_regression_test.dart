@@ -39,7 +39,9 @@ void main() {
       expect(source, isNot(contains("label: '我的'")));
     });
 
-    test('compose action remains feed-only and opens create post screen', () {
+    test(
+        'compose action remains available outside feed and opens create post screen',
+        () {
       final source = read('lib/screens/home/home_screen.dart');
 
       expect(
@@ -49,6 +51,12 @@ void main() {
       expect(source, contains('if (currentIndex != 0) return null;'));
       expect(source, contains('const CreatePostScreen()'));
       expect(source, contains('FloatingActionButton'));
+
+      final shell = read('lib/widgets/authenticated_shell.dart');
+      final navigation = read('lib/widgets/wide_navigation_column.dart');
+      expect(navigation,
+          contains("key: const ValueKey('wide_navigation_compose')"));
+      expect(shell, contains('onCompose: _openCompose'));
     });
 
     test('unread badges remain provider derived and capped', () {

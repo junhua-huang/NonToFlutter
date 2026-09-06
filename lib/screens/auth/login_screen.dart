@@ -48,7 +48,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final requiresEmailCode = authState.requiresEmailCode;
     if (requiresEmailCode && _codeController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入邮箱验证码'), backgroundColor: Colors.orange),
+        const SnackBar(
+            content: Text('请输入邮箱验证码'), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -73,12 +74,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (!wsOk) {
           setState(() => _isLoggingIn = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('连接服务器失败，请重试'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('连接服务器失败，请重试'), backgroundColor: Colors.red),
           );
           return;
         }
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(
+            settings: const RouteSettings(name: AppRoutes.home),
+            builder: (_) => const HomeScreen(),
+          ),
         );
       } else {
         final newError = ref.read(authProvider).error;
@@ -169,22 +174,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                    style:
+                        TextStyle(fontSize: 16, color: AppColors.textPrimary),
                     decoration: InputDecoration(
                       hintText: '邮箱',
                       hintStyle: TextStyle(color: AppColors.textSecondary),
                       filled: true,
                       fillColor: AppColors.surface,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                            color: AppColors.primary, width: 2),
+                        borderSide:
+                            BorderSide(color: AppColors.primary, width: 2),
                       ),
                     ),
                     validator: (v) => v?.isEmpty ?? true ? '请输入邮箱' : null,
@@ -195,22 +201,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                    style:
+                        TextStyle(fontSize: 16, color: AppColors.textPrimary),
                     decoration: InputDecoration(
                       hintText: '密码',
                       hintStyle: TextStyle(color: AppColors.textSecondary),
                       filled: true,
                       fillColor: AppColors.surface,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                            color: AppColors.primary, width: 2),
+                        borderSide:
+                            BorderSide(color: AppColors.primary, width: 2),
                       ),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -220,12 +227,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           color: AppColors.textSecondary,
                           size: 20,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                     ),
-                    validator: (v) =>
-                        (v?.isEmpty ?? true) ? '请输入密码' : null,
+                    validator: (v) => (v?.isEmpty ?? true) ? '请输入密码' : null,
                   ),
                   const SizedBox(height: 8),
 
@@ -240,7 +246,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: requiresOtp
                             ? Padding(
                                 key: const ValueKey('otp-row'),
-                                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                                padding:
+                                    const EdgeInsets.only(top: 8, bottom: 8),
                                 child: OtpFieldRow(
                                   codeController: _codeController,
                                   emailController: _emailController,
@@ -266,7 +273,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: const Text('忘记密码？',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w500)),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -350,9 +358,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: TextStyle(
                               color: AppColors.textSecondary, fontSize: 14)),
                       TextButton(
-                        onPressed: () => Navigator.push(context,
-                            MaterialPageRoute(
-                                builder: (_) => const RegisterScreen())),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            settings:
+                                const RouteSettings(name: AppRoutes.register),
+                            builder: (_) => const RegisterScreen(),
+                          ),
+                        ),
                         style: TextButton.styleFrom(
                           foregroundColor: AppColors.primary,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -366,7 +379,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 16),
                   Text('v0.2.2',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                      style: TextStyle(
+                          fontSize: 10, color: AppColors.textTertiary)),
                 ],
               ),
             ),

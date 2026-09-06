@@ -71,15 +71,17 @@ void main() {
   });
 
   group('Email display policy', () {
-    test('own non-empty email is visible even when showEmail is false', () {
-      final user = User.fromJson(<String, dynamic>{
-        'id': 1,
-        'username': 'alice',
-        'email': 'alice@example.test',
-        'show_email': false,
-      });
+    test('own email follows the same showEmail switch as public profile', () {
+      User userWith(bool showEmail) => User.fromJson(<String, dynamic>{
+            'id': 1,
+            'username': 'alice',
+            'email': 'alice@example.test',
+            'show_email': showEmail,
+          });
 
-      expect(profileEmailFor(user, isOwnProfile: true), 'alice@example.test');
+      expect(profileEmailFor(userWith(true), isOwnProfile: true),
+          'alice@example.test');
+      expect(profileEmailFor(userWith(false), isOwnProfile: true), isNull);
     });
 
     test('empty email is never visible', () {

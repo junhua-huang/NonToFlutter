@@ -86,7 +86,9 @@ class LocalDbService {
     if (db == null) return [];
     final rows =
         await db.getMessages(conversationId, limit: limit, offset: offset);
-    return rows.map(_driftRowToMessage).toList().reversed.toList();
+    // The chat provider consumes newest-first data: offset zero is the latest
+    // message and pagination offsets continue toward older history.
+    return rows.map(_driftRowToMessage).toList();
   }
 
   Future<void> markMessagesRead(int conversationId) async {
@@ -421,10 +423,9 @@ class LocalDbService {
       ...newFromServer,
     ];
     merged.sort((a, b) =>
-        (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
-    final finalMsgs = merged.length > perPage
-        ? merged.sublist(merged.length - perPage)
-        : merged;
+        (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    final finalMsgs =
+        merged.length > perPage ? merged.sublist(0, perPage) : merged;
 
     final finalJson = finalMsgs.map((m) => m.toJson()).toList();
     await DataLayer().write(cacheKey, finalJson);

@@ -138,11 +138,11 @@ void main() {
       expect(mergeSource, contains('m.clientMsgId'));
       expect(
           mergeSource, contains('!serverClientMsgIds.contains(m.clientMsgId)'));
-      expect(mergeSource, contains('_compareMessagesForTimeline'));
+      expect(mergeSource, contains('_mergeMessagesLatestFirst'));
     });
 
     test(
-        'private chat uses a single timeline comparator with seq, createdAt, and id fallback',
+        'private chat uses latest-first ordering with seq, createdAt, and id fallback',
         () {
       final source = read('lib/providers/chat_notifiers.dart');
       final helperStart = source.indexOf('int _compareMessagesForTimeline');
@@ -153,6 +153,7 @@ void main() {
         classEnd > helperStart ? classEnd : source.length,
       );
 
+      expect(helperSource, contains('_compareMessagesForLatestFirst'));
       expect(helperSource, contains('a.seq != null && b.seq != null'));
       expect(helperSource,
           contains('a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)'));
@@ -171,8 +172,9 @@ void main() {
       final sqliteSource = source.substring(sqliteStart, networkStart);
 
       expect(sqliteSource, isNot(contains('localMessages.reversed.toList()')));
-      expect(sqliteSource,
-          contains('localTimeline.sort(_compareMessagesForTimeline)'));
+      expect(sqliteSource, contains('localTimeline'));
+      expect(sqliteSource, contains('latestFirstTimeline'));
+      expect(sqliteSource, contains('localTimeline.reversed.toList()'));
     });
   });
 

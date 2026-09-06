@@ -10,6 +10,7 @@ import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
 import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/chat_prefetch_service.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/widgets/post_card.dart';
@@ -422,16 +423,21 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
         if (community.isMember)
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CommunityChatScreen(
-                    communityId: community.id,
-                    communityName: community.name,
-                    communityAvatar: community.avatarUrl,
+              onPressed: () {
+                unawaited(
+                  ChatPrefetchService().prefetchCommunityChat(community.id),
+                );
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CommunityChatScreen(
+                      communityId: community.id,
+                      communityName: community.name,
+                      communityAvatar: community.avatarUrl,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
               icon: const Icon(Icons.chat_bubble_outline, size: 18),
               label: const Text('群聊'),
             ),

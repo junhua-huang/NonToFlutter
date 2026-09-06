@@ -1454,7 +1454,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
 
   Widget _buildMessages() {
     if (_isLoading && _messages.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildLoadingMessages();
     }
     if (_messages.isEmpty) {
       return _buildEmptyMessagesState();
@@ -1522,6 +1522,29 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           style: TextStyle(color: AppColors.primary, fontSize: 13),
         ),
       ),
+    );
+  }
+
+  Widget _buildLoadingMessages() {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
+      itemCount: 5,
+      itemBuilder: (_, index) {
+        final isMe = index.isOdd;
+        return Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 96.0 + (index % 3) * 42,
+            height: 34,
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        );
+      },
     );
   }
 

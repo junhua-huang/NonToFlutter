@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
 import 'package:nonto/screens/community/community_chat_screen.dart';
+import 'package:nonto/services/chat_prefetch_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
@@ -74,6 +77,9 @@ class _ConversationsTabState extends ConsumerState<ConversationsTab> {
           conversation: conv,
           onTap: () {
             if (conv.isCommunity && conv.communityId != null) {
+              unawaited(
+                ChatPrefetchService().prefetchCommunityChat(conv.communityId!),
+              );
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -86,6 +92,9 @@ class _ConversationsTabState extends ConsumerState<ConversationsTab> {
               );
               return;
             }
+            unawaited(
+              ChatPrefetchService().prefetchPrivateConversation(conv.id),
+            );
             Navigator.push(
               context,
               MaterialPageRoute(
