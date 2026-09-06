@@ -1,0 +1,36 @@
+{
+  "server": {
+    "host": "8.163.99.244",
+    "port": 22,
+    "user": "",
+    "identity_file": "",
+    "known_hosts_file": "",
+    "backend_dir": "/www/wwwroot/NonToPyDev/NanTuPy",
+    "web_dir": "/www/wwwroot/nonto.online/nonto/",
+    "download_dir": "/www/wwwroot/nonto.online/downloads/",
+    "state_dir": "/www/nonto-releases/",
+    "python_executable": "",
+    "service_environment_confirmed": false,
+    "database_backup_credentials_file": "",
+    "stop_command": [],
+    "start_command": [],
+    "database_backup_command": [],
+    "health_url": "http://127.0.0.1:5000/"
+  },
+  "publish": {
+    "channel": "stable",
+    "platforms": ["web", "android"],
+    "public_base_url": "https://www.nonto.online",
+    "release_notes": [],
+    "force_update": false,
+    "minimum_supported_build_number": 2,
+    "api_base_url": "https://www.nonto.online/api",
+    "admin_token_env": "NONTO_ADMIN_TOKEN"
+  },
+  "android": {
+    "package_name": "com.nonto.nonto",
+    "certificate_sha256": "",
+    "apksigner": "",
+    "aapt": ""
+  }
+}
