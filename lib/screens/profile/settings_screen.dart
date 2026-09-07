@@ -4,6 +4,7 @@ import 'package:nonto/providers/app_update_notifier.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/auth_state.dart';
 import 'package:nonto/providers/theme_notifier.dart';
+import 'package:nonto/providers/deployment_providers.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/auth/login_screen.dart';
 import 'package:nonto/screens/profile/background_permission_guide_screen.dart';
@@ -284,6 +285,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final authState = ref.watch(authProvider);
     final updateState = ref.watch(appUpdateProvider);
     final isCheckingForUpdates = updateState.status == AppUpdateStatus.checking;
+    final canDeploy = ref.watch(deploymentWebProvider) &&
+        authState.isLoggedIn &&
+        ref.watch(deploymentCapabilitiesProvider).asData?.value.allowed == true;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -305,6 +309,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
+          if (canDeploy) ...[
+            _buildSettingsSection('服务器管理', [
+              _buildListTile(
+                title: '部署管理',
+                icon: Icons.cloud_upload_outlined,
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.deployments),
+              ),
+            ]),
+            const SizedBox(height: 24),
+          ],
           // 账号与安全
           _buildSettingsSection(
             '账号与安全',

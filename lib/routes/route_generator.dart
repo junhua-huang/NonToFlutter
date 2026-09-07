@@ -30,6 +30,7 @@ import 'package:nonto/screens/profile/identity_detail_screen.dart';
 import 'package:nonto/screens/profile/open_source_screen.dart';
 import 'package:nonto/screens/profile/privacy_policy_screen.dart';
 import 'package:nonto/screens/profile/settings_screen.dart';
+import 'package:nonto/screens/profile/deployments_screen.dart';
 import 'package:nonto/screens/profile/terms_of_service_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
@@ -133,6 +134,11 @@ class RouteGenerator {
         return _authGuard(
           settings: settings,
           builder: (_) => const SettingsScreen(),
+        );
+      case AppRoutes.deployments:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const DeploymentsScreen(),
         );
       case AppRoutes.blockedUsers:
         return _authGuard(

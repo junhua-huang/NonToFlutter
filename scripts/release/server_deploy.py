@@ -466,8 +466,10 @@ def deploy(s, bundle, manifest):
                 (backup / 'migration-attempted').touch()
                 _journal(state, {'release_id': rid, 'phase': 'migration'})
                 _run([s['python_executable'], '-m', 'alembic', 'upgrade', 'head'], stage)
+            _journal(state, {'release_id': rid, 'phase': 'activate'})
             _activate(root, s, manifest, previous)
         start_attempted = True
+        _journal(state, {'release_id': rid, 'phase': 'start'})
         _run(s['start_command'])
         _health(s, manifest)
         _write_receipt(state, _receipt_for_deployment(previous, manifest))
