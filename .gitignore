@@ -11,6 +11,8 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+.run/
+scripts/release/release.config.json
 
 # IntelliJ related
 *.iml

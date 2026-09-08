@@ -285,7 +285,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final authState = ref.watch(authProvider);
     final updateState = ref.watch(appUpdateProvider);
     final isCheckingForUpdates = updateState.status == AppUpdateStatus.checking;
-    final canDeploy = ref.watch(deploymentWebProvider) &&
+    final canConfigureDeployments = ref.watch(deploymentWebProvider) &&
         authState.isLoggedIn &&
         ref.watch(deploymentCapabilitiesProvider).asData?.value.allowed == true;
     return Scaffold(
@@ -309,7 +309,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
-          if (canDeploy) ...[
+          if (canConfigureDeployments) ...[
             _buildSettingsSection('服务器管理', [
               _buildListTile(
                 title: '部署管理',

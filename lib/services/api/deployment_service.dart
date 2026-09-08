@@ -59,6 +59,30 @@ class DeploymentService {
 
   Future<DeploymentCapabilities> capabilities() async =>
       DeploymentCapabilities.fromJson(await _request('/capabilities'));
+  Future<DeploymentSettings> settings() async =>
+      DeploymentSettings.fromJson(await _request('/settings'));
+  Future<DeploymentSettings> health() async =>
+      DeploymentSettings.fromJson(await _request('/settings/health'));
+  Future<DeploymentSettings> patchSettings({
+    required bool enabled,
+    required List<int> operatorIds,
+    required int maxBytes,
+    required int maxExpandedBytes,
+    required int maxFiles,
+    required String reason,
+  }) async =>
+      DeploymentSettings.fromJson(
+          await _request('/settings', method: 'PATCH', data: {
+        'enabled': enabled,
+        'operator_ids': operatorIds,
+        'max_bytes': maxBytes,
+        'max_expanded_bytes': maxExpandedBytes,
+        'max_files': maxFiles,
+        'reason': reason,
+      }));
+  Future<DeploymentSettings> reloadSettings(String reason) async =>
+      DeploymentSettings.fromJson(await _request('/settings/reload',
+          method: 'POST', data: {'reason': reason}));
   Future<DeploymentPage<DeploymentArtifact>> artifacts() async {
     final json = await _request('/artifacts');
     return DeploymentPage(

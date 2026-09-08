@@ -114,6 +114,46 @@ def test_registration_failure_can_be_retried_without_auto_deploy(setup):
         assert job.status == 'failed' and job.error_code == 'REGISTRATION_FAILED'
 
 
+def test_worker_reloads_settings_before_each_claim(setup):
+    worker, sessions, _ = setup
+    settings = SimpleNamespace(enabled=False, operator_ids={1})
+    loads = []
+    worker.settings_loader = lambda db: loads.append(db) or settings
+    assert not worker.run_once()
+    with sessions() as db:
+        assert db.get(Job, 'j').status == 'queued'
+    settings.enabled = True
+    assert worker.run_once()
+    with sessions() as db:
+        assert db.get(Job, 'j').status == 'succeeded'
+    assert len(loads) == 2
+
+
+def test_worker_settings_revoke_operator_and_emit_bounded_heartbeat(setup):
+    worker, sessions, _ = setup
+    heartbeats = []
+    worker.settings_loader = lambda db: SimpleNamespace(enabled=True, operator_ids={2})
+    worker.heartbeat_callback = lambda db, status, code: heartbeats.append((status, code))
+    worker.executor.execute = lambda *args: pytest.fail('must not execute')
+    assert worker.run_once()
+    with sessions() as db:
+        assert db.get(Job, 'j').error_code == 'DEPLOYMENT_FORBIDDEN'
+    assert ('error', 'DEPLOYMENT_FORBIDDEN') in heartbeats
+    worker.heartbeat('error', 'raw secret / path')
+    assert ('error', 'raw secret / path') not in heartbeats
+
+
+def test_worker_heartbeat_does_not_break_job_processing(setup):
+    worker, sessions, _ = setup
+    worker.settings_loader = lambda db: SimpleNamespace(enabled=True, operator_ids={1})
+    def unavailable(*args):
+        raise RuntimeError('heartbeat store unavailable')
+    worker.heartbeat_callback = unavailable
+    assert worker.run_once()
+    with sessions() as db:
+        assert db.get(Job, 'j').status == 'succeeded'
+
+
 def test_worker_lock_rejects_second_process(tmp_path):
     with dw.process_lock(tmp_path / 'worker.lock'):
         with pytest.raises(OSError):

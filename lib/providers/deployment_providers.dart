@@ -25,7 +25,8 @@ final deploymentCapabilitiesProvider =
     FutureProvider.autoDispose<DeploymentCapabilities>((ref) {
   final session = ref.watch(deploymentSessionProvider);
   if (!ref.watch(deploymentWebProvider) || session.token == null) {
-    return const DeploymentCapabilities(enabled: false, canDeploy: false);
+    return const DeploymentCapabilities(
+        enabled: false, canDeploy: false, canConfigure: false);
   }
   return ref.watch(deploymentServiceProvider).capabilities();
 });

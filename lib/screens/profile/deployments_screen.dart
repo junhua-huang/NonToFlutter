@@ -53,7 +53,14 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
   bool _busy = false;
   bool _loading = true;
   bool _allowed = false;
+  bool _canDeploy = false;
   DeploymentFailure? _failure;
+  DeploymentSettings? _settings;
+  final _operators = TextEditingController();
+  final _maxBytes = TextEditingController();
+  final _maxExpandedBytes = TextEditingController();
+  final _maxFiles = TextEditingController();
+  bool _enabled = false;
   DeploymentPage<DeploymentArtifact> _artifacts = const DeploymentPage([], 0);
   DeploymentPage<DeploymentJob> _jobs = const DeploymentPage([], 0);
   DeploymentActive _active = const DeploymentActive();
@@ -68,7 +75,7 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
   BuildContext? _dialogContext;
   bool get _current =>
       mounted && ref.read(deploymentSessionProvider) == widget.session;
-  bool get _canAct => _allowed && !_busy && _failure == null;
+  bool get _canAct => _allowed && _canDeploy && !_busy && _failure == null;
 
   @override
   void initState() {
@@ -86,7 +93,20 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
   @override
   void dispose() {
     _timer?.cancel();
+    _operators.dispose();
+    _maxBytes.dispose();
+    _maxExpandedBytes.dispose();
+    _maxFiles.dispose();
     super.dispose();
+  }
+
+  void _applySettings(DeploymentSettings value) {
+    _settings = value;
+    _enabled = value.enabled;
+    _operators.text = value.operatorIds.join(',');
+    _maxBytes.text = value.maxBytes.toString();
+    _maxExpandedBytes.text = value.maxExpandedBytes.toString();
+    _maxFiles.text = value.maxFiles.toString();
   }
 
   void _fail(Object error) {
@@ -106,16 +126,30 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
   // A new timer is scheduled only after the previous request sequence finishes.
   void _schedule() {
     _timer?.cancel();
-    if (_current &&
-        _failure == null &&
-        (_active.job?.active == true ||
-            _detail?.active == true ||
-            _jobs.items.any((job) => job.active))) {
-      _timer = Timer(const Duration(seconds: 3), _refresh);
+    if (_current && _failure == null && _allowed) {
+      final active = _active.job?.active == true ||
+          _detail?.active == true ||
+          _jobs.items.any((job) => job.active);
+      _timer = Timer(Duration(seconds: active ? 3 : 10), _refresh);
     }
   }
 
   Future<void> _loadData() async {
+    final settings = await widget.service.health();
+    if (!_current) return;
+    if (_settings == null) {
+      _applySettings(settings);
+    } else {
+      _settings = settings;
+    }
+    if (!_canDeploy) {
+      _artifacts = const DeploymentPage([], 0);
+      _jobs = const DeploymentPage([], 0);
+      _active = const DeploymentActive();
+      _detail = null;
+      _artifactId = null;
+      return;
+    }
     final artifacts = await widget.service.artifacts();
     if (!_current) return;
     final jobs = await widget.service.jobs();
@@ -143,7 +177,8 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
       final capability = await widget.service.capabilities();
       if (!_current) return;
       if (!capability.allowed) throw const DeploymentFailure(403);
-      _allowed = true;
+      _allowed = capability.allowed;
+      _canDeploy = capability.canDeploy;
       await _loadData();
       if (!_current) return;
       _failure = null;
@@ -160,8 +195,12 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
     }
   }
 
-  Future<void> _run(Future<void> Function() action) async {
-    if (!_canAct || !_current) return;
+  Future<void> _run(Future<void> Function() action,
+      {bool requireDeploy = true}) async {
+    if ((requireDeploy ? !_canAct : !_allowed || _busy || _failure != null) ||
+        !_current) {
+      return;
+    }
     _timer?.cancel();
     setState(() => _busy = true);
     try {
@@ -201,6 +240,66 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
     if (!_current) return null;
     _schedule();
     return result;
+  }
+
+  Future<void> _saveSettings() async {
+    final ids = _operators.text
+        .split(',')
+        .map((value) => int.tryParse(value.trim()))
+        .toList();
+    final maxBytes = int.tryParse(_maxBytes.text.trim());
+    final maxExpandedBytes = int.tryParse(_maxExpandedBytes.text.trim());
+    final maxFiles = int.tryParse(_maxFiles.text.trim());
+    if (ids.any((value) => value == null || value < 1) ||
+        ids.whereType<int>().toSet().length != ids.length ||
+        maxBytes == null ||
+        maxBytes < 1 ||
+        maxExpandedBytes == null ||
+        maxExpandedBytes < 1 ||
+        maxFiles == null ||
+        maxFiles < 1) {
+      setState(() => _fileError = '运行配置格式不正确，请检查操作员 ID 和额度。');
+      return;
+    }
+    final confirmation =
+        await _confirm('保存运行配置', '设置保存到现有数据库，仅影响新任务。服务器路径、命令和凭据不会由此页面修改。');
+    if (confirmation == null || !_current) return;
+    await _run(() async {
+      final value = await widget.service.patchSettings(
+          enabled: _enabled,
+          operatorIds: ids.cast<int>(),
+          maxBytes: maxBytes,
+          maxExpandedBytes: maxExpandedBytes,
+          maxFiles: maxFiles,
+          reason: confirmation.reason);
+      if (!_current) return;
+      _applySettings(value);
+      final capability = await widget.service.capabilities();
+      if (!_current) return;
+      _canDeploy = capability.canDeploy;
+      await _loadData();
+    }, requireDeploy: false);
+  }
+
+  Future<void> _reloadSettings() async {
+    final confirmation =
+        await _confirm('重新加载运行配置', '重新读取数据库中的运行配置，不会重启服务或中断运行中的任务。');
+    if (confirmation == null || !_current) return;
+    await _run(() async {
+      final value = await widget.service.reloadSettings(confirmation.reason);
+      if (_current) _applySettings(value);
+    }, requireDeploy: false);
+  }
+
+  void _restoreDefaults() {
+    setState(() {
+      _enabled = false;
+      _operators.text = widget.session.userId ?? '';
+      _maxBytes.text = '524288000';
+      _maxExpandedBytes.text = '1073741824';
+      _maxFiles.text = '10000';
+      _fileError = null;
+    });
   }
 
   Future<void> _pick(bool manifest) async {
@@ -353,6 +452,62 @@ class _DeploymentConsoleState extends ConsumerState<_DeploymentConsole> {
                                 style: TextStyle(
                                     color:
                                         Theme.of(context).colorScheme.error))),
+                      Text('运行配置',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('启用发布功能'),
+                        subtitle: const Text('关闭时 Worker 不领取新任务。'),
+                        value: _enabled,
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(() => _enabled = value),
+                      ),
+                      TextField(
+                        controller: _operators,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: '操作员用户 ID（英文逗号分隔）',
+                            border: OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(spacing: 12, runSpacing: 12, children: [
+                        _LimitField(controller: _maxBytes, label: '上传上限（字节）'),
+                        _LimitField(
+                            controller: _maxExpandedBytes, label: '解压上限（字节）'),
+                        _LimitField(controller: _maxFiles, label: '文件数量上限'),
+                      ]),
+                      const SizedBox(height: 12),
+                      Text(
+                          'Worker：${_settings?.workerOnline == true ? '在线' : '离线'} · ${_settings?.workerStatus ?? 'offline'}'),
+                      Text('最近心跳：${_settings?.workerHeartbeatAt ?? '无'}'),
+                      if (_settings?.lastErrorCode != null)
+                        Text('最近错误：${_settings!.lastErrorCode}',
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.error)),
+                      Text(
+                          '存储 ${_settings?.readiness['artifact_storage'] == true ? '已就绪' : '未就绪'} · 数据库 ${_settings?.readiness['database'] == true ? '已就绪' : '未就绪'} · Worker 配置 ${_settings?.readiness['worker_configuration'] == true ? '已初始化' : '待初始化'}'),
+                      const SizedBox(height: 12),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        FilledButton.icon(
+                            onPressed: _busy ? null : _saveSettings,
+                            icon: const Icon(Icons.save_outlined),
+                            label: const Text('保存配置')),
+                        OutlinedButton.icon(
+                            onPressed: _busy ? null : _reloadSettings,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('重新加载')),
+                        OutlinedButton.icon(
+                            onPressed: _busy ? null : _restoreDefaults,
+                            icon: const Icon(Icons.settings_backup_restore),
+                            label: const Text('恢复默认值')),
+                      ]),
+                      if (!_canDeploy)
+                        const Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child:
+                                Text('当前账号尚不能执行发布。请保存启用状态并将当前用户 ID 加入操作员列表。')),
+                      const Divider(height: 32),
                       Text('当前发布',
                           style: Theme.of(context).textTheme.titleMedium),
                       Text(_active.release?.label ?? '尚无发布记录'),
@@ -518,6 +673,23 @@ String _statusLabel(String status) =>
       'manual_recovery': '需人工恢复',
     }[status] ??
     status;
+
+class _LimitField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  const _LimitField({required this.controller, required this.label});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 220,
+        child: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
+        ),
+      );
+}
 
 class _Confirmation {
   final String reason;

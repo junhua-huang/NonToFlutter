@@ -1,13 +1,59 @@
 class DeploymentCapabilities {
   final bool enabled;
   final bool canDeploy;
+  final bool canConfigure;
   const DeploymentCapabilities(
-      {required this.enabled, required this.canDeploy});
-  bool get allowed => enabled && canDeploy;
+      {required this.enabled,
+      required this.canDeploy,
+      this.canConfigure = false});
+  bool get allowed => canDeploy || canConfigure;
   factory DeploymentCapabilities.fromJson(Map<String, dynamic> json) =>
       DeploymentCapabilities(
           enabled: json['enabled'] == true,
-          canDeploy: json['can_deploy'] == true);
+          canDeploy: json['can_deploy'] == true,
+          canConfigure: json['can_configure'] == true);
+}
+
+class DeploymentSettings {
+  final bool enabled;
+  final List<int> operatorIds;
+  final int maxBytes;
+  final int maxExpandedBytes;
+  final int maxFiles;
+  final String workerStatus;
+  final String? workerHeartbeatAt;
+  final String? lastErrorCode;
+  final bool workerOnline;
+  final Map<String, bool> readiness;
+  const DeploymentSettings({
+    required this.enabled,
+    required this.operatorIds,
+    required this.maxBytes,
+    required this.maxExpandedBytes,
+    required this.maxFiles,
+    required this.workerStatus,
+    this.workerHeartbeatAt,
+    this.lastErrorCode,
+    this.workerOnline = false,
+    this.readiness = const {},
+  });
+  factory DeploymentSettings.fromJson(Map<String, dynamic> json) =>
+      DeploymentSettings(
+        enabled: json['enabled'] == true,
+        operatorIds: (json['operator_ids'] as List? ?? [])
+            .whereType<num>()
+            .map((value) => value.toInt())
+            .toList(),
+        maxBytes: (json['max_bytes'] as num?)?.toInt() ?? 0,
+        maxExpandedBytes: (json['max_expanded_bytes'] as num?)?.toInt() ?? 0,
+        maxFiles: (json['max_files'] as num?)?.toInt() ?? 0,
+        workerStatus: '${json['worker_status'] ?? 'offline'}',
+        workerHeartbeatAt: json['worker_heartbeat_at'] as String?,
+        lastErrorCode: json['last_error_code'] as String?,
+        workerOnline: json['worker_online'] == true,
+        readiness: (json['readiness'] as Map? ?? const {})
+            .map((key, value) => MapEntry('$key', value == true)),
+      );
 }
 
 List<String> _components(dynamic value) => value is List

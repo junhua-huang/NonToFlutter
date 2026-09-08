@@ -35,6 +35,31 @@ DEPLOYMENT_SITE_DIR=/www/wwwroot/nonto.online
 
 `NONTO_ADMIN_TOKEN` 只在 worker 服务环境中设置，用于已经部署验证通过后的版本登记；不得放入浏览器、上传包、页面表单或日志。该令牌需要与后台发布权限分离保管并定期更新。客户端使用当前登录身份的 Bearer header，不把新发布接口 JWT 附加在 URL。
 
+## 本地一键启动
+
+桌面上双击 `C:\Users\25318\Desktop\NonToWebDeploy一键启动.cmd`。它会固定启动本地 FastAPI、Flutter Web 静态控制台，并打开 `http://127.0.0.1:8787/nonto/`；运行日志和 PID 记录只写入项目 `.run/deployment-console/`。停止时双击 `C:\Users\25318\Desktop\NonToWebDeploy停止.cmd`，脚本只会停止自己记录且身份匹配的 Python 进程。
+
+首次使用或修改 Web 代码时，启动脚本会自动构建 Web。调试时可以使用项目内的 `scripts/release/一键启动Web控制台.cmd -NoBuild -NoBrowser`。如果不存在本地 `scripts/release/release.config.json`，API 和 Web 页面仍会启动，但 Worker 不会启动；固定 Worker 配置需要由运维通过受保护文件初始化，不能在 Web 表单中填写。
+
+## Web 运行配置
+
+`/settings/deployments` 的“运行配置”只保存非敏感设置到现有数据库：发布开关、操作员用户 ID、上传字节上限、解压字节上限和文件数量上限。页面还显示 Worker 心跳、固定错误码、队列状态和脱敏就绪状态。保存、重载都必须填写审计原因；Worker 在领取新任务前读取最新设置，运行中的任务不会被配置修改强制中断。
+
+页面不会读取或保存 SSH 私钥、数据库密码、JWT、管理员 token、COS/SMTP/推送密钥、known_hosts、任意服务器路径或 shell 命令。服务目录、服务命令、备份命令、数据库连接和凭据继续由服务器受保护环境及固定 `release.config.json` 管理。
+
+## 首次数据库迁移顺序
+
+本功能复用现有 MySQL，不部署新的数据库服务，不导入本地数据库。首次启用控制台前，由运维按以下顺序执行：
+
+1. 先部署包含后端配置 API 的代码。
+2. 在现有数据库执行 `alembic upgrade head`，创建发布队列和 `deployment_settings` 表。
+3. 重启 API，并确认管理员可以打开配置页。
+4. 在 Web 页面填写操作员 ID、限制并显式启用发布功能。
+5. 在服务器固定位置启动独立 Worker。
+6. 使用 Web 控制台上传、预检、批准和执行任务。
+
+发布后端组件时，批准步骤会要求确认 Alembic 迁移。迁移失败不会自动 `downgrade`、不会自动导入旧数据库备份，也不会自动启动旧代码；任务进入人工恢复状态。恢复旧文件前必须由运维确认当前数据库 schema 与旧代码兼容。
+
 ## 工作流
 
 1. 本地运行原有 `package` 模式得到发布目录。
