@@ -117,6 +117,6 @@ $webMarker = "web_console_server.py --port $WebPort"
 $script:tracked += Start-Tracked 'web' $python @($webServer, '--port', "$WebPort", '--root', $webRoot) $client $webMarker $WebPort
 Save-Tracked
 
-$url = "http://127.0.0.1:$WebPort/nonto/"
-Write-Host "Web console: $url" -ForegroundColor Green
+$url = "http://127.0.0.1:$WebPort/nonto/#/settings/deployments"
+Write-Host "Deployment console: $url" -ForegroundColor Green
 if (!$NoBrowser) { Start-Process $url }
