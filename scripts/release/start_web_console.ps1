@@ -83,10 +83,17 @@ if (Test-Path -LiteralPath $pidFile -PathType Leaf) {
 if (!$NoBuild) {
     Push-Location $client
     try {
-        & $flutter build web --release --no-pub '--base-href=/nonto/' --no-source-maps `
-            "--dart-define=API_BASE_URL=http://127.0.0.1:$ApiPort/api" `
-            "--dart-define=WS_URL=ws://127.0.0.1:$ApiPort/ws" *> (Join-Path $logDir 'web-build.log')
-        if ($LASTEXITCODE -ne 0) { Fail 'Flutter Web build failed. See .run\deployment-console\logs\web-build.log.' }
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $flutter build web --release --no-pub '--base-href=/nonto/' --no-source-maps `
+                "--dart-define=API_BASE_URL=http://127.0.0.1:$ApiPort/api" `
+                "--dart-define=WS_URL=ws://127.0.0.1:$ApiPort/ws" *> (Join-Path $logDir 'web-build.log')
+            $buildExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        if ($buildExitCode -ne 0) { Fail 'Flutter Web build failed. See .run\deployment-console\logs\web-build.log.' }
     } finally { Pop-Location }
 }
 $webRoot = Join-Path $client 'build\web'
