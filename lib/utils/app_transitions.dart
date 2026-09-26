@@ -11,6 +11,40 @@ class AppTransitions {
   static const slideBegin = Offset(0.12, 0.0);
   static const slideDuration = Duration(milliseconds: 280);
 
+  /// Route without page transition animation.
+  static PageRouteBuilder none({
+    required Widget page,
+    RouteSettings? settings,
+    bool fullscreenDialog = false,
+    bool maintainState = true,
+  }) {
+    return PageRouteBuilder(
+      settings: settings,
+      fullscreenDialog: fullscreenDialog,
+      maintainState: maintainState,
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+          child,
+    );
+  }
+
+  /// Instant route used by authenticated pages in landscape.
+  static Route<dynamic> landscapePage({
+    required WidgetBuilder builder,
+    RouteSettings? settings,
+    bool fullscreenDialog = false,
+    bool maintainState = true,
+  }) {
+    return none(
+      page: Builder(builder: builder),
+      settings: settings,
+      fullscreenDialog: fullscreenDialog,
+      maintainState: maintainState,
+    );
+  }
+
   static PageRouteBuilder slide({
     required Widget page,
     RouteSettings? settings,

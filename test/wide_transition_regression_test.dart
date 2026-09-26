@@ -16,9 +16,19 @@ void main() {
       ),
     );
 
-    expect(mobileRoute, isA<MaterialPageRoute<dynamic>>());
+    expect(mobileRoute, isA<PageRouteBuilder<dynamic>>());
     expect(wideRoute, isA<PageRouteBuilder<dynamic>>());
     expect(wideRoute.settings.name, AppRoutes.identityCenter);
+    expect((wideRoute as PageRouteBuilder<dynamic>).transitionDuration, Duration.zero);
+    expect((wideRoute as PageRouteBuilder<dynamic>).reverseTransitionDuration, Duration.zero);
+  });
+
+  test('home tab routes keep default transition duration', () {
+    final route = RouteGenerator.generateRoute(
+      const RouteSettings(name: AppRoutes.home),
+    );
+    expect(route, isA<PageRouteBuilder<dynamic>>());
+    expect((route as PageRouteBuilder<dynamic>).transitionDuration, isNot(Duration.zero));
   });
 
   testWidgets('slide transition combines configured horizontal motion and fade',

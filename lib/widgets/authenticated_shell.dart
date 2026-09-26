@@ -138,7 +138,7 @@ class AuthenticatedShell extends ConsumerWidget {
 
   void _pushPage(Widget page, String routeName) {
     _navigator?.push(
-      AppTransitions.slide(
+      AppTransitions.none(
         page: page,
         settings: RouteSettings(name: routeName),
       ),

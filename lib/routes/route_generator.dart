@@ -36,6 +36,8 @@ import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/screens/splash/splash_screen.dart';
 import 'package:nonto/utils/app_transitions.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -62,19 +64,27 @@ class RouteGenerator {
           settings: settings,
           builder: (_) => const RegisterScreen(),
         );
+      case AppRoutes.forgotPassword:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const ForgotPasswordScreen(),
+        );
       case AppRoutes.home:
         return _authGuard(
           settings: settings,
+          keepWideAnimation: true,
           builder: (_) => const HomeScreen(),
         );
       case AppRoutes.profile:
         return _authGuard(
           settings: settings,
+          keepWideAnimation: true,
           builder: (_) => const HomeScreen(initialTab: 3),
         );
       case AppRoutes.chat:
         return _authGuard(
           settings: settings,
+          keepWideAnimation: true,
           builder: (_) => const HomeScreen(initialTab: 2),
         );
       case AppRoutes.notifications:
@@ -85,6 +95,7 @@ class RouteGenerator {
       case AppRoutes.search:
         return _authGuard(
           settings: settings,
+          keepWideAnimation: true,
           builder: (_) => const HomeScreen(initialTab: 1),
         );
       case AppRoutes.friends:
@@ -136,7 +147,7 @@ class RouteGenerator {
           builder: (_) => const SettingsScreen(),
         );
       case AppRoutes.deployments:
-        return MaterialPageRoute(
+        return _pageRoute(
           settings: settings,
           builder: (_) => const DeploymentsScreen(),
         );
@@ -145,14 +156,21 @@ class RouteGenerator {
           settings: settings,
           builder: (_) => const BlockedUsersScreen(),
         );
-      case AppRoutes.forgotPassword:
-        return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
       case AppRoutes.privacyPolicy:
-        return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const PrivacyPolicyScreen(),
+        );
       case AppRoutes.termsOfService:
-        return MaterialPageRoute(builder: (_) => const TermsOfServiceScreen());
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const TermsOfServiceScreen(),
+        );
       case AppRoutes.openSource:
-        return MaterialPageRoute(builder: (_) => const OpenSourceScreen());
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const OpenSourceScreen(),
+        );
       case AppRoutes.comicTimeline:
         return _authGuard(
           settings: settings,
@@ -276,6 +294,7 @@ class RouteGenerator {
   static Route<dynamic> _authGuard({
     RouteSettings? settings,
     bool wideTransition = false,
+    bool keepWideAnimation = false,
     required WidgetBuilder builder,
   }) {
     Widget guardedBuilder(BuildContext context) {
@@ -299,15 +318,39 @@ class RouteGenerator {
     }
 
     if (wideTransition) {
-      return AppTransitions.slide(
+      return AppTransitions.landscapePage(
         settings: settings,
-        page: Builder(builder: guardedBuilder),
+        builder: guardedBuilder,
       );
     }
 
-    return MaterialPageRoute(
+    return _pageRoute(
       settings: settings,
+      keepWideAnimation: keepWideAnimation,
       builder: guardedBuilder,
+    );
+  }
+
+  static Route<dynamic> _pageRoute({
+    RouteSettings? settings,
+    required WidgetBuilder builder,
+    bool keepWideAnimation = false,
+  }) {
+    return PageRouteBuilder(
+      settings: settings,
+      pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        if (!keepWideAnimation && WideShellScope.isWideOf(context)) {
+          return child;
+        }
+        return const CupertinoPageTransitionsBuilder().buildTransitions(
+          ModalRoute.of(context) as PageRoute<dynamic>,
+          context,
+          animation,
+          secondaryAnimation,
+          child,
+        );
+      },
     );
   }
 

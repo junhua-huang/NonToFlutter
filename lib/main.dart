@@ -197,11 +197,12 @@ class NonToApp extends ConsumerWidget {
               highlightColor: AppColors.primary.withValues(alpha: 0.04),
               pageTransitionsTheme: const PageTransitionsTheme(
                 builders: {
-                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.android: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.windows: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.macOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.linux: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.fuchsia: _NontoPageTransitionsBuilder(),
                 },
               ),
               textTheme: TextTheme(
@@ -299,11 +300,12 @@ class NonToApp extends ConsumerWidget {
               highlightColor: AppColors.primary.withValues(alpha: 0.04),
               pageTransitionsTheme: const PageTransitionsTheme(
                 builders: {
-                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.android: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.windows: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.macOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.linux: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.fuchsia: _NontoPageTransitionsBuilder(),
                 },
               ),
               textTheme: const TextTheme(
@@ -370,6 +372,36 @@ class NonToApp extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _NontoPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _NontoPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final name = route.settings.name;
+    final keepAnimation = name == AppRoutes.splash ||
+        name == AppRoutes.login ||
+        name == AppRoutes.register ||
+        name == AppRoutes.forgotPassword ||
+        ShellRouteObserver.isHomeRouteName(name);
+    if (!keepAnimation && WideShellScope.isWideOf(context)) {
+      return child;
+    }
+    return const CupertinoPageTransitionsBuilder().buildTransitions(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      child,
     );
   }
 }

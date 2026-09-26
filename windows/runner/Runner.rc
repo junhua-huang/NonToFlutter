@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.nonto" "\0"
-            VALUE "FileDescription", "nonto" "\0"
+            VALUE "CompanyName", "南图 NonTo" "\0"
+            VALUE "FileDescription", "南图 NonTo" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "nonto" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.nonto. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 南图 NonTo. All rights reserved." "\0"
             VALUE "OriginalFilename", "nonto.exe" "\0"
-            VALUE "ProductName", "nonto" "\0"
+            VALUE "ProductName", "南图 NonTo" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

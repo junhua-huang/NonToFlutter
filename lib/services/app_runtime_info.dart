@@ -9,7 +9,7 @@ class AppRuntimeInfo {
 
   static AppRuntimeInfo current = const AppRuntimeInfo(
     version: '1.0.1',
-    buildNumber: 2,
+    buildNumber: 3,
   );
 
   static Future<AppRuntimeInfo> load() async {
