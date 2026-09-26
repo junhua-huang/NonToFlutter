@@ -1,4 +1,5 @@
-﻿import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/friend_service.dart';
 import 'package:flutter/material.dart';
 
@@ -55,11 +56,14 @@ class _AddFriendButtonState extends State<AddFriendButton> {
       if (resp.success) {
         setState(() => _requested = true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('好友请求已发送'), duration: Duration(seconds: 2)),
+          const SnackBar(
+              content: Text('好友请求已发送'), duration: Duration(seconds: 2)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(resp.message ?? '发送失败'), duration: const Duration(seconds: 2)),
+          SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '发送失败，请重试')),
+              duration: const Duration(seconds: 2)),
         );
       }
     } catch (_) {
@@ -102,7 +106,9 @@ class _AddFriendButtonState extends State<AddFriendButton> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: _requested ? AppColors.textSecondary : AppColors.textPrimary,
+                  color: _requested
+                      ? AppColors.textSecondary
+                      : AppColors.textPrimary,
                 ),
               ),
       ),

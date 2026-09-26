@@ -70,11 +70,11 @@ class OutboxManager {
     final rows = await _db.getPendingMessages();
     return rows
         .map((r) => OutboxItem(
-            clientMsgId: r.read<String>('client_msg_id'),
-            payload: r.read<String>('payload'),
-            timestamp: r.read<int>('timestamp'),
-            retryCount: r.read<int>('retry_count'),
-            status: _parseStatus(r.read<String>('status')),
+              clientMsgId: r.read<String>('client_msg_id'),
+              payload: r.read<String>('payload'),
+              timestamp: r.read<int>('timestamp'),
+              retryCount: r.read<int>('retry_count'),
+              status: _parseStatus(r.read<String>('status')),
             ))
         .toList();
   }
@@ -99,9 +99,25 @@ class OutboxManager {
     await _db.deleteAckedMessage(clientMsgId);
   }
 
+  /// 仅当消息仍为 pending 时标记确认，用于 ACK 结算去重
+  Future<bool> markPendingAcked(String clientMsgId) async {
+    final rows = await _db.ackPendingMessage(clientMsgId);
+    if (rows == 0) return false;
+    _log.fine('Marked pending acked: $clientMsgId');
+    await _db.deleteAckedMessage(clientMsgId);
+    return true;
+  }
+
   /// 增加重试计数，返回新的计数值
   Future<int> incrementRetry(String clientMsgId) async {
     await _db.incrementRetry(clientMsgId);
+    return _db.getRetryCount(clientMsgId);
+  }
+
+  /// 仅当消息仍为 pending 时增加重试计数，返回新的计数值；已结算则返回 null
+  Future<int?> incrementPendingRetry(String clientMsgId) async {
+    final rows = await _db.incrementPendingRetry(clientMsgId);
+    if (rows == 0) return null;
     return _db.getRetryCount(clientMsgId);
   }
 
@@ -109,6 +125,14 @@ class OutboxManager {
   Future<void> markFailed(String clientMsgId) async {
     await _db.markFailed(clientMsgId);
     _log.warning('Marked failed: $clientMsgId');
+  }
+
+  /// 仅当消息仍为 pending 时标记失败，用于 ACK 终态结算去重
+  Future<bool> markPendingFailed(String clientMsgId) async {
+    final rows = await _db.markPendingFailed(clientMsgId);
+    if (rows == 0) return false;
+    _log.warning('Marked pending failed: $clientMsgId');
+    return true;
   }
 
   /// 获取消息的重试计数

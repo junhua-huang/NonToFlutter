@@ -12,18 +12,28 @@ class ImageCompressor {
   /// [originalBytes] 原始图片字节
   /// [quality] 保留参数（PNG 无损输出，quality 仅用于兼容旧接口）
   /// [maxWidth] 最大宽度（像素），保持宽高比，默认 1920
+  /// [allowLargerOutput] 为 true 时，即使重编码后更大也返回兼容格式输出。
   ///
   /// 返回压缩后的 [Uint8List] 字节。
   static Future<Uint8List> compressImage(
     Uint8List originalBytes, {
     int quality = 92,
     int maxWidth = 1920,
+    bool allowLargerOutput = false,
   }) async {
     try {
+      // 先按原尺寸解码，避免小图被 targetWidth 放大到 maxWidth。
+      final ui.Codec sourceCodec =
+          await ui.instantiateImageCodec(originalBytes);
+      final ui.FrameInfo sourceFrameInfo = await sourceCodec.getNextFrame();
+      final int sourceWidth = sourceFrameInfo.image.width;
+      sourceFrameInfo.image.dispose();
+      sourceCodec.dispose();
+
       // 直接使用 instantiateImageCodec 解码 + 缩放（避免 ImmutableBuffer/ImageDescriptor 兼容性问题）
       final ui.Codec codec = await ui.instantiateImageCodec(
         originalBytes,
-        targetWidth: maxWidth,
+        targetWidth: sourceWidth > maxWidth ? maxWidth : null,
       );
       final ui.FrameInfo frameInfo = await codec.getNextFrame();
       final ui.Image image = frameInfo.image;
@@ -42,8 +52,8 @@ class ImageCompressor {
 
       final Uint8List compressed = byteData.buffer.asUint8List();
 
-      // 如果压缩后反而更大，返回原字节
-      if (compressed.length >= originalBytes.length) {
+      // 如果压缩后反而更大，默认返回原字节；上传链路可要求保留兼容格式输出。
+      if (!allowLargerOutput && compressed.length >= originalBytes.length) {
         debugPrint(
           'ImageCompressor: compressed size (${compressed.length}) >= '
           'original (${originalBytes.length}), returning original',

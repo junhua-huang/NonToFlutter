@@ -12,8 +12,7 @@ import 'tables.dart';
 
 // 条件导入：Web 平台加载 database_web.dart（drift/web.dart），
 // Native 平台加载 database_io.dart（drift/native.dart）。
-import 'database_io.dart'
-    if (dart.library.js_interop) 'database_web.dart';
+import 'database_io.dart' if (dart.library.js_interop) 'database_web.dart';
 
 part 'database.g.dart';
 
@@ -75,6 +74,16 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// 仅当消息仍为 pending 时更新为 acked，返回受影响行数
+  Future<int> ackPendingMessage(String clientMsgId) {
+    return customUpdate(
+      'UPDATE outbox SET status = \'acked\' '
+      'WHERE client_msg_id = ? AND status = \'pending\'',
+      variables: [Variable<String>(clientMsgId)],
+      updates: {outbox},
+    );
+  }
+
   /// 删除 acked 消息
   Future<void> deleteAckedMessage(String clientMsgId) {
     return customStatement(
@@ -91,11 +100,31 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// 仅当消息仍为 pending 时增加重试计数，返回受影响行数
+  Future<int> incrementPendingRetry(String clientMsgId) {
+    return customUpdate(
+      'UPDATE outbox SET retry_count = retry_count + 1 '
+      'WHERE client_msg_id = ? AND status = \'pending\'',
+      variables: [Variable<String>(clientMsgId)],
+      updates: {outbox},
+    );
+  }
+
   /// 标记消息为 failed
   Future<void> markFailed(String clientMsgId) {
     return customStatement(
       'UPDATE outbox SET status = \'failed\' WHERE client_msg_id = ?',
       [clientMsgId],
+    );
+  }
+
+  /// 仅当消息仍为 pending 时标记为 failed，返回受影响行数
+  Future<int> markPendingFailed(String clientMsgId) {
+    return customUpdate(
+      'UPDATE outbox SET status = \'failed\' '
+      'WHERE client_msg_id = ? AND status = \'pending\'',
+      variables: [Variable<String>(clientMsgId)],
+      updates: {outbox},
     );
   }
 

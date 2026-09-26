@@ -13,8 +13,13 @@ class AppRoutes {
   static const String topics = '/topics';
   static const String friends = '/friends';
   static const String settings = '/settings';
+  static const String deployments = '/settings/deployments';
+  static const String blockedUsers = '/blocked-users';
   static const String createPost = '/create-post';
   static const String editProfile = '/edit-profile';
+  static const String identityCenter = '/identity-center';
+  static const String identityApplication = '/identity-application';
+  static const String identityDetail = '/identity-detail';
   static const String forgotPassword = '/forgot_password';
   static const String privacyPolicy = '/privacy_policy';
   static const String termsOfService = '/terms_of_service';

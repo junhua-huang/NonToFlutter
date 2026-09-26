@@ -7,14 +7,17 @@ import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/providers/chat_room_state.dart';
 import 'package:nonto/services/api/chat_service.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
+import 'package:nonto/widgets/message_highlight_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -61,16 +64,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   StreamSubscription? _errorSub;
   final Set<int> _reactions = {}; // optimistic reaction message IDs
   bool _loadingMore = false; // track history loading state
-  // 上次自动滚动到底部时的消息条数，用于区分“收到新消息”与“ACK 替换乐观消息导致重建”。
-  // 只有真正新增消息时才滚动；ACK 替换（条数不变）不应触发滚动，避免抖动。
-  int _lastScrolledMsgCount = 0;
-  // 记录上一次滚动到底部时「最后一条消息的 id」。
-  // 仅靠 _lastScrolledMsgCount（条数）判断有缺陷：
-  // 当消息被撤回/删除导致条数减少，再回到同一数字时不会再滚动。
-  // 用「末尾消息 id」作为单调变化的指纹，撤回（id 不变）不会误判，
-  // 新消息到达（id 变大）或乐观消息（id 极大）始终能触发一次滚动。
-  int _lastScrolledLastMsgId = 0;
-  bool _didInitialScrollToLatest = false;
+  /// message.id → GlobalKey，用于点击引用时 Scrollable.ensureVisible 定位。
+  final Map<int, GlobalKey> _msgAnchors = {};
+  // reverse:true 的列表首帧已经位于最新消息，不需要初始化滚动。
+  // 这里只记录已渲染快照，用于后续新消息到达时判断是否需要回到最新处。
+  int _lastObservedMsgCount = 0;
+  int _lastObservedLatestMsgId = 0;
+  bool _hasObservedMessageState = false;
 
   @override
   void initState() {
@@ -78,17 +78,22 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     // 记录当前打开的会话，供未读统计判断（当前会话不产生未读红点）。
     ChatRoomState.setConversation(widget.conversation.id);
 
-    final auth = ref.read(authProvider);
-    final currentUserId = auth.user?.id ?? 0;
-    ref
-        .read(messagesProvider(widget.conversation.id).notifier)
-        .init(currentUserId, otherUserId: widget.conversation.otherUser?.id);
+    // MessagesNotifier loads data and updates provider state; defer its startup
+    // until the first frame has completed to avoid mutating providers in initState.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = ref.read(authProvider);
+      final currentUserId = auth.user?.id ?? 0;
+      ref
+          .read(messagesProvider(widget.conversation.id).notifier)
+          .init(currentUserId, otherUserId: widget.conversation.otherUser?.id);
+    });
 
     _errorSub = WebSocketService().errorStream.listen((error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('发送失败: $error'),
+              content: Text('连接异常: $error'),
               duration: const Duration(seconds: 3)),
         );
       }
@@ -98,7 +103,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       ChatService().markRead(widget.conversation.id);
     }
 
-    // 立即清除本地未读气泡（不等服务端确认）
+    // 立即清除本地未读气泡（不等服务端确认），但延迟到首帧后，
+    // 避免在 initState/build 阶段同步修改 Riverpod provider。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _clearConversationUnreadAfterBuild();
+    });
+  }
+
+  void _clearConversationUnreadAfterBuild() {
+    if (!mounted) return;
     ref
         .read(conversationsProvider.notifier)
         .clearConversationUnread(widget.conversation.id);
@@ -117,21 +130,40 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   // ── 发送 ──
 
-  void _scrollToBottom({bool animate = true, bool force = false}) {
+  bool _isNearLatest() {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.position.pixels.abs() <= 800;
+  }
+
+  void _followLatestIfNeeded(bool shouldFollow) {
+    if (!shouldFollow) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToLatest();
+    });
+  }
+
+  int _latestServerMessageId(List<Message> messages) {
+    // MessagesNotifier keeps the timeline newest-first.
+    for (final message in messages) {
+      if (message.id < 1000000000000) return message.id;
+    }
+    return 0;
+  }
+
+  /// reverse:true 时 offset=0 就是最新消息所在的视口。
+  /// 首帧不需要从历史位置滚动到底部；只有收到新消息时才在近底部状态下跟随。
+  void _scrollToLatest({bool animate = false}) {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    final maxExtent = position.maxScrollExtent;
     if (!animate) {
-      // 即时定位：发送消息时用，避免与 build 里的动画滚动打架造成抖动
-      _scrollController.jumpTo(maxExtent);
+      _scrollController.jumpTo(0);
       return;
     }
-    // 仅当当前已接近底部时才动画滚动到底部，
-    // 否则用户正在翻看历史消息，自动滚动会打断阅读。
-    final distance = (maxExtent - position.pixels).abs();
-    if (!force && distance > 800) return;
+    // 用户正在查看历史消息时不打断阅读。
+    if (position.pixels.abs() > 800) return;
     _scrollController.animateTo(
-      maxExtent,
+      0,
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
     );
@@ -142,6 +174,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (text.isEmpty) return;
     HapticFeedback.lightImpact();
 
+    final shouldFollowLatest = _isNearLatest();
     final notifier =
         ref.read(messagesProvider(widget.conversation.id).notifier);
     if (_quotedMessage != null) {
@@ -156,9 +189,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
     _messageController.clear();
     setState(() => _quotedMessage = null);
-    // 发送时用即时定位（jumpTo），不动画——否则会和 build 里的 postFrame
-    // 动画滚动冲突，导致消息列表上下抖动。
-    _scrollToBottom(animate: false);
+    // 发送时仅在用户本来接近最新消息时即时跟随；查看历史时不打断阅读。
+    _followLatestIfNeeded(shouldFollowLatest);
   }
 
   void _onTextChanged(String text) {
@@ -167,18 +199,49 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
   }
 
+  bool _isVideoFileName(String name) {
+    final lower = name.toLowerCase();
+    return lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.mkv') ||
+        lower.endsWith('.webm');
+  }
+
   Future<void> _pickMedia(ImageSource source) async {
+    final shouldFollowLatest = _isNearLatest();
     try {
+      if (source == ImageSource.camera) {
+        final picked = await _picker.pickImage(
+          source: source,
+          maxWidth: 1200,
+          maxHeight: 1200,
+          imageQuality: 85,
+        );
+        if (picked == null) return;
+        final bytes = await picked.readAsBytes();
+        if (!mounted) return;
+        ref
+            .read(messagesProvider(widget.conversation.id).notifier)
+            .sendImageMessage(bytes, picked.name);
+        _followLatestIfNeeded(shouldFollowLatest);
+        return;
+      }
+
       final picked = await _picker.pickMultipleMedia();
       if (picked.isEmpty) return;
       for (final file in picked) {
         final bytes = await file.readAsBytes();
         if (!mounted) return;
-        ref
-            .read(messagesProvider(widget.conversation.id).notifier)
-            .sendImageMessage(bytes, file.name);
+        final notifier =
+            ref.read(messagesProvider(widget.conversation.id).notifier);
+        if (_isVideoFileName(file.name)) {
+          notifier.sendVideoMessage(bytes, file.name);
+        } else {
+          notifier.sendImageMessage(bytes, file.name);
+        }
       }
-      _scrollToBottom(animate: false);
+      _followLatestIfNeeded(shouldFollowLatest);
     } catch (e) {
       // _picker.pickMultipleMedia may not be available on web, fallback to single
       try {
@@ -194,10 +257,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           ref
               .read(messagesProvider(widget.conversation.id).notifier)
               .sendImageMessage(bytes, picked.name);
-          _scrollToBottom(animate: false);
+          _followLatestIfNeeded(shouldFollowLatest);
         }
       } catch (e2) {
         debugPrint('Pick media error: $e2');
+        if (mounted) showPickerErrorSnackBar(context, e2, target: '相册');
       }
     }
   }
@@ -225,6 +289,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   }
 
   // ── 消息交互 ──
+
+  void _retryFailedMessage(Message msg) {
+    ref
+        .read(messagesProvider(widget.conversation.id).notifier)
+        .retryFailedMessage(msg.id);
+  }
 
   void _showMessageMenu(Message msg) async {
     final isMe = msg.senderId == ref.read(authProvider).user?.id;
@@ -310,31 +380,26 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final msgState = ref.watch(messagesProvider(widget.conversation.id));
     final otherUser = widget.conversation.otherUser;
 
-    // 仅在「消息列表确实前进」时滚动到底部：
-    // - 条数增加（新增消息）
-    // - 或末尾消息 id 变化（撤回后重发、乐观消息 ACK 替换等条数不变但末尾变化的情况）
-    // 之前只看条数，遇到撤回/删除使条数回退、之后再增长到同一值时不会滚动。
+    // reverse:true 的首帧已经从 offset=0 开始，缓存命中时直接显示最新消息。
+    // 后续新消息只在用户仍接近最新处时跟随，不打断正在查看的历史记录。
     final msgCount = msgState.messages.length;
-    final lastMsgId =
-        msgState.messages.isNotEmpty ? msgState.messages.last.id : 0;
-    if (msgCount > 0 && !_didInitialScrollToLatest) {
-      _didInitialScrollToLatest = true;
-      _lastScrolledMsgCount = msgCount;
-      _lastScrolledLastMsgId = lastMsgId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // 首次进入聊天必须定位到最新消息；后续新消息仍由近底部保护避免打断看历史。
-        _scrollToBottom(animate: false, force: true);
-      });
-    } else if (msgCount > 0 &&
-        (msgCount > _lastScrolledMsgCount ||
-            lastMsgId != _lastScrolledLastMsgId)) {
-      _lastScrolledMsgCount = msgCount;
-      _lastScrolledLastMsgId = lastMsgId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // 收到新消息用动画；_scrollToBottom 内部还会判断距离底部
-        // 是否在 800px 内，用户翻看历史时不打断。
-        _scrollToBottom(animate: true);
-      });
+    final latestMsgId = _latestServerMessageId(msgState.messages);
+    if (msgCount > 0) {
+      if (!_hasObservedMessageState) {
+        _lastObservedMsgCount = msgCount;
+        _lastObservedLatestMsgId = latestMsgId;
+        _hasObservedMessageState = true;
+      } else {
+        final shouldFollowLatest = _isNearLatest();
+        final isAppendedLatestMessage = msgState.highlightMessageId == null &&
+            msgCount > _lastObservedMsgCount &&
+            latestMsgId > _lastObservedLatestMsgId;
+        _lastObservedMsgCount = msgCount;
+        _lastObservedLatestMsgId = latestMsgId;
+        if (isAppendedLatestMessage) {
+          _followLatestIfNeeded(shouldFollowLatest);
+        }
+      }
     }
 
     return Scaffold(
@@ -346,7 +411,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           Expanded(
               child: _buildMessageList(msgState, currentUserId, otherUser)),
           if (_quotedMessage != null) _buildQuickReplyBar(),
-          _buildInputBar(msgState.isSending),
+          _buildInputBar(),
           if (_showEmojiPicker) _buildEmojiPicker(),
         ],
       ),
@@ -446,14 +511,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
   }
 
-  void _openUserProfile(User? user) {
+  Future<void> _openUserProfile(User? user) async {
     if (user == null) return;
-    Navigator.push(
+    final result = await Navigator.push<UserProfileResult>(
       context,
       MaterialPageRoute(
         builder: (_) => UserProfileScreen(user: user),
       ),
     );
+    if (result == UserProfileResult.blocked && mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   // ── WS 横幅 ──
@@ -494,15 +562,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       return _buildError(msgState.error!);
     }
     if (msgState.messages.isEmpty && msgState.isLoading) {
-      return const Center(
-          child: CircularProgressIndicator(color: _NontoChatColors.selfBubble));
+      return _buildLoadingMessages();
     }
     if (msgState.messages.isEmpty && !msgState.isLoading) {
       return _buildEmpty(otherUser);
     }
 
     final grouped = _groupMessages(msgState.messages, currentUserId ?? 0);
-    final lastGroupIdx = grouped.lastIndexWhere((e) => e is _MsgGroup);
+    final latestGroupIdx = grouped.indexWhere((e) => e is _MsgGroup);
+    final showLoadMore = msgState.hasMore || _loadingMore;
 
     return SmartRefresher(
       controller: _refreshController,
@@ -520,14 +588,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       ),
       child: ListView.builder(
         controller: _scrollController,
+        reverse: true,
         padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-        itemCount: grouped.length + (msgState.hasMore || _loadingMore ? 1 : 0),
-        itemBuilder: (_, i) {
-          if ((msgState.hasMore || _loadingMore) && i == 0) {
+        itemCount: grouped.length + (showLoadMore ? 1 : 0),
+        itemBuilder: (_, index) {
+          // reverse:true 下，builder 的最后一项位于视觉顶部。
+          if (showLoadMore && index == grouped.length) {
             return _buildLoadMoreHistory(msgState.hasMore);
           }
-          final offset = (msgState.hasMore || _loadingMore) ? 1 : 0;
-          final item = grouped[i - offset];
+          final item = grouped[index];
           if (item is _TimeSeparatorData) {
             return _buildTimeSeparator(item.label);
           }
@@ -538,7 +607,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           final group = item as _MsgGroup;
           final isMe = group.senderId == currentUserId;
           return _buildMessageGroup(group, isMe, otherUser,
-              isLastInList: i == lastGroupIdx);
+              isLastInList: index == latestGroupIdx);
         },
       ),
     );
@@ -570,6 +639,31 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLoadingMessages() {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
+      itemCount: 5,
+      itemBuilder: (_, index) {
+        final isMe = index.isOdd;
+        return Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 96.0 + (index % 3) * 42,
+            height: 34,
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: _isDark
+                  ? _NontoChatColors.darkOtherBubble
+                  : _NontoChatColors.otherBubble,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -728,7 +822,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   final msg = msgs[idx];
                   final isFirst = idx == 0;
                   final isLast = idx == msgs.length - 1;
-                  return _buildBubble(
+                  final bubble = _buildBubble(
                     msg: msg,
                     isMe: isMe,
                     isFirst: isFirst,
@@ -736,12 +830,51 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     groupSize: msgs.length,
                     showAvatar: group.showAvatar,
                   );
+                  // 用 KeyedSubtree 包一层，便于 Scrollable.ensureVisible 定位；
+                  // 高亮由 messagesProvider.highlightMessageId 驱动。
+                  final highlightId = ref
+                      .watch(messagesProvider(widget.conversation.id))
+                      .highlightMessageId;
+                  final wrapped = KeyedSubtree(
+                    key: _anchorKey(msg.id),
+                    child: MessageHighlightWrapper(
+                      active: highlightId == msg.id,
+                      onCompleted: () => ref
+                          .read(
+                              messagesProvider(widget.conversation.id).notifier)
+                          .clearHighlight(),
+                      child: bubble,
+                    ),
+                  );
+                  if (isMe && msg.status == 'failed') {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        wrapped,
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4, top: 2),
+                          child: _SendStatusIcon(
+                            message: msg,
+                            isMe: true,
+                            onRetry: () => _retryFailedMessage(msg),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return wrapped;
                 }),
                 // 状态图标（仅最后一条自己的消息显示）
-                if (isMe && isLastInList)
+                if (isMe && isLastInList && last.status != 'failed')
                   Padding(
                     padding: const EdgeInsets.only(right: 4, top: 2),
-                    child: _SendStatusIcon(message: last, isMe: true),
+                    child: _SendStatusIcon(
+                      message: last,
+                      isMe: true,
+                      onRetry: last.status == 'failed'
+                          ? () => _retryFailedMessage(last)
+                          : null,
+                    ),
                   ),
               ],
             ),
@@ -813,6 +946,10 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       );
     }
 
+    if (msg.messageType == MessageType.system) {
+      return _buildSystemMessage(msg.content ?? '');
+    }
+
     // 连续消息圆角
     const r = Radius.circular(16);
     const rSmall = Radius.circular(4);
@@ -877,6 +1014,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     )
                   else if (isImage)
                     _buildImageBubble(msg)
+                  else if (msg.messageType == MessageType.post)
+                    _buildPostCardBubble(msg, isMe)
                   else
                     _buildMediaBubble(msg, isMe, textColor),
                 ],
@@ -911,6 +1050,88 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
   }
 
+  Widget _buildPostCardBubble(Message msg, bool isMe) {
+    final title = (msg.content?.trim().isNotEmpty == true)
+        ? msg.content!.trim()
+        : '查看帖子 #${msg.relatedId ?? ''}';
+    final imageUrl = msg.mediaUrl?.trim();
+    return InkWell(
+      onTap: msg.relatedId == null
+          ? null
+          : () => Navigator.pushNamed(
+                context,
+                AppRoutes.postDetailId(msg.relatedId.toString()),
+              ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: ImageUtils.resolveUrl(imageUrl),
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.article_outlined,
+                        size: 15,
+                        color:
+                            isMe ? Colors.white70 : _NontoChatColors.timestamp,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '帖子',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isMe
+                              ? Colors.white70
+                              : _NontoChatColors.timestamp,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isMe ? Colors.white : _NontoChatColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '点击查看详情',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildImageBubble(Message msg) {
     final url = msg.mediaUrl ?? msg.content ?? '';
     final isUploading = msg.status == 'uploading';
@@ -919,13 +1140,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
     Widget imageChild;
     if (isFailed) {
-      // ── 上传失败：显示占位图 + 重试提示 ──
+      final failureText = msg.failureMessage?.trim();
+      final reason = failureText?.isNotEmpty == true ? failureText! : '上传失败';
+      // ── 上传失败：终态失败只显示原因，可重试失败才暴露重试入口 ──
       imageChild = GestureDetector(
-        onTap: () {
-          ref
-              .read(messagesProvider(widget.conversation.id).notifier)
-              .retryImageUpload(msg.id);
-        },
+        onTap: msg.canRetry
+            ? () {
+                ref
+                    .read(messagesProvider(widget.conversation.id).notifier)
+                    .retryImageUpload(msg.id);
+              }
+            : null,
         child: Container(
           width: 240,
           height: 180,
@@ -936,7 +1161,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
               Icon(Icons.cloud_off, size: 36, color: Colors.grey[600]),
               const SizedBox(height: 8),
               Text(
-                '上传失败，点击重试',
+                msg.canRetry ? '$reason，点击重试' : reason,
                 style: TextStyle(fontSize: 13, color: Colors.grey[700]),
               ),
             ],
@@ -1007,9 +1232,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       borderRadius: BorderRadius.circular(12),
       child: GestureDetector(
         onTap: isFailed
-            ? () => ref
-                .read(messagesProvider(widget.conversation.id).notifier)
-                .retryImageUpload(msg.id)
+            ? (msg.canRetry
+                ? () => ref
+                    .read(messagesProvider(widget.conversation.id).notifier)
+                    .retryImageUpload(msg.id)
+                : null)
             : (url.startsWith('http') && !isUploading
                 ? () => _showImageViewer(url)
                 : null),
@@ -1025,11 +1252,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         Icon(
           msg.messageType == MessageType.video
               ? Icons.videocam
-              : msg.messageType == MessageType.file
-                  ? Icons.insert_drive_file
-                  : msg.messageType == MessageType.post
-                      ? Icons.article
-                      : Icons.comment,
+              : msg.messageType == MessageType.post
+                  ? Icons.article
+                  : Icons.chat_bubble_outline,
           size: 16,
           color: isMe ? Colors.white70 : _NontoChatColors.timestamp,
         ),
@@ -1086,29 +1311,67 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         ? Colors.white.withValues(alpha: 0.85)
         : (_isDark ? _NontoChatColors.darkText : _NontoChatColors.text);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: quoteBg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border(
-          left: BorderSide(color: quoteColor, width: 2.5),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _onQuoteTap(msg.quoteMessageId),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: quoteBg,
+          borderRadius: BorderRadius.circular(6),
+          border: Border(
+            left: BorderSide(color: quoteColor, width: 2.5),
+          ),
+        ),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.60,
+        ),
+        child: Text(
+          msg.quotePreview ?? '',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.3,
+            color: quoteTextColor,
+          ),
         ),
       ),
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * 0.60,
-      ),
-      child: Text(
-        msg.quotePreview ?? '',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 12,
-          height: 1.3,
-          color: quoteTextColor,
-        ),
-      ),
+    );
+  }
+
+  /// 点击引用预览条 → 加载并定位到原消息。
+  Future<void> _onQuoteTap(int? quoteMessageId) async {
+    if (quoteMessageId == null) return;
+    final notifier =
+        ref.read(messagesProvider(widget.conversation.id).notifier);
+    final ok = await notifier.jumpToMessage(quoteMessageId);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('原消息已被删除')),
+      );
+      return;
+    }
+    // 等待重建后再滚动
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToMessage(quoteMessageId);
+    });
+  }
+
+  GlobalKey _anchorKey(int msgId) =>
+      _msgAnchors.putIfAbsent(msgId, () => GlobalKey());
+
+  void _scrollToMessage(int msgId) {
+    final key = _msgAnchors[msgId];
+    final ctx = key?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -1184,7 +1447,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   // ── 输入区域 ──
 
-  Widget _buildInputBar(bool isSending) {
+  Widget _buildInputBar() {
     final bgColor = _isDark ? _NontoChatColors.darkBg : _NontoChatColors.bg;
     final divColor =
         _isDark ? _NontoChatColors.darkDivider : _NontoChatColors.divider;
@@ -1275,37 +1538,24 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 duration: const Duration(milliseconds: 160),
                 switchInCurve: Curves.easeOut,
                 switchOutCurve: Curves.easeIn,
-                child: isSending
-                    ? const Padding(
-                        key: ValueKey('chat-send-progress'),
-                        padding: EdgeInsets.all(10),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: _NontoChatColors.selfBubble,
-                            strokeWidth: 2,
-                          ),
+                child: hasText
+                    ? IconButton(
+                        key: const ValueKey('chat-send-button'),
+                        icon: const Icon(
+                          Icons.send_rounded,
+                          color: _NontoChatColors.selfBubble,
+                          size: 22,
                         ),
+                        onPressed: _sendMessage,
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
                       )
-                    : hasText
-                        ? IconButton(
-                            key: const ValueKey('chat-send-button'),
-                            icon: const Icon(
-                              Icons.send_rounded,
-                              color: _NontoChatColors.selfBubble,
-                              size: 22,
-                            ),
-                            onPressed: _sendMessage,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 36, minHeight: 36),
-                          )
-                        : const SizedBox(
-                            key: ValueKey('chat-send-empty'),
-                            width: 36,
-                            height: 36,
-                          ),
+                    : const SizedBox(
+                        key: ValueKey('chat-send-empty'),
+                        width: 36,
+                        height: 36,
+                      ),
               );
             },
           ),
@@ -1496,7 +1746,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       }
     }
 
-    return result;
+    // Build chronology for grouping, then expose newest group first. Message
+    // order inside each group stays oldest-to-newest for bubble stacking.
+    return result.reversed.toList();
   }
 
   String _formatSeparatorTime(DateTime dt) {
@@ -1545,12 +1797,47 @@ class _MsgGroup {
 class _SendStatusIcon extends StatelessWidget {
   final Message message;
   final bool isMe;
+  final VoidCallback? onRetry;
 
-  const _SendStatusIcon({required this.message, required this.isMe});
+  const _SendStatusIcon({
+    required this.message,
+    required this.isMe,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (!isMe) return const SizedBox.shrink();
+    if (message.status == 'failed') {
+      final failureText = message.failureMessage?.trim();
+      final reason = failureText?.isNotEmpty == true ? failureText! : '发送失败';
+      if (!message.canRetry) {
+        return Text(
+          reason,
+          style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+        );
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            reason,
+            style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+          ),
+          TextButton.icon(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: Colors.redAccent,
+            ),
+            icon: const Icon(Icons.refresh_rounded, size: 14),
+            label: const Text('重试', style: TextStyle(fontSize: 11)),
+          ),
+        ],
+      );
+    }
     // 上传/发送中（乐观消息）
     if (message.status == 'uploading') {
       return Text(

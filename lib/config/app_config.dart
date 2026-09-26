@@ -11,20 +11,17 @@ class TabActivationNotifier {
 
 /// 应用全局配置
 class AppConfig {
-  // 应用版本号
-  static const String appVersion = '1.0.0';
-
   // 后端 API 基础地址。
-  // 本地默认连电脑本机；Android 模拟器/真机/生产环境通过 --dart-define 覆盖。
+  // 默认连接生产环境，本地开发可通过 --dart-define 覆盖。
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:5000/api',
+    defaultValue: 'https://www.nonto.online/api',
   );
 
   // WebSocket 地址。
   static const String wsUrl = String.fromEnvironment(
     'WS_URL',
-    defaultValue: 'http://127.0.0.1:5000/ws',
+    defaultValue: 'https://www.nonto.online/ws',
   );
 
   // 分页默认值
@@ -38,19 +35,24 @@ class AppConfig {
 
   // 支持的图片格式
   static const List<String> supportedImageFormats = [
-    'jpg', 'jpeg', 'png', 'gif', 'webp',
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
   ];
 
   // 支持的视频格式
   static const List<String> supportedVideoFormats = [
-    'mp4', 'avi', 'mov', 'mkv',
+    'mp4',
+    'avi',
+    'mov',
+    'mkv',
   ];
 
   // 帖子可见性
   static const String visibilityPublic = 'public';
   static const String visibilityFriends = 'friends';
-  static const String visibilityPrivate = 'private';
-  static const String visibilityCustom = 'custom';
 
   // 消息类型
   static const String msgTypeText = 'text';

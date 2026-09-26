@@ -7,12 +7,16 @@ import 'package:nonto/data/emoji_data.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/home/home/feed_tab.dart';
 import 'package:nonto/screens/profile/profile_tab.dart';
 import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/auth_service.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/mention_topic_picker.dart';
+import 'package:nonto/widgets/quoted_post_preview.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -26,8 +30,16 @@ import 'package:video_thumbnail_ohos/video_thumbnail_ohos.dart';
 class CreatePostScreen extends ConsumerStatefulWidget {
   final int? communityId;
   final String? communityName;
+  final Post? post;
+  final Post? quotedPost;
 
-  const CreatePostScreen({super.key, this.communityId, this.communityName});
+  const CreatePostScreen({
+    super.key,
+    this.communityId,
+    this.communityName,
+    this.post,
+    this.quotedPost,
+  });
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -60,6 +72,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   int _charCount = 0;
   static const int _maxChars = 500;
   static const int _maxImages = 9;
+  static const String _hideIdentityValue = '__hide_identity__';
+  String _selectedVisibility = 'public';
+  bool _visibilityChangedByUser = false;
+  String? _selectedDisplayRoleType;
 
   // 草稿 key
   static const String _draftTextKey = 'create_post_draft_text';
@@ -72,20 +88,55 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool get _hasComposerContent =>
       _controller.text.trim().isNotEmpty ||
       _selectedImages.isNotEmpty ||
-      _selectedVideo != null;
+      _selectedVideo != null ||
+      (!_isEditing && widget.quotedPost != null) ||
+      (_isEditing && widget.post!.hasMedia);
 
   bool get _isOverCharacterLimit => _charCount > _maxChars;
 
   bool get _canSubmitPost =>
       _hasComposerContent && !_isSubmitting && !_isOverCharacterLimit;
 
+  bool get _isEditing => widget.post != null;
+
   @override
   void initState() {
     super.initState();
+    final post = widget.post;
+    if (post != null) {
+      _controller.text = post.content ?? '';
+      _charCount = _controller.text.length;
+      _selectedVisibility = normalizePostVisibilityForEdit(
+        post.visibility,
+        legacyIsPublic: post.isPublic,
+      );
+      _selectedDisplayRoleType = post.displayRoleType;
+    }
     _controller.addListener(() {
-      setState(() => _charCount = _controller.text.length);
+      if (mounted) setState(() => _charCount = _controller.text.length);
     });
-    _restoreDraft();
+    if (post == null) {
+      _restoreDraft();
+      _loadDefaultVisibility();
+    }
+  }
+
+  Future<void> _loadDefaultVisibility() async {
+    String? value;
+    try {
+      final resp = await AuthService().getPrivacy();
+      value = resp.success && resp.data is Map
+          ? (resp.data as Map)['post_default_visibility']?.toString()
+          : null;
+    } catch (_) {
+      // Public is the product default when privacy settings are unavailable.
+    }
+    if (!mounted) return;
+    setState(() {
+      if (!_visibilityChangedByUser) {
+        _selectedVisibility = normalizeDefaultPostVisibility(value);
+      }
+    });
   }
 
   @override
@@ -196,9 +247,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       });
     } catch (e) {
       debugPrint('Pick images error: $e');
+      if (mounted) showPickerErrorSnackBar(context, e, target: '相册');
     }
   }
 
+  // ignore: unused_element
   Future<void> _pickVideo() async {
     try {
       final picked = await _picker.pickVideo(source: ImageSource.gallery);
@@ -246,6 +299,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       debugPrint('Pick video error: $e');
+      if (mounted) showPickerErrorSnackBar(context, e, target: '视频');
     }
   }
 
@@ -271,8 +325,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   Future<void> _submitPost() async {
     final content = _controller.text.trim();
-    if (content.isEmpty && _selectedImages.isEmpty && _selectedVideo == null) {
-      setState(() => _error = '帖子内容或媒体不能为空');
+    if (!_hasComposerContent) {
+      setState(() => _error = '帖子内容、媒体或引用不能为空');
+      return;
+    }
+
+    if (_isEditing) {
+      await _updatePost(content);
       return;
     }
 
@@ -302,8 +361,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           if (!mounted) return;
           final file = _selectedImages[i];
 
-          // 使用 UploadService 压缩
-          final compressed = await UploadService.compressXFile(file);
+          // 使用 UploadService 压缩，并确保文件名/MIME 与实际字节格式一致。
+          late final XFile compressed;
+          try {
+            compressed = await UploadService.compressXFileForPost(file);
+          } on UnsupportedError catch (e) {
+            await _saveDraft();
+            if (mounted) {
+              setState(() {
+                _isSubmitting = false;
+                _error = '第 ${i + 1} 张图片上传失败：${e.message}（草稿已保存）';
+              });
+            }
+            return;
+          }
 
           final uploadResp = await ApiClient().uploadBytes(
             '/upload/post/image',
@@ -322,10 +393,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           if (!uploadResp.success) {
             // 上传失败：保存草稿
             await _saveDraft();
+            final message =
+                apiFailureMessage(uploadResp, fallback: '图片上传失败，请重试');
+            debugPrint(
+              '[CreatePost] image upload failed index=${i + 1} '
+              'filename=${compressed.name} status=${uploadResp.statusCode} '
+              'code=${uploadResp.errorCode ?? "none"} message=$message',
+            );
             if (mounted) {
               setState(() {
                 _isSubmitting = false;
-                _error = '第 ${i + 1} 张图片上传失败: ${uploadResp.message}（草稿已保存）';
+                _error = '第 ${i + 1} 张图片上传失败：$message（草稿已保存）';
               });
             }
             return;
@@ -354,10 +432,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         );
         if (!uploadResp.success) {
           await _saveDraft();
+          final message = apiFailureMessage(uploadResp, fallback: '视频上传失败，请重试');
           if (mounted) {
             setState(() {
               _isSubmitting = false;
-              _error = '视频上传失败: ${uploadResp.message}（草稿已保存）';
+              _error = '视频上传失败：$message（草稿已保存）';
             });
           }
           return;
@@ -386,10 +465,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       // 3. 创建帖子
       final resp = await PostService().createPost(
         content: content,
+        visibility: _selectedVisibility,
         imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
         videoPath: videoUrl,
         thumbnailUrl: thumbnailUrl,
+        displayRoleType: _selectedDisplayRoleType,
         communityId: widget.communityId,
+        quotedPostId: widget.quotedPost?.id,
       );
 
       if (resp.success) {
@@ -407,12 +489,36 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           }
         }
 
+        final selectedRoleIndex = _selectedDisplayRoleType == null
+            ? -1
+            : currentUser.verifiedRoles.indexOf(_selectedDisplayRoleType!);
+        final selectedRoleLabel = selectedRoleIndex >= 0 &&
+                selectedRoleIndex < currentUser.verifiedRoleLabels.length
+            ? currentUser.verifiedRoleLabels[selectedRoleIndex]
+            : null;
+        if (serverPost?.displayRoleLabel == null && selectedRoleLabel != null) {
+          serverPost = serverPost?.copyWith(
+            displayRoleType: _selectedDisplayRoleType,
+            displayRoleLabel: selectedRoleLabel,
+          );
+        }
+        if (serverPost != null &&
+            widget.quotedPost != null &&
+            serverPost.quotedPostId == null) {
+          serverPost = serverPost.copyWith(
+            quotedPostId: widget.quotedPost!.id,
+            quotedPost: widget.quotedPost,
+          );
+        }
         final optimisticPost = serverPost ??
             Post(
               id: -DateTime.now().millisecondsSinceEpoch,
               content: content,
               videoUrl: videoUrl,
               thumbnailUrl: thumbnailUrl,
+              visibility: _selectedVisibility,
+              displayRoleType: _selectedDisplayRoleType,
+              displayRoleLabel: selectedRoleLabel,
               userId: currentUser.id,
               user: currentUser,
               likeCount: 0,
@@ -421,6 +527,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               createdAt: DateTime.now(),
               updatedAt: DateTime.now(),
               images: imageUrls.isNotEmpty ? imageUrls : null,
+              quotedPostId: widget.quotedPost?.id,
+              quotedPost: widget.quotedPost,
             );
 
         FeedTab.newPostNotifier.value = optimisticPost;
@@ -431,19 +539,67 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         Navigator.of(context).pop(true);
       } else {
         await _saveDraft();
+        final message = apiFailureMessage(resp, fallback: '发布失败，请重试');
         if (mounted) {
           setState(() {
             _isSubmitting = false;
-            _error = resp.message ?? '发布失败（草稿已保存）';
+            _error = '$message（草稿已保存）';
           });
         }
       }
     } catch (e) {
+      final stackTrace = StackTrace.current;
+      debugPrint('Create post error: $e');
+      debugPrintStack(stackTrace: stackTrace);
       await _saveDraft();
       if (mounted) {
         setState(() {
           _isSubmitting = false;
-          _error = '网络错误，请稍后重试（草稿已保存）';
+          _error = '发布失败，请稍后重试（草稿已保存）';
+        });
+      }
+    }
+  }
+
+  Future<void> _updatePost(String content) async {
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+    try {
+      final resp = await PostService().updatePost(
+        widget.post!.id,
+        content: content,
+        visibility: _selectedVisibility,
+      );
+      if (!mounted) return;
+      if (resp.success) {
+        var updatedPost = widget.post!.mergeJson(<String, dynamic>{
+          'content': content,
+          'visibility': _selectedVisibility,
+        }).copyWith(updatedAt: DateTime.now());
+        final data = resp.data;
+        if (data is Map) {
+          final rawPost = data['post'] ?? data;
+          if (rawPost is Map) {
+            updatedPost = updatedPost.mergeJson(
+              Map<String, dynamic>.from(rawPost),
+            );
+          }
+        }
+        Navigator.of(context).pop(updatedPost);
+        return;
+      }
+      final message = apiFailureMessage(resp, fallback: '保存失败，请重试');
+      setState(() {
+        _isSubmitting = false;
+        _error = message;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _error = '网络错误，请稍后重试';
         });
       }
     }
@@ -867,10 +1023,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   strokeWidth: 2,
                 ),
               )
-            : const Text(
-                '发布',
-                key: ValueKey('publish'),
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            : Text(
+                _isEditing ? '保存' : '发布',
+                key: ValueKey(_isEditing ? 'save' : 'publish'),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
       ),
     );
@@ -890,12 +1049,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               icon: Icons.image_outlined,
               label: '图片 (${_selectedImages.length}/$_maxImages)',
               onTap: _selectedImages.length >= _maxImages ? null : _pickImages,
-            ),
-            const SizedBox(width: 4),
-            _ToolbarButton(
-              icon: Icons.videocam_outlined,
-              label: '视频',
-              onTap: _selectedImages.isNotEmpty ? null : _pickVideo,
             ),
             const SizedBox(width: 4),
             _ToolbarButton(
@@ -936,6 +1089,97 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
   }
 
+  Widget _buildPostOptions(User? user) {
+    final roles = user?.verifiedRoles ?? const <String>[];
+    final labels = user?.verifiedRoleLabels ?? const <String>[];
+    final selectedIndex = _selectedDisplayRoleType == null
+        ? -1
+        : roles.indexOf(_selectedDisplayRoleType!);
+    final selectedRoleLabel =
+        selectedIndex >= 0 && selectedIndex < labels.length
+            ? labels[selectedIndex]
+            : _selectedDisplayRoleType;
+    final visibilityLabel = postVisibilityOptions
+        .firstWhere((option) => option.value == _selectedVisibility)
+        .label;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '以什么身份发布',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+        ),
+        if (!_isEditing && roles.isEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            '认证身份可让你的作品更可信',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.identityCenter),
+            child: const Text('申请身份认证'),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+        PopupMenuButton<String>(
+          initialValue: _selectedVisibility,
+          onSelected: (value) {
+            _visibilityChangedByUser = true;
+            setState(() => _selectedVisibility = value);
+          },
+          itemBuilder: (context) => postVisibilityOptions
+              .map(
+                (option) => PopupMenuItem<String>(
+                  value: option.value,
+                  child: Text(option.label),
+                ),
+              )
+              .toList(),
+          child: _SelectorChip(
+            icon: _selectedVisibility == 'public'
+                ? Icons.public_outlined
+                : Icons.people_outline,
+            label: visibilityLabel,
+          ),
+        ),
+        if (!_isEditing)
+          PopupMenuButton<String>(
+            initialValue: _selectedDisplayRoleType ?? _hideIdentityValue,
+            onSelected: (value) => setState(() => _selectedDisplayRoleType =
+                value == _hideIdentityValue ? null : value),
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
+                value: _hideIdentityValue,
+                child: Text('不展示身份'),
+              ),
+              for (var i = 0; i < roles.length; i++)
+                PopupMenuItem<String>(
+                  value: roles[i],
+                  child: Text(i < labels.length ? labels[i] : roles[i]),
+                ),
+            ],
+            child: _SelectorChip(
+              icon: Icons.verified_outlined,
+              label: _selectedDisplayRoleType == null
+                  ? '不展示身份'
+                  : (selectedRoleLabel ?? _selectedDisplayRoleType!),
+            ),
+          ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
@@ -950,7 +1194,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         leading: IconButton(
           icon: Icon(Icons.close, color: _primaryTextColor, size: 24),
           onPressed: () {
-            _saveDraft();
+            if (!_isEditing) _saveDraft();
             Navigator.of(context).pop();
           },
         ),
@@ -1036,6 +1280,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ),
                   ],
                   const SizedBox(height: 12),
+                  _buildPostOptions(user),
+                  const SizedBox(height: 12),
                   // Text field
                   TextField(
                     controller: _controller,
@@ -1053,6 +1299,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       counterText: '',
                     ),
                   ),
+                  if (!_isEditing && widget.quotedPost != null)
+                    QuotedPostPreview(
+                      quotedPostId: widget.quotedPost!.id,
+                      quotedPost: widget.quotedPost,
+                      compact: true,
+                    ),
                   // Image grid preview (tap to preview)
                   if (_selectedImages.isNotEmpty && _imageBytesList.isNotEmpty)
                     _buildImageList(),
@@ -1089,8 +1341,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               ),
             ),
           ),
-          // Bottom toolbar — horizontally scrollable
-          _buildComposerToolbar(isOverLimit: _isOverCharacterLimit),
+          // Editing preserves existing media; media changes are create-only.
+          if (!_isEditing)
+            _buildComposerToolbar(isOverLimit: _isOverCharacterLimit),
         ],
       ),
     );
@@ -1116,6 +1369,43 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         user?.initials ?? '?',
         style: TextStyle(
             color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+      ),
+    );
+  }
+}
+
+class _SelectorChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _SelectorChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.textSecondary),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.keyboard_arrow_down,
+              size: 16, color: AppColors.textSecondary),
+        ],
       ),
     );
   }

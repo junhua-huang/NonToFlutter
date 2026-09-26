@@ -7,3 +7,4 @@ library;
 export 'src/client.dart';
 export 'src/protocol/message.dart';
 export 'src/models/connection_state.dart';
+export 'src/models/send_failure.dart';

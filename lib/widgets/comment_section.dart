@@ -8,6 +8,7 @@ import 'package:nonto/providers/comment_state.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/identity_badge.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -213,7 +214,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                                 targetType: widget.targetType,
                                 isOwner: false,
                                 onReply: () => _notifier.startReply(
-                                  r.id.toString(),
+                                  comment.id.toString(),
                                   r.user?.displayName ??
                                       r.user?.username ??
                                       '用户',
@@ -623,6 +624,9 @@ class _CommentItem extends ConsumerWidget {
     final colors = Theme.of(context).colorScheme;
     final user = comment.user;
     final displayName = user?.displayName ?? user?.username ?? '用户';
+    final identityLabel = user?.verifiedRoleLabels.isNotEmpty == true
+        ? user!.verifiedRoleLabels.first
+        : null;
     final isOwnerCheck = user?.id == ref.watch(authProvider).user?.id;
     final double touchSize = 44; // M3 minimum touch target
 
@@ -668,6 +672,7 @@ class _CommentItem extends ConsumerWidget {
                                 ),
                               ),
                             ),
+                            IdentityBadge(label: identityLabel),
                             if (comment.replyToUser != null)
                               GestureDetector(
                                 onTap: () => _navigateToProfile(

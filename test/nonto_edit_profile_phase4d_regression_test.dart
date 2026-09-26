@@ -49,11 +49,11 @@ void main() {
         contains('final optimistic = user.copyWith(displayName: newName)'),
       );
       expect(source, contains('final optimistic = user.copyWith(bio: newBio)'));
-      expect(
-        source,
-        contains('updateUser(user.copyWith(displayName: originalName))'),
-      );
-      expect(source, contains('updateUser(user.copyWith(bio: originalBio))'));
+      expect(source, contains('_rollbackName(user.id, originalName)'));
+      expect(source, contains('_rollbackBio(user.id, originalBio)'));
+      expect(source, contains('final current = ref.read(authProvider).user'));
+      expect(source, contains("..['display_name'] = originalName"));
+      expect(source, contains("..['bio'] = originalBio"));
     });
 
     test('edit profile removes known unused imports', () {

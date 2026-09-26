@@ -51,6 +51,7 @@ class AppColors {
 
   // 功能色
   static const Color likeRed = Color(0xFFF91880);
+  static const Color unreadBadge = likeRed;
   static const Color successGreen = Color(0xFF00BA7C);
 
   // UI 元素色

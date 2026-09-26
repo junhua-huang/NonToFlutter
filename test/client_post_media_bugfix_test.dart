@@ -1,0 +1,197 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:cross_file/cross_file.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/utils/image_compressor.dart';
+
+void main() {
+  test('post image upload names match detected image byte format', () {
+    expect(UploadService.detectImageUploadFormat([0xFF, 0xD8, 0xFF])?.extension,
+        'jpg');
+    expect(
+        UploadService.detectImageUploadFormat(
+          [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+        )?.extension,
+        'png');
+    expect(
+        UploadService.detectImageUploadFormat(
+                [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
+            ?.extension,
+        'webp');
+    expect(UploadService.detectImageUploadFormat([0x00, 0x01]), isNull);
+
+    expect(UploadService.uploadFileNameForFormat('IMG_0001.HEIC', 'png'),
+        'IMG_0001.png');
+    expect(UploadService.uploadFileNameForFormat('picked-image', 'jpg'),
+        'picked-image.jpg');
+    expect(UploadService.uploadFileNameForFormat('', 'webp'),
+        startsWith('image_'));
+    expect(
+        UploadService.uploadFileNameForFormat('', 'webp'), endsWith('.webp'));
+  });
+
+  test('post image compression may keep larger re-encoded compatible output',
+      () async {
+    final transparentPng = _transparentPng1x1();
+
+    final compressed = await ImageCompressor.compressImage(
+      transparentPng,
+      allowLargerOutput: true,
+    );
+
+    expect(compressed, isNot(transparentPng));
+    expect(UploadService.detectImageUploadFormat(compressed)?.extension, 'png');
+  });
+
+  test('image compression does not upscale small upload images', () async {
+    final compressed = await ImageCompressor.compressImage(
+      _transparentPng1x1(),
+      allowLargerOutput: true,
+    );
+    final codec = await ui.instantiateImageCodec(compressed);
+    final frameInfo = await codec.getNextFrame();
+    addTearDown(() {
+      frameInfo.image.dispose();
+      codec.dispose();
+    });
+
+    expect(frameInfo.image.width, 1);
+    expect(frameInfo.image.height, 1);
+  });
+
+  test('post image compression keeps a non-empty upload filename', () async {
+    final compressed = await UploadService.compressXFile(
+      XFile.fromData(
+        _transparentPng1x1(),
+        name: '',
+        mimeType: 'image/png',
+      ),
+    );
+
+    expect(compressed.name, isNotEmpty);
+    expect(compressed.name, endsWith('.png'));
+  });
+
+  test('post image compression can force JPEG upload format', () async {
+    final compressed = await UploadService.compressXFileForPost(
+      XFile.fromData(
+        _transparentPng1x1(),
+        name: 'picked.png',
+        path: 'picked.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final bytes = await compressed.readAsBytes();
+
+    expect(compressed.name, endsWith('.jpg'));
+    expect(compressed.mimeType, 'image/jpeg');
+    expect(UploadService.detectImageUploadFormat(bytes)?.extension, 'jpg');
+  });
+
+  test('post service does not send legacy single image_url field', () {
+    final source =
+        File('lib/services/api/post_service.dart').readAsStringSync();
+
+    expect(source, isNot(contains('imageUrl: uploadedUrl')));
+    expect(source, contains('imageUrls: [uploadedUrl.toString()]'));
+    expect(source, isNot(contains("'image_url'")));
+  });
+
+  test(
+      'create post source disables video upload entry and logs create failures',
+      () {
+    final source =
+        File('lib/screens/post/create_post_screen.dart').readAsStringSync();
+
+    expect(source, isNot(contains("label: '视频'")));
+    expect(source, contains("debugPrint('Create post error:"));
+    expect(source, contains('debugPrintStack(stackTrace: stackTrace)'));
+    expect(source, contains('[CreatePost] image upload failed'));
+    expect(source, contains('UploadService.compressXFileForPost(file)'));
+  });
+
+  test('publish button is not blocked by default visibility loading', () {
+    final source =
+        File('lib/screens/post/create_post_screen.dart').readAsStringSync();
+    final canSubmitStart = source.indexOf('bool get _canSubmitPost =>');
+    final canSubmitEnd = source.indexOf('bool get _isEditing', canSubmitStart);
+    expect(canSubmitStart, greaterThanOrEqualTo(0));
+    expect(canSubmitEnd, greaterThan(canSubmitStart));
+
+    final canSubmitSource = source.substring(canSubmitStart, canSubmitEnd);
+    expect(canSubmitSource, isNot(contains('_isDefaultVisibilityLoading')));
+  });
+}
+
+Uint8List _transparentPng1x1() => Uint8List.fromList(<int>[
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
+    ]);

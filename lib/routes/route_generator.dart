@@ -1,4 +1,6 @@
 import 'package:nonto/models/user.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/models/identity_application.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/routes/app_routes.dart';
@@ -12,6 +14,7 @@ import 'package:nonto/screens/comic/comic_timeline_page.dart';
 import 'package:nonto/screens/comic/comic_upload_page.dart';
 import 'package:nonto/screens/friends/friends_screen.dart';
 import 'package:nonto/screens/home/home_screen.dart';
+import 'package:nonto/screens/notifications/notifications_tab.dart';
 import 'package:nonto/screens/community/community_list_screen.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/screens/community/community_create_screen.dart';
@@ -19,14 +22,22 @@ import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/screens/profile/blocked_users_screen.dart';
 import 'package:nonto/screens/profile/edit_profile_screen.dart';
+import 'package:nonto/screens/profile/identity_application_screen.dart';
+import 'package:nonto/screens/profile/identity_center_screen.dart';
+import 'package:nonto/screens/profile/identity_detail_screen.dart';
 import 'package:nonto/screens/profile/open_source_screen.dart';
 import 'package:nonto/screens/profile/privacy_policy_screen.dart';
 import 'package:nonto/screens/profile/settings_screen.dart';
+import 'package:nonto/screens/profile/deployments_screen.dart';
 import 'package:nonto/screens/profile/terms_of_service_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/screens/splash/splash_screen.dart';
+import 'package:nonto/utils/app_transitions.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,53 +50,152 @@ class RouteGenerator {
     // Exact routes
     switch (name) {
       case AppRoutes.splash:
-        return MaterialPageRoute(builder: (_) => const SplashScreen());
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const SplashScreen(),
+        );
       case AppRoutes.login:
-        return MaterialPageRoute(builder: (_) => const LoginScreen());
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const LoginScreen(),
+        );
       case AppRoutes.register:
-        return MaterialPageRoute(builder: (_) => const RegisterScreen());
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const RegisterScreen(),
+        );
+      case AppRoutes.forgotPassword:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const ForgotPasswordScreen(),
+        );
       case AppRoutes.home:
-        return _authGuard(builder: (_) => const HomeScreen());
+        return _authGuard(
+          settings: settings,
+          keepWideAnimation: true,
+          builder: (_) => const HomeScreen(),
+        );
       case AppRoutes.profile:
-        return _authGuard(builder: (_) => const HomeScreen(initialTab: 3));
+        return _authGuard(
+          settings: settings,
+          keepWideAnimation: true,
+          builder: (_) => const HomeScreen(initialTab: 3),
+        );
       case AppRoutes.chat:
-        return _authGuard(builder: (_) => const HomeScreen(initialTab: 1));
+        return _authGuard(
+          settings: settings,
+          keepWideAnimation: true,
+          builder: (_) => const HomeScreen(initialTab: 2),
+        );
       case AppRoutes.notifications:
-        return _authGuard(builder: (_) => const HomeScreen(initialTab: 2));
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const NotificationsTab(),
+        );
       case AppRoutes.search:
-        return _authGuard(builder: (_) => const HomeScreen(initialTab: 4));
+        return _authGuard(
+          settings: settings,
+          keepWideAnimation: true,
+          builder: (_) => const HomeScreen(initialTab: 1),
+        );
       case AppRoutes.friends:
-        return _authGuard(builder: (_) => const FriendsScreen());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const FriendsScreen(),
+        );
       case AppRoutes.createPost:
         final createPostArgs = args is Map ? args : null;
         return _authGuard(
+          settings: settings,
           builder: (_) => CreatePostScreen(
             communityId: createPostArgs?['community_id'] as int?,
             communityName: createPostArgs?['community_name'] as String?,
+            quotedPost: (createPostArgs?['quoted_post'] ??
+                createPostArgs?['quotedPost']) as Post?,
           ),
         );
       case AppRoutes.editProfile:
-        return _authGuard(builder: (_) => const EditProfileScreen());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const EditProfileScreen(),
+        );
+      case AppRoutes.identityCenter:
+        return _authGuard(
+          settings: settings,
+          wideTransition: args is Map && args['wideTransition'] == true,
+          builder: (_) => const IdentityCenterScreen(),
+        );
+      case AppRoutes.identityApplication:
+        final identityArgs = args is Map ? args : null;
+        return _authGuard(
+          settings: settings,
+          builder: (_) => IdentityApplicationScreen(
+            initialRoleName: identityArgs?['initialRoleName'] as String?,
+          ),
+        );
+      case AppRoutes.identityDetail:
+        if (args is IdentityApplication) {
+          return _authGuard(
+            settings: settings,
+            builder: (_) => IdentityDetailScreen(application: args),
+          );
+        }
+        return _errorRoute('IdentityApplication argument is required');
       case AppRoutes.settings:
-        return _authGuard(builder: (_) => const SettingsScreen());
-      case AppRoutes.forgotPassword:
-        return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const SettingsScreen(),
+        );
+      case AppRoutes.deployments:
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const DeploymentsScreen(),
+        );
+      case AppRoutes.blockedUsers:
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const BlockedUsersScreen(),
+        );
       case AppRoutes.privacyPolicy:
-        return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const PrivacyPolicyScreen(),
+        );
       case AppRoutes.termsOfService:
-        return MaterialPageRoute(builder: (_) => const TermsOfServiceScreen());
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const TermsOfServiceScreen(),
+        );
       case AppRoutes.openSource:
-        return MaterialPageRoute(builder: (_) => const OpenSourceScreen());
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const OpenSourceScreen(),
+        );
       case AppRoutes.comicTimeline:
-        return _authGuard(builder: (_) => const ComicTimelinePage());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const ComicTimelinePage(),
+        );
       case AppRoutes.comicUpload:
-        return _authGuard(builder: (_) => const ComicUploadPage());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const ComicUploadPage(),
+        );
       case AppRoutes.comicMyEvents:
-        return _authGuard(builder: (_) => const ComicMyEventsPage());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const ComicMyEventsPage(),
+        );
       case AppRoutes.communityList:
-        return _authGuard(builder: (_) => const CommunityListScreen());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const CommunityListScreen(),
+        );
       case AppRoutes.communityCreate:
-        return _authGuard(builder: (_) => const CommunityCreateScreen());
+        return _authGuard(
+          settings: settings,
+          builder: (_) => const CommunityCreateScreen(),
+        );
     }
 
     // Parameterized deep-link routes: /profile/:id, /post/:id, /chat/:id, /topics/:topic
@@ -96,6 +206,7 @@ class RouteGenerator {
       if (segments.length == 2 && segments[0] == 'profile') {
         if (args is User) {
           return MaterialPageRoute(
+              settings: settings,
               builder: (_) => UserProfileScreen(user: args));
         }
         return _errorRoute('User argument is required for profile view');
@@ -104,17 +215,19 @@ class RouteGenerator {
       if (segments.length == 2 && segments[0] == 'post') {
         final postId = int.parse(segments[1]);
         return MaterialPageRoute(
+            settings: settings,
             builder: (_) => PostDetailScreen(postId: postId));
       }
 
       if (segments.length == 2 && segments[0] == 'chat') {
-        // 极光推送点击跳转：/chat/:id 打开指定会话。
-        // 先进入 HomeScreen(initialTab:1) 保证底部导航回退栈正确，
+        // 通知点击跳转：/chat/:id 打开指定会话。
+        // 先进入 HomeScreen(initialTab:2) 保证底部导航回退栈正确，
         // 再用 postFrame 推入 ChatRoomScreen。
         // 用 stub Conversation（仅 id）—— ChatRoomScreen 会通过 messagesProvider
         // 加载该会话的真实数据；otherUser 为 null 时顶栏显示「聊天」占位。
         final convId = int.tryParse(segments[1]);
         return _authGuard(
+          settings: settings,
           builder: (_) => _ChatDeepLinkScreen(conversationId: convId),
         );
       }
@@ -122,6 +235,7 @@ class RouteGenerator {
       if (segments.length == 2 && segments[0] == 'topics') {
         final topic = segments[1];
         return MaterialPageRoute(
+          settings: settings,
           builder: (_) => TopicSearchResultsScreen(topicName: topic),
         );
       }
@@ -130,61 +244,112 @@ class RouteGenerator {
           segments[0] == 'comic' &&
           segments[1] == 'detail') {
         final eventId = int.parse(segments[2]);
-        return _authGuard(builder: (_) => ComicDetailPage(eventId: eventId));
+        return _authGuard(
+          settings: settings,
+          builder: (_) => ComicDetailPage(eventId: eventId),
+        );
       }
 
       if (segments.length == 3 &&
           segments[0] == 'comic' &&
           segments[1] == 'edit') {
         final eventId = int.parse(segments[2]);
-        return _authGuard(builder: (_) => ComicUploadPage(eventId: eventId));
+        return _authGuard(
+          settings: settings,
+          builder: (_) => ComicUploadPage(eventId: eventId),
+        );
       }
 
       // ── 社群参数路由 ──
       if (segments.length == 2 && segments[0] == 'communities') {
         final communityId = int.parse(segments[1]);
         return _authGuard(
-            builder: (_) => CommunityDetailScreen(communityId: communityId));
+          settings: settings,
+          builder: (_) => CommunityDetailScreen(communityId: communityId),
+        );
       }
       if (segments.length == 3 &&
           segments[0] == 'communities' &&
           segments[2] == 'chat') {
         final communityId = int.parse(segments[1]);
         return _authGuard(
-            builder: (_) => CommunityChatScreen(communityId: communityId));
+          settings: settings,
+          builder: (_) => CommunityChatScreen(communityId: communityId),
+        );
       }
       if (segments.length == 3 &&
           segments[0] == 'communities' &&
           segments[2] == 'manage') {
         final communityId = int.parse(segments[1]);
         return _authGuard(
-            builder: (_) => CommunityManageScreen(communityId: communityId));
+          settings: settings,
+          builder: (_) => CommunityManageScreen(communityId: communityId),
+        );
       }
     }
 
     return _errorRoute('Route not found');
   }
 
-  static Route<dynamic> _authGuard({required WidgetBuilder builder}) {
-    return MaterialPageRoute(
-      builder: (context) {
-        final auth = ProviderScope.containerOf(context).read(authProvider);
-        if (!auth.isLoggedIn) {
-          // 给用户一个提示，而不是静默跳转
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('请先登录'),
-                  duration: Duration(seconds: 2),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            }
-          });
-          return const LoginScreen();
+  static Route<dynamic> _authGuard({
+    RouteSettings? settings,
+    bool wideTransition = false,
+    bool keepWideAnimation = false,
+    required WidgetBuilder builder,
+  }) {
+    Widget guardedBuilder(BuildContext context) {
+      final auth = ProviderScope.containerOf(context).read(authProvider);
+      if (!auth.isLoggedIn) {
+        // 给用户一个提示，而不是静默跳转
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('请先登录'),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        });
+        return const LoginScreen();
+      }
+      return builder(context);
+    }
+
+    if (wideTransition) {
+      return AppTransitions.landscapePage(
+        settings: settings,
+        builder: guardedBuilder,
+      );
+    }
+
+    return _pageRoute(
+      settings: settings,
+      keepWideAnimation: keepWideAnimation,
+      builder: guardedBuilder,
+    );
+  }
+
+  static Route<dynamic> _pageRoute({
+    RouteSettings? settings,
+    required WidgetBuilder builder,
+    bool keepWideAnimation = false,
+  }) {
+    return PageRouteBuilder(
+      settings: settings,
+      pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        if (!keepWideAnimation && WideShellScope.isWideOf(context)) {
+          return child;
         }
-        return builder(context);
+        return const CupertinoPageTransitionsBuilder().buildTransitions(
+          ModalRoute.of(context) as PageRoute<dynamic>,
+          context,
+          animation,
+          secondaryAnimation,
+          child,
+        );
       },
     );
   }
@@ -199,7 +364,7 @@ class RouteGenerator {
   }
 }
 
-/// 极光推送点击「私信」通知后的落地页：先建好 HomeScreen（消息 Tab）回退栈，
+/// 点击「私信」通知后的落地页：先建好 HomeScreen（消息 Tab）回退栈，
 /// 首帧后推入 ChatRoomScreen。
 /// convId 为空时只进入消息 Tab（兼容旧调用）。
 class _ChatDeepLinkScreen extends StatefulWidget {
@@ -232,6 +397,6 @@ class _ChatDeepLinkScreenState extends State<_ChatDeepLinkScreen> {
         ));
       });
     }
-    return const HomeScreen(initialTab: 1);
+    return const HomeScreen(initialTab: 2);
   }
 }

@@ -6,6 +6,21 @@ class AppDateUtils {
   /// 北京时区偏移
   static const Duration beijingOffset = Duration(hours: 8);
 
+  /// 将服务端时间字符串解析为本地时间。
+  ///
+  /// 后端使用 UTC 存储时，历史接口可能返回不带时区的 ISO 字符串，
+  /// 例如 `2026-06-15T10:00:00`。这种值按 UTC 处理，避免被
+  /// Dart 当作本地时间导致排序和展示偏移。
+  ///
+  /// 空值、非法值返回 null，调用方不能用当前时间兜底历史消息时间。
+  static DateTime? parseServerTime(String? dateString) {
+    final value = dateString?.trim();
+    if (value == null || value.isEmpty) return null;
+    final hasTimezone = RegExp(r'(Z|[+-]\d{2}:?\d{2})$').hasMatch(value);
+    final normalized = hasTimezone ? value : '${value}Z';
+    return DateTime.tryParse(normalized)?.toLocal();
+  }
+
   /// 将服务器时间字符串解析为本地时间 DateTime（北京时间）
   /// 后端使用 datetime.utcnow() 存储，.isoformat() 序列化时通常不带 Z 后缀
   /// 例如："2026-06-15T10:00:00" 实际是 UTC 时间
@@ -22,8 +37,10 @@ class AppDateUtils {
       DateTime utcDt;
       // 如果字符串有时区标记（如 Z、+08:00），DateTime.parse 会正确解析为 UTC
       if (dateString.contains('Z') ||
-          (dateString.contains('+') && dateString.indexOf('+') > dateString.indexOf('T')) ||
-          (dateString.contains('-', dateString.length - 6) && dateString.indexOf('T') > 0)) {
+          (dateString.contains('+') &&
+              dateString.indexOf('+') > dateString.indexOf('T')) ||
+          (dateString.contains('-', dateString.length - 6) &&
+              dateString.indexOf('T') > 0)) {
         utcDt = dt.toUtc();
       } else {
         // 无时区标记 → 后端存的是 UTC，但 DateTime.parse 当作本地时间
@@ -33,8 +50,8 @@ class AppDateUtils {
       }
       // UTC + 8h = 北京时间，构造为本地 DateTime（isUtc=false）
       final bj = utcDt.add(beijingOffset);
-      return DateTime(bj.year, bj.month, bj.day, bj.hour, bj.minute,
-          bj.second, bj.millisecond, bj.microsecond);
+      return DateTime(bj.year, bj.month, bj.day, bj.hour, bj.minute, bj.second,
+          bj.millisecond, bj.microsecond);
     } catch (_) {
       return _nowLocalBeijing();
     }

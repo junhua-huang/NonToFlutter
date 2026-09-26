@@ -1,18 +1,23 @@
+import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/providers/auth_notifier.dart';
 import 'package:nonto/providers/theme_notifier.dart';
+import 'package:nonto/widgets/app_update_gate.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
 import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/routes/route_generator.dart';
 import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/aliyun_push_service.dart';
+import 'package:nonto/services/app_lifecycle_keepalive_service.dart';
+import 'package:nonto/services/app_runtime_info.dart';
 import 'package:nonto/services/prefs_migrator.dart';
 import 'package:nonto/services/sound_service.dart';
 import 'package:nonto/services/connectivity_service.dart';
-import 'package:nonto/services/push_service.dart';
+import 'package:nonto/services/local_notification_service.dart';
 import 'package:nonto/services/web_utils.dart'
     if (dart.library.html) 'package:nonto/services/web_utils_web.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
@@ -46,11 +51,8 @@ void main() async {
     return true;
   };
 
-  // Drift Web 初始化：加载 sqlite3 WASM
-  if (kIsWeb) {
-    // Web 端 drift 会自动通过 IndexedDB / WASM 工作
-    // 如需自定义 sqlite3.wasm 路径，可在此处配置
-  }
+  // ── Runtime package metadata ──
+  await AppRuntimeInfo.load();
 
   // ── SharedPreferences ──
   // On Web this reads from localStorage; catch any failure to prevent
@@ -73,10 +75,6 @@ void main() async {
   // ── SharedPreferences 结构迁移（幂等，runApp 前执行） ──
   await PrefsMigrator.run();
 
-  // 极光推送初始化（仅 Android/iOS 生效，Web/鸿蒙在 PushService 内部跳过）。
-  // 在 runApp 前调用，确保 SDK 尽早就绪，登录后能尽快拿到 registrationId。
-  await PushService().init();
-
   runApp(
     ProviderScope(
       overrides: [
@@ -88,6 +86,31 @@ void main() async {
 
   // Web: 成功初始化后隐藏 HTML loading overlay（与 index.html 双保险）
   hideWebLoadingOverlay();
+
+  unawaited(_startPostRunAppServices());
+}
+
+Future<void> _startPostRunAppServices() async {
+  // Local notifications are retained for Android notification permission and explicit diagnostic test notifications only.
+  // Vendor push handles delivery while the app is backgrounded or terminated.
+  try {
+    await LocalNotificationService().init();
+  } catch (e) {
+    debugPrint('LocalNotificationService init failed: $e');
+  }
+
+  try {
+    await AliyunPushService().init();
+  } catch (e) {
+    debugPrint('AliyunPushService init failed: $e');
+  }
+
+  // Observe lifecycle for the foreground-only Flutter WebSocket.
+  try {
+    AppLifecycleKeepAliveService().start();
+  } catch (e) {
+    debugPrint('AppLifecycleKeepAliveService start failed: $e');
+  }
 }
 
 class NonToApp extends ConsumerWidget {
@@ -114,6 +137,7 @@ class NonToApp extends ConsumerWidget {
             key: const ValueKey('nonto_app'),
             title: 'nonto',
             navigatorKey: ApiClient.navigatorKey,
+            navigatorObservers: [shellRouteObserver],
             debugShowCheckedModeBanner: false,
             builder: (context, child) {
               return Column(
@@ -141,7 +165,13 @@ class NonToApp extends ConsumerWidget {
                         ),
                       ),
                     ),
-                  Expanded(child: child ?? const SizedBox.shrink()),
+                  Expanded(
+                    child: AppUpdateGate(
+                      child: AuthenticatedShell(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -167,11 +197,12 @@ class NonToApp extends ConsumerWidget {
               highlightColor: AppColors.primary.withValues(alpha: 0.04),
               pageTransitionsTheme: const PageTransitionsTheme(
                 builders: {
-                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.android: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.windows: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.macOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.linux: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.fuchsia: _NontoPageTransitionsBuilder(),
                 },
               ),
               textTheme: TextTheme(
@@ -211,9 +242,17 @@ class NonToApp extends ConsumerWidget {
               ),
               snackBarTheme: SnackBarThemeData(
                 behavior: SnackBarBehavior.floating,
+                backgroundColor: const Color(0xFF202327),
+                contentTextStyle: const TextStyle(color: Colors.white),
+                actionTextColor: Colors.white,
+                closeIconColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+              popupMenuTheme: const PopupMenuThemeData(
+                color: Colors.white,
+                textStyle: TextStyle(color: Color(0xFF0F1419)),
               ),
               dialogTheme: DialogThemeData(
                 shape: RoundedRectangleBorder(
@@ -261,11 +300,12 @@ class NonToApp extends ConsumerWidget {
               highlightColor: AppColors.primary.withValues(alpha: 0.04),
               pageTransitionsTheme: const PageTransitionsTheme(
                 builders: {
-                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-                  TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.android: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.windows: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.macOS: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.linux: _NontoPageTransitionsBuilder(),
+                  TargetPlatform.fuchsia: _NontoPageTransitionsBuilder(),
                 },
               ),
               textTheme: const TextTheme(
@@ -303,9 +343,17 @@ class NonToApp extends ConsumerWidget {
               ),
               snackBarTheme: SnackBarThemeData(
                 behavior: SnackBarBehavior.floating,
+                backgroundColor: const Color(0xFF202327),
+                contentTextStyle: const TextStyle(color: Colors.white),
+                actionTextColor: Colors.white,
+                closeIconColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+              popupMenuTheme: const PopupMenuThemeData(
+                color: Color(0xFF202327),
+                textStyle: TextStyle(color: Colors.white),
               ),
               dialogTheme: DialogThemeData(
                 shape: RoundedRectangleBorder(
@@ -324,6 +372,36 @@ class NonToApp extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _NontoPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _NontoPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final name = route.settings.name;
+    final keepAnimation = name == AppRoutes.splash ||
+        name == AppRoutes.login ||
+        name == AppRoutes.register ||
+        name == AppRoutes.forgotPassword ||
+        ShellRouteObserver.isHomeRouteName(name);
+    if (!keepAnimation && WideShellScope.isWideOf(context)) {
+      return child;
+    }
+    return const CupertinoPageTransitionsBuilder().buildTransitions(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      child,
     );
   }
 }

@@ -1,38 +1,97 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
 import 'package:nonto/config/app_config.dart';
-import 'package:nonto/services/websocket_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'request_manager.dart';
+
+class ApiErrorCodes {
+  static const contentRejected = 'CONTENT_REJECTED';
+  static const moderationUnavailable = 'MODERATION_UNAVAILABLE';
+  static const accountDisabled = 'ACCOUNT_DISABLED';
+}
 
 class ApiResponse<T> {
   final bool success;
   final T? data;
   final String? message;
   final int? statusCode;
+  final String? errorCode;
+  final bool isRetryable;
 
-  ApiResponse({required this.success, this.data, this.message, this.statusCode});
+  const ApiResponse({
+    required this.success,
+    this.data,
+    this.message,
+    this.statusCode,
+    this.errorCode,
+    this.isRetryable = false,
+  });
+}
+
+String apiFailureMessage(ApiResponse response, {required String fallback}) {
+  switch (response.errorCode) {
+    case ApiErrorCodes.contentRejected:
+      return '内容未通过审核';
+    case ApiErrorCodes.moderationUnavailable:
+      return '内容审核服务暂不可用，请稍后重试';
+    case ApiErrorCodes.accountDisabled:
+      return '账号已停用';
+    default:
+      final message = response.message?.trim();
+      if (message == null || message.isEmpty) return fallback;
+      if (_looksUnsafeUserMessage(message)) return fallback;
+      return message;
+  }
+}
+
+bool _looksUnsafeUserMessage(String message) {
+  final normalized = message.toLowerCase();
+  return normalized.contains('exception') ||
+      normalized.contains('traceback') ||
+      normalized.contains('stack trace') ||
+      normalized.contains('sensitive') ||
+      normalized.contains('moderation') ||
+      normalized.contains('regex') ||
+      normalized.contains('threshold') ||
+      normalized.contains('hit term') ||
+      message.contains('敏感词') ||
+      message.contains('违规词') ||
+      message.contains('命中') ||
+      message.contains('未通过审核') ||
+      message.contains('内容审核') ||
+      message.contains('审核服务');
 }
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._();
   factory ApiClient() => _instance;
-  ApiClient._();
+  ApiClient._({Dio? dio}) : _dio = dio ?? _createDio();
+
+  @visibleForTesting
+  factory ApiClient.test({required Dio dio, Dio? refreshDio}) {
+    if (refreshDio != null) {
+      _refreshDio = refreshDio;
+    }
+    _installInterceptors(dio);
+    return ApiClient._(dio: dio);
+  }
 
   static String? token;
 
   /// 全局 NavigatorKey，供 token 失效时跳转登录页
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 
   /// 请求管理器：去重 + 限并发，可全局配置
   static final RequestManager requestManager = RequestManager(maxConcurrent: 4);
 
   /// 防止并发刷新 token
   static bool _isRefreshing = false;
+  static bool _sessionClearNotified = false;
 
   /// token 刷新失败回调（供 auth_notifier 注册，触发跳转登录页）
   static VoidCallback? onTokenExpired;
@@ -46,10 +105,15 @@ class ApiClient {
   /// 参数 `userId` 已转为字符串（与 LocalDbService.currentUserId 同类型）。
   static void Function(String userId)? onUserIdDetected;
 
-  late final Dio _dio = _createDio();
+  /// Production hooks are installed by the lifecycle service, keeping this
+  /// central token owner independent from WebSocket/lifecycle imports.
+  static Future<void> Function()? onTokenActivated;
+  static Future<void> Function()? onTokenCleared;
+
+  final Dio _dio;
 
   /// 专用于刷新 token 的 Dio（无拦截器，避免无限循环）
-  static final Dio _refreshDio = _createRefreshDio();
+  static Dio _refreshDio = _createRefreshDio();
 
   Dio get dio => _dio;
 
@@ -69,26 +133,73 @@ class ApiClient {
       receiveTimeout: const Duration(seconds: 30),
       headers: {'Content-Type': 'application/json'},
     ));
+    _installInterceptors(dio);
+    return dio;
+  }
+
+  @visibleForTesting
+  static String safeRequestPathForLog(String path) {
+    final uri = Uri.tryParse(path);
+    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
+      return '${uri.scheme}://${uri.host}/...';
+    }
+    final queryIndex = path.indexOf('?');
+    return queryIndex == -1 ? path : path.substring(0, queryIndex);
+  }
+
+  static const _requestAccessTokenKey = 'api_client_access_token';
+
+  static String? _requestAccessToken(RequestOptions options) {
+    final extraToken = options.extra[_requestAccessTokenKey];
+    if (extraToken is String && extraToken.isNotEmpty) return extraToken;
+    final queryToken = options.queryParameters['access_token'];
+    if (queryToken is String && queryToken.isNotEmpty) return queryToken;
+    return null;
+  }
+
+  static void _installInterceptors(Dio dio) {
+    dio.interceptors.clear();
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
-        if (token != null && token!.isNotEmpty) {
-          final url = options.uri.toString();
+        final authToken = token;
+        if (authToken != null && authToken.isNotEmpty) {
+          final url = options.path;
           // 仅对自身 API 请求注入 token，COS / 第三方 URL 不注入
           if (!url.startsWith('http') || url.startsWith(AppConfig.baseUrl)) {
             // 通过 query 参数传递 token，兼容 Web 端无自定义请求头的限制
-            options.queryParameters.addAll({'access_token': token});
+            options.queryParameters.addAll({'access_token': authToken});
+            options.extra[_requestAccessTokenKey] = authToken;
           }
         }
         return handler.next(options);
       },
       onError: (error, handler) async {
         try {
+          final parsed = parseErrorResponse(
+            statusCode: error.response?.statusCode,
+            data: error.response?.data,
+            fallbackMessage: error.message,
+          );
+          final safePath = safeRequestPathForLog(error.requestOptions.path);
+          debugPrint(
+            '[ApiClient] request failed path=$safePath '
+            'status=${error.response?.statusCode} code=${parsed.errorCode ?? "none"} '
+            'errorType=${error.type.name}',
+          );
+
+          final requestToken = _requestAccessToken(error.requestOptions);
+          if (parsed.errorCode == ApiErrorCodes.accountDisabled) {
+            await _clearSessionAndNotify(requestToken);
+            return handler.next(error);
+          }
+
           if (error.response?.statusCode == 401) {
-            debugPrint('[ApiClient] 401 caught on ${error.requestOptions.path}, isRefreshing=$_isRefreshing');
+            debugPrint(
+                '[ApiClient] 401 caught on $safePath, isRefreshing=$_isRefreshing');
             // 跳过刷新端点自身，避免无限循环
             if (error.requestOptions.path == '/auth/refresh') {
               debugPrint('[ApiClient] 401 on /auth/refresh itself — giving up');
-              _handleRefreshFailed();
+              await _clearSessionAndNotify(requestToken);
               return handler.next(error);
             }
 
@@ -98,8 +209,9 @@ class ApiClient {
               try {
                 final newToken = await _doRefreshToken();
                 if (newToken != null) {
-                  debugPrint('[ApiClient] refresh OK, retrying original request');
-                  token = newToken;
+                  debugPrint(
+                      '[ApiClient] refresh OK, retrying original request');
+                  setToken(newToken);
                   final opts = error.requestOptions;
                   opts.queryParameters = {'access_token': newToken};
                   try {
@@ -107,7 +219,10 @@ class ApiClient {
                     debugPrint('[ApiClient] retry succeeded');
                     return handler.resolve(response);
                   } catch (retryErr) {
-                    debugPrint('[ApiClient] retry also failed: $retryErr');
+                    debugPrint(
+                      '[ApiClient] retry failed path=${safeRequestPathForLog(opts.path)} '
+                      'errorType=${retryErr.runtimeType}',
+                    );
                     if (retryErr is DioException) {
                       return handler.next(retryErr);
                     }
@@ -118,19 +233,24 @@ class ApiClient {
                 }
               } finally {
                 _isRefreshing = false;
-                debugPrint('[ApiClient] refresh attempt finished, isRefreshing=false');
+                debugPrint(
+                    '[ApiClient] refresh attempt finished, isRefreshing=false');
               }
               // 刷新失败，清理 token
               if (token != null) {
-                _handleRefreshFailed();
+                await _clearSessionAndNotify(requestToken);
               }
             } else {
-              debugPrint('[ApiClient] refresh already in progress, skipping duplicate');
+              debugPrint(
+                  '[ApiClient] refresh already in progress, skipping duplicate');
             }
           }
           return handler.next(error);
         } catch (unexpected) {
-          debugPrint('[ApiClient] FATAL: onError interceptor threw: $unexpected');
+          debugPrint(
+            '[ApiClient] onError interceptor failed '
+            'path=${safeRequestPathForLog(error.requestOptions.path)} errorType=${unexpected.runtimeType}',
+          );
           // 兜底：保证 handler 一定被调用，避免请求永久挂起
           return handler.next(DioException(
             requestOptions: error.requestOptions,
@@ -140,42 +260,13 @@ class ApiClient {
         }
       },
     ));
-    return dio;
   }
 
-  /// 打印 token 完整信息（JWT 解码 header + payload）
+  /// 仅记录凭据是否存在及长度，不输出原文或解码后的声明。
   static void printToken(String source, String? t) {
-    // 安全：生产环境（kReleaseMode）不打印任何 token 信息，避免日志泄露。
-    // debug 包保留用于开发调试。
     if (kReleaseMode) return;
-    if (t == null || t.isEmpty) {
-      debugPrint('═══════════════════════════════════════');
-      debugPrint('[TOKEN] $source → NULL/EMPTY');
-      debugPrint('═══════════════════════════════════════');
-      return;
-    }
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('[TOKEN] 来源: $source');
-    debugPrint('[TOKEN] 长度: ${t.length} chars');
-    debugPrint('[TOKEN] 原始值: $t');
-
-    // 尝试 JWT 解码（3 段 base64，以 . 分隔）
-    final parts = t.split('.');
-    if (parts.length == 3) {
-      try {
-        final header = _tryBase64Decode(parts[0]);
-        debugPrint('[TOKEN] JWT Header : $header');
-      } catch (_) {
-        debugPrint('[TOKEN] JWT Header : (decode failed)');
-      }
-      try {
-        final payload = _tryBase64Decode(parts[1]);
-        debugPrint('[TOKEN] JWT Payload: $payload');
-      } catch (_) {
-        debugPrint('[TOKEN] JWT Payload: (decode failed)');
-      }
-    }
-    debugPrint('═══════════════════════════════════════');
+    final length = t?.length ?? 0;
+    debugPrint('[TOKEN] source=$source present=${length > 0} length=$length');
   }
 
   static String _tryBase64Decode(String str) {
@@ -194,8 +285,10 @@ class ApiClient {
   }
 
   static void setToken(String? t, {bool connectWs = true}) {
-    token = t;
-    if (t != null && t.isNotEmpty) {
+    final activated = t != null && t.trim().isNotEmpty;
+    token = activated ? t : null;
+    if (activated) {
+      _sessionClearNotified = false;
       printToken('ApiClient.setToken (内存写入)', t);
       // 解出 token 中的用户 ID 并通知业务层做一致性校验
       final uid = _extractUserIdFromToken(t);
@@ -203,20 +296,36 @@ class ApiClient {
         try {
           onUserIdDetected?.call(uid);
         } catch (e) {
-          debugPrint('[ApiClient] onUserIdDetected callback threw: $e');
+          debugPrint(
+              '[ApiClient] onUserIdDetected callback failed errorType=${e.runtimeType}');
         }
       } else {
-        debugPrint('[ApiClient] setToken: failed to extract user id from token');
+        debugPrint(
+            '[ApiClient] setToken: failed to extract user id from token');
       }
-      if (connectWs) {
-        // Async connect WS whenever token is available
-        WebSocketService().connect().catchError((e, stack) {
-          debugPrint('❗ WebSocket connect failed: $e');
-          debugPrint(stack.toString());
-        });
-      }
+      _runTokenHook(onTokenActivated, 'activation');
     } else {
-      WebSocketService().disconnect();
+      _runTokenHook(onTokenCleared, 'clear');
+    }
+  }
+
+  static void _runTokenHook(
+    Future<void> Function()? hook,
+    String operation,
+  ) {
+    unawaited(_runTokenHookNow(hook, operation));
+  }
+
+  static Future<void> _runTokenHookNow(
+    Future<void> Function()? hook,
+    String operation,
+  ) async {
+    if (hook == null) return;
+    try {
+      await hook();
+    } catch (error) {
+      debugPrint(
+          '[ApiClient] token $operation hook failed errorType=${error.runtimeType}');
     }
   }
 
@@ -247,72 +356,117 @@ class ApiClient {
       }
       debugPrint('[ApiClient] _doRefreshToken: step1 setting query param...');
       _refreshDio.options.queryParameters = {'access_token': token};
-      debugPrint('[ApiClient] _doRefreshToken: step2 calling POST /auth/refresh...');
+      debugPrint(
+          '[ApiClient] _doRefreshToken: step2 calling POST /auth/refresh...');
       final resp = await _refreshDio
           .post('/auth/refresh')
           .timeout(const Duration(seconds: 8));
       final elapsed = DateTime.now().difference(t0).inMilliseconds;
-      debugPrint('[ApiClient] _doRefreshToken: step3 got response status=${resp.statusCode} in ${elapsed}ms');
+      debugPrint(
+          '[ApiClient] _doRefreshToken: step3 got response status=${resp.statusCode} in ${elapsed}ms');
       if (resp.statusCode == 200 && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
         final newToken = data['access_token'] as String?;
-        debugPrint('[ApiClient] _doRefreshToken: step4 newToken=${newToken != null ? "yes(${newToken.length}chars)" : "no"}');
+        debugPrint(
+            '[ApiClient] _doRefreshToken: step4 newToken=${newToken != null ? "yes(${newToken.length}chars)" : "no"}');
         if (newToken != null && newToken.isNotEmpty) {
           printToken('HTTP POST /auth/refresh (网络刷新)', newToken);
           // 持久化新 token
           try {
-            debugPrint('[ApiClient] _doRefreshToken: step5 persisting to SharedPreferences...');
+            debugPrint(
+                '[ApiClient] _doRefreshToken: step5 persisting to SharedPreferences...');
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('access_token', newToken);
             debugPrint('[ApiClient] _doRefreshToken: step6 persisted OK');
           } catch (e) {
-            debugPrint('[ApiClient] _doRefreshToken: step6 persist failed: $e');
+            debugPrint(
+                '[ApiClient] _doRefreshToken: step6 persist failed errorType=${e.runtimeType}');
           }
-          debugPrint('[ApiClient] token refreshed (total ${DateTime.now().difference(t0).inMilliseconds}ms)');
+          debugPrint(
+              '[ApiClient] token refreshed (total ${DateTime.now().difference(t0).inMilliseconds}ms)');
           return newToken;
         }
-        debugPrint('[ApiClient] _doRefreshToken: newToken was empty/null in response body');
+        debugPrint(
+            '[ApiClient] _doRefreshToken: newToken was empty/null in response body');
       } else {
-        debugPrint('[ApiClient] _doRefreshToken: non-200 status=${resp.statusCode}');
+        debugPrint(
+            '[ApiClient] _doRefreshToken: non-200 status=${resp.statusCode}');
       }
     } catch (e) {
       final elapsed = DateTime.now().difference(t0).inMilliseconds;
-      debugPrint('[ApiClient] _doRefreshToken failed after ${elapsed}ms: $e');
+      debugPrint(
+          '[ApiClient] _doRefreshToken failed after ${elapsed}ms errorType=${e.runtimeType}');
     }
     return null;
   }
 
-  /// 刷新失败后的统一清理：置空 token + 清除持久化 + 断开 WS
-  static void _handleRefreshFailed() {
-    debugPrint('[ApiClient] _handleRefreshFailed: clearing token (was=${token != null ? "set" : "null"})');
-    final oldToken = token;
+  /// 刷新失败或账号停用后的统一清理：置空 token + 清除持久化 + 断开 WS
+  static Future<void> _clearSessionAndNotify(String? tokenToClear) async {
+    final shouldNotify = !_sessionClearNotified;
+    _sessionClearNotified = true;
+    final currentToken = token;
+    debugPrint(
+        '[ApiClient] clearing session (was=${currentToken != null ? "set" : "null"})');
+    if (tokenToClear == null || currentToken != tokenToClear) {
+      _sessionClearNotified = false;
+      debugPrint('[ApiClient] skipped stale in-memory session cleanup');
+      return;
+    }
     token = null;
-    debugPrint('[ApiClient] _handleRefreshFailed: disconnecting WS...');
-    WebSocketService().disconnect();
-    // 异步清除 SharedPreferences 中的过期 token
-    unawaited(Future(() async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        if (prefs.getString('access_token') == oldToken) {
-          await prefs.remove('access_token');
-          await prefs.remove('current_user_id');
+    await _runTokenHookNow(onTokenCleared, 'clear');
+    var hasNewerSession = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var persistedToken = prefs.getString('access_token');
+      hasNewerSession = token != null ||
+          (persistedToken != null && persistedToken != tokenToClear);
+      if (!hasNewerSession && persistedToken == tokenToClear) {
+        await prefs.remove('current_user_id');
+        persistedToken = prefs.getString('access_token');
+        if (persistedToken == tokenToClear) {
           await prefs.remove('current_user_json');
-          debugPrint('[ApiClient] _handleRefreshFailed: cleared expired token from prefs');
-        } else {
-          debugPrint('[ApiClient] _handleRefreshFailed: prefs token already different, skip');
         }
-      } catch (e) {
-        debugPrint('[ApiClient] _handleRefreshFailed: prefs cleanup error: $e');
+        persistedToken = prefs.getString('access_token');
+        if (persistedToken == tokenToClear) {
+          await prefs.remove('access_token');
+        }
+        hasNewerSession = token != null ||
+            (prefs.getString('access_token') != null &&
+                prefs.getString('access_token') != tokenToClear);
+        debugPrint('[ApiClient] cleared persisted session');
+      } else {
+        debugPrint('[ApiClient] skipped stale persisted session cleanup');
       }
-    }));
+    } catch (e) {
+      debugPrint('[ApiClient] prefs cleanup failed errorType=${e.runtimeType}');
+    }
+    if (hasNewerSession) {
+      _sessionClearNotified = false;
+    }
     // 通知 UI 层跳转登录页
-    onTokenExpired?.call();
+    if (shouldNotify && !hasNewerSession && token == null) {
+      onTokenExpired?.call();
+    }
   }
 
-  Future<ApiResponse<T>> get<T>(String path, {Map<String, dynamic>? params}) async {
+  @visibleForTesting
+  static void resetTestHooks() {
+    token = null;
+    _isRefreshing = false;
+    _sessionClearNotified = false;
+    _refreshDio = _createRefreshDio();
+    onTokenExpired = null;
+    onUserIdDetected = null;
+    onTokenActivated = null;
+    onTokenCleared = null;
+  }
+
+  Future<ApiResponse<T>> get<T>(String path,
+      {Map<String, dynamic>? params}) async {
     try {
       final resp = await _dio.get(path, queryParameters: params);
-      return ApiResponse(success: true, data: resp.data as T?, statusCode: resp.statusCode);
+      return ApiResponse(
+          success: true, data: resp.data as T?, statusCode: resp.statusCode);
     } on DioException catch (e) {
       return _handleError<T>(e);
     }
@@ -326,7 +480,11 @@ class ApiClient {
   ///
   /// [customKey] 可覆盖自动生成的 key，用于跨端点的去重需求。
   /// [priority] 优先级，值越大越优先（默认 0，预热请求用 -1）。
-  Future<ApiResponse<T>> getDeduped<T>(String path, {Map<String, dynamic>? params, String? customKey, int priority = 0, bool bypassManager = false}) async {
+  Future<ApiResponse<T>> getDeduped<T>(String path,
+      {Map<String, dynamic>? params,
+      String? customKey,
+      int priority = 0,
+      bool bypassManager = false}) async {
     final key = customKey ?? _makeKey('GET', path, params);
     return requestManager.execute(
       key: key,
@@ -339,9 +497,14 @@ class ApiClient {
   /// 按键取消一个请求（排队中或执行中均可）。
   void cancelRequest(String key) => requestManager.cancel(key);
 
+  /// Invalidate managed requests and completed results selected by [matches].
+  void invalidateRequestsWhere(bool Function(String key) matches) {
+    requestManager.invalidateWhere(matches);
+  }
+
   /// 取消一个去重 GET 请求（自动生成 key）。
   void cancelGet(String path, {Map<String, dynamic>? params}) {
-    requestManager.cancel(_makeKey('GET', path, params));
+    requestManager.invalidate(_makeKey('GET', path, params));
   }
 
   /// 生成请求去重 key。
@@ -361,7 +524,8 @@ class ApiClient {
     return requestManager.throttle(() async {
       try {
         final resp = await _dio.post(path, data: data);
-        return ApiResponse(success: true, data: resp.data as T?, statusCode: resp.statusCode);
+        return ApiResponse(
+            success: true, data: resp.data as T?, statusCode: resp.statusCode);
       } on DioException catch (e) {
         return _handleError<T>(e);
       }
@@ -372,7 +536,8 @@ class ApiClient {
     return requestManager.throttle(() async {
       try {
         final resp = await _dio.put(path, data: data);
-        return ApiResponse(success: true, data: resp.data as T?, statusCode: resp.statusCode);
+        return ApiResponse(
+            success: true, data: resp.data as T?, statusCode: resp.statusCode);
       } on DioException catch (e) {
         return _handleError<T>(e);
       }
@@ -383,7 +548,8 @@ class ApiClient {
     return requestManager.throttle(() async {
       try {
         final resp = await _dio.delete(path);
-        return ApiResponse(success: true, data: resp.data as T?, statusCode: resp.statusCode);
+        return ApiResponse(
+            success: true, data: resp.data as T?, statusCode: resp.statusCode);
       } on DioException catch (e) {
         return _handleError<T>(e);
       }
@@ -397,7 +563,8 @@ class ApiClient {
   }) async {
     final fileName = file.name;
     final fileExt = fileName.contains('.') ? fileName.split('.').last : '';
-    return _getCosPresignedUrlFromName(fileName: fileName, fileExt: fileExt, type: type);
+    return _getCosPresignedUrlFromName(
+        fileName: fileName, fileExt: fileExt, type: type);
   }
 
   /// 获取 COS 预签名上传 URL（直接提供文件名和扩展名）
@@ -406,6 +573,9 @@ class ApiClient {
     required String fileExt,
     required String type,
   }) async {
+    debugPrint(
+      '[Upload] presign start type=$type filename=$fileName ext=$fileExt',
+    );
     final result = await post<Map<String, dynamic>>('/upload/presign', data: {
       'filename': fileName,
       'file_type': fileExt,
@@ -413,9 +583,28 @@ class ApiClient {
     });
 
     if (result.success && result.data != null) {
+      final data = result.data!;
+      final cosKey = _safeMapString(data, 'cos_key');
+      final publicUrl = _safeMapString(data, 'public_url');
+      debugPrint(
+        '[Upload] presign ok hasUploadUrl=${_presignHasUploadUrl(data)} '
+        'hasCosKey=${cosKey.isNotEmpty} '
+        'hasPublicUrl=${publicUrl.isNotEmpty} '
+        'cosKey=$cosKey',
+      );
       return result;
     }
-    return ApiResponse(success: false, message: '获取上传链接失败', statusCode: result.statusCode);
+    debugPrint(
+      '[Upload] presign failed status=${result.statusCode} '
+      'code=${result.errorCode ?? "none"} message=${result.message ?? "none"}',
+    );
+    return ApiResponse(
+      success: false,
+      message: result.message ?? '获取上传链接失败',
+      statusCode: result.statusCode,
+      errorCode: result.errorCode,
+      isRetryable: result.isRetryable,
+    );
   }
 
   /// 直接上传文件到 COS（使用预签名 URL）
@@ -432,6 +621,9 @@ class ApiClient {
       final bytes = await file.readAsBytes();
       final fileName = file.name;
       final contentType = _getContentType(fileName);
+      debugPrint(
+        '[Upload] cos put start contentType=$contentType bytes=${bytes.length}',
+      );
 
       // 使用 Dio 直接 PUT 到 COS
       final resp = await _dio.put(
@@ -449,9 +641,17 @@ class ApiClient {
       );
 
       if (resp.statusCode == 200 || resp.statusCode == 204) {
-        return ApiResponse(success: true, data: {'url': presignedUrl.split('?').first} as T?, statusCode: resp.statusCode);
+        debugPrint('[Upload] cos put ok status=${resp.statusCode}');
+        return ApiResponse(
+            success: true,
+            data: {'url': presignedUrl.split('?').first} as T?,
+            statusCode: resp.statusCode);
       }
-      return ApiResponse(success: false, message: 'COS 上传失败: ${resp.statusCode}', statusCode: resp.statusCode);
+      debugPrint('[Upload] cos put failed status=${resp.statusCode}');
+      return ApiResponse(
+          success: false,
+          message: 'COS 上传失败: ${resp.statusCode}',
+          statusCode: resp.statusCode);
     } on DioException catch (e) {
       return _handleError<T>(e);
     }
@@ -469,6 +669,9 @@ class ApiClient {
     try {
       final contentType = _getContentType(fileName);
       final isVideo = contentType.startsWith('video/');
+      debugPrint(
+        '[Upload] cos put start contentType=$contentType bytes=${bytes.length}',
+      );
 
       final resp = await _dio.put(
         presignedUrl,
@@ -478,8 +681,10 @@ class ApiClient {
           followRedirects: false,
           validateStatus: (status) => status != null && status < 400,
           // 视频上传需要更长超时：发送最多 5min，接收 3min
-          sendTimeout: sendTimeout ?? (isVideo ? const Duration(minutes: 5) : null),
-          receiveTimeout: receiveTimeout ?? (isVideo ? const Duration(minutes: 3) : null),
+          sendTimeout:
+              sendTimeout ?? (isVideo ? const Duration(minutes: 5) : null),
+          receiveTimeout:
+              receiveTimeout ?? (isVideo ? const Duration(minutes: 3) : null),
         ),
         onSendProgress: onSendProgress != null
             ? (sent, total) => onSendProgress(sent, total)
@@ -487,9 +692,17 @@ class ApiClient {
       );
 
       if (resp.statusCode == 200 || resp.statusCode == 204) {
-        return ApiResponse(success: true, data: {'url': presignedUrl.split('?').first} as T?, statusCode: resp.statusCode);
+        debugPrint('[Upload] cos put ok status=${resp.statusCode}');
+        return ApiResponse(
+            success: true,
+            data: {'url': presignedUrl.split('?').first} as T?,
+            statusCode: resp.statusCode);
       }
-      return ApiResponse(success: false, message: 'COS 上传失败: ${resp.statusCode}', statusCode: resp.statusCode);
+      debugPrint('[Upload] cos put failed status=${resp.statusCode}');
+      return ApiResponse(
+          success: false,
+          message: 'COS 上传失败: ${resp.statusCode}',
+          statusCode: resp.statusCode);
     } on DioException catch (e) {
       return _handleError<T>(e);
     }
@@ -503,10 +716,11 @@ class ApiClient {
   /// [onSendProgress] 上传进度回调
   Future<ApiResponse<T>> upload<T>(String path, XFile file,
       {Map<String, dynamic>? extraData,
-       void Function(int sent, int total)? onSendProgress}) async {
+      void Function(int sent, int total)? onSendProgress}) async {
     try {
       final uploadType = _extractUploadType(path);
-      final presignResp = await _getCosPresignedUrl(file: file, type: uploadType);
+      final presignResp =
+          await _getCosPresignedUrl(file: file, type: uploadType);
       return _handlePresignAndUpload<T>(
         path: path,
         presignResp: presignResp,
@@ -525,13 +739,19 @@ class ApiClient {
   }
 
   /// 改造后的 uploadBytes 方法：先获取预签名 URL，再直传 COS
-  Future<ApiResponse> uploadBytes(String path, List<int> bytes,
-      String fileName, {String fileKey = 'file',
-       void Function(int sent, int total)? onSendProgress}) async {
+  Future<ApiResponse> uploadBytes(String path, List<int> bytes, String fileName,
+      {String fileKey = 'file',
+      void Function(int sent, int total)? onSendProgress}) async {
     try {
       final uploadType = _extractUploadType(path);
       final fileExt = fileName.contains('.') ? fileName.split('.').last : '';
-      final presignResp = await _getCosPresignedUrlFromName(fileName: fileName, fileExt: fileExt, type: uploadType);
+      debugPrint(
+        '[Upload] uploadBytes start path=$path type=$uploadType '
+        'filename=$fileName ext=$fileExt bytes=${bytes.length} '
+        'contentType=${_getContentType(fileName)}',
+      );
+      final presignResp = await _getCosPresignedUrlFromName(
+          fileName: fileName, fileExt: fileExt, type: uploadType);
       return _handlePresignAndUpload(
         path: path,
         presignResp: presignResp,
@@ -560,12 +780,21 @@ class ApiClient {
     required Future<ApiResponse<T>> Function(String presignedUrl) cosUpload,
   }) async {
     if (!presignResp.success || presignResp.data == null) {
-      return ApiResponse(success: false, message: presignResp.message ?? '获取上传链接失败');
+      return ApiResponse(
+        success: false,
+        message: presignResp.message ?? '获取上传链接失败',
+        statusCode: presignResp.statusCode,
+        errorCode: presignResp.errorCode,
+        isRetryable: presignResp.isRetryable,
+      );
     }
 
-    final presignedUrl = presignResp.data!['upload_url'] as String? ?? presignResp.data!['presigned_url'] as String? ?? presignResp.data!['url'] as String? ?? '';
+    final presignedUrl = presignResp.data!['upload_url'] as String? ??
+        presignResp.data!['presigned_url'] as String? ??
+        presignResp.data!['url'] as String? ??
+        '';
     if (presignedUrl.isEmpty) {
-      debugPrint('_handlePresignAndUpload: presigned URL is empty. presignResp.data=${presignResp.data}');
+      debugPrint('_handlePresignAndUpload: presigned URL is empty');
       return ApiResponse(success: false, message: '上传服务暂不可用，请检查 COS 配置或稍后重试');
     }
 
@@ -579,30 +808,62 @@ class ApiClient {
 
       if (cosKey.isNotEmpty) {
         try {
-          final confirmResp = await post('/upload/confirm', data: {
-            'cos_key': cosKey,
-            'final_filename': fileName,
-          });
-          if (confirmResp.success && confirmResp.data != null && confirmResp.data['url'] != null) {
-            publicUrl = confirmResp.data['url'] as String;
+          final confirmFileName = _uploadFinalFileName(cosKey, fileName);
+          debugPrint(
+            '[Upload] confirm start bodyKeys=cos_key,final_filename '
+            'cosKey=$cosKey finalFilename=$confirmFileName originalFilename=$fileName',
+          );
+          final confirmResp = await post<Map<String, dynamic>>(
+            '/upload/confirm',
+            data: {
+              'cos_key': cosKey,
+              'final_filename': confirmFileName,
+            },
+          );
+          if (!confirmResp.success) {
+            debugPrint(
+              '[Upload] confirm failed status=${confirmResp.statusCode} '
+              'code=${confirmResp.errorCode ?? "none"} '
+              'message=${confirmResp.message ?? "none"}',
+            );
+            return _wrapUploadConfirmFailure(
+              confirmResp,
+              fallback: '上传确认失败，请重试',
+            );
+          }
+          debugPrint('[Upload] confirm ok status=${confirmResp.statusCode}');
+          if (confirmResp.data != null && confirmResp.data!['url'] != null) {
+            publicUrl = confirmResp.data!['url'] as String;
           }
         } catch (e) {
-          debugPrint('Upload confirm failed: $e');
+          debugPrint('Upload confirm failed errorType=${e.runtimeType}');
+          return ApiResponse(success: false, message: '上传确认失败，请重试');
         }
       }
 
       // 兜底：如果 public_url 仍为空，使用预签名 URL 的基础地址（去掉查询参数）
       if (publicUrl.isEmpty) {
         publicUrl = presignedUrl.split('?').first;
-        debugPrint('_handlePresignAndUpload: public_url is empty, fallback to presigned base URL: $publicUrl');
+        debugPrint(
+            '_handlePresignAndUpload: public_url is empty, using presigned base URL');
       }
 
       // 头像/封面需要调用专属 confirm 端点更新数据库
       if (uploadType == 'avatar') {
         try {
-          await post('/upload/avatar/confirm', data: {'url': publicUrl});
+          final avatarConfirmResp = await post(
+            '/upload/avatar/confirm',
+            data: {'url': publicUrl},
+          );
+          if (!avatarConfirmResp.success) {
+            return _wrapUploadConfirmFailure(
+              avatarConfirmResp,
+              fallback: '头像上传确认失败，请重试',
+            );
+          }
         } catch (e) {
-          debugPrint('Avatar confirm failed: $e');
+          debugPrint('Avatar confirm failed errorType=${e.runtimeType}');
+          return ApiResponse(success: false, message: '头像上传确认失败，请重试');
         }
         return ApiResponse(
           success: true,
@@ -611,9 +872,19 @@ class ApiClient {
         );
       } else if (uploadType == 'cover') {
         try {
-          await post('/upload/cover/confirm', data: {'url': publicUrl});
+          final coverConfirmResp = await post(
+            '/upload/cover/confirm',
+            data: {'url': publicUrl},
+          );
+          if (!coverConfirmResp.success) {
+            return _wrapUploadConfirmFailure(
+              coverConfirmResp,
+              fallback: '背景图上传确认失败，请重试',
+            );
+          }
         } catch (e) {
-          debugPrint('Cover confirm failed: $e');
+          debugPrint('Cover confirm failed errorType=${e.runtimeType}');
+          return ApiResponse(success: false, message: '背景图上传确认失败，请重试');
         }
         return ApiResponse(
           success: true,
@@ -629,7 +900,43 @@ class ApiClient {
       );
     }
 
+    debugPrint(
+      '[Upload] cos upload failed status=${cosResp.statusCode} '
+      'code=${cosResp.errorCode ?? "none"} message=${cosResp.message ?? "none"}',
+    );
     return cosResp;
+  }
+
+  ApiResponse<T> _wrapUploadConfirmFailure<T>(
+    ApiResponse response, {
+    required String fallback,
+  }) {
+    return ApiResponse<T>(
+      success: false,
+      message: apiFailureMessage(response, fallback: fallback),
+      statusCode: response.statusCode,
+      errorCode: response.errorCode,
+      isRetryable: response.isRetryable,
+    );
+  }
+
+  String _uploadFinalFileName(String cosKey, String fileName) {
+    final trimmed = fileName.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+    final normalized = cosKey.replaceAll('\\', '/');
+    final slashIndex = normalized.lastIndexOf('/');
+    return slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
+  }
+
+  bool _presignHasUploadUrl(Map<String, dynamic> data) {
+    return _safeMapString(data, 'upload_url').isNotEmpty ||
+        _safeMapString(data, 'presigned_url').isNotEmpty ||
+        _safeMapString(data, 'url').isNotEmpty;
+  }
+
+  String _safeMapString(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    return value == null ? '' : value.toString();
   }
 
   /// 从路径中提取上传类型（与后端 upload_type: avatar/cover/post/comic 对齐）
@@ -644,7 +951,8 @@ class ApiClient {
 
   /// 根据文件名获取 Content-Type
   String _getContentType(String fileName) {
-    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    final ext =
+        fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
     switch (ext) {
       case 'jpg':
       case 'jpeg':
@@ -672,13 +980,26 @@ class ApiClient {
     }
   }
 
-  ApiResponse<T> _handleError<T>(DioException e) {
-    final data = e.response?.data;
+  static ApiResponse<T> parseErrorResponse<T>({
+    required int? statusCode,
+    dynamic data,
+    String? fallbackMessage,
+  }) {
     String? msg;
+    String? code;
+    bool? retryable;
+
     if (data is Map) {
       // FastAPI returns errors with 'detail' field
       final detail = data['detail'];
-      if (detail is String) {
+      if (detail is Map) {
+        code = detail['code']?.toString();
+        msg = detail['message']?.toString();
+        final detailRetryable = detail['retryable'];
+        if (detailRetryable is bool) {
+          retryable = detailRetryable;
+        }
+      } else if (detail is String) {
         msg = detail;
       } else if (detail is List && detail.isNotEmpty) {
         // Pydantic validation errors: [{loc, msg, type}, ...]
@@ -691,7 +1012,44 @@ class ApiClient {
       }
       msg ??= data['message']?.toString();
     }
-    msg ??= e.message ?? 'Network error';
-    return ApiResponse(success: false, message: msg, statusCode: e.response?.statusCode);
+
+    switch (code) {
+      case ApiErrorCodes.contentRejected:
+        retryable = false;
+        msg = msg?.trim().isNotEmpty == true ? msg : '内容未通过审核';
+        break;
+      case ApiErrorCodes.moderationUnavailable:
+        retryable = true;
+        msg = msg?.trim().isNotEmpty == true ? msg : '内容审核服务暂不可用，请稍后重试';
+        break;
+      case ApiErrorCodes.accountDisabled:
+        retryable = false;
+        msg = msg?.trim().isNotEmpty == true ? msg : '账号已停用';
+        break;
+      default:
+        retryable ??= statusCode == null || statusCode >= 500;
+    }
+
+    if (msg == null || msg.trim().isEmpty) {
+      msg = fallbackMessage;
+    }
+    if (msg == null || msg.trim().isEmpty) {
+      msg = 'Network error';
+    }
+    return ApiResponse<T>(
+      success: false,
+      message: msg,
+      statusCode: statusCode,
+      errorCode: code,
+      isRetryable: retryable,
+    );
+  }
+
+  ApiResponse<T> _handleError<T>(DioException e) {
+    return parseErrorResponse<T>(
+      statusCode: e.response?.statusCode,
+      data: e.response?.data,
+      fallbackMessage: e.message,
+    );
   }
 }

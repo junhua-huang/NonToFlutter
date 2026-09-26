@@ -47,20 +47,44 @@ void main() {
           contains('ImageUtils.resolveUrl(conversation.communityAvatar)'));
     });
 
-    test('messages tab opens community sessions in community chat screen', () {
-      final source = read('lib/screens/messages/messages_tab.dart');
+    test('messages and legacy conversations tabs open community sessions in community chat screen', () {
+      final messagesSource = read('lib/screens/messages/messages_tab.dart');
+      final legacySource = read('lib/screens/chat/conversations_tab.dart');
 
       expect(
-          source,
+          messagesSource,
           contains(
               "import 'package:nonto/screens/community/community_chat_screen.dart';"));
-      expect(source,
+      expect(messagesSource,
           contains('if (conv.isCommunity && conv.communityId != null)'));
-      expect(source, contains('CommunityChatScreen('));
-      expect(source, contains('communityId: conv.communityId!'));
-      expect(source, contains('communityName: conv.communityName'));
-      expect(source, contains('communityAvatar: conv.communityAvatar'));
-      expect(source, contains('ChatRoomScreen(conversation: conv)'));
+      expect(messagesSource, contains('CommunityChatScreen('));
+      expect(messagesSource, contains('communityId: conv.communityId!'));
+      expect(messagesSource, contains('communityName: conv.communityName'));
+      expect(messagesSource, contains('communityAvatar: conv.communityAvatar'));
+      expect(messagesSource, contains('ChatRoomScreen(conversation: conv)'));
+
+      expect(
+          legacySource,
+          contains(
+              "import 'package:nonto/screens/community/community_chat_screen.dart';"));
+      expect(legacySource,
+          contains('if (conv.isCommunity && conv.communityId != null)'));
+      expect(legacySource, contains('CommunityChatScreen('));
+      expect(legacySource, contains('communityId: conv.communityId!'));
+    });
+
+    test('direct chat entry points preserve top-level other user from create response', () {
+      final profileSource = read('lib/screens/profile/user_profile_screen.dart');
+      final notificationSource =
+          read('lib/screens/notifications/notifications_tab.dart');
+
+      expect(profileSource, contains("data['other_user']"));
+      expect(profileSource, contains("convJson['other_user'] = data['other_user']"));
+      expect(notificationSource, contains("data['other_user']"));
+      expect(
+        notificationSource,
+        contains("convJson['other_user'] = data['other_user']"),
+      );
     });
 
     test('community chat app bar shows avatar online count and detail entry',

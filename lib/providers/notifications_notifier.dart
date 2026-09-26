@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:nonto/models/notification.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/notification_service.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
@@ -52,11 +53,16 @@ class NotificationsState {
 class NotificationsNotifier extends StateNotifier<NotificationsState> {
   final NotificationService _service = NotificationService();
   final WebSocketService _ws = WebSocketService();
+  final Future<ApiResponse> Function() _getUnreadCount;
   StreamSubscription? _wsSub;
   StreamSubscription? _dataSub;
   bool _loadInProgress = false;
+  Future<void>? _unreadCountRefreshInFlight;
 
-  NotificationsNotifier() : super(const NotificationsState()) {
+  NotificationsNotifier({Future<ApiResponse> Function()? getUnreadCount})
+      : _getUnreadCount =
+            getUnreadCount ?? NotificationService().getUnreadCount,
+        super(const NotificationsState()) {
     _wsSub = _ws.notificationStream.listen(_onWsNotification);
     _loadCached();
     _dataSub = DataLayer().changeStream.listen((key) {
@@ -79,6 +85,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       if (result.data is List) {
         final list = (result.data as List<dynamic>)
             .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+            .where((n) => n.notificationType != 'message')
             .toList();
         state = state.copyWith(
           notifications: list,
@@ -125,6 +132,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
         rawNotif is Map ? Map<String, dynamic>.from(rawNotif) : null;
     if (event == 'new_notification' && notification != null) {
       final appNotif = AppNotification.fromJson(notification);
+      if (appNotif.notificationType == 'message') return;
       final val = data['unread_count'];
       final unread = val is int
           ? val
@@ -145,6 +153,41 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
           ttlSeconds: 600,
         );
       } catch (_) {}
+    }
+  }
+
+  Future<void> refreshUnreadCount() {
+    final inFlight = _unreadCountRefreshInFlight;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> refresh;
+    refresh = _performUnreadCountRefresh().whenComplete(() {
+      if (identical(_unreadCountRefreshInFlight, refresh)) {
+        _unreadCountRefreshInFlight = null;
+      }
+    });
+    _unreadCountRefreshInFlight = refresh;
+    return refresh;
+  }
+
+  Future<void> _performUnreadCountRefresh() async {
+    try {
+      final response = await _getUnreadCount();
+      if (!response.success || response.data == null) return;
+
+      final data = response.data is String
+          ? jsonDecode(response.data as String)
+          : response.data;
+      if (data is! Map) return;
+
+      final raw = data['unread_count'] ?? data['count'];
+      final unreadCount =
+          raw is int ? raw : int.tryParse(raw?.toString() ?? '');
+      if (unreadCount != null && mounted) {
+        state = state.copyWith(unreadCount: unreadCount);
+      }
+    } catch (_) {
+      // Keep the cached unread count when the request or payload is invalid.
     }
   }
 
@@ -195,11 +238,17 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       if (result.data != null) {
         final list = (result.data as List<dynamic>)
             .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+            .where((n) => n.notificationType != 'message')
             .toList();
         final hasMore = serverHasMore ?? list.length >= 20;
-        final unreadCount = serverUnread ?? state.unreadCount;
+        final mergedNotifications =
+            (refresh ? list : [...state.notifications, ...list])
+                .where((n) => n.notificationType != 'message')
+                .toList();
+        final localUnread = mergedNotifications.where((n) => !n.isRead).length;
+        final unreadCount = serverUnread ?? localUnread;
         state = state.copyWith(
-          notifications: refresh ? list : [...state.notifications, ...list],
+          notifications: mergedNotifications,
           page: state.page + 1,
           hasMore: hasMore,
           unreadCount: unreadCount,

@@ -80,7 +80,8 @@ class RequestManager {
 
     // 并发限制：如果当前并发已满，入队等待（按优先级）
     if (_running >= maxConcurrent) {
-      debugPrint('[RequestManager] queued: $key (priority=$priority, running=$_running/$maxConcurrent)');
+      debugPrint(
+          '[RequestManager] queued: $key (priority=$priority, running=$_running/$maxConcurrent)');
       final completer = Completer<T>();
       _insertQueued(_QueuedItem<T>(
         key: key,
@@ -136,6 +137,26 @@ class RequestManager {
     });
   }
 
+  /// Invalidate one deduplication/TTL cache key.
+  ///
+  /// This uses the same cancellation boundary as retries: completed results are
+  /// evicted, while an older queued or in-flight read is prevented from
+  /// publishing a result after a successful mutation.
+  void invalidate(String key) => cancel(key);
+
+  /// Invalidate only keys selected by [matches].
+  ///
+  /// A snapshot is used because [cancel] mutates both managed collections.
+  void invalidateWhere(bool Function(String key) matches) {
+    final keys = <String>{
+      ..._inFlight.keys.where(matches),
+      ..._waitQueue.map((item) => item.key).where(matches),
+    };
+    for (final key in keys) {
+      cancel(key);
+    }
+  }
+
   /// 限并发（不去重）。
   ///
   /// 每个调用都会生成唯一 key，不会合并相同请求。
@@ -161,7 +182,8 @@ class RequestManager {
   /// 注意：执行中的请求底层 Future 无法真正中止，但其 completer
   /// 会以 [RequestCancelledException] 完成，调用方收到取消异常后应放弃结果。
   void clearAll() {
-    debugPrint('[RequestManager] clearAll: in-flight=${_inFlight.length}, queued=${_waitQueue.length}');
+    debugPrint(
+        '[RequestManager] clearAll: in-flight=${_inFlight.length}, queued=${_waitQueue.length}');
 
     // 取消执行中的请求（不再回填结果给调用方）
     for (final entry in _inFlight.values.toList()) {
@@ -198,9 +220,11 @@ class RequestManager {
   }
 
   /// 无去重、仅限并发的执行
-  Future<T> _executeNoDedup<T>(String key, Future<T> Function() task, {Duration? timeout}) {
+  Future<T> _executeNoDedup<T>(String key, Future<T> Function() task,
+      {Duration? timeout}) {
     if (_running >= maxConcurrent) {
-      debugPrint('[RequestManager] throttled: $key (running=$_running/$maxConcurrent)');
+      debugPrint(
+          '[RequestManager] throttled: $key (running=$_running/$maxConcurrent)');
       final completer = Completer<T>();
       _insertQueued(_QueuedItem<T>(
         key: key,
@@ -216,7 +240,8 @@ class RequestManager {
   }
 
   /// 立即执行一个任务
-  Future<T> _run<T>(String key, Future<T> Function() task, {Duration? timeout}) {
+  Future<T> _run<T>(String key, Future<T> Function() task,
+      {Duration? timeout}) {
     _running++;
     final completer = Completer<T>();
     final entry = _Entry<T>(
@@ -226,7 +251,8 @@ class RequestManager {
     );
     _inFlight[key] = entry;
 
-    debugPrint('[RequestManager] executing: $key (running=$_running/$maxConcurrent)');
+    debugPrint(
+        '[RequestManager] executing: $key (running=$_running/$maxConcurrent)');
 
     if (timeout != null) {
       _scheduleTimeout(key, timeout);
@@ -261,11 +287,14 @@ class RequestManager {
 
     _running--;
     entry.isDone = true;
-    debugPrint('[RequestManager] completed: $key (running=$_running/$maxConcurrent, queue=${_waitQueue.length})');
+    debugPrint(
+        '[RequestManager] completed: $key (running=$_running/$maxConcurrent, queue=${_waitQueue.length})');
 
-    // 延迟清理：TTL 过期后从 _inFlight 移除
+    // 延迟清理：只移除当前 entry，避免失效后旧 timer 清掉同 key 的新请求。
     Future.delayed(ttl, () {
-      _inFlight.remove(key);
+      if (identical(_inFlight[key], entry)) {
+        _inFlight.remove(key);
+      }
     });
 
     // 处理等待队列中的下一个请求
@@ -286,12 +315,15 @@ class RequestManager {
 
       // 执行排队请求
       _run<dynamic>(queued.key, queued.task).then(
-        (v) { if (!queued.completer.isCompleted) queued.completer.complete(v); },
+        (v) {
+          if (!queued.completer.isCompleted) queued.completer.complete(v);
+        },
         onError: (e) {
           if (!queued.completer.isCompleted) {
             queued.completer.completeError(e);
           } else {
-            debugPrint('[RequestManager] queued completer already completed (likely cancelled), error swallowed: $e');
+            debugPrint(
+                '[RequestManager] queued completer already completed (likely cancelled), error swallowed: $e');
           }
         },
       );
@@ -304,8 +336,12 @@ class RequestManager {
     if (existing == null || waiter.isCompleted) return;
     debugPrint('[RequestManager] chain queued to in-flight: $key');
     existing.completer.future.then(
-      (v) { if (!waiter.isCompleted) waiter.complete(v); },
-      onError: (e) { if (!waiter.isCompleted) waiter.completeError(e); },
+      (v) {
+        if (!waiter.isCompleted) waiter.complete(v);
+      },
+      onError: (e) {
+        if (!waiter.isCompleted) waiter.completeError(e);
+      },
     );
   }
 
@@ -320,7 +356,8 @@ class RequestManager {
       // 只在请求仍未完成时才取消（避免已完成请求被误取消）
       final entry = _inFlight[key];
       if (entry != null && !entry.completer.isCompleted) {
-        debugPrint('[RequestManager] timeout: $key (${timeout.inMilliseconds}ms)');
+        debugPrint(
+            '[RequestManager] timeout: $key (${timeout.inMilliseconds}ms)');
         cancel(key);
       }
     });

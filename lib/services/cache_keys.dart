@@ -11,31 +11,45 @@ class CacheKeys {
 
   // ── 会话 ──
   static const String convFullList = 'conv:full:list';
+
   /// 用于 invalidate 的泛匹配模式
   static const String convPattern = 'conv:*:list';
 
   // ── 聊天消息 ──
   /// 预热缓存（page=1，AppWarmup 写入）
   static String msgWarmup(int convId) => 'msg:$convId:1';
+
   /// 会话最近消息（运行时标准 key）
   static String msgRecent(int convId) => 'msg:$convId:recent';
+
   /// 用户维度最近消息（带 userId 前缀）
-  static String msgRecentByUser(int convId, String userId) => 'msg:$userId:$convId:recent';
+  static String msgRecentByUser(int convId, String userId) =>
+      'msg:$userId:$convId:recent';
+
   /// 社群群聊最近消息（进入前尚未知 backing conversationId 时使用）
-  static String communityChatRecent(int communityId) => 'community:$communityId:chat:recent';
+  static String communityChatRecent(int communityId) =>
+      'community:$communityId:chat:recent';
+
   /// 社群群聊 backing conversation 元信息
-  static String communityChatConversation(int communityId) => 'community:$communityId:conversation';
+  static String communityChatConversation(int communityId) =>
+      'community:$communityId:conversation';
 
   // ── Feed ──
   static const String feedPosts = 'feed:1:posts';
+
+  /// 首页不同轨道的首屏帖子缓存 key。
+  static String feedTrackPosts(String trackKey) => 'feed:$trackKey:posts';
+
   /// 分页 Feed key
   static String feedPage(int page) => 'feed:$page:posts';
 
   // ── 用户 ──
   static String userProfile(dynamic userId) => 'user:$userId:profile';
   static String userPosts(dynamic userId) => 'user:$userId:posts';
-  static String userPostsPage(dynamic userId, int page) => 'user:$userId:posts:$page';
+  static String userPostsPage(dynamic userId, int page) =>
+      'user:$userId:posts:$page';
   static String userLiked(dynamic userId) => 'user:$userId:liked:1';
+  static String userLikeCount(dynamic userId) => 'user:$userId:likes';
 
   // ── 通知 ──
   static const String notifList = 'notif:list:1';
@@ -56,6 +70,10 @@ class CacheKeys {
   // ── 好友 ──
   /// 好友列表缓存，按最后联系时间排序
   static const String friendList = 'friend:list';
+
+  // ── 社群 ──
+  /// 我的社群列表缓存，用于分享面板等快速选择场景
+  static const String communityMyList = 'community:my:list';
 
   // ── 漫展 ──
   static String comicEvents() => 'comic:events';

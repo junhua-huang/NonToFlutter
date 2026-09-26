@@ -11,7 +11,8 @@ class AuthService {
     return _api.post('/auth/register', data: data);
   }
 
-  Future<ApiResponse> login(String email, String password, {String? emailCode}) {
+  Future<ApiResponse> login(String email, String password,
+      {String? emailCode}) {
     final body = <String, dynamic>{'email': email, 'password': password};
     // 仅在连续登录失败 ≥ 5 次时后端要求验证码；前端正常登录不带 email_code
     if (emailCode != null && emailCode.isNotEmpty) {
@@ -22,7 +23,8 @@ class AuthService {
 
   /// 发送邮箱验证码
   /// purpose: register / reset_password / login
-  Future<ApiResponse> sendOtp({required String email, required String purpose}) {
+  Future<ApiResponse> sendOtp(
+      {required String email, required String purpose}) {
     return _api.post('/auth/send-otp', data: {
       'email': email,
       'purpose': purpose,
@@ -64,8 +66,12 @@ class AuthService {
     });
   }
 
-  Future<ApiResponse> getUser(int userId) {
-    return _api.getDeduped('/auth/users/$userId');
+  Future<ApiResponse> getUser(int userId, {bool forceRefresh = false}) {
+    final path = '/auth/users/$userId';
+    if (forceRefresh) {
+      _api.cancelGet(path);
+    }
+    return _api.getDeduped(path, bypassManager: forceRefresh);
   }
 
   /// Permanently delete the authenticated user's account (GDPR "Right to be Forgotten").
@@ -97,6 +103,11 @@ class AuthService {
   Future<ApiResponse> getPrivacy() => _api.getDeduped('/auth/privacy');
 
   /// Update privacy settings
-  Future<ApiResponse> updatePrivacy(Map<String, dynamic> data) =>
-      _api.put('/auth/privacy', data: data);
+  Future<ApiResponse> updatePrivacy(Map<String, dynamic> data) async {
+    final response = await _api.put('/auth/privacy', data: data);
+    if (response.success) {
+      _api.cancelGet('/auth/privacy');
+    }
+    return response;
+  }
 }

@@ -7,9 +7,11 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/routes/app_routes.dart';
 import 'package:nonto/screens/friends/friends_screen.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/auth_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/friend_service.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/upload_service.dart';
@@ -19,9 +21,11 @@ import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/services/websocket_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/post_card.dart';
+import 'package:nonto/widgets/profile_identity_section.dart';
 import 'package:flutter/material.dart';
 import 'package:nonto/utils/bar_scroll_handler.dart';
 import 'package:image_cropper_plus/image_cropper_plus.dart';
@@ -55,6 +59,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
   List<Post> _likedPosts = [];
   String? _likesError;
   bool _isRefreshing = false;
+  final Set<int> _likingPostIds = {};
 
   late final TabController _tabController;
   final ImagePicker _picker = ImagePicker();
@@ -371,7 +376,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
         );
       } catch (e) {
         // Edge/Web 兼容：回退到不传 imageQuality
-        picked = await _picker.pickImage(source: ImageSource.gallery);
+        try {
+          picked = await _picker.pickImage(source: ImageSource.gallery);
+        } catch (fallbackError) {
+          if (mounted) {
+            showPickerErrorSnackBar(context, fallbackError, target: '相册');
+          }
+          return;
+        }
       }
       if (picked == null) return;
 
@@ -425,7 +437,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('头像上传失败: ${resp.message}'),
+                content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
                 backgroundColor: Colors.red),
           );
         }
@@ -434,7 +446,8 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
       debugPrint('Change avatar error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('头像更新失败: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('操作失败，请重试'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -462,7 +475,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
           imageQuality: 85,
         );
       } catch (e) {
-        picked = await _picker.pickImage(source: ImageSource.gallery);
+        try {
+          picked = await _picker.pickImage(source: ImageSource.gallery);
+        } catch (fallbackError) {
+          if (mounted) {
+            showPickerErrorSnackBar(context, fallbackError, target: '相册');
+          }
+          return;
+        }
       }
       if (picked == null) return;
       final pickedFile = picked;
@@ -530,7 +550,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('背景图上传失败: ${resp.message}'),
+                content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
                 backgroundColor: Colors.red),
           );
         }
@@ -539,7 +559,8 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
       debugPrint('Change cover error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('背景图更新失败: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('操作失败，请重试'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -551,6 +572,24 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
         });
       }
     }
+  }
+
+  double _profileHeaderExpandedHeight(User user) {
+    var height = 180.0 // cover
+        +
+        56.0 // avatar overlap spacer
+        +
+        88.0 // name, username, identity baseline
+        +
+        34.0 // join date
+        +
+        48.0 // stats
+        +
+        48.0; // tab bar
+    if (profileEmailFor(user, isOwnProfile: true) != null) height += 24;
+    if (user.verifiedRoleLabels.isNotEmpty) height += 12;
+    if (user.bio != null && user.bio!.isNotEmpty) height += 44;
+    return height.clamp(460.0, 560.0).toDouble();
   }
 
   /// 将裁剪后的字节数组保存为临时文件，返回文件路径
@@ -584,7 +623,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
       child: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 420,
+            expandedHeight: _profileHeaderExpandedHeight(user),
             floating: false,
             pinned: true,
             automaticallyImplyLeading: false,
@@ -702,6 +741,24 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
                                 style: TextStyle(
                                     fontSize: 15,
                                     color: AppColors.textSecondary),
+                              ),
+                              if (profileEmailFor(user, isOwnProfile: true) !=
+                                  null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  profileEmailFor(user, isOwnProfile: true)!,
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textSecondary),
+                                ),
+                              ],
+                              ProfileIdentitySection(
+                                labels: user.verifiedRoleLabels,
+                                isOwnProfile: true,
+                                onManage: () => Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.identityCenter,
+                                ),
                               ),
                             ],
                           ),
@@ -1145,35 +1202,93 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
   }
 
   Future<void> _togglePostLike(Post post) async {
+    if (_likingPostIds.contains(post.id)) return;
+    _likingPostIds.add(post.id);
     final wasLiked = post.isLiked ?? false;
-    final originalCount = post.likeCount;
+    final likeDelta = wasLiked ? -1 : 1;
+    final optimisticCount = post.likeCount + likeDelta;
+    final nextCount = optimisticCount < 0 ? 0 : optimisticCount;
 
     // Optimistic update: update UI immediately
     setState(() {
-      _updatePostLike(
-          post.id, !wasLiked, wasLiked ? originalCount - 1 : originalCount + 1);
+      _applyPostLikeDelta(post.id, !wasLiked, likeDelta);
     });
     // L2 + L1 同步写入
     _syncPostsToCache();
 
     try {
-      if (wasLiked) {
-        await PostService().unlikePost(post.id);
-      } else {
-        await PostService().likePost(post.id);
+      final resp = wasLiked
+          ? await PostService().unlikePost(post.id)
+          : await PostService().likePost(post.id);
+      if (!resp.success) {
+        if (!mounted) return;
+        setState(() {
+          _applyPostLikeDelta(
+            post.id,
+            wasLiked,
+            -likeDelta,
+            onlyIfLiked: !wasLiked,
+          );
+        });
+        _syncPostsToCache();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
       }
-      PostInteractionNotifier().notifyLikeChanged(
-          post.id, !wasLiked, wasLiked ? originalCount - 1 : originalCount + 1);
-    } catch (e) {
+      PostInteractionNotifier()
+          .notifyLikeChanged(post.id, !wasLiked, nextCount);
+    } catch (_) {
       if (!mounted) return;
       // Rollback on failure
       setState(() {
-        _updatePostLike(post.id, wasLiked, originalCount);
+        _applyPostLikeDelta(
+          post.id,
+          wasLiked,
+          -likeDelta,
+          onlyIfLiked: !wasLiked,
+        );
       });
       _syncPostsToCache();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
       );
+    } finally {
+      _likingPostIds.remove(post.id);
+    }
+  }
+
+  void _applyPostLikeDelta(
+    int postId,
+    bool isLiked,
+    int delta, {
+    bool? onlyIfLiked,
+  }) {
+    final idx = _userPosts.indexWhere((p) => p.id == postId);
+    if (idx != -1) {
+      final current = _userPosts[idx];
+      if (onlyIfLiked == null || (current.isLiked ?? false) == onlyIfLiked) {
+        final count = current.likeCount + delta;
+        _userPosts[idx] = current.copyWith(
+          isLiked: isLiked,
+          likeCount: count < 0 ? 0 : count,
+        );
+      }
+    }
+    final likedIdx = _likedPosts.indexWhere((p) => p.id == postId);
+    if (likedIdx != -1) {
+      final current = _likedPosts[likedIdx];
+      if (onlyIfLiked == null || (current.isLiked ?? false) == onlyIfLiked) {
+        final count = current.likeCount + delta;
+        _likedPosts[likedIdx] = current.copyWith(
+          isLiked: isLiked,
+          likeCount: count < 0 ? 0 : count,
+        );
+      }
     }
   }
 
@@ -1182,6 +1297,11 @@ class _ProfileTabState extends ConsumerState<ProfileTab>
     if (idx != -1) {
       _userPosts[idx] =
           _userPosts[idx].copyWith(isLiked: isLiked, likeCount: likeCount);
+    }
+    final likedIdx = _likedPosts.indexWhere((p) => p.id == postId);
+    if (likedIdx != -1) {
+      _likedPosts[likedIdx] = _likedPosts[likedIdx]
+          .copyWith(isLiked: isLiked, likeCount: likeCount);
     }
   }
 

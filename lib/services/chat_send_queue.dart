@@ -38,11 +38,17 @@ class ChatSendQueue {
   void Function(int optimisticMsgId, Message serverMsg)? onAck;
 
   /// 业务回调：消息最终发送失败
-  void Function(int optimisticMsgId, String reason)? onFailed;
+  void Function(int optimisticMsgId, ChatSendFailure failure)? onFailed;
 
   /// 缓冲早到的协议 ACK — 当 handleProtocolAck 在 _processNext 设置
   /// msg.clientMsgId 之前被调用时，暂存于此，待 clientMsgId 设置后消费。
   final Map<String, int> _earlyAcks = {};
+
+  /// 缓冲早到的失败 ACK — 终态失败优先于同 clientMsgId 的成功 ACK。
+  final Map<String, ChatSendFailure> _earlyFailures = {};
+
+  /// 已终态失败的 clientMsgId，用于吞掉后续迟到成功 ACK。
+  final Set<String> _failedClientMsgIds = {};
 
   // ── 配置 ──
 
@@ -119,6 +125,8 @@ class ChatSendQueue {
   /// 返回 true 表示匹配到了队列中的消息。
   /// 如果 clientMsgId 尚未设置（ACK 早于 _processNext 赋值），暂存到 _earlyAcks。
   bool handleProtocolAck(String clientMsgId, int messageId) {
+    if (_failedClientMsgIds.contains(clientMsgId)) return true;
+
     if (_current != null && _current!.message.clientMsgId == clientMsgId) {
       final msg = _current!.message;
       final serverMsg = msg.copyWith(
@@ -160,6 +168,19 @@ class ChatSendQueue {
     return false;
   }
 
+  /// 检查 _earlyFailures 中是否有匹配当前消息的早到失败 ACK，如有则消费
+  void _consumeEarlyFailure(_SendEntry entry) {
+    final clientMsgId = entry.message.clientMsgId;
+    if (clientMsgId == null) return;
+    final failure = _earlyFailures.remove(clientMsgId);
+    if (failure != null) {
+      _earlyAcks.remove(clientMsgId);
+      debugPrint(
+          '[SendQ] consuming early failure clientMsgId=$clientMsgId code=${failure.code}');
+      _failCurrent(failure);
+    }
+  }
+
   /// 检查 _earlyAcks 中是否有匹配当前消息的早到 ACK，如有则消费
   void _consumeEarlyAck(_SendEntry entry) {
     final clientMsgId = entry.message.clientMsgId;
@@ -177,39 +198,59 @@ class ChatSendQueue {
     }
   }
 
-  /// 收到服务端 error 帧 → 匹配 clientMsgId 并立即标记失败
-  /// 返回 true 表示匹配到了队列中的消息
-  bool handleSendError(String clientMsgId, String error) {
+  Message _failedMessage(Message msg, ChatSendFailure failure) {
+    if (failure.clientMsgId.isNotEmpty) {
+      _failedClientMsgIds.add(failure.clientMsgId);
+      msg.clientMsgId = failure.clientMsgId;
+    }
+    msg.status = 'failed';
+    msg.failureCode = failure.code;
+    msg.failureMessage = failure.message;
+    msg.retryable = failure.retryable;
+    return msg;
+  }
+
+  /// 收到服务端失败 ACK / error 帧 → 匹配 clientMsgId 并立即标记失败
+  /// 返回 true 表示匹配到了队列中的消息或已为当前消息缓冲。
+  bool handleSendFailure(ChatSendFailure failure) {
+    final clientMsgId = failure.clientMsgId;
     if (_current != null && _current!.message.clientMsgId == clientMsgId) {
       debugPrint(
-          '[SendQ] server error for current msgId=${_current!.message.id}: $error');
-      _failCurrent(error);
+          '[SendQ] failed ACK for current msgId=${_current!.message.id} code=${failure.code}');
+      _failCurrent(failure);
       return true;
     }
 
     for (final entry in _waiting) {
       if (entry.message.clientMsgId == clientMsgId) {
         debugPrint(
-            '[SendQ] server error for waiting msgId=${entry.message.id}: $error');
+            '[SendQ] failed ACK for waiting msgId=${entry.message.id} code=${failure.code}');
         _waiting.remove(entry);
+        entry.message = _failedMessage(entry.message, failure);
         final msg = entry.message;
-        msg.status = 'failed';
         DataLayer().persistMessage(msg).catchError((_) {});
-        onFailed?.call(msg.id, '发送失败：$error');
+        onFailed?.call(msg.id, failure);
+        _drain();
         return true;
       }
+    }
+
+    if (_current != null && _current!.message.clientMsgId == null) {
+      debugPrint('[SendQ] early failure buffered clientMsgId=$clientMsgId');
+      _earlyFailures[clientMsgId] = failure;
+      return true;
     }
     return false;
   }
 
   /// 将当前消息标记为失败并继续下一条
-  void _failCurrent(String reason) {
+  void _failCurrent(ChatSendFailure failure) {
     _ackTimer?.cancel();
     _ackTimer = null;
+    _current!.message = _failedMessage(_current!.message, failure);
     final msg = _current!.message;
-    msg.status = 'failed';
     DataLayer().persistMessage(msg).catchError((_) {});
-    onFailed?.call(msg.id, '发送失败：$reason');
+    onFailed?.call(msg.id, failure);
     _current = null;
     _draining = false; // 重置门闩，否则后续 _drain() 会被 if(_draining) 挡住
     _drain();
@@ -287,6 +328,7 @@ class ChatSendQueue {
               msg.content ?? '',
               messageType: msg.messageType.name,
               mediaUrl: msg.mediaUrl,
+              relatedId: msg.relatedId,
               quoteMessageId: msg.quoteMessageId,
               quotePreview: msg.quotePreview,
             )
@@ -303,6 +345,12 @@ class ChatSendQueue {
         await DataLayer().persistMessage(msg);
         onAck?.call(
             msg.id, msg.copyWith(clientMsgId: clientMsgId, status: 'sending'));
+
+        // 终态失败优先于同 clientMsgId 的成功 ACK
+        _consumeEarlyFailure(entry);
+        if (_current == null) {
+          return;
+        }
 
         // 检查是否有早到的 ACK 在 clientMsgId 设置前就已缓存
         _consumeEarlyAck(entry);
@@ -354,12 +402,18 @@ class ChatSendQueue {
       _processNext();
     } else {
       debugPrint('[SendQ] msgId=${entry.message.id} FAILED');
+      final failure = ChatSendFailure(
+        clientMsgId: entry.message.clientMsgId ?? '',
+        code: 'MAX_RETRIES_EXCEEDED',
+        message: '发送失败：已达最大重试次数',
+        retryable: true,
+      );
+      entry.message = _failedMessage(entry.message, failure);
       final msg = entry.message;
-      msg.status = 'failed';
       try {
         await DataLayer().persistMessage(msg);
       } catch (_) {}
-      onFailed?.call(msg.id, '发送失败：已达最大重试次数');
+      onFailed?.call(msg.id, failure);
       _current = null;
       _processNext();
     }
@@ -370,13 +424,16 @@ class ChatSendQueue {
     _ackTimer?.cancel();
     _ackTimer = null;
     _waiting.clear();
+    _earlyAcks.clear();
+    _earlyFailures.clear();
+    _failedClientMsgIds.clear();
     _current = null;
     _draining = false;
   }
 }
 
 class _SendEntry {
-  final Message message;
+  Message message;
   final DateTime enqueuedAt;
   int retries = 0;
 

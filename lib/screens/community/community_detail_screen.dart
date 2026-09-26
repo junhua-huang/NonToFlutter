@@ -9,6 +9,8 @@ import 'package:nonto/providers/community_notifier.dart';
 import 'package:nonto/screens/community/community_chat_screen.dart';
 import 'package:nonto/screens/community/community_manage_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/chat_prefetch_service.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/widgets/post_card.dart';
@@ -26,6 +28,8 @@ class CommunityDetailScreen extends ConsumerStatefulWidget {
 
 class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   StreamSubscription<PostLikeEvent>? _likeSub;
+  final Set<int> _likingPostIds = {};
+  bool _isMembershipChanging = false;
 
   @override
   void initState() {
@@ -150,30 +154,53 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   }
 
   Future<void> _togglePostLike(Post post) async {
+    if (_likingPostIds.contains(post.id)) return;
+    _likingPostIds.add(post.id);
     final wasLiked = post.isLiked == true;
-    final originalCount = post.likeCount;
-    final nextCount = wasLiked ? originalCount - 1 : originalCount + 1;
+    final likeDelta = wasLiked ? -1 : 1;
+    final optimisticCount = post.likeCount + likeDelta;
+    final nextCount = optimisticCount < 0 ? 0 : optimisticCount;
 
     ref
         .read(communityDetailProvider.notifier)
-        .updatePostLike(post.id, !wasLiked, nextCount);
+        .applyPostLikeDelta(post.id, !wasLiked, likeDelta);
 
     try {
-      if (wasLiked) {
-        await PostService().unlikePost(post.id);
-      } else {
-        await PostService().likePost(post.id);
+      final resp = wasLiked
+          ? await PostService().unlikePost(post.id)
+          : await PostService().likePost(post.id);
+      if (!resp.success) {
+        if (!mounted) return;
+        ref.read(communityDetailProvider.notifier).applyPostLikeDelta(
+              post.id,
+              wasLiked,
+              -likeDelta,
+              onlyIfLiked: !wasLiked,
+            );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
       }
       PostInteractionNotifier()
           .notifyLikeChanged(post.id, !wasLiked, nextCount);
     } catch (_) {
       if (!mounted) return;
-      ref
-          .read(communityDetailProvider.notifier)
-          .updatePostLike(post.id, wasLiked, originalCount);
+      ref.read(communityDetailProvider.notifier).applyPostLikeDelta(
+            post.id,
+            wasLiked,
+            -likeDelta,
+            onlyIfLiked: !wasLiked,
+          );
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
       );
+    } finally {
+      _likingPostIds.remove(post.id);
     }
   }
 
@@ -396,16 +423,21 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
         if (community.isMember)
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CommunityChatScreen(
-                    communityId: community.id,
-                    communityName: community.name,
-                    communityAvatar: community.avatarUrl,
+              onPressed: () {
+                unawaited(
+                  ChatPrefetchService().prefetchCommunityChat(community.id),
+                );
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CommunityChatScreen(
+                      communityId: community.id,
+                      communityName: community.name,
+                      communityAvatar: community.avatarUrl,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
               icon: const Icon(Icons.chat_bubble_outline, size: 18),
               label: const Text('群聊'),
             ),
@@ -428,14 +460,16 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
         else if (!community.isMember)
           Expanded(
             child: ElevatedButton(
-              onPressed: () => _handleJoin(community),
+              onPressed:
+                  _isMembershipChanging ? null : () => _handleJoin(community),
               child: const Text('加入社群'),
             ),
           )
         else
           Expanded(
             child: OutlinedButton(
-              onPressed: () => _handleLeave(community),
+              onPressed:
+                  _isMembershipChanging ? null : () => _handleLeave(community),
               child: const Text('已加入'),
             ),
           ),
@@ -496,13 +530,24 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   }
 
   void _handleJoin(Community community) async {
-    if (community.isPending) return;
+    if (community.isPending || _isMembershipChanging) return;
+    setState(() => _isMembershipChanging = true);
     final api = CommunityApiService();
     try {
       if (community.isApproval) {
         final message = await _showJoinDialog();
         if (message == null) return;
-        await api.join(community.id, message: message);
+        final resp = await api.join(community.id, message: message);
+        if (!resp.success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+              ),
+            );
+          }
+          return;
+        }
         ref
             .read(communityDetailProvider.notifier)
             .updateMembershipStatus(myStatus: 'pending');
@@ -515,17 +560,30 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
         return;
       }
 
-      await api.join(community.id);
+      final resp = await api.join(community.id);
+      if (!resp.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+            ),
+          );
+        }
+        return;
+      }
       ref
           .read(communityDetailProvider.notifier)
           .updateMembershipStatus(myStatus: 'active', myRole: 'member');
       ref.read(communityDetailProvider.notifier).load(widget.communityId);
       ref.read(communityListProvider.notifier).refreshMy();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('操作失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('操作失败，请重试')),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isMembershipChanging = false);
     }
   }
 
@@ -560,16 +618,31 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   }
 
   void _handleLeave(Community community) async {
+    if (_isMembershipChanging) return;
+    setState(() => _isMembershipChanging = true);
     final api = CommunityApiService();
     try {
-      await api.leave(community.id);
+      final resp = await api.leave(community.id);
+      if (!resp.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+            ),
+          );
+        }
+        return;
+      }
       ref.read(communityDetailProvider.notifier).load(widget.communityId);
       ref.read(communityListProvider.notifier).refreshMy();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('操作失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('操作失败，请重试')),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isMembershipChanging = false);
     }
   }
 
@@ -594,12 +667,23 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
     );
     if (ok == true) {
       try {
-        await CommunityApiService().disband(community.id);
+        final resp = await CommunityApiService().disband(community.id);
+        if (!resp.success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(apiFailureMessage(resp, fallback: '解散失败，请重试')),
+              ),
+            );
+          }
+          return;
+        }
         if (mounted) Navigator.pop(context);
-      } catch (e) {
+      } catch (_) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('解散失败: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('解散失败，请重试')),
+          );
         }
       }
     }

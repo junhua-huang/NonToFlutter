@@ -1,0 +1,684 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nonto/config/app_theme.dart';
+import 'package:nonto/models/post.dart';
+import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/blocking_notifier.dart';
+import 'package:nonto/screens/post/create_post_screen.dart';
+import 'package:nonto/screens/post/post_detail_screen.dart';
+import 'package:nonto/screens/profile/user_profile_screen.dart';
+import 'package:nonto/screens/search/search_results_screen.dart';
+import 'package:nonto/services/api/api_client.dart';
+import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/report_service.dart';
+import 'package:nonto/utils/image_utils.dart';
+import 'package:nonto/widgets/enhanced_media_viewer.dart';
+import 'package:nonto/widgets/media_viewer.dart';
+import 'package:nonto/widgets/post_author_meta_line.dart';
+import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
+import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
+import 'package:nonto/widgets/rich_text_content.dart';
+import 'package:nonto/widgets/twitter_bottom_sheet.dart';
+
+class QuoteThreadCard extends ConsumerStatefulWidget {
+  final Post post;
+  final VoidCallback onCurrentTap;
+  final VoidCallback? onCurrentLike;
+  final VoidCallback? onCurrentLongPress;
+  final VoidCallback? onCurrentDelete;
+  final VoidCallback? onCurrentComment;
+  final List<Post>? feedPosts;
+  final EdgeInsetsGeometry padding;
+
+  const QuoteThreadCard({
+    super.key,
+    required this.post,
+    required this.onCurrentTap,
+    this.onCurrentLike,
+    this.onCurrentLongPress,
+    this.onCurrentDelete,
+    this.onCurrentComment,
+    this.feedPosts,
+    this.padding = const EdgeInsets.fromLTRB(16, 16, 16, 0),
+  });
+
+  @override
+  ConsumerState<QuoteThreadCard> createState() => _QuoteThreadCardState();
+}
+
+class _QuoteThreadCardState extends ConsumerState<QuoteThreadCard> {
+  late Post _currentPost;
+  Post? _quotedPost;
+  static const int _maxQuotedAncestors = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPost(widget.post);
+  }
+
+  @override
+  void didUpdateWidget(covariant QuoteThreadCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post != widget.post) _syncPost(widget.post);
+  }
+
+  void _syncPost(Post post) {
+    _currentPost = post;
+    _quotedPost = post.quotedPost;
+  }
+
+  void _openPost(Post segmentPost) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PostDetailScreen(
+          postId: segmentPost.id,
+          initialPost: segmentPost,
+        ),
+      ),
+    );
+  }
+
+  void _showSegmentStats(Post segmentPost) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('帖子统计',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 18),
+              _StatRow(label: '浏览量', value: '${segmentPost.viewCount}'),
+              _StatRow(label: '点赞数', value: '${segmentPost.likeCount}'),
+              _StatRow(label: '评论数', value: '${segmentPost.commentCount}'),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('关闭'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _quoteSegment(Post segmentPost) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreatePostScreen(quotedPost: segmentPost),
+      ),
+    );
+  }
+
+  void _shareSegment(Post segmentPost) {
+    PostShareToChatSheet.show(context, post: segmentPost);
+  }
+
+  static const List<_ReportOption> _reportReasons = [
+    _ReportOption('spam', '骚扰信息'),
+    _ReportOption('fake', '虚假信息'),
+    _ReportOption('violence', '暴力内容'),
+    _ReportOption('hate', '仇恨言论'),
+    _ReportOption('other', '其他'),
+  ];
+
+  Future<void> _showReportDialog(BuildContext context, Post post) async {
+    final reason = await TwitterBottomSheet.show<String>(
+      context,
+      groupLabel: '选择举报原因',
+      options: _reportReasons
+          .map((r) => TwitterSheetOption(
+                icon: Icons.flag_outlined,
+                label: r.label,
+                value: r.value,
+              ))
+          .toList(),
+    );
+    if (reason == null || !context.mounted) return;
+    try {
+      final resp = await ReportService().reportPost(post.id, reason);
+      if (!context.mounted) return;
+      if (resp.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('举报已提交'), duration: Duration(seconds: 2)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '举报失败，请重试')),
+              duration: const Duration(seconds: 2)),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('举报失败，请稍后重试'), duration: Duration(seconds: 2)),
+      );
+    }
+  }
+
+  Future<void> _showBlockConfirmDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Post post,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('屏蔽用户',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Text(
+            '确定要屏蔽@${post.user?.username ?? '该用户'} 吗？\n\n屏蔽后你将看不到该用户的动态，对方也不会收到通知。',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('确认屏蔽'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final result =
+        await ref.read(blockCoordinatorProvider).blockUser(post.userId);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? '已屏蔽@${post.user?.username ?? '该用户'}'
+              : result.error ?? '屏蔽失败',
+        ),
+        backgroundColor: result.success ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _showDeleteConfirmDialog(BuildContext context, Post post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('删除帖子',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Text('确定要删除这条帖子吗？此操作不可撤销。',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final resp = await PostService().deletePost(post.id);
+      if (!context.mounted) return;
+      if (resp.success) {
+        if (post.id == _currentPost.id) widget.onCurrentDelete?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('帖子已删除'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '删除失败，请重试')),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2)),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('删除失败，请重试'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2)),
+      );
+    }
+  }
+
+  Future<void> _showPostActions(
+    BuildContext context,
+    WidgetRef ref,
+    Post segmentPost,
+  ) async {
+    final currentUserId =
+        ProviderScope.containerOf(context).read(authProvider).user?.id;
+    final isOwnPost =
+        currentUserId != null && segmentPost.userId == currentUserId;
+
+    final options = <TwitterSheetOption<String>>[
+      const TwitterSheetOption(
+          icon: Icons.report_outlined, label: '举报帖子', value: 'report'),
+      const TwitterSheetOption(
+          icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+      if (isOwnPost)
+        const TwitterSheetOption(
+            icon: Icons.delete_outline,
+            label: '删除帖子',
+            value: 'delete',
+            isDestructive: true),
+    ];
+
+    final action =
+        await TwitterBottomSheet.show<String>(context, options: options);
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case 'report':
+        _showReportDialog(context, segmentPost);
+        break;
+      case 'block':
+        _showBlockConfirmDialog(context, ref, segmentPost);
+        break;
+      case 'delete':
+        _showDeleteConfirmDialog(context, segmentPost);
+        break;
+    }
+  }
+
+  List<Post> _buildQuoteChain() {
+    final chain = <Post>[_currentPost];
+    var next = _quotedPost;
+    var depth = 0;
+    while (next != null && depth < _maxQuotedAncestors) {
+      chain.add(next);
+      next = next.quotedPost;
+      depth += 1;
+    }
+    return chain;
+  }
+
+  List<Post> get _quoteChainPosts => _buildQuoteChain();
+
+  @override
+  Widget build(BuildContext context) {
+    final quotedUnavailable =
+        _currentPost.quotedPostUnavailable || _quotedPost == null;
+    final chain = _quoteChainPosts;
+    return InkWell(
+      onTap: widget.onCurrentTap,
+      onLongPress: widget.onCurrentLongPress,
+      child: Padding(
+        padding: widget.padding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < chain.length; i++)
+              _QuoteThreadSegment(
+                segmentPost: chain[i],
+                showConnector: i < chain.length - 1 || quotedUnavailable,
+                onTap: i == 0 ? widget.onCurrentTap : () => _openPost(chain[i]),
+                onComment: i == 0
+                    ? widget.onCurrentComment ?? widget.onCurrentTap
+                    : () => _openPost(chain[i]),
+                onLike: i == 0
+                    ? widget.onCurrentLike ?? () {}
+                    : () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final wasLiked = chain[i].isLiked == true;
+                        final resp = wasLiked
+                            ? await PostService().unlikePost(chain[i].id)
+                            : await PostService().likePost(chain[i].id);
+                        if (!mounted || resp.success) return;
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('操作失败，请重试')),
+                        );
+                      },
+                onView: () => _showSegmentStats(chain[i]),
+                onQuote: () => _quoteSegment(chain[i]),
+                onShare: () => _shareSegment(chain[i]),
+                onMore: () => _showPostActions(context, ref, chain[i]),
+                feedPosts: i == 0 ? widget.feedPosts : const [],
+                quoteChainPosts: chain,
+              ),
+            if (quotedUnavailable) _UnavailableQuotedSegment(),
+            Padding(
+              padding: const EdgeInsets.only(left: 0, right: 0),
+              child: Divider(height: 1, color: AppColors.borderLight),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuoteThreadSegment extends StatelessWidget {
+  final Post segmentPost;
+  final bool showConnector;
+  final VoidCallback onTap;
+  final VoidCallback onComment;
+  final VoidCallback onLike;
+  final VoidCallback onView;
+  final VoidCallback onQuote;
+  final VoidCallback onShare;
+  final VoidCallback onMore;
+  final List<Post>? feedPosts;
+  final List<Post> quoteChainPosts;
+
+  const _QuoteThreadSegment({
+    required this.segmentPost,
+    required this.showConnector,
+    required this.onTap,
+    required this.onComment,
+    required this.onLike,
+    required this.onView,
+    required this.onQuote,
+    required this.onShare,
+    required this.onMore,
+    this.feedPosts,
+    required this.quoteChainPosts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 44,
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (segmentPost.user != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              UserProfileScreen(user: segmentPost.user!),
+                        ),
+                      );
+                    }
+                  },
+                  child: ImageUtils.buildAvatar(segmentPost.user, radius: 20),
+                ),
+                if (showConnector) const Expanded(child: _QuoteConnectorLine()),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: onTap,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: PostAuthorMetaLine(
+                              post: segmentPost,
+                              showUsername: false,
+                              onTap: onTap,
+                            ),
+                          ),
+                          _buildCompactMoreButton(),
+                        ],
+                      ),
+                      if (segmentPost.content != null &&
+                          segmentPost.content!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        RichTextContent(
+                          text: segmentPost.content!,
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                          onTopicTap: (topicName) => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TopicSearchResultsScreen(
+                                  topicName: topicName),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                _buildMedia(context),
+                NontoPostActionBar(
+                  padding: const EdgeInsets.fromLTRB(0, 6, 0, 12),
+                  commentCount: segmentPost.commentCount,
+                  likeCount: segmentPost.likeCount,
+                  viewCount: segmentPost.viewCount,
+                  isLiked: segmentPost.isLiked == true,
+                  onComment: onComment,
+                  onLike: onLike,
+                  onView: onView,
+                  onQuote: onQuote,
+                  onShare: onShare,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactMoreButton() {
+    return GestureDetector(
+      onTap: onMore,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 24,
+        height: 22,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child:
+              Icon(Icons.more_horiz, size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+
+  List<Post> _buildQuoteMediaPosts() {
+    final seen = <int>{};
+    final posts = <Post>[];
+    for (final post in quoteChainPosts) {
+      if (seen.add(post.id)) posts.add(post);
+    }
+    for (final post in feedPosts ?? const <Post>[]) {
+      if (seen.add(post.id)) posts.add(post);
+    }
+    return posts;
+  }
+
+  List<PostMediaItem> _buildQuoteMediaItems(List<String> images) {
+    return _buildQuoteMediaPosts()
+        .where((post) => post.hasImage || post.hasVideo)
+        .map((post) => PostMediaItem(
+              post: post,
+              mediaUrls: post.id == segmentPost.id
+                  ? images
+                  : (post.images ?? const <String>[])
+                      .where((url) => url.isNotEmpty)
+                      .toList(),
+            ))
+        .where((item) => item.mediaUrls.isNotEmpty)
+        .toList();
+  }
+
+  Widget _buildMedia(BuildContext context) {
+    final images = (segmentPost.images ?? const <String>[])
+        .where((url) => url.isNotEmpty)
+        .toList();
+    if (images.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: images.length == 1
+            ? GestureDetector(
+                onTap: () {
+                  final items = _buildQuoteMediaItems(images);
+                  final initialPostIndex = items
+                      .indexWhere((item) => item.post.id == segmentPost.id)
+                      .clamp(0, items.length - 1);
+                  EnhancedImageViewerScreen.show(
+                    context,
+                    items,
+                    initialPostIndex: initialPostIndex,
+                  );
+                },
+                child: AdaptivePostImageGallery(
+                  imageUrls: images,
+                  maxHeight: 320,
+                  post: null,
+                  onTap: () {
+                    final items = _buildQuoteMediaItems(images);
+                    final initialPostIndex = items
+                        .indexWhere((item) => item.post.id == segmentPost.id)
+                        .clamp(0, items.length - 1);
+                    EnhancedImageViewerScreen.show(
+                      context,
+                      items,
+                      initialPostIndex: initialPostIndex,
+                    );
+                  },
+                ),
+              )
+            : AdaptivePostImageGallery(
+                imageUrls: images,
+                maxHeight: 320,
+                post: segmentPost,
+                feedPosts: _buildQuoteMediaPosts(),
+              ),
+      );
+    }
+    if (segmentPost.hasVideo) {
+      return Container(
+        margin: const EdgeInsets.only(top: 10),
+        height: 180,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.black12,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Icon(Icons.play_arrow, color: AppColors.textSecondary, size: 40),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+class _QuoteConnectorLine extends StatelessWidget {
+  const _QuoteConnectorLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 2,
+      margin: const EdgeInsets.only(top: 6, bottom: 0),
+      decoration: BoxDecoration(
+        color: AppColors.borderLight,
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
+class _UnavailableQuotedSegment extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 44,
+          child: CircleAvatar(
+            radius: 20,
+            backgroundColor: AppColors.surface,
+            child: Icon(Icons.lock_outline,
+                size: 18, color: AppColors.textSecondary),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Text(
+              '原帖不可见或已被隐藏',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportOption {
+  final String value;
+  final String label;
+  const _ReportOption(this.value, this.label);
+}
+
+class _StatRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(color: AppColors.textPrimary)),
+          const Spacer(),
+          Text(value,
+              style: TextStyle(
+                  color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}

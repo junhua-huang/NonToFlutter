@@ -1,4 +1,4 @@
-﻿import 'package:nonto/models/comment.dart';
+import 'package:nonto/models/comment.dart';
 import 'package:nonto/models/user.dart';
 import 'package:nonto/providers/comment_state.dart';
 import 'package:nonto/services/api/api_client.dart';
@@ -37,15 +37,28 @@ class CommentSectionKey {
 ///   - Expand replies
 ///   - Reply targeting
 class CommentNotifier extends StateNotifier<CommentState> {
+  static final Set<CommentNotifier> _activeNotifiers = {};
+
+  static void removeUserFromActiveSections(int userId) {
+    for (final notifier in List<CommentNotifier>.from(_activeNotifiers)) {
+      notifier.removeCommentsByUser(userId);
+    }
+  }
+
   final CommentSectionKey key;
   final CommentService _commentService = CommentService();
   final ComicService _comicService = ComicService();
   final User? _currentUser; // 用于乐观更新显示头像和名称
 
-  CommentNotifier(this.key, {User? currentUser})
-      : _currentUser = currentUser,
-        super(const CommentState()) {
-    loadComments();
+  CommentNotifier(
+    this.key, {
+    User? currentUser,
+    CommentState initialState = const CommentState(),
+    bool loadOnInit = true,
+  })  : _currentUser = currentUser,
+        super(initialState) {
+    _activeNotifiers.add(this);
+    if (loadOnInit) loadComments();
   }
 
   bool get _isPost => key.targetType == 'post';
@@ -53,7 +66,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
 
   void _warnUnknownTarget() {
     if (!_isPost && !_isComic) {
-      debugPrint('[CommentNotifier] ⚠️ Unknown targetType "${key.targetType}" — falling back to comic API');
+      debugPrint(
+          '[CommentNotifier] ⚠️ Unknown targetType "${key.targetType}" — falling back to comic API');
     }
   }
 
@@ -75,7 +89,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
             await _commentService.getComments(key.targetId, page: state.page);
         data = resp.data as Map<String, dynamic>?;
       } else {
-        final resp = await _comicService.getEventComments(key.targetId, page: state.page);
+        final resp = await _comicService.getEventComments(key.targetId,
+            page: state.page);
         data = resp.data;
       }
 
@@ -85,7 +100,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
             [];
         comments = list.map((e) => Comment.fromJson(e)).toList();
         final total = data['total'] ?? 0;
-        hasMore = comments.length < (total is int ? total : comments.length + 1);
+        hasMore =
+            comments.length < (total is int ? total : comments.length + 1);
       } else {
         comments = [];
         hasMore = false;
@@ -104,9 +120,9 @@ class CommentNotifier extends StateNotifier<CommentState> {
           error: null,
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        state = state.copyWith(isLoading: false, error: e.toString());
+        state = state.copyWith(isLoading: false, error: '评论加载失败');
       }
     }
   }
@@ -140,7 +156,9 @@ class CommentNotifier extends StateNotifier<CommentState> {
             comments: [...state.comments, ...newComments],
             isLoading: false,
             hasMore: state.comments.length + newComments.length <
-                (total is int ? total : state.comments.length + newComments.length + 1),
+                (total is int
+                    ? total
+                    : state.comments.length + newComments.length + 1),
             page: nextPage,
           );
         }
@@ -162,7 +180,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
     final text = content.trim();
     if (text.isEmpty || state.isSending) return null;
 
-    final parentId = state.replyingToId != null ? int.tryParse(state.replyingToId!) : null;
+    final parentId =
+        state.replyingToId != null ? int.tryParse(state.replyingToId!) : null;
     final replyingToUserId = state.replyingToUserId;
 
     // 立即播放发送音效
@@ -184,7 +203,6 @@ class CommentNotifier extends StateNotifier<CommentState> {
       replies: const [],
     );
 
-    final oldState = state;
     if (parentId != null) {
       final updated = List<Comment>.from(state.comments);
       for (int i = 0; i < updated.length; i++) {
@@ -230,9 +248,10 @@ class CommentNotifier extends StateNotifier<CommentState> {
       }
 
       if (resp.success && resp.data != null) {
+        if (!mounted) return null;
         final data = resp.data as Map<String, dynamic>;
         final commentJson = data['comment'] as Map<String, dynamic>?;
-        if (commentJson != null && mounted) {
+        if (commentJson != null) {
           final realComment = Comment.fromJson(commentJson);
           // 替换乐观评论为真实评论
           final updated = List<Comment>.from(state.comments);
@@ -257,14 +276,52 @@ class CommentNotifier extends StateNotifier<CommentState> {
         }
         return null; // 成功
       } else {
-        // 失败：回退乐观评论
-        state = oldState.copyWith(isSending: false, error: resp.message ?? '评论发送失败');
-        return resp.message ?? '评论发送失败';
+        // 失败：只移除本次乐观评论，保留等待期间的其它状态更新
+        final message = apiFailureMessage(resp, fallback: '评论发送失败');
+        if (mounted) {
+          _removeOptimisticComment(optimisticComment.id, parentId: parentId);
+          state = state.copyWith(isSending: false, error: message);
+        }
+        return message;
       }
-    } catch (e) {
-      // 网络错误：回退乐观评论
-      state = oldState.copyWith(isSending: false, error: '评论发送失败: $e');
+    } catch (_) {
+      // 网络错误：只移除本次乐观评论，保留等待期间的其它状态更新
+      if (mounted) {
+        _removeOptimisticComment(optimisticComment.id, parentId: parentId);
+        state = state.copyWith(isSending: false, error: '评论发送失败');
+      }
       return '评论发送失败';
+    }
+  }
+
+  void _removeOptimisticComment(int optimisticCommentId, {int? parentId}) {
+    if (parentId != null) {
+      final updated = List<Comment>.from(state.comments);
+      for (int i = 0; i < updated.length; i++) {
+        if (updated[i].id == parentId) {
+          final replies = updated[i]
+              .replies
+              .where((reply) => reply.id != optimisticCommentId)
+              .toList();
+          final removed = updated[i].replies.length - replies.length;
+          if (removed == 0) return;
+          final nextReplyCount = updated[i].replyCount - removed;
+          updated[i] = updated[i].copyWith(
+            replies: replies,
+            replyCount: nextReplyCount < 0 ? 0 : nextReplyCount,
+          );
+          state = state.copyWith(comments: updated);
+          return;
+        }
+      }
+      return;
+    }
+
+    final comments = state.comments
+        .where((comment) => comment.id != optimisticCommentId)
+        .toList();
+    if (comments.length != state.comments.length) {
+      state = state.copyWith(comments: comments);
     }
   }
 
@@ -278,94 +335,57 @@ class CommentNotifier extends StateNotifier<CommentState> {
     final newLiking = Set<int>.from(state.likingIds)..add(commentId);
     state = state.copyWith(likingIds: newLiking);
 
-    // Optimistic update
-    final updated = List<Comment>.from(state.comments);
-    bool found = false;
-    for (int i = 0; i < updated.length; i++) {
-      if (updated[i].id == commentId) {
-        updated[i] = updated[i].copyWith(
-          isLiked: !updated[i].isLiked,
-          likeCount: updated[i].isLiked
-              ? updated[i].likeCount - 1
-              : updated[i].likeCount + 1,
-        );
-        found = true;
-        break;
-      }
-      // Check in replies
-      final replies = updated[i].replies;
-      for (int j = 0; j < replies.length; j++) {
-        if (replies[j].id == commentId) {
-          final newReplies = List<Comment>.from(replies);
-          newReplies[j] = newReplies[j].copyWith(
-            isLiked: !newReplies[j].isLiked,
-            likeCount: newReplies[j].isLiked
-                ? newReplies[j].likeCount - 1
-                : newReplies[j].likeCount + 1,
-          );
-          updated[i] = updated[i].copyWith(replies: newReplies);
-          found = true;
-          break;
-        }
-      }
-      if (found) break;
+    final currentComment = _findComment(commentId);
+    if (currentComment == null) {
+      state = state.copyWith(
+          likingIds: Set<int>.from(state.likingIds)..remove(commentId));
+      return;
     }
+    final wasLiked = currentComment.isLiked;
+    final likeDelta = wasLiked ? -1 : 1;
 
-    if (found && mounted) {
+    // Optimistic update
+    final updated = _applyLikeDeltaInComments(
+      state.comments,
+      commentId,
+      isLiked: !wasLiked,
+      likeDelta: likeDelta,
+    );
+    if (updated != null && mounted) {
       state = state.copyWith(comments: updated);
     }
 
     try {
+      final ApiResponse resp;
       if (_isPost) {
-        // Determine if liked now
-        final isNowLiked =
-            state.comments.expand((c) => [c, ...c.replies]).any(
-                  (c) => c.id == commentId && c.isLiked,
-                );
-        if (isNowLiked) {
-          await _commentService.likeComment(commentId);
-        } else {
-          await _commentService.unlikeComment(commentId);
-        }
+        resp = wasLiked
+            ? await _commentService.unlikeComment(commentId)
+            : await _commentService.likeComment(commentId);
       } else {
-        await _comicService.likeComment(commentId);
+        resp = await _comicService.likeComment(commentId);
+      }
+      if (!resp.success) {
+        if (mounted) {
+          _rollbackLikeMutation(
+            commentId,
+            expectedLiked: !wasLiked,
+            likeDelta: likeDelta,
+          );
+          state = state.copyWith(
+            error: apiFailureMessage(resp, fallback: '操作失败，请重试'),
+          );
+        }
+        return;
       }
     } catch (_) {
       // Revert on error
       if (mounted) {
-        final reverted = List<Comment>.from(state.comments);
-        bool revertedFound = false;
-        for (int i = 0; i < reverted.length; i++) {
-          if (reverted[i].id == commentId) {
-            reverted[i] = reverted[i].copyWith(
-              isLiked: !reverted[i].isLiked,
-              likeCount: reverted[i].isLiked
-                  ? reverted[i].likeCount - 1
-                  : reverted[i].likeCount + 1,
-            );
-            revertedFound = true;
-            break;
-          }
-          final replies = reverted[i].replies;
-          for (int j = 0; j < replies.length; j++) {
-            if (replies[j].id == commentId) {
-              final newReplies = List<Comment>.from(replies);
-              newReplies[j] = newReplies[j].copyWith(
-                isLiked: !newReplies[j].isLiked,
-                likeCount: newReplies[j].isLiked
-                    ? newReplies[j].likeCount - 1
-                    : newReplies[j].likeCount + 1,
-              );
-              reverted[i] = reverted[i].copyWith(replies: newReplies);
-              revertedFound = true;
-              break;
-            }
-          }
-          if (revertedFound) break;
-        }
-        if (revertedFound) {
-          state = state.copyWith(comments: reverted);
-        }
+        _rollbackLikeMutation(
+          commentId,
+          expectedLiked: !wasLiked,
+          likeDelta: likeDelta,
+        );
+        state = state.copyWith(error: '操作失败，请重试');
       }
     } finally {
       if (mounted) {
@@ -375,27 +395,140 @@ class CommentNotifier extends StateNotifier<CommentState> {
     }
   }
 
+  void _rollbackLikeMutation(
+    int commentId, {
+    required bool expectedLiked,
+    required int likeDelta,
+  }) {
+    final reverted = _applyLikeDeltaInComments(
+      state.comments,
+      commentId,
+      isLiked: !expectedLiked,
+      likeDelta: -likeDelta,
+      onlyIfLiked: expectedLiked,
+    );
+    if (reverted != null) {
+      state = state.copyWith(comments: reverted);
+    }
+  }
+
+  Comment? _findComment(int commentId) {
+    for (final comment in state.comments) {
+      if (comment.id == commentId) return comment;
+      for (final reply in comment.replies) {
+        if (reply.id == commentId) return reply;
+      }
+    }
+    return null;
+  }
+
+  List<Comment>? _applyLikeDeltaInComments(
+    List<Comment> comments,
+    int commentId, {
+    required bool isLiked,
+    required int likeDelta,
+    bool? onlyIfLiked,
+  }) {
+    final updated = List<Comment>.from(comments);
+    for (int i = 0; i < updated.length; i++) {
+      if (updated[i].id == commentId) {
+        final next = _applyLikeDelta(
+          updated[i],
+          isLiked: isLiked,
+          likeDelta: likeDelta,
+          onlyIfLiked: onlyIfLiked,
+        );
+        if (next == null) return null;
+        updated[i] = next;
+        return updated;
+      }
+
+      final replies = updated[i].replies;
+      for (int j = 0; j < replies.length; j++) {
+        if (replies[j].id == commentId) {
+          final next = _applyLikeDelta(
+            replies[j],
+            isLiked: isLiked,
+            likeDelta: likeDelta,
+            onlyIfLiked: onlyIfLiked,
+          );
+          if (next == null) return null;
+          final newReplies = List<Comment>.from(replies);
+          newReplies[j] = next;
+          updated[i] = updated[i].copyWith(replies: newReplies);
+          return updated;
+        }
+      }
+    }
+    return null;
+  }
+
+  Comment? _applyLikeDelta(
+    Comment comment, {
+    required bool isLiked,
+    required int likeDelta,
+    bool? onlyIfLiked,
+  }) {
+    if (onlyIfLiked != null && comment.isLiked != onlyIfLiked) return null;
+    final nextCount = comment.likeCount + likeDelta;
+    return comment.copyWith(
+      isLiked: isLiked,
+      likeCount: nextCount < 0 ? 0 : nextCount,
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════
   //  Delete
   // ═══════════════════════════════════════════════════════════
 
   Future<bool> deleteComment(int commentId) async {
     try {
-      if (_isPost) {
-        await _commentService.deleteComment(commentId);
-      } else {
-        await _comicService.deleteComment(commentId);
+      final resp = _isPost
+          ? await _commentService.deleteComment(commentId)
+          : await _comicService.deleteComment(commentId);
+      if (!resp.success) {
+        if (mounted) {
+          state = state.copyWith(
+            error: apiFailureMessage(resp, fallback: '删除失败，请重试'),
+          );
+        }
+        return false;
       }
       if (mounted) {
-        state = state.copyWith(
-          comments:
-              state.comments.where((c) => c.id != commentId).toList(),
-        );
+        _removeDeletedComment(commentId);
       }
       return true;
     } catch (_) {
+      if (mounted) {
+        state = state.copyWith(error: '删除失败，请重试');
+      }
       return false;
     }
+  }
+
+  void _removeDeletedComment(int commentId) {
+    final updated = <Comment>[];
+    var changed = false;
+    for (final comment in state.comments) {
+      if (comment.id == commentId) {
+        changed = true;
+        continue;
+      }
+      final replies =
+          comment.replies.where((reply) => reply.id != commentId).toList();
+      if (replies.length != comment.replies.length) {
+        changed = true;
+        final removed = comment.replies.length - replies.length;
+        final nextReplyCount = comment.replyCount - removed;
+        updated.add(comment.copyWith(
+          replies: replies,
+          replyCount: nextReplyCount < 0 ? 0 : nextReplyCount,
+        ));
+      } else {
+        updated.add(comment);
+      }
+    }
+    if (changed) state = state.copyWith(comments: updated);
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -410,7 +543,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
       final List<Comment> replies;
       bool hasMore = false;
       if (_isPost) {
-        final resp = await _commentService.getReplies(key.targetId, parentId: parentId);
+        final resp =
+            await _commentService.getReplies(key.targetId, parentId: parentId);
         final data = resp.data as Map<String, dynamic>?;
         if (resp.success && data != null) {
           final list = (data['comments'] as List<dynamic>?)
@@ -441,7 +575,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
           if (updated[i].id == parentId) {
             // 保留乐观回复（id < 0），不被 API 返回的结果覆盖
             final existingReplies = updated[i].replies;
-            final optimisticReplies = existingReplies.where((r) => r.id < 0).toList();
+            final optimisticReplies =
+                existingReplies.where((r) => r.id < 0).toList();
             final merged = [...replies, ...optimisticReplies];
             updated[i] = updated[i].copyWith(
               replies: merged,
@@ -455,7 +590,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
       }
     } catch (_) {
       if (mounted) {
-        final collapsed = Set<int>.from(state.expandedReplies)..remove(parentId);
+        final collapsed = Set<int>.from(state.expandedReplies)
+          ..remove(parentId);
         state = state.copyWith(expandedReplies: collapsed);
       }
     }
@@ -492,7 +628,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
           newReplies = [];
         }
       } else {
-        final resp = await _comicService.getCommentReplies(parentId, page: nextPage);
+        final resp =
+            await _comicService.getCommentReplies(parentId, page: nextPage);
         final data = resp.data;
         if (resp.success && data != null) {
           final list = (data['replies'] as List<dynamic>?)
@@ -517,12 +654,15 @@ class CommentNotifier extends StateNotifier<CommentState> {
             break;
           }
         }
-        final loadingIds = Set<int>.from(state.loadingRepliesIds)..remove(parentId);
-        state = state.copyWith(comments: updated, loadingRepliesIds: loadingIds);
+        final loadingIds = Set<int>.from(state.loadingRepliesIds)
+          ..remove(parentId);
+        state =
+            state.copyWith(comments: updated, loadingRepliesIds: loadingIds);
       }
     } catch (_) {
       if (mounted) {
-        final loadingIds = Set<int>.from(state.loadingRepliesIds)..remove(parentId);
+        final loadingIds = Set<int>.from(state.loadingRepliesIds)
+          ..remove(parentId);
         state = state.copyWith(loadingRepliesIds: loadingIds);
       }
     }
@@ -531,7 +671,8 @@ class CommentNotifier extends StateNotifier<CommentState> {
   void toggleExpandReplies(int commentId) {
     if (state.expandedReplies.contains(commentId)) {
       final collapsed = Set<int>.from(state.expandedReplies)..remove(commentId);
-      state = state.copyWith(expandedReplies: collapsed, comments: List.from(state.comments));
+      state = state.copyWith(
+          expandedReplies: collapsed, comments: List.from(state.comments));
     } else {
       loadReplies(commentId);
     }
@@ -565,6 +706,22 @@ class CommentNotifier extends StateNotifier<CommentState> {
     );
   }
 
+  void removeCommentsByUser(int userId) {
+    List<Comment> filter(List<Comment> comments) {
+      return comments
+          .where((comment) => comment.userId != userId)
+          .map((comment) {
+        final replies = filter(comment.replies);
+        return comment.copyWith(
+          replies: replies,
+          replyCount: replies.length,
+        );
+      }).toList();
+    }
+
+    state = state.copyWith(comments: filter(state.comments));
+  }
+
   /// Helper: notifier is still mounted after dispose.
   @override
   bool get mounted {
@@ -577,12 +734,14 @@ class CommentNotifier extends StateNotifier<CommentState> {
 
   @override
   void dispose() {
+    _activeNotifiers.remove(this);
     _mounted = false;
     super.dispose();
   }
 }
 
 /// Family provider: creates one CommentNotifier per (targetType, targetId) pair.
-final commentProvider = StateNotifierProvider.family<CommentNotifier, CommentState, CommentSectionKey>(
+final commentProvider = StateNotifierProvider.family<CommentNotifier,
+    CommentState, CommentSectionKey>(
   (ref, key) => CommentNotifier(key, currentUser: ref.read(authProvider).user),
 );

@@ -20,12 +20,82 @@ void main() {
     });
   });
 
+  group('chat composer and retry regressions', () {
+    test(
+        'private chat composer keeps send button available while messages are sending',
+        () {
+      final source = read('lib/screens/chat/chat_room_screen.dart');
+      final inputStart = source.indexOf('Widget _buildInputBar(');
+      final attachmentStart =
+          source.indexOf('void _showAttachmentOptions', inputStart);
+      expect(inputStart, greaterThanOrEqualTo(0));
+      expect(attachmentStart, greaterThan(inputStart));
+      final inputSource = source.substring(inputStart, attachmentStart);
+
+      expect(inputSource, isNot(contains('chat-send-progress')));
+      expect(inputSource, isNot(contains('CircularProgressIndicator')));
+      expect(inputSource, isNot(contains('child: isSending')));
+      expect(inputSource, contains('onPressed: _sendMessage'));
+    });
+
+    test('private failed outgoing messages expose a retry button on the bubble',
+        () {
+      final room = read('lib/screens/chat/chat_room_screen.dart');
+      final notifier = read('lib/providers/chat_notifiers.dart');
+
+      expect(room, contains('_retryFailedMessage'));
+      expect(room, contains('Icons.refresh_rounded'));
+      expect(room, contains("msg.status == 'failed'"));
+      expect(room, contains('重试'));
+      expect(notifier, contains('void retryFailedMessage(int msgId)'));
+    });
+
+    test('community chat composer keeps send button available while sending',
+        () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+      final sendStart = source.indexOf('Future<void> _sendMessage()');
+      final optimisticStart = source.indexOf(
+          'Map<String, dynamic> _buildOptimisticMessage', sendStart);
+      final composerStart = source.indexOf('Widget _buildComposer()');
+      final emojiStart =
+          source.indexOf('Widget _buildEmojiPicker()', composerStart);
+      expect(sendStart, greaterThanOrEqualTo(0));
+      expect(optimisticStart, greaterThan(sendStart));
+      expect(composerStart, greaterThan(optimisticStart));
+      expect(emojiStart, greaterThan(composerStart));
+      final sendSource = source.substring(sendStart, optimisticStart);
+      final composerSource = source.substring(composerStart, emojiStart);
+
+      expect(sendSource, isNot(contains('content.isEmpty || _isSending')));
+      expect(composerSource, isNot(contains('CircularProgressIndicator')));
+      expect(composerSource,
+          isNot(contains('onPressed: _isSending ? null : _sendMessage')));
+      expect(composerSource, contains('onPressed: _sendMessage'));
+    });
+
+    test(
+        'community failed outgoing messages expose a retry button on the bubble',
+        () {
+      final source = read('lib/screens/community/community_chat_screen.dart');
+
+      expect(
+          source, contains('void _retryMessage(Map<String, dynamic> message)'));
+      expect(source, contains('final bool isFailed'));
+      expect(source, contains('onRetry'));
+      expect(source, contains('Icons.refresh_rounded'));
+      expect(source, contains('重试'));
+    });
+  });
+
   group('chat send queue regressions', () {
     test('message notifier cancels ack subscription on dispose', () {
       final source = read('lib/providers/chat_notifiers.dart');
 
       expect(source, contains('StreamSubscription? _wsAckSub;'));
-      expect(source, contains('_wsAckSub = _ws.ackMessageIdStream.listen(_onAckMessageId);'));
+      expect(
+          source,
+          contains(
+              '_wsAckSub = _ws.ackMessageIdStream.listen(_onAckMessageId);'));
       expect(source, contains('_wsAckSub?.cancel();'));
     });
 
@@ -34,6 +104,28 @@ void main() {
 
       expect(source, contains('onMessageFailed:'));
       expect(source, contains('_sendErrorController.add'));
+    });
+
+    test('generic websocket errors are not shown as send failures', () {
+      final service = read('lib/services/websocket_service.dart');
+      final notifier = read('lib/providers/chat_notifiers.dart');
+      final room = read('lib/screens/chat/chat_room_screen.dart');
+
+      final onErrorStart =
+          service.lastIndexOf('onError: (message, clientMsgId)');
+      final onAuthFailedStart = service.indexOf('onAuthFailed:', onErrorStart);
+      expect(onErrorStart, greaterThanOrEqualTo(0));
+      expect(onAuthFailedStart, greaterThan(onErrorStart));
+      final onErrorBody = service.substring(onErrorStart, onAuthFailedStart);
+
+      expect(onErrorBody,
+          contains('if (clientMsgId != null && clientMsgId.isNotEmpty)'));
+      expect(onErrorBody, isNot(contains('_errorController.add(message)')));
+      expect(
+          notifier,
+          isNot(contains(
+              r"state = state.copyWith(isSending: false, error: '发送失败: $error')")));
+      expect(room, isNot(contains(r"content: Text('发送失败: $error')")));
     });
 
     test('queue ack timeout does not resend with a new client message id', () {
@@ -48,16 +140,19 @@ void main() {
       expect(
         startAckTimerBody,
         contains('ReliableSender'),
-        reason: 'The queue should document that protocol retry owns retransmission.',
+        reason:
+            'The queue should document that protocol retry owns retransmission.',
       );
     });
 
     test('websocket new message notification sound excludes own echoes', () {
       final source = read('lib/services/websocket_service.dart');
 
-      final ownCheck = source.indexOf('final isOwn = senderId != null');
-      final gate = source.indexOf('if (!isConvOpen && !isOwn && token != null && token.isNotEmpty)');
-      final soundCall = source.indexOf('SoundService().playNotificationSound()', gate);
+      final ownCheck = source.indexOf('final isOwn =');
+      final gate = source.indexOf(
+          'if (!isConvOpen && !isOwn && token != null && token.isNotEmpty)');
+      final soundCall =
+          source.indexOf('SoundService().playNotificationSound()', gate);
 
       expect(source, contains('ChatRoomState.isOpen(convIdInt)'));
       expect(source, contains("final senderId = normalized['sender_id'];"));
@@ -65,6 +160,31 @@ void main() {
       expect(ownCheck, greaterThanOrEqualTo(0));
       expect(gate, greaterThan(ownCheck));
       expect(soundCall, greaterThan(gate));
+    });
+
+    test(
+        'jump to message persists around window without overwriting recent cache',
+        () {
+      final source = read('lib/providers/chat_notifiers.dart');
+      final jumpSource = source
+          .split('Future<bool> jumpToMessage(int targetId) async')[1]
+          .split('/// UI 完成高亮动画后调用')[0];
+      final aroundStart = jumpSource.indexOf('getMessagesAround');
+      final persistStart =
+          jumpSource.indexOf('DataLayer().persistMessages(window)');
+      final stateReplaceStart =
+          jumpSource.indexOf('state = state.copyWith(', persistStart);
+      final syncStart = jumpSource.indexOf('_syncL1()', persistStart);
+
+      expect(aroundStart, isNonNegative);
+      expect(persistStart, greaterThan(aroundStart));
+      expect(stateReplaceStart, greaterThan(persistStart));
+      expect(syncStart, -1,
+          reason:
+              'Around-window navigation should not overwrite msgRecent cache.');
+      expect(source, contains('_suppressRecentCacheSync'));
+      expect(jumpSource, contains('_suppressRecentCacheSync = true'));
+      expect(source, contains('if (_suppressRecentCacheSync) return'));
     });
   });
 }

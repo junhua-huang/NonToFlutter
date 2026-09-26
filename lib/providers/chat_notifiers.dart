@@ -6,7 +6,6 @@ import 'package:nonto/models/conversation.dart';
 import 'package:nonto/models/message.dart';
 import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/chat_service.dart';
-import 'package:nonto/services/api/notification_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/chat_send_queue.dart';
@@ -64,9 +63,14 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   bool _loadInProgress = false;
   int? _currentUserId;
 
-  ConversationsNotifier() : super(const ConversationsState()) {
-    _loadCurrentUserId();
-    _loadData();
+  ConversationsNotifier({
+    ConversationsState initialState = const ConversationsState(),
+    bool loadOnInit = true,
+  }) : super(initialState) {
+    if (loadOnInit) {
+      _loadCurrentUserId();
+      _loadData();
+    }
     _wsMsgSub = _ws.messageStream.listen(_onWsMessage);
     _wsSessionSub = _ws.sessionListStream.listen(_onSessionList);
     _wsFriendOnlineSub = _ws.friendOnlineStream.listen(_onFriendOnline);
@@ -611,30 +615,10 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
       clearError: true,
     );
     try {
-      // 并发请求：会话列表 + 未读数量（各自独立超时，不互相影响）
-      final results = await Future.wait([
-        _chatService
-            .getConversations()
-            .timeout(const Duration(seconds: 25))
-            .catchError((_) => null as dynamic),
-        NotificationService()
-            .getUnreadCount()
-            .timeout(const Duration(seconds: 10))
-            .catchError((_) => null as dynamic),
-      ]);
-
-      // 会话列表
-      // results[0] 来自 .catchError((_) => null)，运行时确实可能为 null；
-      // 分析器因 dynamic 推断为 non-null 误报，这里显式 cast 让语义清晰且消警告。
-      final response = results[0] as dynamic;
-      if (response == null) {
-        debugPrint('[Conv] getConversations timed out or failed');
-        state = state.copyWith(
-          isLoading: false,
-          error: state.conversations.isEmpty ? '加载超时，下拉重试' : null,
-        );
-        return;
-      }
+      final response = await _chatService
+          .getConversations()
+          .timeout(const Duration(seconds: 25))
+          .catchError((_) => null as dynamic);
       debugPrint(
           '[Conv] getConversations success=${response.success}, statusCode=${response.statusCode}, msg=${response.message}, dataType=${response.data?.runtimeType}');
       if (response.success) {
@@ -673,30 +657,13 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
               '[Conv] conv[0] otherUser=${c.otherUser?.username} displayName=${c.otherUser?.displayName} avatar=${c.otherUser?.avatarUrl}');
         }
 
-        // 提取未读通知数量（独立 try/catch，单个超时不影响会话列表）
-        int unread = state.unreadCount;
-        final unreadResp = results[1];
-        try {
-          debugPrint(
-              '[Conv] getUnreadCount success=${unreadResp.success}, data=${unreadResp.data}');
-          if (unreadResp.success && unreadResp.data != null) {
-            final unreadData = unreadResp.data;
-            if (unreadData is Map) {
-              unread = unreadData['unread_count'] ?? unreadData['count'] ?? 0;
-            } else if (unreadData is int) {
-              unread = unreadData;
-            }
-          }
-        } catch (_) {}
-
         state = state.copyWith(
           conversations: conversations,
-          unreadCount: unread,
           isLoading: false,
           error: null,
         );
         debugPrint(
-            '[Conv] STATE SET: conversations=${conversations.length}, unread=$unread, isLoading=false, error=null');
+            '[Conv] STATE SET: conversations=${conversations.length}, isLoading=false, error=null');
         // 持久化操作独立 try/catch：数据库异常不影响内存中的会话列表
         try {
           await DataLayer().persistConversations(conversations);
@@ -721,7 +688,8 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
     }
   }
 
-  Future<void> _warmRecentMessageCaches(List<Conversation> conversations) async {
+  Future<void> _warmRecentMessageCaches(
+      List<Conversation> conversations) async {
     for (final conversation in conversations) {
       final lastMessage = conversation.lastMessage;
       if (lastMessage == null) continue;
@@ -750,6 +718,35 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   void _reset() {
     _loadInProgress = false;
     state = const ConversationsState();
+  }
+
+  Future<List<int>> removeDirectConversationsWithUser(int userId) async {
+    final removed = state.conversations
+        .where((conversation) =>
+            !conversation.isCommunity && conversation.otherUser?.id == userId)
+        .map((conversation) => conversation.id)
+        .toList();
+    if (removed.isEmpty) return const [];
+
+    final removedIds = removed.toSet();
+    state = state.copyWith(
+      conversations: state.conversations
+          .where((conversation) => !removedIds.contains(conversation.id))
+          .toList(),
+    );
+    for (final conversationId in removed) {
+      await LocalDbService().deleteConversation(conversationId);
+      await DataLayer().invalidate(CacheKeys.msgWarmup(conversationId));
+      await DataLayer().invalidate(CacheKeys.msgRecent(conversationId));
+      await DataLayer().invalidate(
+        CacheKeys.msgRecentByUser(conversationId, '*'),
+      );
+    }
+    await DataLayer().write(
+      CacheKeys.convFullList,
+      state.conversations.map((conversation) => conversation.toJson()).toList(),
+    );
+    return removed;
   }
 
   /// 清除所有会话的未读数（仅用于外层总角标归零；不会错误改写服务端每个会话未读）
@@ -800,6 +797,10 @@ class MessagesState {
   final bool otherUserTyping;
   final bool? otherUserIsOnline;
 
+  /// 命中 jumpToMessage 后，需要被高亮 + 滚动定位的消息 id。
+  /// UI 在 ensureVisible 完成并播放高亮动画后调用 clearHighlight 清掉。
+  final int? highlightMessageId;
+
   const MessagesState({
     this.messages = const [],
     this.isLoading = false,
@@ -811,6 +812,7 @@ class MessagesState {
     this.wsConnected = false,
     this.otherUserTyping = false,
     this.otherUserIsOnline,
+    this.highlightMessageId,
   });
 
   MessagesState copyWith({
@@ -824,6 +826,8 @@ class MessagesState {
     bool? wsConnected,
     bool? otherUserTyping,
     bool? otherUserIsOnline,
+    int? highlightMessageId,
+    bool clearHighlight = false,
     bool clearError = false,
   }) {
     return MessagesState(
@@ -837,14 +841,82 @@ class MessagesState {
       wsConnected: wsConnected ?? this.wsConnected,
       otherUserTyping: otherUserTyping ?? this.otherUserTyping,
       otherUserIsOnline: otherUserIsOnline ?? this.otherUserIsOnline,
+      highlightMessageId: clearHighlight
+          ? null
+          : (highlightMessageId ?? this.highlightMessageId),
     );
   }
+}
+
+int _compareMessagesForTimeline(Message a, Message b) {
+  if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
+  final aCreatedAt = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  final bCreatedAt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  final timeCompare = aCreatedAt.compareTo(bCreatedAt);
+  if (timeCompare != 0) return timeCompare;
+  return a.id.compareTo(b.id);
+}
+
+/// Message state is newest-first so reverse:true can render the latest item at
+/// offset zero without a first-frame scroll correction.
+int _compareMessagesForLatestFirst(Message a, Message b) =>
+    _compareMessagesForTimeline(b, a);
+
+List<Message> _mergeMessagesLatestFirst(
+  Iterable<Message> current,
+  Iterable<Message> incoming,
+) {
+  final byId = <int, Message>{};
+  for (final message in [...current, ...incoming]) {
+    byId[message.id] = message;
+  }
+  final merged = byId.values.toList()..sort(_compareMessagesForLatestFirst);
+  return merged;
+}
+
+class _CachedMessagePayload {
+  final List<dynamic> messages;
+  final bool hasMore;
+
+  const _CachedMessagePayload(this.messages, {required this.hasMore});
+}
+
+_CachedMessagePayload _cachedMessagePayload(dynamic raw) {
+  dynamic data = raw;
+  if (data is String) {
+    try {
+      data = jsonDecode(data);
+    } catch (_) {
+      return const _CachedMessagePayload([], hasMore: false);
+    }
+  }
+  if (data is Map) {
+    final messages = data['messages'];
+    final messageList = messages is List ? messages : const [];
+    final hasMore = data['has_more'] ?? data['hasMore'];
+    final hasMoreBefore = data['has_more_before'];
+    return _CachedMessagePayload(
+      messageList,
+      hasMore: hasMore is bool
+          ? hasMore
+          : (hasMoreBefore is bool ? hasMoreBefore : messageList.length >= 50),
+    );
+  }
+  if (data is List) {
+    return _CachedMessagePayload(data, hasMore: data.length >= 50);
+  }
+  return const _CachedMessagePayload([], hasMore: false);
 }
 
 class MessagesNotifier extends StateNotifier<MessagesState> {
   final int conversationId;
   final ChatService _chatService = ChatService();
   final WebSocketService _ws = WebSocketService();
+  final Future<ApiResponse> Function(int userId) _loadUserStatus;
+  final Stream<bool> _connectionStream;
+  final Stream<Map<String, dynamic>> _friendOnlineStream;
+  final Stream<Map<String, dynamic>> _friendOfflineStream;
+  final bool _loadMessagesOnInit;
   late final ChatSendQueue _sendQueue;
   StreamSubscription? _wsMsgSub;
   StreamSubscription? _wsTypingSub;
@@ -854,22 +926,44 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   StreamSubscription? _wsAckSub;
   StreamSubscription? _wsFriendOnlineSub;
   StreamSubscription? _wsFriendOfflineSub;
+  Future<void>? _statusRefreshInFlight;
+  int? _statusRefreshUserId;
+  int _statusRefreshGeneration = 0;
   Timer? _typingTimer;
   int? _currentUserId;
+  int? _otherUserId;
   bool _initialized = false;
+  bool _suppressRecentCacheSync = false;
 
   final void Function(int convId, String content, String msgType, DateTime now)?
       _onMessageSent;
 
-  MessagesNotifier(this.conversationId,
-      {void Function(int convId, String content, String msgType, DateTime now)?
-          onMessageSent})
-      : _onMessageSent = onMessageSent,
+  MessagesNotifier(
+    this.conversationId, {
+    void Function(int convId, String content, String msgType, DateTime now)?
+        onMessageSent,
+    @visibleForTesting Future<ApiResponse> Function(int userId)? loadUserStatus,
+    @visibleForTesting Stream<bool>? connectionStream,
+    @visibleForTesting Stream<Map<String, dynamic>>? friendOnlineStream,
+    @visibleForTesting Stream<Map<String, dynamic>>? friendOfflineStream,
+    @visibleForTesting bool loadMessagesOnInit = true,
+  })  : _onMessageSent = onMessageSent,
+        _loadUserStatus = loadUserStatus ?? ChatService().getUserStatus,
+        _connectionStream =
+            connectionStream ?? WebSocketService().connectionStream,
+        _friendOnlineStream =
+            friendOnlineStream ?? WebSocketService().friendOnlineStream,
+        _friendOfflineStream =
+            friendOfflineStream ?? WebSocketService().friendOfflineStream,
+        _loadMessagesOnInit = loadMessagesOnInit,
         super(const MessagesState()) {
     _wsMsgSub = _ws.messageStream.listen(_onWsMessage);
     _wsTypingSub = _ws.typingStream.listen(_onWsTyping);
-    _wsConnSub = _ws.connectionStream.listen((connected) {
+    _wsConnSub = _connectionStream.listen((connected) {
       if (mounted) state = state.copyWith(wsConnected: connected);
+      if (connected && _otherUserId != null) {
+        unawaited(refreshOtherUserStatus(_otherUserId!));
+      }
     });
     _wsErrorSub = _ws.errorStream.listen(_onWsError);
     // 监听发送错误（携带 clientMsgId），用于通知 ChatSendQueue 标记消息失败
@@ -903,7 +997,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         '[Chat] ack message_id: ${msg.id} → $messageId (clientMsgId=$clientMsgId)');
   }
 
-  /// 由 ChatRoomScreen 在 initState 中调用，传入当前用户 ID 和对方用户 ID 并启动加载。
+  /// 由 ChatRoomScreen 的首帧回调调用，传入当前用户 ID 和对方用户 ID 并启动加载。
   ///
   /// 注意：family Provider 不会随 ChatRoomScreen pop 自动销毁，
   /// 同一会话第二次进入时若直接 `if (_initialized) return;` 会跳过
@@ -911,11 +1005,21 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   /// 表现为：对方已读回执不下发、typing 不显示。
   /// 因此把「重复进入也要做的事」放到守卫之前。
   void init(int currentUserId, {int? otherUserId}) {
-    // 1) 每次进入都必须做的事：加房间 + 上报已读
+    // 1) 每次进入都必须做的事：加房间 + 上报已读 + 刷新对方权威在线状态
     _ws.joinConversation(conversationId);
     _sendMarkRead();
+    if (_otherUserId != otherUserId) {
+      _otherUserId = otherUserId;
+      _statusRefreshGeneration++;
+      _statusRefreshInFlight = null;
+      _statusRefreshUserId = null;
+    }
+    _replacePresenceSubscriptions();
+    if (otherUserId != null) {
+      unawaited(refreshOtherUserStatus(otherUserId));
+    }
 
-    // 2) 已初始化过的实例：只补发 join/markRead，跳过订阅 / 队列重建 / 首次加载
+    // 2) 已初始化过的实例：只补发 join/markRead，跳过队列重建 / 首次加载
     if (_initialized) {
       // 数据已在内存，触发一次轻量增量同步即可填补离线期间空档
       if (state.messages.isNotEmpty) {
@@ -926,36 +1030,95 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     _initialized = true;
     _currentUserId = currentUserId;
 
-    // 监听好友在线/离线事件，实时更新 AppBar 状态
-    if (otherUserId != null) {
-      _wsFriendOnlineSub = _ws.friendOnlineStream.listen((data) {
-        final uid = data['user_id'];
-        final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
-        if (id == otherUserId && mounted) {
-          state = state.copyWith(otherUserIsOnline: true);
-        }
-      });
-      _wsFriendOfflineSub = _ws.friendOfflineStream.listen((data) {
-        final uid = data['user_id'];
-        final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
-        if (id == otherUserId && mounted) {
-          state = state.copyWith(otherUserIsOnline: false);
-        }
-      });
-    }
-
     _sendQueue = ChatSendQueue(
       conversationId: conversationId,
       senderId: currentUserId,
     );
     _sendQueue.onAck = _onQueueAck;
     _sendQueue.onFailed = _onQueueFailed;
-    _loadMessages();
+    if (_loadMessagesOnInit) {
+      _loadMessages();
+    }
+  }
+
+  void _replacePresenceSubscriptions() {
+    _wsFriendOnlineSub?.cancel();
+    _wsFriendOfflineSub?.cancel();
+    _wsFriendOnlineSub = null;
+    _wsFriendOfflineSub = null;
+
+    final otherUserId = _otherUserId;
+    if (otherUserId == null) return;
+
+    // offline 事件可能只是对方进入后台；再次拉取后端产品在线状态作为权威值。
+    _wsFriendOnlineSub = _friendOnlineStream.listen((data) {
+      final uid = data['user_id'];
+      final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
+      if (id == _otherUserId && mounted) {
+        state = state.copyWith(otherUserIsOnline: true);
+      }
+    });
+    _wsFriendOfflineSub = _friendOfflineStream.listen((data) {
+      final uid = data['user_id'];
+      final id = uid is int ? uid : int.tryParse(uid?.toString() ?? '');
+      if (id == _otherUserId && mounted) {
+        unawaited(refreshOtherUserStatus(otherUserId));
+      }
+    });
+  }
+
+  Future<void> refreshOtherUserStatus(int userId) {
+    final inFlight = _statusRefreshInFlight;
+    if (inFlight != null && _statusRefreshUserId == userId) {
+      return inFlight;
+    }
+
+    final generation = ++_statusRefreshGeneration;
+    late final Future<void> refresh;
+    refresh = _performStatusRefresh(userId, generation).whenComplete(() {
+      if (identical(_statusRefreshInFlight, refresh)) {
+        _statusRefreshInFlight = null;
+        _statusRefreshUserId = null;
+      }
+    });
+    _statusRefreshUserId = userId;
+    _statusRefreshInFlight = refresh;
+    return refresh;
+  }
+
+  Future<void> _performStatusRefresh(int userId, int generation) async {
+    try {
+      final response = await _loadUserStatus(userId);
+      if (!mounted ||
+          generation != _statusRefreshGeneration ||
+          userId != _otherUserId ||
+          !response.success ||
+          response.data == null) {
+        return;
+      }
+      final data = response.data is String
+          ? jsonDecode(response.data as String)
+          : response.data;
+      if (data is! Map) return;
+      final isOnline = data['is_online'];
+      if (isOnline is bool &&
+          mounted &&
+          generation == _statusRefreshGeneration &&
+          userId == _otherUserId) {
+        state = state.copyWith(otherUserIsOnline: isOnline);
+      }
+    } catch (_) {
+      // Keep the previous known value when status refresh fails.
+    }
   }
 
   // ── 数据加载 ──
 
   Future<void> _loadMessages() async {
+    _suppressRecentCacheSync = false;
+    if (mounted) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
     debugPrint('[Messages] ═══════════════════════════════════════');
     debugPrint('[Messages] _loadMessages START conv=$conversationId');
 
@@ -985,14 +1148,21 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       final warmupKey = CacheKeys.msgWarmup(conversationId);
       final warmupSnapshot = await DataLayer()
           .query(warmupKey, () async => null, forceRefresh: false);
-      if (warmupSnapshot.data is List &&
-          (warmupSnapshot.data as List).isNotEmpty) {
-        final messages = (warmupSnapshot.data as List<dynamic>)
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
+      final warmupPayload = _cachedMessagePayload(warmupSnapshot.data);
+      if (warmupPayload.messages.isNotEmpty) {
+        final messages = warmupPayload.messages
+            .whereType<Map>()
+            .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+          ..sort(_compareMessagesForLatestFirst);
+        final hasMoreFromWarmup = warmupPayload.hasMore;
         debugPrint(
-            '[Messages] Step1 warmup HIT: ${messages.length} msgs from $warmupKey');
-        state = state.copyWith(messages: messages, isLoading: false);
+            '[Messages] Step1 warmup HIT: ${messages.length} msgs from $warmupKey hasMore=$hasMoreFromWarmup');
+        state = state.copyWith(
+          messages: messages,
+          isLoading: false,
+          hasMore: hasMoreFromWarmup,
+        );
       }
     } catch (_) {
       // ignore
@@ -1008,8 +1178,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         if (state.messages.isEmpty) {
           debugPrint(
               '[Messages] Step2 → SQLite fallback, ${localMessages.length} msgs');
+          final localTimeline = List<Message>.from(localMessages)
+            ..sort(_compareMessagesForTimeline);
+          final latestFirstTimeline = localTimeline.reversed.toList();
           state = state.copyWith(
-            messages: localMessages.reversed.toList(),
+            messages: latestFirstTimeline,
             isLoading: false,
           );
         }
@@ -1053,35 +1226,35 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       }, forceRefresh: state.messages.isEmpty); // 无数据时强制网络
 
       if (result.data != null) {
-        final resultData = result.data;
-        List<dynamic> msgList;
-        bool hasMoreFromLoad = false;
-        if (resultData is Map && resultData.containsKey('messages')) {
-          msgList = resultData['messages'] as List<dynamic>;
-          hasMoreFromLoad = resultData['has_more'] == true;
-        } else if (resultData is List) {
-          msgList = resultData;
-          hasMoreFromLoad = resultData.length >= 50;
-        } else {
-          msgList = [];
-        }
+        final loadedPayload = _cachedMessagePayload(result.data);
+        final msgList = loadedPayload.messages;
+        final hasMoreFromLoad = loadedPayload.hasMore;
         final serverMessages = msgList
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
+            .whereType<Map>()
+            .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+          ..sort(_compareMessagesForLatestFirst);
         if (result.source.name != 'memory' ||
             serverMessages.length != state.messages.length) {
-          // BUG 修复：之前直接 `messages: serverMessages` 会覆盖掉用户刚发出、
-          // 还没收到 ACK 的乐观消息（id >= 1e12），表现为「发完一条消息进入聊天室 /
-          // 拉取增量时自己刚发的消息凭空消失」。这里把仍处于 pending 的乐观消息
-          // 追加到服务端列表末尾，保留「发送中」气泡，等服务端 ACK 回来再替换。
+          // Preserve pending optimistic messages while refreshing the server
+          // window; the merge helper restores newest-first order afterward.
           final serverIds = serverMessages.map((m) => m.id).toSet();
+          final serverClientMsgIds = serverMessages
+              .map((m) => m.clientMsgId)
+              .where((id) => id != null && id.isNotEmpty)
+              .toSet();
           final pendingOptimistic = state.messages
-              .where((m) => m.id >= 1000000000000 && !serverIds.contains(m.id))
+              .where((m) =>
+                  m.id >= 1000000000000 &&
+                  !serverIds.contains(m.id) &&
+                  (m.clientMsgId == null ||
+                      m.clientMsgId!.isEmpty ||
+                      !serverClientMsgIds.contains(m.clientMsgId)))
               .toList();
-          final merged = <Message>[
-            ...serverMessages,
-            ...pendingOptimistic,
-          ];
+          final merged = _mergeMessagesLatestFirst(
+            serverMessages,
+            pendingOptimistic,
+          );
           state = state.copyWith(
               messages: merged, isLoading: false, hasMore: hasMoreFromLoad);
           await DataLayer().persistMessages(serverMessages);
@@ -1089,6 +1262,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
               '[Messages] Step3 → updated: ${serverMessages.length} server msgs'
               '${pendingOptimistic.isNotEmpty ? " + ${pendingOptimistic.length} pending optimistic" : ""}'
               ' (source=${result.source.name}) hasMore=$hasMoreFromLoad');
+        } else if (state.hasMore != hasMoreFromLoad || state.isLoading) {
+          state = state.copyWith(isLoading: false, hasMore: hasMoreFromLoad);
         }
       } else if (state.messages.isEmpty) {
         state = state.copyWith(isLoading: false);
@@ -1117,8 +1292,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   Future<void> retry() async {
     // WS 发送失败 → 重发最后一条失败消息
     if ((state.error ?? '').startsWith('发送失败')) {
-      final failedIdx =
-          state.messages.lastIndexWhere((m) => m.id >= 1000000000000);
+      final failedIdx = state.messages.indexWhere((m) => m.id >= 1000000000000);
       if (failedIdx < 0) {
         state = state.copyWith(error: null);
         return;
@@ -1144,7 +1318,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     if (state.messages.isEmpty) return;
 
     int? lastMessageId;
-    for (final m in state.messages.reversed) {
+    for (final m in state.messages) {
       if (m.id < 1000000000000) {
         lastMessageId = m.id;
         break;
@@ -1169,9 +1343,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           serverMsgs.where((m) => !existingIds.contains(m.id)).toList();
 
       if (newMsgs.isNotEmpty) {
-        final List<Message> allMsgs = [...state.messages, ...newMsgs];
-        allMsgs.sort((a, b) =>
-            (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
+        final allMsgs = _mergeMessagesLatestFirst(state.messages, newMsgs);
         state = state.copyWith(messages: allMsgs);
         await DataLayer().persistMessages(newMsgs);
         _syncL1();
@@ -1186,72 +1358,168 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     }
   }
 
-  /// 加载更多历史消息：先查本地 SQLite，不足再 HTTP 分页
+  /// 加载更多历史消息：先查本地 SQLite，不足再 HTTP 分页。
   Future<void> loadMore() async {
     if (!state.hasMore || state.isLoading) return;
+    const localPageSize = 50;
+    const optimisticIdFloor = 1000000000000;
     state = state.copyWith(isLoading: true);
 
-    // Step 1: 从本地 SQLite 获取更早的消息
+    // SQLite is newest-first too. Optimistic rows are not persisted server
+    // history, so they must not advance the database offset.
+    final persistedCount =
+        state.messages.where((m) => m.id < optimisticIdFloor).length;
     final localMsgs = await DataLayer().loadMessagesFromDb(
       conversationId,
-      limit: 50,
-      offset: state.messages.length,
+      limit: localPageSize,
+      offset: persistedCount,
     );
 
+    var localPageWasShort = localMsgs.length < localPageSize;
     if (localMsgs.isNotEmpty) {
       final existingIds = state.messages.map((m) => m.id).toSet();
       final newMsgs =
           localMsgs.where((m) => !existingIds.contains(m.id)).toList();
       if (newMsgs.isNotEmpty) {
         state = state.copyWith(
-          messages: [...newMsgs, ...state.messages],
-          hasMore: localMsgs.length >= 50,
-          isLoading: false,
+          messages: _mergeMessagesLatestFirst(state.messages, newMsgs),
         );
-        return;
+        _syncL1();
       }
     }
 
-    // Step 2: 本地不够 → HTTP 分页
+    // A complete local page means the next invocation can continue from the
+    // same server page boundary. A short page must fall through now so a
+    // partially warmed cache cannot hide older messages behind the button.
+    if (!localPageWasShort) {
+      state = state.copyWith(isLoading: false);
+      return;
+    }
+
+    // If the current in-memory window is shorter than one server page, it may
+    // be a partial cache of page 1. Fetch that page first instead of skipping
+    // directly to page 2. Once page 1 is complete, continue with the next page.
+    final loadedCount =
+        state.messages.where((m) => m.id < optimisticIdFloor).length;
+    final requestedPage =
+        loadedCount < localPageSize ? state.page : state.page + 1;
+
     try {
-      final resp =
-          await _chatService.getMessages(conversationId, page: state.page + 1);
-      if (resp.success && resp.data != null) {
-        final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
-        List<dynamic> msgList = [];
-        bool hasMoreFlag = false;
-        if (data is Map) {
-          msgList = data['messages'] ?? [];
-          hasMoreFlag = data['has_more'] == true;
-        } else if (data is List) {
-          msgList = data;
+      final resp = await _chatService.getMessages(
+        conversationId,
+        page: requestedPage,
+        perPage: localPageSize,
+      );
+      if (!resp.success || resp.data == null) {
+        // Network failure should not make already-known history look exhausted.
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+
+      final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
+      List<dynamic> msgList = [];
+      bool hasMoreFlag = false;
+      bool hasMoreKnown = false;
+      if (data is Map) {
+        msgList = data['messages'] is List ? data['messages'] : [];
+        final rawHasMore = data['has_more'];
+        if (rawHasMore is bool) {
+          hasMoreFlag = rawHasMore;
+          hasMoreKnown = true;
         }
-        final messages = msgList
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
-        final existingIds = state.messages.map((m) => m.id).toSet();
-        final newMsgs =
-            messages.where((m) => !existingIds.contains(m.id)).toList();
-        if (newMsgs.isNotEmpty) {
-          final allMsgs = [...newMsgs, ...state.messages];
-          allMsgs.sort((a, b) => (a.createdAt ?? DateTime(0))
-              .compareTo(b.createdAt ?? DateTime(0)));
-          state = state.copyWith(
-            messages: allMsgs,
-            page: state.page + 1,
-            hasMore: hasMoreFlag || msgList.length >= 50,
-            isLoading: false,
-          );
-          await DataLayer().persistMessages(newMsgs);
-          _syncL1();
-        } else {
-          state = state.copyWith(page: state.page + 1, isLoading: false);
-        }
-      } else {
-        state = state.copyWith(hasMore: false, isLoading: false);
+      } else if (data is List) {
+        msgList = data;
+      }
+
+      final messages = msgList
+          .whereType<Map>()
+          .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final existingIds = state.messages.map((m) => m.id).toSet();
+      final newMsgs =
+          messages.where((m) => !existingIds.contains(m.id)).toList();
+      final nextHasMore =
+          hasMoreKnown ? hasMoreFlag : msgList.length >= localPageSize;
+      final nextPage = requestedPage > state.page ? requestedPage : state.page;
+
+      state = state.copyWith(
+        messages: newMsgs.isEmpty
+            ? state.messages
+            : _mergeMessagesLatestFirst(state.messages, newMsgs),
+        page: nextPage,
+        hasMore: nextHasMore,
+        isLoading: false,
+      );
+      if (newMsgs.isNotEmpty) {
+        await DataLayer().persistMessages(newMsgs);
+        _syncL1();
       }
     } catch (e) {
+      debugPrint('[Messages] loadMore error: $e');
       state = state.copyWith(isLoading: false);
+    }
+  }
+
+  /// 跳转并加载目标消息上下文。
+  ///
+  /// 流程：
+  /// 1) 当前 messages 已包含 target → 直接置 highlight，UI 滚动 + 高亮
+  /// 2) 否则调用 around 接口拉取窗口（before/after 各 20 条），替换 messages
+  /// 3) 失败（消息已删/不存在） → 返回 false，UI 给出 toast 提示
+  ///
+  /// 成功后 state.highlightMessageId 被置为目标 id，UI 在定位 + 高亮完成后
+  /// 必须调用 [clearHighlight] 清掉，否则下次进入页面会再次高亮。
+  Future<bool> jumpToMessage(int targetId) async {
+    // 1) 本地已有 → 直接高亮
+    if (state.messages.any((m) => m.id == targetId)) {
+      state = state.copyWith(highlightMessageId: targetId);
+      return true;
+    }
+
+    // 2) 拉上下文窗口
+    state = state.copyWith(isLoading: true);
+    try {
+      final resp =
+          await _chatService.getMessagesAround(conversationId, targetId);
+      if (!resp.success || resp.data == null) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      final data = resp.data is String ? jsonDecode(resp.data) : resp.data;
+      if (data is! Map) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      final list = (data['messages'] as List?) ?? [];
+      final window = list
+          .map((e) => Message.fromJson(e as Map<String, dynamic>))
+          .toList()
+        ..sort(_compareMessagesForLatestFirst);
+      if (!window.any((m) => m.id == targetId)) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      // 替换为窗口内容，hasMore 由服务端 has_more_before 决定
+      await DataLayer().persistMessages(window);
+      _suppressRecentCacheSync = true;
+      state = state.copyWith(
+        messages: window,
+        isLoading: false,
+        hasMore: data['has_more_before'] == true,
+        highlightMessageId: targetId,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('jumpToMessage error: $e');
+      state = state.copyWith(isLoading: false);
+      return false;
+    }
+  }
+
+  /// UI 完成高亮动画后调用，清掉 highlightMessageId。
+  void clearHighlight() {
+    if (state.highlightMessageId != null) {
+      state = state.copyWith(clearHighlight: true);
     }
   }
 
@@ -1270,6 +1538,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   void sendMessage(String content,
       {String messageType = 'text',
       String? mediaUrl,
+      int? relatedId,
       int? quoteMessageId,
       String? quotePreview}) {
     if (_currentUserId == null) return;
@@ -1277,7 +1546,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final now = DateTime.now();
 
     debugPrint(
-        '[Chat] sendMessage conv=$conversationId content="$content" type=$messageType qDepth=${_sendQueue.pendingCount}');
+        '[Chat] sendMessage conv=$conversationId type=$messageType length=${content.length} qDepth=${_sendQueue.pendingCount}');
 
     // 乐观消息（先落本地再入队）
     final optimisticMsg = Message(
@@ -1290,6 +1559,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
         orElse: () => MessageType.text,
       ),
       mediaUrl: mediaUrl,
+      relatedId: relatedId,
       isRead: false,
       createdAt: now,
       requestId: requestId,
@@ -1299,7 +1569,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     );
 
     state = state.copyWith(
-      messages: [...state.messages, optimisticMsg],
+      messages: [optimisticMsg, ...state.messages],
       isSending: true,
     );
     DataLayer().persistMessage(optimisticMsg);
@@ -1331,7 +1601,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     );
 
     state = state.copyWith(
-      messages: [...state.messages, optimisticMsg],
+      messages: [optimisticMsg, ...state.messages],
       isSending: true,
     );
     DataLayer().persistMessage(optimisticMsg);
@@ -1361,6 +1631,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             mediaUrl: url,
             status: 'sending',
             uploadProgress: 1.0,
+            clearFailure: true,
             clearTempBytes: true, // 上传成功后清除临时 bytes
           );
           final updated = state.messages
@@ -1375,26 +1646,152 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           _sendQueue.enqueue(queuedMsg);
         }
       } else {
-        // 上传失败，标记为 failed 但保留 tempBytes 用于重试
-        _markUploadFailed(optimisticMsg.id, bytes);
+        // 上传失败，标记为 failed 但保留 tempBytes 用于允许的手动重试
+        _markUploadFailed(
+          optimisticMsg.id,
+          bytes,
+          failureCode: uploadResp.errorCode,
+          failureMessage: apiFailureMessage(uploadResp, fallback: '上传失败，请重试'),
+          retryable: uploadResp.isRetryable != false,
+        );
       }
     } catch (e) {
-      debugPrint('Send image error: $e');
+      debugPrint('[Chat] image upload failed');
       // 上传失败，标记为 failed 但保留 tempBytes 用于重试
       _markUploadFailed(optimisticMsg.id, bytes);
     }
   }
 
-  /// 标记图片上传失败（保留 tempBytes 以便重试）
-  void _markUploadFailed(int optimisticId, Uint8List bytes) {
+  /// 发送视频消息（先上传再发送）
+  Future<void> sendVideoMessage(Uint8List bytes, String fileName) async {
+    if (_currentUserId == null) return;
+    final requestId = _generateRequestId();
+    final now = DateTime.now();
+
+    final optimisticMsg = Message(
+      id: now.millisecondsSinceEpoch,
+      conversationId: conversationId,
+      senderId: _currentUserId!,
+      content: '视频',
+      messageType: MessageType.video,
+      createdAt: now,
+      requestId: requestId,
+      status: 'uploading',
+      tempBytes: bytes,
+    );
+
+    state = state.copyWith(
+      messages: [optimisticMsg, ...state.messages],
+      isSending: true,
+    );
+    DataLayer().persistMessage(optimisticMsg);
+
+    try {
+      final uploadResp = await ApiClient().uploadBytes(
+        '/upload/chat/video',
+        bytes,
+        fileName,
+        onSendProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          final progress = (sent / total).clamp(0.0, 1.0).toDouble();
+          final updated = state.messages
+              .map((m) => m.id == optimisticMsg.id
+                  ? m.copyWith(status: 'uploading', uploadProgress: progress)
+                  : m)
+              .toList();
+          state = state.copyWith(messages: updated, isSending: true);
+          _syncL1();
+        },
+      );
+      if (uploadResp.success) {
+        final url = _extractUrl(uploadResp.data);
+        if (url != null) {
+          final queuedMsg = optimisticMsg.copyWith(
+            content: url,
+            mediaUrl: url,
+            status: 'sending',
+            uploadProgress: 1.0,
+            clearFailure: true,
+            clearTempBytes: true,
+          );
+          final updated = state.messages
+              .map((m) => m.id == optimisticMsg.id ? queuedMsg : m)
+              .toList();
+          state = state.copyWith(messages: updated, isSending: true);
+          await DataLayer().persistMessage(queuedMsg);
+          _syncL1();
+          SoundService().playSendSound();
+          _onMessageSent?.call(conversationId, '视频', 'video', now);
+          _sendQueue.enqueue(queuedMsg);
+        }
+      } else {
+        _markUploadFailed(
+          optimisticMsg.id,
+          bytes,
+          failureCode: uploadResp.errorCode,
+          failureMessage: apiFailureMessage(uploadResp, fallback: '上传失败，请重试'),
+          retryable: uploadResp.isRetryable != false,
+        );
+      }
+    } catch (e) {
+      debugPrint('[Chat] video upload failed');
+      _markUploadFailed(optimisticMsg.id, bytes);
+    }
+  }
+
+  /// 标记图片/视频上传失败（仅 retryable=true 时允许手动重试）
+  void _markUploadFailed(
+    int optimisticId,
+    Uint8List bytes, {
+    String? failureCode,
+    String? failureMessage,
+    bool retryable = true,
+  }) {
     if (!mounted) return;
+    Message? failedMessage;
     final updated = state.messages.map((m) {
       if (m.id == optimisticId) {
-        return m.copyWith(status: 'failed', tempBytes: bytes);
+        failedMessage = m.copyWith(
+          status: 'failed',
+          tempBytes: bytes,
+          failureCode: failureCode,
+          failureMessage: failureMessage ?? '上传失败，请重试',
+          retryable: retryable,
+        );
+        return failedMessage!;
       }
       return m;
     }).toList();
     state = state.copyWith(messages: updated, isSending: false);
+    if (failedMessage != null) {
+      DataLayer().persistMessage(failedMessage!);
+      _syncL1();
+    }
+  }
+
+  /// 重试失败的普通消息。媒体上传失败继续走专门的上传重试。
+  void retryFailedMessage(int msgId) {
+    final msgIdx = state.messages.indexWhere((m) => m.id == msgId);
+    if (msgIdx < 0) return;
+    final failed = state.messages[msgIdx];
+    if (failed.status != 'failed' || !failed.canRetry) return;
+
+    if (failed.messageType == MessageType.image && failed.tempBytes != null) {
+      unawaited(retryImageUpload(msgId));
+      return;
+    }
+
+    final updated = List<Message>.from(state.messages)..removeAt(msgIdx);
+    state = state.copyWith(messages: updated, isSending: false);
+    DataLayer().deletePersistedMessage(failed.id);
+    sendMessage(
+      failed.content ?? '',
+      messageType: failed.messageType.name,
+      mediaUrl: failed.mediaUrl,
+      relatedId: failed.relatedId,
+      quoteMessageId: failed.quoteMessageId,
+      quotePreview: failed.quotePreview,
+    );
   }
 
   /// 重试上传失败的图片消息
@@ -1402,7 +1799,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final msgIdx = state.messages.indexWhere((m) => m.id == msgId);
     if (msgIdx < 0) return;
     final msg = state.messages[msgIdx];
-    if (msg.status != 'failed' || msg.tempBytes == null) return;
+    if (msg.status != 'failed' || !msg.canRetry || msg.tempBytes == null) {
+      return;
+    }
 
     // 恢复为上传中状态
     final updated = state.messages.map((m) {
@@ -1411,6 +1810,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           status: 'uploading',
           uploadProgress: 0.0,
           tempBytes: msg.tempBytes,
+          clearFailure: true,
         );
       }
       return m;
@@ -1443,6 +1843,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
             mediaUrl: url,
             status: 'sending',
             uploadProgress: 1.0,
+            clearFailure: true,
             clearTempBytes: true,
           );
           final finalUpdated =
@@ -1456,10 +1857,16 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
           _sendQueue.enqueue(queuedMsg);
         }
       } else {
-        _markUploadFailed(msgId, msg.tempBytes!);
+        _markUploadFailed(
+          msgId,
+          msg.tempBytes!,
+          failureCode: uploadResp.errorCode,
+          failureMessage: apiFailureMessage(uploadResp, fallback: '上传失败，请重试'),
+          retryable: uploadResp.isRetryable != false,
+        );
       }
     } catch (e) {
-      debugPrint('Retry image upload error: $e');
+      debugPrint('[Chat] retry image upload failed');
       _markUploadFailed(msgId, msg.tempBytes!);
     }
   }
@@ -1568,22 +1975,25 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     if (!filtered.any((m) => m.id == serverMsg.id)) {
       filtered.add(serverMsg);
     }
-    filtered.sort((a, b) {
-      if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
-      return (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0));
-    });
+    filtered.sort(_compareMessagesForLatestFirst);
     state = state.copyWith(messages: filtered, isSending: false);
     DataLayer().persistMessage(serverMsg);
     DataLayer().deletePersistedMessage(optimisticMsgId);
     _syncL1();
   }
 
-  void _onQueueFailed(int optimisticMsgId, String reason) {
+  void _onQueueFailed(int optimisticMsgId, ChatSendFailure failure) {
     if (!mounted) return;
     final idx = state.messages.indexWhere((m) => m.id == optimisticMsgId);
     if (idx < 0) return;
     final updated = List<Message>.from(state.messages);
-    updated[idx] = updated[idx].copyWith(status: 'failed');
+    updated[idx] = updated[idx].copyWith(
+      clientMsgId: failure.clientMsgId.isNotEmpty ? failure.clientMsgId : null,
+      status: 'failed',
+      failureCode: failure.code,
+      failureMessage: failure.message,
+      retryable: failure.retryable,
+    );
     state = state.copyWith(messages: updated, isSending: false);
     DataLayer().persistMessage(updated[idx]);
     _syncL1();
@@ -1648,10 +2058,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     }).toList();
     filtered.add(message);
     // 排序：优先用服务端 seq，无 seq 时按 createdAt
-    filtered.sort((a, b) {
-      if (a.seq != null && b.seq != null) return a.seq!.compareTo(b.seq!);
-      return (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0));
-    });
+    filtered.sort(_compareMessagesForLatestFirst);
     state = state.copyWith(messages: filtered, isSending: false);
     DataLayer().persistMessage(message);
   }
@@ -1682,17 +2089,16 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   void _onWsError(String error) {
     if (!mounted) return;
-    state = state.copyWith(isSending: false, error: '发送失败: $error');
+    debugPrint('[Chat] websocket notice: $error');
   }
 
-  void _onSendError(Map<String, dynamic> data) {
+  void _onSendError(ChatSendFailure failure) {
     if (!mounted) return;
-    final clientMsgId = data['clientMsgId'] as String?;
-    final error = data['error'] as String? ?? '未知错误';
-    if (clientMsgId == null) return;
+    final clientMsgId = failure.clientMsgId;
+    if (clientMsgId.isEmpty) return;
 
     // 通知 ChatSendQueue 立即标记该消息为失败
-    if (_sendQueue.handleSendError(clientMsgId, error)) {
+    if (_sendQueue.handleSendFailure(failure)) {
       return;
     }
 
@@ -1700,7 +2106,12 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
     final idx = state.messages.indexWhere((m) => m.clientMsgId == clientMsgId);
     if (idx >= 0) {
       final updated = List<Message>.from(state.messages);
-      updated[idx] = updated[idx].copyWith(status: 'failed');
+      updated[idx] = updated[idx].copyWith(
+        status: 'failed',
+        failureCode: failure.code,
+        failureMessage: failure.message,
+        retryable: failure.retryable,
+      );
       state = state.copyWith(messages: updated, isSending: false);
       DataLayer().persistMessage(updated[idx]);
     }
@@ -1731,12 +2142,20 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   /// 将当前消息列表同步写入 DataLayer L1
   void _syncL1() {
-    final l1Data = state.messages.map((m) => m.toJson()).toList();
+    if (_suppressRecentCacheSync) return;
+    final l1Data = <String, dynamic>{
+      'messages': state.messages.map((m) => m.toJson()).toList(),
+      'has_more': state.hasMore,
+    };
     DataLayer().write(CacheKeys.msgRecent(conversationId), l1Data);
   }
 
   @override
   void dispose() {
+    _statusRefreshGeneration++;
+    _statusRefreshInFlight = null;
+    _statusRefreshUserId = null;
+    _otherUserId = null;
     _ws.leaveConversation(conversationId);
     _wsMsgSub?.cancel();
     _wsTypingSub?.cancel();

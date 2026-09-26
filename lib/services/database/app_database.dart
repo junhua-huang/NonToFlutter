@@ -20,6 +20,8 @@ part 'app_database.g.dart';
 //      · messages_table, conversations_table
 //      · cache, offline_queue, app_meta
 //      · idx_msg_conv 索引
+//  - v2 (2026-07): messages_table 持久化发送失败语义
+//      · failure_code, failure_message, retryable
 // ═══════════════════════════════════════════════════════════════════════
 
 /// 聊天消息表
@@ -29,13 +31,22 @@ class MessagesTable extends Table {
   IntColumn get senderId => integer()();
   TextColumn get content => text().nullable()();
   TextColumn get mediaUrl => text().nullable()();
+  IntColumn get relatedId => integer().nullable()();
   TextColumn get messageType => text().withDefault(const Constant('text'))();
   BoolColumn get isRead => boolean().withDefault(const Constant(false))();
   IntColumn get createdAt => integer().nullable()();
   TextColumn get requestId => text().nullable()();
+  TextColumn get clientMsgId => text().nullable()();
   IntColumn get seq => integer().nullable()(); // 服务端消息序号
-  TextColumn get status =>
-      text().withDefault(const Constant('sent'))(); // sending/sent/failed
+  TextColumn get status => text()
+      .withDefault(const Constant('sent'))(); // uploading/sending/sent/failed
+  RealColumn get uploadProgress => real().nullable()();
+  IntColumn get quoteMessageId => integer().nullable()();
+  TextColumn get quotePreview => text().nullable()();
+  BoolColumn get isRecalled => boolean().withDefault(const Constant(false))();
+  TextColumn get failureCode => text().nullable()();
+  TextColumn get failureMessage => text().nullable()();
+  BoolColumn get retryable => boolean().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -51,6 +62,12 @@ class ConversationsTable extends Table {
   TextColumn get otherUserAvatar => text().nullable()();
   TextColumn get otherUserUsername => text().nullable()();
   TextColumn get lastMessage => text().nullable()();
+  TextColumn get lastMessageType =>
+      text().withDefault(const Constant('text'))();
+  TextColumn get lastMessageMediaUrl => text().nullable()();
+  IntColumn get lastMessageRelatedId => integer().nullable()();
+  BoolColumn get lastMessageIsRecalled =>
+      boolean().withDefault(const Constant(false))();
   IntColumn get lastMessageAt => integer().nullable()();
   IntColumn get unreadCount => integer().withDefault(const Constant(0))();
   BoolColumn get isOnline => boolean().withDefault(const Constant(false))();
@@ -117,6 +134,8 @@ class AppDatabase extends _$AppDatabase {
     return AppDatabase._(executor);
   }
 
+  AppDatabase.forTesting(super.e);
+
   /// 删除指定用户的数据库文件（含 WAL/Journal 文件）。
   /// 用于账号切换时清理旧数据。Web 端为空操作。
   static Future<void> deleteDatabaseFile(String userId) async {
@@ -133,7 +152,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// 当前 schema 版本。
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   /// 迁移元信息 key
   static const String metaKeySchemaVersion = 'schema_version';
@@ -151,10 +170,11 @@ class AppDatabase extends _$AppDatabase {
 
         // 向上迁移：每个版本一个独立 block，向上累积，【永不修改已发布 block】
         onUpgrade: (Migrator m, int from, int to) async {
-          // v1 → v2 示例（将来启用）：
-          // if (from < 2) {
-          //   await m.addColumn(messagesTable, messagesTable.editedAt);
-          // }
+          if (from < 2) {
+            await m.addColumn(messagesTable, messagesTable.failureCode);
+            await m.addColumn(messagesTable, messagesTable.failureMessage);
+            await m.addColumn(messagesTable, messagesTable.retryable);
+          }
 
           // 同步版本号到 app_meta（与 drift 内部版本号交叉校验）
           await _writeMeta(metaKeySchemaVersion, to.toString());
@@ -406,12 +426,27 @@ class AppDatabase extends _$AppDatabase {
     String lastMessage,
     int lastMessageAtEpoch, {
     int unreadIncrement = 0,
+    String messageType = 'text',
+    String? mediaUrl,
+    int? relatedId,
+    bool isRecalled = false,
   }) async {
     if (unreadIncrement > 0) {
       await customStatement(
         'UPDATE conversations_table SET unread_count = unread_count + ?, '
-        'last_message = ?, last_message_at = ? WHERE id = ?',
-        [unreadIncrement, lastMessage, lastMessageAtEpoch, conversationId],
+        'last_message = ?, last_message_type = ?, last_message_media_url = ?, '
+        'last_message_related_id = ?, last_message_is_recalled = ?, '
+        'last_message_at = ? WHERE id = ?',
+        [
+          unreadIncrement,
+          lastMessage,
+          messageType,
+          mediaUrl,
+          relatedId,
+          isRecalled,
+          lastMessageAtEpoch,
+          conversationId,
+        ],
       );
       return;
     }
@@ -419,6 +454,10 @@ class AppDatabase extends _$AppDatabase {
           ..where((t) => t.id.equals(conversationId)))
         .write(ConversationsTableCompanion(
       lastMessage: Value(lastMessage),
+      lastMessageType: Value(messageType),
+      lastMessageMediaUrl: Value(mediaUrl),
+      lastMessageRelatedId: Value(relatedId),
+      lastMessageIsRecalled: Value(isRecalled),
       lastMessageAt: Value(lastMessageAtEpoch),
     ));
   }

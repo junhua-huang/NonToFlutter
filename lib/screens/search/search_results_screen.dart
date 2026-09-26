@@ -2,6 +2,7 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
@@ -26,6 +27,7 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
   String? _error;
   int _page = 1;
   bool _hasMore = true;
+  final Set<int> _likingPostIds = {};
   final RefreshController _refreshController = RefreshController();
 
   @override
@@ -66,7 +68,7 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
         }
       } else {
         setState(() {
-          _error = resp.message ?? '搜索失败';
+          _error = apiFailureMessage(resp, fallback: '搜索失败');
           _isLoading = false;
         });
         if (isRefresh) {
@@ -75,9 +77,9 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
           _refreshController.loadFailed();
         }
       }
-    } catch (e) {
+    } catch (_) {
       setState(() {
-        _error = e.toString();
+        _error = '搜索失败，请重试';
         _isLoading = false;
       });
       if (isRefresh) {
@@ -89,34 +91,55 @@ class _TopicSearchResultsScreenState extends State<TopicSearchResultsScreen> {
   }
 
   Future<void> _togglePostLike(Post post) async {
-    final index = _posts.indexWhere((item) => item.id == post.id);
-    if (index == -1) return;
-
+    if (_likingPostIds.contains(post.id)) return;
+    _likingPostIds.add(post.id);
     final wasLiked = post.isLiked == true;
-    final originalCount = post.likeCount;
-    final nextCount = wasLiked ? originalCount - 1 : originalCount + 1;
+    final likeDelta = wasLiked ? -1 : 1;
+    final optimisticCount = post.likeCount + likeDelta;
+    final nextCount = optimisticCount < 0 ? 0 : optimisticCount;
 
-    setState(() {
-      _posts[index] = post.copyWith(isLiked: !wasLiked, likeCount: nextCount);
-    });
+    void apply(bool isLiked, int delta, {bool? onlyIfLiked}) {
+      final idx = _posts.indexWhere((item) => item.id == post.id);
+      if (idx == -1) return;
+      final current = _posts[idx];
+      if (onlyIfLiked != null && (current.isLiked == true) != onlyIfLiked) {
+        return;
+      }
+      final count = current.likeCount + delta;
+      _posts[idx] = current.copyWith(
+        isLiked: isLiked,
+        likeCount: count < 0 ? 0 : count,
+      );
+    }
+
+    setState(() => apply(!wasLiked, likeDelta));
 
     try {
-      if (wasLiked) {
-        await PostService().unlikePost(post.id);
-      } else {
-        await PostService().likePost(post.id);
+      final resp = wasLiked
+          ? await PostService().unlikePost(post.id)
+          : await PostService().likePost(post.id);
+      if (!resp.success) {
+        if (!mounted) return;
+        setState(() => apply(wasLiked, -likeDelta, onlyIfLiked: !wasLiked));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
       }
       PostInteractionNotifier()
           .notifyLikeChanged(post.id, !wasLiked, nextCount);
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _posts[index] =
-            post.copyWith(isLiked: wasLiked, likeCount: originalCount);
-      });
+      setState(() => apply(wasLiked, -likeDelta, onlyIfLiked: !wasLiked));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
       );
+    } finally {
+      _likingPostIds.remove(post.id);
     }
   }
 

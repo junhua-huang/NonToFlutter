@@ -25,12 +25,15 @@ void main() {
     });
   });
 
-  group('cursor feed service', () {
-    test('recommendation feed accepts optional cursor without sending empty cursor', () {
-      final source = readSource('lib/services/api/recommendation_service.dart');
-      expect(source, contains('String? cursor'));
-      expect(source, contains("if (cursor != null && cursor.isNotEmpty) 'cursor': cursor"));
-      expect(source, contains("'per_page': perPage"));
+  group('feed service tracks', () {
+    test(
+        'post service exposes timeline and related-to-me feeds without recommendation cursor',
+        () {
+      final source = readSource('lib/services/api/post_service.dart');
+      expect(source, contains('getFeed({int page = 1, int perPage = 20})'));
+      expect(
+          source, contains('getRelatedToMe({int page = 1, int perPage = 20})'));
+      expect(source, contains("'/posts/related-to-me'"));
     });
   });
 
@@ -44,10 +47,16 @@ void main() {
       expect(source, contains('final bool isLoadingMore;'));
     });
 
-    test('feed notifier sends cursor on load more and deduplicates appended posts', () {
+    test(
+        'feed notifier switches recommended and following tracks and deduplicates appended posts',
+        () {
       final source = readSource('lib/providers/feed_notifier.dart');
-      expect(source, contains('cursor: state.page == 1 ? null : state.nextCursor'));
       expect(source, contains('_mergeUniquePosts'));
+      expect(source, contains("case 'recommended':"));
+      expect(source, contains("case 'following':"));
+      expect(source, contains('PostService().getFeed(page: requestPage)'));
+      expect(
+          source, contains('PostService().getRelatedToMe(page: requestPage)'));
       expect(source, contains("data['next_cursor'] as String?"));
       expect(source, contains("data['feed_status'] as String?"));
     });

@@ -145,7 +145,7 @@ class _UnreadBadge extends StatelessWidget {
       height: 20,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: const BoxDecoration(
-        color: AppColors.likeRed,
+        color: AppColors.unreadBadge,
         borderRadius: BorderRadius.all(Radius.circular(10)),
       ),
       alignment: Alignment.center,

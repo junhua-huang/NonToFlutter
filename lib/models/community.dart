@@ -146,6 +146,18 @@ class CommunityMember {
     'user': user?.toJson(),
   };
 
+  CommunityMember copyWith({User? user}) {
+    return CommunityMember(
+      id: id,
+      communityId: communityId,
+      userId: userId,
+      role: role,
+      status: status,
+      joinedAt: joinedAt,
+      user: user ?? this.user,
+    );
+  }
+
   static int _parseInt(dynamic v) =>
       v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
   static DateTime? _parseDate(dynamic v) =>

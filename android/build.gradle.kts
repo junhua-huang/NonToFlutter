@@ -1,3 +1,12 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.9.1")
+    }
+}
 allprojects {
     repositories {
         google()
@@ -6,6 +15,9 @@ allprojects {
         maven { url = uri("https://maven.aliyun.com/repository/google") }
         maven { url = uri("https://maven.aliyun.com/repository/public") }
         maven { url = uri("https://maven.aliyun.com/repository/jcenter") }
+        maven { url = uri("https://maven.aliyun.com/nexus/content/repositories/releases/") }
+        maven { url = uri("https://developer.huawei.com/repo/") }
+        maven { url = uri("https://developer.hihonor.com/repo") }
     }
 }
 

@@ -10,6 +10,7 @@ import 'package:nonto/screens/post/post_detail_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
 import 'package:nonto/services/api/post_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/search_service.dart';
 import 'package:nonto/services/api/topic_service.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
@@ -20,6 +21,7 @@ import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/add_friend_button.dart';
 import 'package:nonto/widgets/error_state_widget.dart';
 import 'package:nonto/widgets/nonto_header_search_bar.dart';
+import 'package:nonto/widgets/authenticated_shell.dart';
 import 'package:nonto/widgets/post_card.dart';
 import 'package:nonto/widgets/search_suggestions.dart';
 import 'package:flutter/material.dart';
@@ -46,6 +48,7 @@ class _SearchTabState extends ConsumerState<SearchTab>
   List<User> _userResults = [];
   List<Post> _postResults = [];
   List<ComicEvent> _comicEventResults = [];
+  final Set<int> _likingPostIds = {};
 
   /// 是否处于搜索态（焦点驱动）：隐藏标题栏、展开搜索记录/建议、右侧显示按钮
   bool _inSearchMode = false;
@@ -249,15 +252,15 @@ class _SearchTabState extends ConsumerState<SearchTab>
         }
         SearchService().saveHistory(query, 'global');
       } else {
-        final msg = resp.message ?? '搜索失败';
+        final msg = apiFailureMessage(resp, fallback: '搜索失败');
         debugPrint(
-            '[Search] globalSearch failed: $msg, statusCode=${resp.statusCode}');
+            '[Search] globalSearch failed statusCode=${resp.statusCode} code=${resp.errorCode ?? "none"}');
         setState(
             () => _error = (resp.statusCode == 422) ? '搜索关键词至少需要2个字符' : msg);
       }
     } catch (e) {
       if (!mounted || generation != _searchGeneration) return;
-      debugPrint('[Search] globalSearch exception for query="$query": $e');
+      debugPrint('[Search] globalSearch exception type=${e.runtimeType}');
       setState(() => _error = '搜索失败，请重试');
     } finally {
       if (mounted && generation == _searchGeneration) {
@@ -267,44 +270,75 @@ class _SearchTabState extends ConsumerState<SearchTab>
   }
 
   Future<void> _togglePostLike(Post post) async {
+    if (_likingPostIds.contains(post.id)) return;
+    _likingPostIds.add(post.id);
     final wasLiked = post.isLiked == true;
-    final originalCount = post.likeCount;
-    final nextCount = wasLiked ? originalCount - 1 : originalCount + 1;
+    final likeDelta = wasLiked ? -1 : 1;
+    final optimisticCount = post.likeCount + likeDelta;
+    final nextCount = optimisticCount < 0 ? 0 : optimisticCount;
 
-    void apply(bool isLiked, int likeCount) {
+    int? apply(bool isLiked, int delta, {bool? onlyIfLiked}) {
       final idx = _postResults.indexWhere((item) => item.id == post.id);
-      if (idx != -1) {
-        _postResults[idx] = _postResults[idx].copyWith(
-          isLiked: isLiked,
-          likeCount: likeCount,
-        );
+      if (idx == -1) return null;
+      final current = _postResults[idx];
+      if (onlyIfLiked != null && (current.isLiked == true) != onlyIfLiked) {
+        return null;
       }
+      final count = current.likeCount + delta;
+      final safeCount = count < 0 ? 0 : count;
+      _postResults[idx] = current.copyWith(
+        isLiked: isLiked,
+        likeCount: safeCount,
+      );
       ref
           .read(exploreProvider.notifier)
-          .updatePostLike(post.id, isLiked, likeCount);
+          .updatePostLike(post.id, isLiked, safeCount);
+      return safeCount;
     }
 
-    setState(() => apply(!wasLiked, nextCount));
+    setState(() => apply(!wasLiked, likeDelta));
 
     try {
-      if (wasLiked) {
-        await PostService().unlikePost(post.id);
-      } else {
-        await PostService().likePost(post.id);
+      final resp = wasLiked
+          ? await PostService().unlikePost(post.id)
+          : await PostService().likePost(post.id);
+      if (!resp.success) {
+        if (!mounted) return;
+        setState(() => apply(wasLiked, -likeDelta, onlyIfLiked: !wasLiked));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
       }
       PostInteractionNotifier()
           .notifyLikeChanged(post.id, !wasLiked, nextCount);
     } catch (_) {
       if (!mounted) return;
-      setState(() => apply(wasLiked, originalCount));
+      setState(() => apply(wasLiked, -likeDelta, onlyIfLiked: !wasLiked));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('操作失败'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('操作失败，请重试'), duration: Duration(seconds: 2)),
       );
+    } finally {
+      _likingPostIds.remove(post.id);
     }
   }
 
   void _clearHistory() async {
-    await SearchService().clearHistory();
+    final resp = await SearchService().clearHistory();
+    if (!resp.success) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(apiFailureMessage(resp, fallback: '操作失败，请重试')),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     setState(() => _searchHistory.clear());
   }
 
@@ -342,8 +376,10 @@ class _SearchTabState extends ConsumerState<SearchTab>
                             focusNode: _focusNode,
                             user: ref.watch(authProvider).user,
                             hintText: '搜索',
-                            onAvatarTap: () =>
-                                Scaffold.of(context).openDrawer(),
+                            leading: _buildSearchLeading(),
+                            onAvatarTap: WideShellScope.isWideOf(context)
+                                ? null
+                                : () => Scaffold.of(context).openDrawer(),
                             onChanged: (_) => _onTextChanged(),
                             onSubmitted: _doSearch,
                             suffixIcon: ValueListenableBuilder<bool>(
@@ -399,6 +435,15 @@ class _SearchTabState extends ConsumerState<SearchTab>
           ),
         ],
       ),
+    );
+  }
+
+  Widget? _buildSearchLeading() {
+    if (!_isSearching) return null;
+    return IconButton(
+      icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+      tooltip: '退出搜索',
+      onPressed: () => _exitSearchMode(clearResults: true),
     );
   }
 

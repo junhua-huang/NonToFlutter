@@ -297,10 +297,26 @@ class DataLayer {
       LocalDbService().getConversations();
 
   /// 更新会话最后一条消息
-  Future<void> updateConvLastMessage(int convId, String content, DateTime time,
-          {int unreadIncrement = 0}) =>
-      LocalDbService().updateConversationLastMessage(convId, content, time,
-          unreadIncrement: unreadIncrement);
+  Future<void> updateConvLastMessage(
+    int convId,
+    String content,
+    DateTime time, {
+    int unreadIncrement = 0,
+    MessageType messageType = MessageType.text,
+    String? mediaUrl,
+    int? relatedId,
+    bool isRecalled = false,
+  }) =>
+      LocalDbService().updateConversationLastMessage(
+        convId,
+        content,
+        time,
+        unreadIncrement: unreadIncrement,
+        messageType: messageType,
+        mediaUrl: mediaUrl,
+        relatedId: relatedId,
+        isRecalled: isRecalled,
+      );
 
   /// 清理旧消息（保留最近 N 条或 N 天内）
   Future<int> pruneMessages(int convId, {int maxCount = 500, int maxDays = 30}) =>

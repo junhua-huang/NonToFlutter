@@ -14,10 +14,12 @@ void main() {
       expect(source, contains('Nonto 主框架页'));
       expect(source, contains('首页、发现、消息与我的'));
       expect(source, contains('IndexedStack'));
-      expect(source, contains('FeedTab()'));
-      expect(source, contains('SearchTab()'));
-      expect(source, contains('MessagesTab()'));
-      expect(source, contains('ProfileTab()'));
+      expect(source, contains('late final List<Widget?> _tabCache'));
+      expect(source, contains('Widget _buildLazyTab(int index)'));
+      expect(source, contains('_tabCache[index] ??= _createTab(index)'));
+      expect(
+          source, contains('List.generate(_tabCache.length, _buildLazyTab)'));
+      expect(source, isNot(contains('late final List<Widget> _tabs = const')));
     });
 
     test('bottom navigation chrome is extracted and keeps icons only', () {
@@ -37,7 +39,9 @@ void main() {
       expect(source, isNot(contains("label: '我的'")));
     });
 
-    test('compose action remains feed-only and opens create post screen', () {
+    test(
+        'compose action remains available outside feed and opens create post screen',
+        () {
       final source = read('lib/screens/home/home_screen.dart');
 
       expect(
@@ -47,16 +51,26 @@ void main() {
       expect(source, contains('if (currentIndex != 0) return null;'));
       expect(source, contains('const CreatePostScreen()'));
       expect(source, contains('FloatingActionButton'));
+
+      final shell = read('lib/widgets/authenticated_shell.dart');
+      final navigation = read('lib/widgets/wide_navigation_column.dart');
+      expect(navigation,
+          contains("key: const ValueKey('wide_navigation_compose')"));
+      expect(shell, contains('onCompose: _openCompose'));
     });
 
-    test('unread badge remains provider derived and capped', () {
-      final source = read('lib/screens/home/home_screen.dart');
+    test('unread badges remain provider derived and capped', () {
+      final homeSource = read('lib/screens/home/home_screen.dart');
+      final messagesSource = read('lib/screens/messages/messages_tab.dart');
 
-      expect(source, contains('unreadNotificationsCountProvider'));
-      expect(source, contains('unreadMessagesCountProvider'));
-      expect(source, contains('String _formatBadgeCount(int count)'));
-      expect(source, contains("count > 99 ? '99+' : '\$count'"));
-      expect(source, contains('Badge('));
+      expect(homeSource, contains('unreadMessagesCountProvider'));
+      expect(homeSource, isNot(contains('unreadNotificationsCountProvider')));
+      expect(homeSource, contains('String _formatBadgeCount(int count)'));
+      expect(homeSource, contains("count > 99 ? '99+' : '\$count'"));
+      expect(homeSource, contains('Badge('));
+      expect(messagesSource, contains('unreadNotificationsCountProvider'));
+      expect(messagesSource, contains('unreadNotifications > 99'));
+      expect(messagesSource, contains("? '99+'"));
     });
 
     test('known HomeScreen analyzer noise is removed', () {

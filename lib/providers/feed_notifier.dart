@@ -1,8 +1,9 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:nonto/models/post.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
-import 'package:nonto/services/api/recommendation_service.dart';
+import 'package:nonto/services/cache_keys.dart';
 import 'package:nonto/services/data_layer.dart';
 import 'package:nonto/services/post_interaction_notifier.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ class FeedState {
   final List<Post> posts;
   final int page;
   final String? nextCursor;
+  final String trackKey;
   final String? feedStatus;
   final bool hasMore;
   final bool isInitialLoading;
@@ -24,6 +26,7 @@ class FeedState {
   const FeedState({
     this.posts = const [],
     this.page = 1,
+    this.trackKey = 'recommended',
     this.nextCursor,
     this.feedStatus,
     this.hasMore = true,
@@ -39,6 +42,7 @@ class FeedState {
   FeedState copyWith({
     List<Post>? posts,
     int? page,
+    String? trackKey,
     String? nextCursor,
     bool clearNextCursor = false,
     String? feedStatus,
@@ -53,6 +57,7 @@ class FeedState {
     return FeedState(
       posts: posts ?? this.posts,
       page: page ?? this.page,
+      trackKey: trackKey ?? this.trackKey,
       nextCursor: clearNextCursor ? null : (nextCursor ?? this.nextCursor),
       feedStatus: feedStatus ?? this.feedStatus,
       hasMore: hasMore ?? this.hasMore,
@@ -71,13 +76,21 @@ class FeedNotifier extends StateNotifier<FeedState> {
   final Set<int> _likingPostIds = {};
   StreamSubscription? _sub;
   bool _loadInProgress = false;
+  final DataLayer _dataLayer;
+  final Map<String, FeedState> _trackStates = {};
 
-  FeedNotifier() : super(const FeedState()) {
-    _loadCached();
-    _sub = DataLayer().changeStream.listen((key) {
+  FeedNotifier({
+    FeedState initialState = const FeedState(),
+    DataLayer? dataLayer,
+    bool loadOnInit = true,
+  })  : _dataLayer = dataLayer ?? DataLayer(),
+        super(initialState) {
+    if (loadOnInit) _loadCached();
+    _sub = _dataLayer.changeStream.listen((key) {
       if (key == '__auth:logout') {
         reset();
-      } else if (key == 'feed:1:posts') {
+      } else if (key == CacheKeys.feedTrackPosts(state.trackKey) ||
+          (state.trackKey == 'recommended' && key == CacheKeys.feedPosts)) {
         _loadCached();
       }
     });
@@ -87,25 +100,28 @@ class FeedNotifier extends StateNotifier<FeedState> {
   Future<void> _loadCached() async {
     if (state.posts.isNotEmpty || _loadInProgress) return;
     _loadInProgress = true;
+    final requestTrackKey = state.trackKey;
     try {
-      final result = await DataLayer()
-          .query('feed:1:posts', () async => null)
+      final result = await _dataLayer
+          .query(CacheKeys.feedTrackPosts(requestTrackKey), () async => null)
           .timeout(const Duration(seconds: 2));
       final cached = result.data;
+      if (state.trackKey != requestTrackKey) return;
       if (cached is List && cached.isNotEmpty) {
-        final posts =
-            cached.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+        final posts = cached
+            .map((e) => Post.fromJson(e as Map<String, dynamic>))
+            .toList();
         state = state.copyWith(posts: posts, page: 2, isInitialLoading: false);
-        _loadInProgress = false;
+        _rememberCurrentTrackState();
         return;
       }
-    } catch (_) {}
-    // 缓存空 → 触发网络加载。
-    // 直接调 _fetchAndRefreshFeed 而非 loadPosts()，因为 loadPosts 内部有
-    // `_loadInProgress` guard，此时该标志已被本方法置为 true，会被直接
-    // return 掉，导致 isLoading 永远卡在 true（骨架屏不消失）。
-    try {
+      // 缓存空 → 触发网络加载。
+      // 直接调 _fetchAndRefreshFeed 而非 loadPosts()，因为 loadPosts 内部有
+      // `_loadInProgress` guard，此时该标志已被本方法置为 true，会被直接
+      // return 掉，导致 isLoading 永远卡在 true（骨架屏不消失）。
       await _fetchAndRefreshFeed();
+    } catch (_) {
+      if (state.trackKey == requestTrackKey) await _fetchAndRefreshFeed();
     } finally {
       _loadInProgress = false;
     }
@@ -121,13 +137,20 @@ class FeedNotifier extends StateNotifier<FeedState> {
   }
 
   /// Parse posts from API response data and update state.
-  void _applyPostsFromData(Map<String, dynamic> data, List postsJson) {
+  void _applyPostsFromData(
+    String requestTrackKey,
+    int requestPage,
+    Map<String, dynamic> data,
+    List postsJson,
+  ) {
+    if (state.trackKey != requestTrackKey) return;
     final posts =
         postsJson.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
-    final isFirstPage = state.page == 1;
+    final isFirstPage = requestPage == 1;
     final nextCursor = data['next_cursor'] as String?;
     final feedStatus = data['feed_status'] as String?;
-    final newPosts = isFirstPage ? posts : _mergeUniquePosts(state.posts, posts);
+    final newPosts =
+        isFirstPage ? posts : _mergeUniquePosts(state.posts, posts);
     state = state.copyWith(
       posts: newPosts,
       hasMore: data['has_more'] == true ||
@@ -135,61 +158,102 @@ class FeedNotifier extends StateNotifier<FeedState> {
       nextCursor: nextCursor,
       clearNextCursor: nextCursor == null || nextCursor.isEmpty,
       feedStatus: feedStatus,
-      page: state.page + 1,
+      page: requestPage + 1,
       clearError: true,
       lastUpdatedAt: DateTime.now(),
     );
+    _rememberCurrentTrackState();
     _syncFeedToCache();
   }
 
-  /// Fetch feed from recommendation service, with automatic fallback to PostService.
-  Future<Map<String, dynamic>?> _fetchFeedResponse() async {
+  /// Fetch chronological timeline feed. Recommendation feed is intentionally unused.
+  Future<Map<String, dynamic>?> _fetchFeedResponse(
+    String requestTrackKey,
+    int requestPage,
+  ) async {
     try {
-      final resp = await RecommendationService().getFeed(
-        page: state.page,
-        cursor: state.page == 1 ? null : state.nextCursor,
-      );
+      ApiResponse? resp;
+      switch (requestTrackKey) {
+        case 'recommended':
+          resp = await PostService().getFeed(page: requestPage);
+          break;
+        case 'following':
+          resp = await PostService().getRelatedToMe(page: requestPage);
+          break;
+        default:
+          return null;
+      }
       if (resp.success && resp.data != null) {
         return resp.data as Map<String, dynamic>;
       }
     } catch (e) {
-      debugPrint('FeedNotifier recommendation error: $e');
-    }
-    // Fallback to basic feed
-    try {
-      final resp = await PostService().getFeed(page: state.page);
-      if (resp.success && resp.data != null) {
-        return resp.data as Map<String, dynamic>;
-      }
-    } catch (e2) {
-      debugPrint('FeedNotifier fallback error: $e2');
+      debugPrint('FeedNotifier timeline error: $e');
     }
     return null;
   }
 
   Future<void> _fetchAndRefreshFeed() async {
+    final requestTrackKey = state.trackKey;
+    final requestPage = state.page;
     try {
-      final data = await _fetchFeedResponse();
+      final data = await _fetchFeedResponse(requestTrackKey, requestPage);
+      if (state.trackKey != requestTrackKey) return;
       if (data != null) {
         final List postsJson = data['posts'] ?? data['items'] ?? [];
-        _applyPostsFromData(data, postsJson);
+        _applyPostsFromData(requestTrackKey, requestPage, data, postsJson);
       } else {
         state = state.copyWith(
           error: state.posts.isEmpty ? '加载失败' : '刷新失败，正在显示上次内容',
         );
+        _rememberCurrentTrackState();
       }
     } catch (e) {
+      if (state.trackKey != requestTrackKey) return;
       debugPrint('FeedNotifier _fetchAndRefreshFeed error: $e');
       state = state.copyWith(
         error: state.posts.isEmpty ? '加载失败' : '刷新失败，正在显示上次内容',
       );
+      _rememberCurrentTrackState();
     } finally {
-      state = state.copyWith(
-        isInitialLoading: false,
+      if (state.trackKey == requestTrackKey) {
+        state = state.copyWith(
+          isInitialLoading: false,
+          isRefreshing: false,
+          isLoadingMore: false,
+        );
+        _rememberCurrentTrackState();
+      }
+    }
+  }
+
+  void _rememberCurrentTrackState() {
+    _trackStates[state.trackKey] = state;
+  }
+
+  Future<void> switchTrack(String trackKey) async {
+    if (state.trackKey == trackKey) return;
+    _rememberCurrentTrackState();
+    final cachedState = _trackStates[trackKey];
+    if (cachedState != null) {
+      state = cachedState.copyWith(
         isRefreshing: false,
         isLoadingMore: false,
+        clearError: true,
       );
+      return;
     }
+    state = state.copyWith(
+      posts: const [],
+      page: 1,
+      trackKey: trackKey,
+      hasMore: trackKey == 'recommended' || trackKey == 'following',
+      isInitialLoading: true,
+      isRefreshing: false,
+      isLoadingMore: false,
+      clearNextCursor: true,
+      clearError: true,
+    );
+    await _fetchAndRefreshFeed();
   }
 
   /// Pull-to-refresh: reset to page 1 and force-reload.
@@ -206,8 +270,11 @@ class FeedNotifier extends StateNotifier<FeedState> {
       clearNextCursor: true,
       clearError: true,
     );
-    await _fetchAndRefreshFeed();
-    _loadInProgress = false;
+    try {
+      await _fetchAndRefreshFeed();
+    } finally {
+      _loadInProgress = false;
+    }
   }
 
   /// Load more posts (pagination).
@@ -217,14 +284,47 @@ class FeedNotifier extends StateNotifier<FeedState> {
     if (_loadInProgress) return;
     _loadInProgress = true;
     state = state.copyWith(isLoadingMore: true, clearError: true);
-    await _fetchAndRefreshFeed();
-    _loadInProgress = false;
+    try {
+      await _fetchAndRefreshFeed();
+    } finally {
+      _loadInProgress = false;
+    }
   }
 
-  /// Insert a newly created post at the top.
+  /// Insert a newly created post at the top of the recommended track only.
   void insertNewPost(Post post) {
+    if (state.trackKey != 'recommended') return;
     if (state.posts.any((p) => p.id == post.id)) return;
     state = state.copyWith(posts: [post, ...state.posts]);
+    _rememberCurrentTrackState();
+    _syncFeedToCache();
+  }
+
+  void _rollbackLikeMutation(
+    int postId, {
+    required bool expectedLiked,
+    required int likeDelta,
+    String? error,
+  }) {
+    final currentIdx = state.posts.indexWhere((p) => p.id == postId);
+    if (currentIdx == -1) {
+      if (error != null) state = state.copyWith(error: error);
+      return;
+    }
+    final currentPost = state.posts[currentIdx];
+    if ((currentPost.isLiked ?? false) != expectedLiked) {
+      if (error != null) state = state.copyWith(error: error);
+      return;
+    }
+    final nextCount = currentPost.likeCount - likeDelta;
+    final rollbackPosts = List<Post>.from(state.posts);
+    rollbackPosts[currentIdx] = currentPost.copyWith(
+      isLiked: !expectedLiked,
+      likeCount: nextCount < 0 ? 0 : nextCount,
+    );
+    state = state.copyWith(posts: rollbackPosts, error: error);
+    _rememberCurrentTrackState();
+    _syncFeedToCache();
   }
 
   /// Toggle like with optimistic update.
@@ -240,34 +340,45 @@ class FeedNotifier extends StateNotifier<FeedState> {
 
     final post = state.posts[idx];
     final wasLiked = post.isLiked ?? false;
+    final likeDelta = wasLiked ? -1 : 1;
+    final nextLikeCount = post.likeCount + likeDelta;
     final updatedPost = post.copyWith(
       isLiked: !wasLiked,
-      likeCount: wasLiked ? post.likeCount - 1 : post.likeCount + 1,
+      likeCount: nextLikeCount < 0 ? 0 : nextLikeCount,
     );
 
     // Optimistic update
     final updatedPosts = List<Post>.from(state.posts);
     updatedPosts[idx] = updatedPost;
     state = state.copyWith(posts: updatedPosts);
+    _rememberCurrentTrackState();
     _syncFeedToCache();
 
     try {
-      if (wasLiked) {
-        await PostService().unlikePost(postId);
-      } else {
-        await PostService().likePost(postId);
+      final resp = wasLiked
+          ? await PostService().unlikePost(postId)
+          : await PostService().likePost(postId);
+      if (!resp.success) {
+        _rollbackLikeMutation(
+          postId,
+          expectedLiked: !wasLiked,
+          likeDelta: likeDelta,
+          error: apiFailureMessage(resp, fallback: '操作失败，请重试'),
+        );
+        return;
       }
       PostInteractionNotifier().notifyLikeChanged(
         postId,
         !wasLiked,
-        wasLiked ? post.likeCount - 1 : post.likeCount + 1,
+        updatedPost.likeCount,
       );
-    } catch (e) {
-      // Rollback
-      final rollbackPosts = List<Post>.from(state.posts);
-      rollbackPosts[idx] = post;
-      state = state.copyWith(posts: rollbackPosts);
-      _syncFeedToCache();
+    } catch (_) {
+      _rollbackLikeMutation(
+        postId,
+        expectedLiked: !wasLiked,
+        likeDelta: likeDelta,
+        error: '操作失败，请重试',
+      );
     } finally {
       _likingPostIds.remove(postId);
     }
@@ -280,13 +391,26 @@ class FeedNotifier extends StateNotifier<FeedState> {
     final updatedPosts = List<Post>.from(state.posts);
     updatedPosts[idx] = updater(updatedPosts[idx]);
     state = state.copyWith(posts: updatedPosts);
+    _rememberCurrentTrackState();
   }
 
-  /// Sync current posts to DataLayer cache (always uses canonical 'feed:1:posts' key).
-  void _syncFeedToCache() {
-    if (state.posts.isEmpty) return;
+  /// Remove blocked-user posts from memory and persist even an empty result.
+  Future<void> removePostsByUser(int userId) async {
+    final filtered =
+        state.posts.where((post) => post.userId != userId).toList();
+    if (filtered.length == state.posts.length) return;
+    state = state.copyWith(posts: filtered);
+    _rememberCurrentTrackState();
+    await _syncFeedToCache();
+  }
+
+  /// Sync current posts to the canonical feed cache, including empty lists.
+  Future<void> _syncFeedToCache() async {
     final data = state.posts.map((p) => p.toJson()).toList();
-    DataLayer().write('feed:1:posts', data);
+    await _dataLayer.write(CacheKeys.feedTrackPosts(state.trackKey), data);
+    if (state.trackKey == 'recommended') {
+      await _dataLayer.write(CacheKeys.feedPosts, data);
+    }
   }
 
   /// Reset to initial state.
@@ -302,7 +426,6 @@ class FeedNotifier extends StateNotifier<FeedState> {
   }
 }
 
-final feedProvider =
-    StateNotifierProvider<FeedNotifier, FeedState>((ref) {
+final feedProvider = StateNotifierProvider<FeedNotifier, FeedState>((ref) {
   return FeedNotifier();
 });

@@ -37,6 +37,15 @@ class TwitterSheetOption<T> {
   });
 }
 
+class NontoSheetOption<T> extends TwitterSheetOption<T> {
+  const NontoSheetOption({
+    required super.icon,
+    required super.label,
+    required super.value,
+    super.isDestructive = false,
+  });
+}
+
 /// 弹窗入口
 class TwitterBottomSheet {
   TwitterBottomSheet._();
@@ -58,6 +67,24 @@ class TwitterBottomSheet {
         options: options,
         destructiveColor: destructiveColor ?? AppColors.likeRed,
       ),
+    );
+  }
+}
+
+class NontoBottomSheet {
+  NontoBottomSheet._();
+
+  static Future<T?> show<T>(
+    BuildContext context, {
+    String? groupLabel,
+    required List<NontoSheetOption<T>> options,
+    Color? destructiveColor,
+  }) {
+    return TwitterBottomSheet.show<T>(
+      context,
+      groupLabel: groupLabel,
+      options: options,
+      destructiveColor: destructiveColor,
     );
   }
 }

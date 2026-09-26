@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/conversation.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/screens/chat/chat_room_screen.dart';
+import 'package:nonto/screens/community/community_chat_screen.dart';
+import 'package:nonto/services/chat_prefetch_service.dart';
 import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
 import 'package:nonto/widgets/empty_state_widget.dart';
@@ -71,12 +75,33 @@ class _ConversationsTabState extends ConsumerState<ConversationsTab> {
         final conv = conversations[index];
         return _ConversationTile(
           conversation: conv,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatRoomScreen(conversation: conv),
-            ),
-          ),
+          onTap: () {
+            if (conv.isCommunity && conv.communityId != null) {
+              unawaited(
+                ChatPrefetchService().prefetchCommunityChat(conv.communityId!),
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CommunityChatScreen(
+                    communityId: conv.communityId!,
+                    communityName: conv.communityName,
+                    communityAvatar: conv.communityAvatar,
+                  ),
+                ),
+              );
+              return;
+            }
+            unawaited(
+              ChatPrefetchService().prefetchPrivateConversation(conv.id),
+            );
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatRoomScreen(conversation: conv),
+              ),
+            );
+          },
         );
       },
     );

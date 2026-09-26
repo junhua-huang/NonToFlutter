@@ -11,6 +11,8 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+.run/
+scripts/release/release.config.json
 
 # IntelliJ related
 *.iml
@@ -43,3 +45,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Vendor push configuration contains environment-specific credentials
+/android/app/agconnect-services.json

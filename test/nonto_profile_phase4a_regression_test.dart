@@ -34,6 +34,18 @@ void main() {
     });
 
     test(
+        'profile header reserves enough expanded height for email and identity',
+        () {
+      expect(
+          source, contains('double _profileHeaderExpandedHeight(User user)'));
+      expect(source,
+          contains('expandedHeight: _profileHeaderExpandedHeight(user)'));
+      expect(source, contains('profileEmailFor(user, isOwnProfile: true)'));
+      expect(source, contains('user.verifiedRoleLabels.isNotEmpty'));
+      expect(source, isNot(contains('expandedHeight: 420')));
+    });
+
+    test(
         'profile tab removes known unused imports and unused avatar preview fields',
         () {
       expect(source, isNot(contains("package:cross_file/cross_file.dart")));

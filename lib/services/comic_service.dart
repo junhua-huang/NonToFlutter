@@ -6,24 +6,37 @@ import 'api/api_client.dart';
 class ComicService {
   static const String _basePath = '/comic';
 
+  ApiResponse<R> _wrapFailure<R>(ApiResponse resp, String fallback) {
+    return ApiResponse<R>(
+      success: false,
+      message: apiFailureMessage(resp, fallback: fallback),
+      statusCode: resp.statusCode,
+      errorCode: resp.errorCode,
+      isRetryable: resp.isRetryable,
+    );
+  }
+
   Future<ApiResponse<List<ComicCity>>> getCities() async {
-    final resp = await ApiClient().getDeduped<List<dynamic>>('$_basePath/cities');
+    final resp =
+        await ApiClient().getDeduped<List<dynamic>>('$_basePath/cities');
     if (resp.success && resp.data != null) {
-      final cities =
-          resp.data!.map((e) => ComicCity.fromJson(e as Map<String, dynamic>)).toList();
+      final cities = resp.data!
+          .map((e) => ComicCity.fromJson(e as Map<String, dynamic>))
+          .toList();
       return ApiResponse(success: true, data: cities);
     }
-    return ApiResponse(success: false, message: resp.message ?? '获取城市列表失败');
+    return _wrapFailure(resp, '获取城市列表失败');
   }
 
   Future<ApiResponse<List<ComicTag>>> getTags() async {
     final resp = await ApiClient().getDeduped<List<dynamic>>('$_basePath/tags');
     if (resp.success && resp.data != null) {
-      final tags =
-          resp.data!.map((e) => ComicTag.fromJson(e as Map<String, dynamic>)).toList();
+      final tags = resp.data!
+          .map((e) => ComicTag.fromJson(e as Map<String, dynamic>))
+          .toList();
       return ApiResponse(success: true, data: tags);
     }
-    return ApiResponse(success: false, message: resp.message ?? '获取标签列表失败');
+    return _wrapFailure(resp, '获取标签列表失败');
   }
 
   Future<ApiResponse<ComicEventsPage>> getEvents({
@@ -44,12 +57,14 @@ class ComicService {
       params: params,
     );
     if (resp.success && resp.data != null) {
-      return ApiResponse(success: true, data: ComicEventsPage.fromJson(resp.data!));
+      return ApiResponse(
+          success: true, data: ComicEventsPage.fromJson(resp.data!));
     }
-    return ApiResponse(success: false, message: resp.message ?? '获取漫展列表失败');
+    return _wrapFailure(resp, '获取漫展列表失败');
   }
 
-  Future<ApiResponse<ComicEvent>> getEventDetail(int eventId, {int? userId}) async {
+  Future<ApiResponse<ComicEvent>> getEventDetail(int eventId,
+      {int? userId}) async {
     final params = <String, dynamic>{};
     if (userId != null) params['userId'] = userId.toString();
 
@@ -58,9 +73,10 @@ class ComicService {
       params: params,
     );
     if (resp.success && resp.data != null) {
-      return ApiResponse(success: true, data: ComicEvent.fromDetailJson(resp.data!));
+      return ApiResponse(
+          success: true, data: ComicEvent.fromDetailJson(resp.data!));
     }
-    return ApiResponse(success: false, message: resp.message ?? '获取漫展详情失败');
+    return _wrapFailure(resp, '获取漫展详情失败');
   }
 
   Future<ApiResponse<Map<String, dynamic>>> toggleFollow(int eventId) async {
@@ -70,37 +86,42 @@ class ComicService {
     if (resp.success) {
       return ApiResponse(success: true, data: resp.data);
     }
-    return ApiResponse(success: false, message: resp.message ?? '操作失败');
+    return _wrapFailure(resp, '操作失败');
   }
 
   /// 获取当前用户发布的漫展（分页）
-  Future<ApiResponse<ComicEventsPage>> getMyEvents({int page = 1, int size = 10}) async {
+  Future<ApiResponse<ComicEventsPage>> getMyEvents(
+      {int page = 1, int size = 10}) async {
     final resp = await ApiClient().getDeduped<Map<String, dynamic>>(
       '$_basePath/my-events',
       params: {'page': page.toString(), 'size': size.toString()},
     );
     if (resp.success && resp.data != null) {
-      return ApiResponse(success: true, data: ComicEventsPage.fromJson(resp.data!));
+      return ApiResponse(
+          success: true, data: ComicEventsPage.fromJson(resp.data!));
     }
-    return ApiResponse(success: false, message: resp.message ?? '获取我的漫展失败');
+    return _wrapFailure(resp, '获取我的漫展失败');
   }
 
   /// 获取当前用户关注的漫展（分页）
-  Future<ApiResponse<ComicEventsPage>> getMyFollowed({int page = 1, int size = 10}) async {
+  Future<ApiResponse<ComicEventsPage>> getMyFollowed(
+      {int page = 1, int size = 10}) async {
     final resp = await ApiClient().getDeduped<Map<String, dynamic>>(
       '$_basePath/my-followed',
       params: {'page': page.toString(), 'size': size.toString()},
     );
     if (resp.success && resp.data != null) {
-      return ApiResponse(success: true, data: ComicEventsPage.fromJson(resp.data!));
+      return ApiResponse(
+          success: true, data: ComicEventsPage.fromJson(resp.data!));
     }
-    return ApiResponse(success: false, message: resp.message ?? '获取关注的漫展失败');
+    return _wrapFailure(resp, '获取关注的漫展失败');
   }
 
   /// 提交漫展 JSON（图片 URL 已预先上传）
-  Future<ApiResponse<Map<String, dynamic>>> submitEvent(Map<String, dynamic> body) async {
-    final resp =
-        await ApiClient().post<Map<String, dynamic>>('$_basePath/events', data: body);
+  Future<ApiResponse<Map<String, dynamic>>> submitEvent(
+      Map<String, dynamic> body) async {
+    final resp = await ApiClient()
+        .post<Map<String, dynamic>>('$_basePath/events', data: body);
     return resp;
   }
 
@@ -130,7 +151,7 @@ class ComicService {
         },
       );
       if (!resp.success || resp.data == null) {
-        throw Exception(resp.message ?? '图片 ${i + 1} 上传失败');
+        throw Exception(apiFailureMessage(resp, fallback: '图片 ${i + 1} 上传失败'));
       }
       final url = resp.data!['url']?.toString() ?? '';
       if (url.isEmpty) {
@@ -140,18 +161,20 @@ class ComicService {
     }
 
     final body = <String, dynamic>{...fields, 'imageUrls': imageUrls};
-    final resp = await api.post<Map<String, dynamic>>('$_basePath/events', data: body);
+    final resp =
+        await api.post<Map<String, dynamic>>('$_basePath/events', data: body);
     if (resp.success && resp.data != null) {
       return resp.data!['id'] ?? -1;
     }
-    throw Exception(resp.message ?? '发布失败');
+    throw Exception(apiFailureMessage(resp, fallback: '发布失败'));
   }
 
   // ==========================================
   // 漫展评论
   // ==========================================
 
-  Future<ApiResponse<Map<String, dynamic>>> getEventComments(int eventId, {int page = 1, int size = 20}) async {
+  Future<ApiResponse<Map<String, dynamic>>> getEventComments(int eventId,
+      {int page = 1, int size = 20}) async {
     return ApiClient().get<Map<String, dynamic>>(
       '$_basePath/events/$eventId/comments',
       params: {'page': page.toString(), 'size': size.toString()},
@@ -167,13 +190,16 @@ class ComicService {
     final body = <String, dynamic>{'content': content};
     if (parentId != null) body['parent_id'] = parentId;
     if (replyToUserId != null) body['reply_to_user_id'] = replyToUserId;
-    return ApiClient().post<Map<String, dynamic>>(
+    final resp = await ApiClient().post<Map<String, dynamic>>(
       '$_basePath/events/$eventId/comments',
       data: body,
     );
+    if (resp.success) return resp;
+    return _wrapFailure(resp, '评论发送失败');
   }
 
-  Future<ApiResponse<Map<String, dynamic>>> getCommentReplies(int commentId, {int page = 1, int size = 50}) async {
+  Future<ApiResponse<Map<String, dynamic>>> getCommentReplies(int commentId,
+      {int page = 1, int size = 50}) async {
     return ApiClient().get<Map<String, dynamic>>(
       '$_basePath/events/comments/$commentId/replies',
       params: {'page': page.toString(), 'size': size.toString()},
@@ -181,15 +207,19 @@ class ComicService {
   }
 
   Future<ApiResponse<Map<String, dynamic>>> likeComment(int commentId) async {
-    return ApiClient().post<Map<String, dynamic>>(
+    final resp = await ApiClient().post<Map<String, dynamic>>(
       '$_basePath/events/comments/$commentId/like',
     );
+    if (resp.success) return resp;
+    return _wrapFailure(resp, '操作失败');
   }
 
   Future<ApiResponse<Map<String, dynamic>>> deleteComment(int commentId) async {
-    return ApiClient().delete<Map<String, dynamic>>(
+    final resp = await ApiClient().delete<Map<String, dynamic>>(
       '$_basePath/events/comments/$commentId',
     );
+    if (resp.success) return resp;
+    return _wrapFailure(resp, '删除失败');
   }
 
   /// 逐张图片上传到 COS（编辑漫展用）
@@ -211,7 +241,7 @@ class ComicService {
         },
       );
       if (!resp.success || resp.data == null) {
-        throw Exception(resp.message ?? '图片 ${i + 1} 上传失败');
+        throw Exception(apiFailureMessage(resp, fallback: '图片 ${i + 1} 上传失败'));
       }
       final url = resp.data!['url']?.toString() ?? '';
       if (url.isEmpty) {
@@ -221,10 +251,10 @@ class ComicService {
     }
 
     final body = <String, dynamic>{...fields, 'imageUrls': imageUrls};
-    final resp =
-        await api.put<Map<String, dynamic>>('$_basePath/events/$eventId', data: body);
+    final resp = await api
+        .put<Map<String, dynamic>>('$_basePath/events/$eventId', data: body);
     if (!resp.success) {
-      throw Exception(resp.message ?? '编辑失败');
+      throw Exception(apiFailureMessage(resp, fallback: '编辑失败'));
     }
   }
 }

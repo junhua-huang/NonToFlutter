@@ -7,7 +7,9 @@ import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/providers/chat_notifiers.dart';
 import 'package:nonto/screens/community/community_detail_screen.dart';
 import 'package:nonto/services/api/community_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/upload_service.dart';
+import 'package:nonto/utils/picker_error_utils.dart';
 
 /// 创建社群 — 两步表单
 /// Step 1: 名称、简介、规则与视觉资料。
@@ -69,13 +71,20 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
   }
 
   Future<void> _pickCommunityImage({required bool isAvatar}) async {
-    final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: isAvatar ? 720 : 1600,
-      imageQuality: 90,
-    );
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
+    XFile? picked;
+    Uint8List bytes;
+    try {
+      picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: isAvatar ? 720 : 1600,
+        imageQuality: 90,
+      );
+      if (picked == null) return;
+      bytes = await picked.readAsBytes();
+    } catch (e) {
+      if (mounted) showPickerErrorSnackBar(context, e, target: '相册');
+      return;
+    }
     if (!mounted) return;
     setState(() {
       if (isAvatar) {
@@ -101,13 +110,13 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(resp.message ?? '上传失败')),
+          SnackBar(content: Text(apiFailureMessage(resp, fallback: '上传失败'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('上传失败: $e')));
+            .showSnackBar(const SnackBar(content: Text('上传失败，请重试')));
       }
     } finally {
       if (mounted) {
@@ -140,6 +149,16 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
         'avatar_url': _avatarUrl,
         'banner_url': _bannerUrl,
       });
+      if (!resp.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(apiFailureMessage(resp, fallback: '创建失败，请重试')),
+            ),
+          );
+        }
+        return;
+      }
       if (resp.data is Map && resp.data['community'] != null) {
         final community = resp.data['community'];
         final id = community is Map ? community['id'] : null;
@@ -152,11 +171,15 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
             ),
           );
         }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建失败，请重试')),
+        );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('创建失败: $e')));
+            .showSnackBar(const SnackBar(content: Text('创建失败，请重试')));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

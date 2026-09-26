@@ -2,16 +2,19 @@ import 'package:nonto/config/app_config.dart';
 import 'package:nonto/config/app_theme.dart';
 import 'package:nonto/models/post.dart';
 import 'package:nonto/providers/auth_notifier.dart';
+import 'package:nonto/providers/blocking_notifier.dart';
+import 'package:nonto/screens/post/create_post_screen.dart';
 import 'package:nonto/screens/profile/user_profile_screen.dart';
 import 'package:nonto/screens/search/search_results_screen.dart';
-import 'package:nonto/services/api/block_service.dart';
+import 'package:nonto/services/api/api_client.dart';
 import 'package:nonto/services/api/post_service.dart';
 import 'package:nonto/services/api/report_service.dart';
-import 'package:nonto/utils/date_utils.dart';
 import 'package:nonto/utils/image_utils.dart';
-import 'package:nonto/widgets/enhanced_media_viewer.dart';
+import 'package:nonto/widgets/post_author_meta_line.dart';
 import 'package:nonto/widgets/media_viewer.dart';
 import 'package:nonto/widgets/nonto/nonto_post_action_bar.dart';
+import 'package:nonto/widgets/post_share_to_chat_sheet.dart';
+import 'package:nonto/widgets/quote_thread_card.dart';
 import 'package:nonto/widgets/rich_text_content.dart';
 import 'package:nonto/widgets/twitter_bottom_sheet.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -21,7 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
 /// 统一帖子卡片组件 — 首页 Feed、他人主页、我的主页共用
-class PostCard extends StatelessWidget {
+class PostCard extends ConsumerWidget {
   final Post post;
   final VoidCallback onTap;
   final VoidCallback? onLike;
@@ -155,7 +158,7 @@ class PostCard extends StatelessWidget {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(resp.message ?? '举报失败'),
+              content: Text(apiFailureMessage(resp, fallback: '举报失败，请重试')),
               duration: const Duration(seconds: 2)),
         );
       }
@@ -168,7 +171,11 @@ class PostCard extends StatelessWidget {
     }
   }
 
-  Future<void> _showBlockConfirmDialog(BuildContext context, Post post) async {
+  Future<void> _showBlockConfirmDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Post post,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -192,29 +199,22 @@ class PostCard extends StatelessWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    try {
-      final resp = await BlockService().blockUser(post.userId);
-      if (!context.mounted) return;
-      if (resp.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('已屏蔽@${post.user?.username ?? '该用户'}'),
-              duration: const Duration(seconds: 2)),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(resp.message ?? '屏蔽失败'),
-              duration: const Duration(seconds: 2)),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('屏蔽失败，请稍后重试'), duration: Duration(seconds: 2)),
-      );
-    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final result =
+        await ref.read(blockCoordinatorProvider).blockUser(post.userId);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? '已屏蔽@${post.user?.username ?? '该用户'}'
+              : result.error ?? '屏蔽失败',
+        ),
+        backgroundColor: result.success ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _showDeleteConfirmDialog(BuildContext context, Post post) async {
@@ -254,7 +254,7 @@ class PostCard extends StatelessWidget {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(resp.message ?? '删除失败'),
+              content: Text(apiFailureMessage(resp, fallback: '删除失败，请重试')),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 2)),
         );
@@ -271,235 +271,188 @@ class PostCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (post.quotedPostId != null) {
+      return QuoteThreadCard(
+        post: post,
+        onCurrentTap: onTap,
+        onCurrentLike: onLike,
+        onCurrentLongPress: onLongPress,
+        onCurrentDelete: onDelete,
+        feedPosts: feedPosts,
+      );
+    }
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- Header ---
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar
                 GestureDetector(
-                  onTap: () {
-                    if (post.user != null) {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: post.user!),
-                          ));
-                    }
-                  },
+                  onTap: () => _openUserProfile(context),
                   child: ImageUtils.buildAvatar(post.user, radius: 20),
                 ),
                 const SizedBox(width: 12),
-                // Name + username/time
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          if (post.user != null) {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      UserProfileScreen(user: post.user!),
-                                ));
-                          }
-                        },
-                        child: Text(
-                          post.user?.displayName ?? '未知用户',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      GestureDetector(
-                        onTap: () {
-                          if (post.user != null) {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      UserProfileScreen(user: post.user!),
-                                ));
-                          }
-                        },
-                        child: Text(
-                          '@${post.user?.username ?? ''}  ·  ${AppDateUtils.formatTimeAgo(post.createdAt)}',
-                          style: TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // More button
-                IconButton(
-                  icon: Icon(Icons.more_horiz,
-                      size: 18, color: AppColors.textSecondary),
-                  onPressed: () async {
-                    final currentUserId = ProviderScope.containerOf(context)
-                        .read(authProvider)
-                        .user
-                        ?.id;
-                    final isOwnPost =
-                        currentUserId != null && post.userId == currentUserId;
-
-                    final options = <TwitterSheetOption<String>>[
-                      const TwitterSheetOption(
-                          icon: Icons.report_outlined,
-                          label: '举报帖子',
-                          value: 'report'),
-                      const TwitterSheetOption(
-                          icon: Icons.block_outlined,
-                          label: '屏蔽用户',
-                          value: 'block'),
-                      if (isOwnPost)
-                        const TwitterSheetOption(
-                            icon: Icons.delete_outline,
-                            label: '删除帖子',
-                            value: 'delete',
-                            isDestructive: true),
-                    ];
-
-                    final action = await TwitterBottomSheet.show<String>(
-                        context,
-                        options: options);
-                    if (action == null || !context.mounted) return;
-                    switch (action) {
-                      case 'report':
-                        _showReportDialog(context, post);
-                        break;
-                      case 'block':
-                        _showBlockConfirmDialog(context, post);
-                        break;
-                      case 'delete':
-                        _showDeleteConfirmDialog(context, post);
-                        break;
-                    }
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
-                ),
+                Expanded(child: _buildNormalPostContentColumn(context, ref)),
               ],
             ),
           ),
-          // --- Content ---
-          if (post.content != null && post.content!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Builder(
-                builder: (context) => RichTextContent(
-                  text: post.content!,
-                  style: TextStyle(
-                      fontSize: 15, height: 1.4, color: AppColors.textPrimary),
-                  onTopicTap: (topicName) {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              TopicSearchResultsScreen(topicName: topicName),
-                        ));
-                  },
-                ),
-              ),
-            ),
-          // --- Image ---
-          if (post.hasImage)
-            Padding(
-              padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
-              child: () {
-                final allImages = <String>[];
-                if (post.images != null) {
-                  for (final u in post.images!) {
-                    if (u.isNotEmpty) allImages.add(u);
-                  }
-                }
-                if (allImages.isEmpty) return const SizedBox.shrink();
-                if (allImages.length == 1) {
-                  return GestureDetector(
-                    onTap: () {
-                      final items =
-                          _buildMediaItems(post, allImages, feedPosts);
-                      final index = _indexForPost(items, post.id);
-                      EnhancedImageViewerScreen.show(context, items,
-                          initialPostIndex: index);
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Hero(
-                        tag: 'feed_img_${post.id}_0',
-                        child: ImageUtils.buildPostImage(
-                          allImages[0],
-                          fit: BoxFit.fitWidth,
-                          width: double.infinity,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                return ImageGalleryGrid(
-                  imageUrls: allImages,
-                  maxHeight: 400,
-                  post: post,
-                  feedPosts: feedPosts,
-                );
-              }(),
-            ),
-          // --- Video ---
-          if (post.hasVideo && post.videoUrl != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
-              child: kIsWeb
-                  ? _WebVideoPlayer(
-                      videoUrl: post.videoUrl!,
-                      coverUrl: post.thumbnailUrl ??
-                          (post.images != null && post.images!.isNotEmpty
-                              ? post.images![0]
-                              : null),
-                    )
-                  : InlineVideoPlayer(
-                      videoUrl: post.videoUrl!,
-                      coverUrl: post.thumbnailUrl ??
-                          (post.images != null && post.images!.isNotEmpty
-                              ? post.images![0]
-                              : null),
-                      playerPool: videoPlayerPool,
-                      pauseWhenHidden: true,
-                    ),
-            ),
-          // --- Actions ---
-          NontoPostActionBar(
-            commentCount: post.commentCount,
-            likeCount: post.likeCount,
-            viewCount: post.viewCount,
-            isLiked: post.isLiked == true,
-            onComment: onTap,
-            onLike: onLike ?? () {},
-            onView: () => _showPostStats(context, post),
-          ),
-          // Divider
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.only(left: 72, right: 16),
             child: Divider(height: 1, color: AppColors.borderLight),
           ),
         ],
       ),
     );
+  }
+
+  void _openUserProfile(BuildContext context) {
+    if (post.user == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: post.user!)),
+    );
+  }
+
+  Widget _buildNormalPostContentColumn(BuildContext context, WidgetRef ref) {
+    final images = (post.images ?? const <String>[])
+        .where((url) => url.isNotEmpty)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: PostAuthorMetaLine(
+                post: post,
+                showUsername: false,
+                onTap: () => _openUserProfile(context),
+              ),
+            ),
+            _buildCompactMoreButton(context, ref),
+          ],
+        ),
+        if (post.content != null && post.content!.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          RichTextContent(
+            text: post.content!,
+            style: TextStyle(
+                fontSize: 15, height: 1.4, color: AppColors.textPrimary),
+            onTopicTap: (topicName) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      TopicSearchResultsScreen(topicName: topicName),
+                ),
+              );
+            },
+          ),
+        ],
+        if (images.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          AdaptivePostImageGallery(
+            imageUrls: images,
+            maxHeight: 400,
+            post: post,
+            feedPosts: feedPosts,
+          ),
+        ],
+        if (post.hasVideo && post.videoUrl != null) ...[
+          const SizedBox(height: 10),
+          kIsWeb
+              ? _WebVideoPlayer(
+                  videoUrl: post.videoUrl!,
+                  coverUrl: post.thumbnailUrl ??
+                      (post.images != null && post.images!.isNotEmpty
+                          ? post.images![0]
+                          : null),
+                )
+              : InlineVideoPlayer(
+                  videoUrl: post.videoUrl!,
+                  coverUrl: post.thumbnailUrl ??
+                      (post.images != null && post.images!.isNotEmpty
+                          ? post.images![0]
+                          : null),
+                  playerPool: videoPlayerPool,
+                  pauseWhenHidden: true,
+                ),
+        ],
+        NontoPostActionBar(
+          padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+          commentCount: post.commentCount,
+          likeCount: post.likeCount,
+          viewCount: post.viewCount,
+          isLiked: post.isLiked == true,
+          onComment: onTap,
+          onLike: onLike ?? () {},
+          onView: () => _showPostStats(context, post),
+          onQuote: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => CreatePostScreen(quotedPost: post)),
+          ),
+          onShare: () => PostShareToChatSheet.show(context, post: post),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactMoreButton(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () => _showPostActions(context, ref),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 24,
+        height: 22,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child:
+              Icon(Icons.more_horiz, size: 18, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPostActions(BuildContext context, WidgetRef ref) async {
+    final currentUserId =
+        ProviderScope.containerOf(context).read(authProvider).user?.id;
+    final isOwnPost = currentUserId != null && post.userId == currentUserId;
+
+    final options = <TwitterSheetOption<String>>[
+      const TwitterSheetOption(
+          icon: Icons.report_outlined, label: '举报帖子', value: 'report'),
+      const TwitterSheetOption(
+          icon: Icons.block_outlined, label: '屏蔽用户', value: 'block'),
+      if (isOwnPost)
+        const TwitterSheetOption(
+            icon: Icons.delete_outline,
+            label: '删除帖子',
+            value: 'delete',
+            isDestructive: true),
+    ];
+
+    final action =
+        await TwitterBottomSheet.show<String>(context, options: options);
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case 'report':
+        _showReportDialog(context, post);
+        break;
+      case 'block':
+        _showBlockConfirmDialog(context, ref, post);
+        break;
+      case 'delete':
+        _showDeleteConfirmDialog(context, post);
+        break;
+    }
   }
 }
 
@@ -537,67 +490,6 @@ class _ReportOption {
   final String value;
   final String label;
   const _ReportOption(this.value, this.label);
-}
-
-/// Build a list of PostMediaItem from current post and nearby posts
-int _indexForPost(List<PostMediaItem> items, int postId) {
-  for (int i = 0; i < items.length; i++) {
-    if (items[i].post.id == postId) return i;
-  }
-  return 0;
-}
-
-List<PostMediaItem> _buildMediaItems(
-    Post post, List<String> allImages, List<Post>? feedPosts) {
-  final items = <PostMediaItem>[];
-  // Helper: extract media URLs from a post
-  List<String> mediaUrlsOf(Post p) {
-    final urls = <String>[];
-    if (p.images != null) {
-      for (final u in p.images!) {
-        if (u.isNotEmpty) urls.add(u);
-      }
-    }
-    return urls;
-  }
-
-  if (feedPosts == null || feedPosts.isEmpty) {
-    items.add(PostMediaItem(post: post, mediaUrls: allImages));
-    return items;
-  }
-
-  // Find current post position
-  final currentIdx = feedPosts.indexWhere((p) => p.id == post.id);
-  if (currentIdx < 0) {
-    items.add(PostMediaItem(post: post, mediaUrls: allImages));
-    return items;
-  }
-
-  // Collect before/after posts in feed order (only those with media)
-  final before = <Post>[];
-  final after = <Post>[];
-  for (int i = 0; i < feedPosts.length; i++) {
-    if (i == currentIdx) continue;
-    final p = feedPosts[i];
-    if (p.hasImage || p.hasVideo) {
-      if (i < currentIdx) {
-        before.add(p);
-      } else {
-        after.add(p);
-      }
-    }
-  }
-
-  // Build items: before (feed order) → current → after (feed order)
-  for (final p in before) {
-    items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
-  }
-  items.add(PostMediaItem(post: post, mediaUrls: allImages));
-  for (final p in after) {
-    items.add(PostMediaItem(post: p, mediaUrls: mediaUrlsOf(p)));
-  }
-
-  return items;
 }
 
 /// Web 端视频播放器 — media_kit 不支持 Web，改用 video_player（浏览器原生 <video>）
