@@ -26,7 +26,7 @@ struct ExploreView: View {
                         } header: { Text("最近搜索") }
                     }
                     Section("热门话题") {
-                        ForEach(topics) { topic in NavigationLink { TopicDetailView(topic: topic) } label: { HStack { Image(systemName: "number").foregroundStyle(.brand); Text(topic.name); Spacer(); Text("\(topic.raw["post_count"].int) 动态").font(.caption).foregroundStyle(.secondary) } } }
+                        ForEach(topics) { topic in NavigationLink { TopicDetailView(topic: topic) } label: { HStack { Image(systemName: "number").foregroundStyle(Color.brand); Text(topic.name); Spacer(); Text("\(topic.raw["post_count"].int) 动态").font(.caption).foregroundStyle(.secondary) } } }
                     }
                     ErrorBanner(text: error)
                 }.listStyle(.insetGrouped).refreshable { await load() }
@@ -147,7 +147,7 @@ struct NotificationsView: View {
                             Text(notice.content).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
                             if let d = ServerDate.parse(notice.raw["created_at"]) { Text(d, style: .relative).font(.caption2).foregroundStyle(.secondary) }
                         }
-                        if !notice.isRead { Circle().fill(.brand).frame(width: 8, height: 8) }
+                        if !notice.isRead { Circle().fill(Color.brand).frame(width: 8, height: 8) }
                     }.padding(.vertical, 6)
                 }.swipeActions {
                     Button(role: .destructive) { Task { await remove(notice) } } label: { Label("删除", systemImage: "trash") }

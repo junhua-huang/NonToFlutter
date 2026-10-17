@@ -22,7 +22,7 @@ struct AuthView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Image(systemName: "sparkle").font(.system(size: 44, weight: .light)).foregroundStyle(.brand)
+                        Image(systemName: "sparkle").font(.system(size: 44, weight: .light)).foregroundStyle(Color.brand)
                         Text("南图").font(.system(size: 40, weight: .bold, design: .rounded))
                         Text("发现世界的动态，遇见同频的人。").foregroundStyle(.secondary)
                     }.padding(.vertical, 24)
@@ -45,7 +45,7 @@ struct AuthView: View {
                         NavigationLink("隐私政策") { PolicyView(kind: "privacy") }
                     }.font(.footnote)
                     ErrorBanner(text: error)
-                    if let message { Text(message).font(.subheadline).foregroundStyle(.brand) }
+                    if let message { Text(message).font(.subheadline).foregroundStyle(Color.brand) }
                     Button { Task { await submit() } } label: {
                         HStack { Spacer(); if busy { ProgressView().tint(.white) }; Text(mode == .reset ? "重设密码" : mode.rawValue); Spacer() }.padding(.vertical, 8)
                     }.buttonStyle(.glassProminent).controlSize(.large)

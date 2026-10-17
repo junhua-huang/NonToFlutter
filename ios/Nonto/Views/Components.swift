@@ -10,7 +10,7 @@ struct AvatarView: View {
     var body: some View {
         AsyncImage(url: URL(string: url)) { phase in
             if let image = phase.image { image.resizable().scaledToFill() }
-            else { ZStack { Color.brand.opacity(0.12); Text(String(name.prefix(1))).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(.brand) } }
+            else { ZStack { Color.brand.opacity(0.12); Text(String(name.prefix(1))).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(Color.brand) } }
         }
         .frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
     }
@@ -45,7 +45,7 @@ struct PersonRow: View {
         HStack(spacing: 12) {
             AvatarView(url: person.avatar, name: person.name)
             VStack(alignment: .leading, spacing: 3) {
-                HStack { Text(person.name).font(.headline); if !person.verifiedLabels.isEmpty { Image(systemName: "checkmark.seal.fill").foregroundStyle(.brand) } }
+                HStack { Text(person.name).font(.headline); if !person.verifiedLabels.isEmpty { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.brand) } }
                 Text("@\(person.username)").font(.caption).foregroundStyle(.secondary)
                 if !person.bio.isEmpty { Text(person.bio).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
             }

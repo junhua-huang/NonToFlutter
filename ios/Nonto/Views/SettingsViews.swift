@@ -64,7 +64,7 @@ struct PrivacySettingsView: View {
             }.disabled(!loaded || busy)
             if !loaded && error == nil { ProgressView() }
             ErrorBanner(text: error) { Task { await load() } }
-            if saved { Text("已保存").foregroundStyle(.brand) }
+            if saved { Text("已保存").foregroundStyle(Color.brand) }
             Button("保存设置") { Task { await save() } }.disabled(!loaded || busy)
         }.navigationTitle("隐私设置").task { await load() }
     }
@@ -106,7 +106,7 @@ struct NotificationSettingsView: View {
             Toggle("消息提醒", isOn: $message)
             Toggle("通知声音", isOn: $sound)
             Button("保存") { Task { await save() } }.disabled(!loaded || busy)
-            if saved { Text("已保存").foregroundStyle(.brand) }
+            if saved { Text("已保存").foregroundStyle(Color.brand) }
             ErrorBanner(text: error)
         }.disabled(!loaded || busy).navigationTitle("消息提醒").task {
             do { let j = try await session.api.request("/notifications/settings"); let s = j["settings"].or(j); message = s["notify_message"].bool; sound = s["notify_sound"].bool; loaded = true }
@@ -133,7 +133,7 @@ struct PasswordView: View {
             SecureField("新密码（至少 8 位）", text: $new).textContentType(.newPassword)
             SecureField("确认新密码", text: $repeatPassword).textContentType(.newPassword)
             ErrorBanner(text: error)
-            if saved { Text("密码已修改").foregroundStyle(.brand) }
+            if saved { Text("密码已修改").foregroundStyle(Color.brand) }
             Button("修改密码") { Task { await save() } }.disabled(busy || old.isEmpty || new.count < 8 || new != repeatPassword)
         }.navigationTitle("修改密码")
     }

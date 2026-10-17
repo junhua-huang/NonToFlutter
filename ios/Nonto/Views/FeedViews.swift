@@ -60,7 +60,7 @@ struct PostCard: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
                                 Text(current.author.name).font(.headline)
-                                if !current.raw["display_role_label"].string.isEmpty { Text(current.raw["display_role_label"].string).font(.caption2).foregroundStyle(.brand) }
+                                if !current.raw["display_role_label"].string.isEmpty { Text(current.raw["display_role_label"].string).font(.caption2).foregroundStyle(Color.brand) }
                             }
                             HStack(spacing: 5) {
                                 if let date = current.date { Text(date, style: .relative) }

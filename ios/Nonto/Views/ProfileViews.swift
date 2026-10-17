@@ -29,7 +29,7 @@ struct ProfileView: View {
                             Spacer()
                             if isOwn { Button("编辑") { editing = true }.buttonStyle(.glass) }
                         }
-                        if !user.verifiedLabels.isEmpty { Label(user.verifiedLabels.joined(separator: " · "), systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(.brand) }
+                        if !user.verifiedLabels.isEmpty { Label(user.verifiedLabels.joined(separator: " · "), systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.brand) }
                         if !user.bio.isEmpty { Text(user.bio).textSelection(.enabled) }
                         if let email = user.publicEmail, !email.isEmpty { Text(email).font(.caption).foregroundStyle(.secondary) }
                         if !isOwn {

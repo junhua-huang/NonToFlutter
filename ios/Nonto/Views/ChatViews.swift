@@ -19,7 +19,7 @@ struct MessagesView: View {
                             HStack { Text(conversation.name).font(.headline); Spacer(); if let d = conversation.last.date { Text(d, style: .relative).font(.caption2).foregroundStyle(.secondary) } }
                             Text(conversation.last.recalled ? "消息已撤回" : preview(conversation.last)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         }
-                        if conversation.unread > 0 { Text("\(conversation.unread)").font(.caption.bold()).padding(6).background(.brand, in: Capsule()).foregroundStyle(.white) }
+                        if conversation.unread > 0 { Text("\(conversation.unread)").font(.caption.bold()).padding(6).background(Color.brand, in: Capsule()).foregroundStyle(.white) }
                     }.padding(.vertical, 6)
                 }
             }
