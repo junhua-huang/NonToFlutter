@@ -1,0 +1,53 @@
+name: Native iOS
+on:
+  push:
+    branches: [ios]
+    paths: ['ios/**', '.github/workflows/native-ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/native-ios.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check generated project
+        run: |
+          python3 ios/scripts/generate_project.py
+          git diff --exit-code -- ios/Nonto.xcodeproj
+          xcodebuild -version
+      - name: Select simulator
+        run: |
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/simulators.json"
+          python3 - <<'PY'
+          import json, os
+          with open(os.environ['RUNNER_TEMP'] + '/simulators.json') as f:
+              data = json.load(f)
+          phones = [d for group in data['devices'].values() for d in group if d['name'].startswith('iPhone') and d['isAvailable']]
+          if not phones:
+              raise SystemExit('No iPhone simulator available')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('SIMULATOR_UDID=' + phones[0]['udid'] + '\n')
+          PY
+      - name: Build and test native app
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/NontoTests.xcresult CODE_SIGNING_ALLOWED=NO test | tee build-native.log
+      - name: Build for iPhone
+        run: xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/Device CODE_SIGNING_ALLOWED=NO build
+      - name: Upload test results and simulator app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nonto-native-checks
+          path: |
+            build-native.log
+            build/NontoTests.xcresult
+            build/Native/Build/Products/Debug-iphonesimulator/Nonto.app
+          retention-days: 7
