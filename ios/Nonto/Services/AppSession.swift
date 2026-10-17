@@ -58,13 +58,18 @@ final class AppSession: ObservableObject {
         await refreshCounts()
     }
     func loadPreferences() async {
+        let epoch = api.generation
         await NativeNotifications.shared.refreshAuthorization()
+        guard epoch == api.generation else { return }
         if let json = try? await api.request("/notifications/settings") {
+            guard epoch == api.generation else { return }
             let settings = json["settings"].or(json)
             NativeNotifications.shared.messageEnabled = settings["notify_message"].bool
             NativeNotifications.shared.soundEnabled = settings["notify_sound"].bool
         }
+        guard epoch == api.generation else { return }
         if let privacy = try? await api.request("/auth/privacy") {
+            guard epoch == api.generation else { return }
             defaultVisibility = ["friends", "friends_only"].contains(privacy["post_default_visibility"].string) ? "friends" : "public"
         }
     }
@@ -167,6 +172,7 @@ final class PagedResource<T: Record>: ObservableObject {
             cursor = json["next_cursor"].string.isEmpty ? nil : json["next_cursor"].string
             hasMore = paginated && (json["has_more"].isNull ? rows.count >= pageSize : json["has_more"].bool)
             if !json["total_pages"].isNull { hasMore = next < json["total_pages"].int }
+            if !json["pages"].isNull { hasMore = next < json["pages"].int }
             LocalCache.write(.array(Array(items.prefix(100)).map(\.raw)), userID: userID, key: cacheKey)
         } catch is CancellationError {} catch {
             guard requestID == ticket, api.generation == epoch else { return }

@@ -159,7 +159,7 @@ struct ComicEditor: View {
                 "start_date": .text(date.string(from: start)), "end_date": .text(date.string(from: max(start, end))),
                 "start_time": .text(time.string(from: start)), "end_time": .text(time.string(from: max(start, end))),
                 "intro": .text(intro), "ticket_info": .text(ticket), "website": .text(website),
-                "tags": .array(selectedTags.sorted().map(JSON.id)), "images": .array(urls.map(JSON.text)), "imageUrls": .array(urls.map(JSON.text))])
+                "tags": .array(tags.filter { selectedTags.contains($0["id"].int) }.map { $0["name"] }), "images": .array(urls.map(JSON.text)), "imageUrls": .array(urls.map(JSON.text))])
             _ = try await session.api.request(event.isNull ? "/comic/events" : "/comic/events/\(event["id"].int)", method: event.isNull ? "POST" : "PUT", body: body)
             dismiss()
         } catch { self.error = error.localizedDescription }

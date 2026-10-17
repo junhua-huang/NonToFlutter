@@ -65,6 +65,23 @@ final class APIClientTests: XCTestCase {
         do { _ = try await api.request("/posts/"); XCTFail("Expected an error") } catch {}
         XCTAssertNil(api.token); XCTAssertNil(store.value); XCTAssertEqual(expired, 1)
     }
+    func testConcurrentUnauthorizedRequestsShareRefresh() async throws {
+        let lock = NSLock()
+        var refreshes = 0
+        let (api, _) = client { request in
+            if request.url!.path == "/api/auth/refresh" {
+                lock.lock(); refreshes += 1; lock.unlock()
+                return (200, .object(["access_token": .text("new")]))
+            }
+            let q = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            return q.first { $0.name == "access_token" }?.value == "old" ? (401, .null) : (200, .object(["ok": .bool(true)]))
+        }
+        try api.setToken("old")
+        async let first = api.request("/posts/")
+        async let second = api.request("/notifications/")
+        let (a, b) = try await (first, second)
+        XCTAssertTrue(a["ok"].bool); XCTAssertTrue(b["ok"].bool); XCTAssertEqual(refreshes, 1)
+    }
     func testNetworkFailureDoesNotDeleteCredentials() async throws {
         let (api, store) = client { _ in throw URLError(.notConnectedToInternet) }
         try api.setToken("valid")

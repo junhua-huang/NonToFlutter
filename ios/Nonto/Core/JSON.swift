@@ -65,7 +65,7 @@ enum ServerDate {
         iso.formatOptions = [.withInternetDateTime]
         if let d = iso.date(from: text) { return d }
         // Legacy backend dates without an offset are Beijing time, not device time.
-        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss"] {
+        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm"] {
             let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
             f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = format
             if let d = f.date(from: text) { return d }

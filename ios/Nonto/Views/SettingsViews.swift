@@ -108,7 +108,7 @@ struct NotificationSettingsView: View {
             Button("保存") { Task { await save() } }.disabled(!loaded || busy)
             if saved { Text("已保存").foregroundStyle(Color.brand) }
             ErrorBanner(text: error)
-        }.disabled(!loaded || busy).navigationTitle("消息提醒").task {
+        }.disabled(busy).navigationTitle("消息提醒").task {
             do { let j = try await session.api.request("/notifications/settings"); let s = j["settings"].or(j); message = s["notify_message"].bool; sound = s["notify_sound"].bool; loaded = true }
             catch { self.error = error.localizedDescription }
         }

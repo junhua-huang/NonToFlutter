@@ -259,7 +259,8 @@ struct PostComposer: View {
     @State private var status = ""
     @State private var published = false
     @State private var draftLoaded = false
-    private var draftKey: String { "nonto.native.draft.\(session.user?.id ?? 0).\(communityID ?? 0).\(quoted?.id ?? 0)" }
+    @State private var accountID = 0
+    private var draftKey: String { "nonto.native.draft.\(accountID).\(communityID ?? 0).\(quoted?.id ?? 0)" }
     var body: some View {
         NavigationStack {
             Form {
@@ -301,10 +302,11 @@ struct PostComposer: View {
                 }.interactiveDismissDisabled(busy)
                 .onAppear {
                     guard !draftLoaded else { return }; draftLoaded = true
+                    accountID = session.user?.id ?? 0
                     text = editing?.content ?? UserDefaults.standard.string(forKey: draftKey) ?? ""
                     visibility = editing?.visibilityForEdit ?? session.defaultVisibility
                 }
-                .onDisappear { if editing == nil && !published { UserDefaults.standard.set(text, forKey: draftKey) } }
+                .onDisappear { if accountID > 0 && editing == nil && !published { UserDefaults.standard.set(text, forKey: draftKey) } }
                 .task(id: picks) {
                     guard !picks.isEmpty else { return }; reading = true; defer { reading = false }
                     do {

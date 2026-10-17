@@ -57,6 +57,7 @@ struct ChatRoomView: View {
     @State private var page = 1
     @State private var more = true
     @State private var roomID = 0
+    @State private var accountID = 0
     @State private var quote: ChatMessage?
     @State private var pick: PhotosPickerItem?
     @State private var scrollTarget: Int?
@@ -64,7 +65,7 @@ struct ChatRoomView: View {
     @State private var confirmRecall = false
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     private var cacheKey: String { "chat.\(communityID == nil ? "single" : "community").\(communityID ?? conversation.id)" }
-    private var outboxKey: String { "nonto.native.outbox.\(session.user?.id ?? 0).\(cacheKey)" }
+    private var outboxKey: String { "nonto.native.outbox.\(accountID).\(cacheKey)" }
     private var path: String { if let communityID { return "/communities/\(communityID)/chat" }; return "/chat/conversations/\(conversation.id)/messages" }
     var body: some View {
         ScrollViewReader { proxy in
@@ -78,7 +79,7 @@ struct ChatRoomView: View {
                     }
                     ForEach(pending) { item in
                         VStack(alignment: .trailing, spacing: 6) {
-                            Text(item.content.isEmpty ? "[媒体消息]" : item.content).padding(12).background(.brand.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                            Text(item.content.isEmpty ? "[媒体消息]" : item.content).padding(12).background(Color.brand.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
                             if let failure = item.failure {
                                 Text(failure).font(.caption).foregroundStyle(.red)
                                 HStack { Button("重试") { Task { await deliver(item) } }.disabled(sending); Button("移除", role: .destructive) { pending.removeAll { $0.id == item.id }; savePending() } }.font(.caption)
@@ -104,9 +105,10 @@ struct ChatRoomView: View {
             }.padding(.top, 8)
         }
         .task {
+            accountID = session.user?.id ?? 0
             roomID = conversation.id
             NativeNotifications.shared.activeConversation = roomID
-            if let cached = LocalCache.read(userID: session.user?.id ?? 0, key: cacheKey) { messages = Records.messages([], cached.array.map(ChatMessage.init)) }
+            if let cached = LocalCache.read(userID: accountID, key: cacheKey) { messages = Records.messages([], cached.array.map(ChatMessage.init)) }
             if let data = UserDefaults.standard.data(forKey: outboxKey), let saved = try? JSONDecoder().decode([PendingMessage].self, from: data) { pending = saved }
             await load(); await flushPending()
             // Refresh while visible to recover even if a socket reconnect loses an event.
@@ -164,7 +166,7 @@ struct ChatRoomView: View {
         }.padding(.horizontal)
     }
     private func load(older: Bool = false) async {
-        guard !loading else { return }; loading = true; defer { loading = false }
+        guard !loading, accountID > 0, session.user?.id == accountID else { return }; loading = true; defer { loading = false }
         let epoch = session.api.generation
         do {
             var query = ["per_page": "50", "page": String(older ? page + 1 : 1)]
@@ -184,7 +186,7 @@ struct ChatRoomView: View {
             // Reconcile a response lost after server acceptance using the idempotency key.
             let confirmed = Set(rows.flatMap { [$0.raw["request_id"].string, $0.raw["client_msg_id"].string] }.filter { !$0.isEmpty })
             pending.removeAll { confirmed.contains($0.id) }; savePending()
-            LocalCache.write(.array(Array(messages.suffix(500)).map(\.raw)), userID: session.user?.id ?? 0, key: cacheKey)
+            LocalCache.write(.array(Array(messages.suffix(500)).map(\.raw)), userID: accountID, key: cacheKey)
             if !older && messages.last?.id != last { scrollTarget = messages.last?.id }
             if roomID > 0 { _ = try? await session.api.request("/chat/conversations/\(roomID)/mark-read", method: "POST") }
             error = nil
@@ -195,10 +197,11 @@ struct ChatRoomView: View {
         pending.append(item); text = ""; quote = nil; savePending()
         Task { await deliver(item) }
     }
-    private func savePending() { if let data = try? JSONEncoder().encode(pending) { UserDefaults.standard.set(data, forKey: outboxKey) } }
+    private func savePending() { guard accountID > 0 else { return }; if let data = try? JSONEncoder().encode(pending) { UserDefaults.standard.set(data, forKey: outboxKey) } }
     private func flushPending() async { for item in pending where item.failure == nil { await deliver(item) } }
     private func deliver(_ item: PendingMessage) async {
-        guard !sending else { return }; sending = true; defer { sending = false }
+        guard !sending, session.user?.id == accountID else { return }; sending = true; defer { sending = false }
+        let epoch = session.api.generation
         do {
             var body: [String: JSON] = ["content": .text(item.content), "message_type": .text(item.kind)]
             body[communityID == nil ? "request_id" : "client_msg_id"] = .text(item.id)
@@ -210,6 +213,7 @@ struct ChatRoomView: View {
             if message.id > 0 { messages = Records.messages(messages, [message]); scrollTarget = message.id }
             pending.removeAll { $0.id == item.id }; savePending(); await load()
         } catch {
+            guard epoch == session.api.generation else { return }
             if let index = pending.firstIndex(where: { $0.id == item.id }) { pending[index].failure = error.localizedDescription; savePending() }
         }
     }
