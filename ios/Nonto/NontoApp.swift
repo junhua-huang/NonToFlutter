@@ -3,6 +3,7 @@ import SwiftUI
 @main
 @MainActor
 struct NontoApp: App {
+    @UIApplicationDelegateAdaptor(NontoAppDelegate.self) private var appDelegate
     @StateObject private var session = AppSession()
     @Environment(\.scenePhase) private var phase
     @AppStorage("nonto.native.appearance") private var appearance = "system"
@@ -15,7 +16,7 @@ struct NontoApp: App {
                         Label("暂时无法恢复登录", systemImage: "wifi.exclamationmark")
                     } description: { Text(error) } actions: {
                         Button("重试") { Task { await session.bootstrap() } }.buttonStyle(.glassProminent)
-                        Button("重新登录") { try? session.logout() }
+                        Button("重新登录") { Task { try? await session.logout() } }
                     }
                 } else if let user = session.user { MainTabs().id(user.id) }
                 else { AuthView() }
@@ -31,6 +32,8 @@ struct NontoApp: App {
 struct MainTabs: View {
     @EnvironmentObject private var session: AppSession
     @State private var compose = false
+    @ObservedObject private var notifications = NativeNotifications.shared
+    @State private var pushDestination: PushRoute?
     var body: some View {
         TabView {
             NavigationStack { FeedView(session: session) }
@@ -46,6 +49,16 @@ struct MainTabs: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $compose) { PostComposer() }
+        .sheet(item: $pushDestination) { route in
+            NavigationStack {
+                PushDestinationView(route: route)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { pushDestination = nil } } }
+            }
+        }
+        .onReceive(notifications.$route.compactMap { $0 }) { route in
+            guard route.recipientID == session.user?.id else { return }
+            compose = false; pushDestination = route; notifications.route = nil
+        }
         .environment(\.openComposer, { compose = true })
         .task {
             while !Task.isCancelled {

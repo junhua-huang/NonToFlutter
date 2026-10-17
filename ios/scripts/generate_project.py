@@ -38,6 +38,8 @@ def configs(name, settings):
     ids = []
     for mode in ['Debug', 'Release']:
         values = dict(settings)
+        if name == 'app':
+            values['APNS_ENVIRONMENT'] = 'development' if mode == 'Debug' else 'production'
         values.update({'SWIFT_OPTIMIZATION_LEVEL': '-Onone' if mode == 'Debug' else '-O',
                        'DEBUG_INFORMATION_FORMAT': 'dwarf' if mode == 'Debug' else 'dwarf-with-dsym'})
         if mode == 'Debug':
@@ -54,11 +56,11 @@ test_refs = [ref(p, 'sourcecode.swift') for p in tests]
 resource_refs = [ref(p, 'folder.assetcatalog' if p.endswith('.xcassets') else ('text.plist.xml' if p.endswith('.xcprivacy') else 'text')) for p in resources]
 app_product = add('product:app', '{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nonto.app; sourceTree = BUILT_PRODUCTS_DIR; }')
 test_product = add('product:tests', '{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NontoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; }')
-main_group = group('Nonto', [group('Application', source_refs), group('Resources', resource_refs + [ref('Nonto/Resources/Info.plist', 'text.plist.xml')]), group('Tests', test_refs), group('Products', [app_product, test_product])])
+main_group = group('Nonto', [group('Application', source_refs), group('Resources', resource_refs + [ref('Nonto/Resources/Info.plist', 'text.plist.xml'), ref('Nonto/Resources/Nonto.entitlements', 'text.plist.xml')]), group('Tests', test_refs), group('Products', [app_product, test_product])])
 app_phases = [phase('app:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(sources, source_refs)]), phase('app:frameworks', 'PBXFrameworksBuildPhase', []), phase('app:resources', 'PBXResourcesBuildPhase', [build(p, r) for p, r in zip(resources, resource_refs)])]
 test_phases = [phase('tests:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(tests, test_refs)]), phase('tests:frameworks', 'PBXFrameworksBuildPhase', []), phase('tests:resources', 'PBXResourcesBuildPhase', [])]
 common = {'IPHONEOS_DEPLOYMENT_TARGET': '26.0', 'SDKROOT': 'iphoneos', 'SWIFT_VERSION': '5.0', 'CLANG_ENABLE_MODULES': 'YES', 'TARGETED_DEVICE_FAMILY': '1,2', 'CODE_SIGN_STYLE': 'Automatic', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO'}
-app_config = configs('app', common | {'PRODUCT_NAME': 'Nonto', 'PRODUCT_BUNDLE_IDENTIFIER': 'online.nonto.native', 'INFOPLIST_FILE': 'Nonto/Resources/Info.plist', 'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'MARKETING_VERSION': '1.0.0', 'CURRENT_PROJECT_VERSION': '1', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'ENABLE_USER_SCRIPT_SANDBOXING': 'YES'})
+app_config = configs('app', common | {'CODE_SIGN_ENTITLEMENTS': 'Nonto/Resources/Nonto.entitlements', 'PRODUCT_NAME': 'Nonto', 'PRODUCT_BUNDLE_IDENTIFIER': 'online.nonto.native', 'INFOPLIST_FILE': 'Nonto/Resources/Info.plist', 'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'MARKETING_VERSION': '1.0.0', 'CURRENT_PROJECT_VERSION': '1', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'ENABLE_USER_SCRIPT_SANDBOXING': 'YES'})
 test_config = configs('tests', common | {'PRODUCT_NAME': 'NontoTests', 'PRODUCT_BUNDLE_IDENTIFIER': 'online.nonto.native.tests', 'GENERATE_INFOPLIST_FILE': 'YES', 'TEST_HOST': '$(BUILT_PRODUCTS_DIR)/Nonto.app/Nonto', 'BUNDLE_LOADER': '$(TEST_HOST)', 'TEST_TARGET_NAME': 'Nonto', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks @loader_path/Frameworks'})
 app_id = ident('target:app')
 project_id = ident('project')
@@ -67,7 +69,7 @@ dependency = add('dependency:app', f'{{isa = PBXTargetDependency; target = {app_
 add('target:app', f'{{isa = PBXNativeTarget; buildConfigurationList = {app_config}; buildPhases = {array(app_phases)}; buildRules = (); dependencies = (); name = Nonto; productName = Nonto; productReference = {app_product}; productType = "com.apple.product-type.application"; }}')
 test_id = add('target:tests', f'{{isa = PBXNativeTarget; buildConfigurationList = {test_config}; buildPhases = {array(test_phases)}; buildRules = (); dependencies = ({dependency},); name = NontoTests; productName = NontoTests; productReference = {test_product}; productType = "com.apple.product-type.bundle.unit-test"; }}')
 project_config = configs('project', {'CLANG_ENABLE_OBJC_ARC': 'YES', 'CLANG_WARN_DOCUMENTATION_COMMENTS': 'YES', 'GCC_C_LANGUAGE_STANDARD': 'gnu17', 'SWIFT_STRICT_CONCURRENCY': 'targeted'})
-add('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {{{app_id} = {{CreatedOnToolsVersion = 16.0; }}; {test_id} = {{CreatedOnToolsVersion = 16.0; TestTargetID = {app_id}; }}; }}; }}; buildConfigurationList = {project_config}; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", en, Base); mainGroup = {main_group}; productRefGroup = {ident("group:Products")}; projectDirPath = ""; projectRoot = ""; targets = ({app_id}, {test_id},); }}')
+add('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {{{app_id} = {{CreatedOnToolsVersion = 16.0; SystemCapabilities = {{com.apple.Push = {{enabled = 1; }}; }}; }}; {test_id} = {{CreatedOnToolsVersion = 16.0; TestTargetID = {app_id}; }}; }}; }}; buildConfigurationList = {project_config}; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", en, Base); mainGroup = {main_group}; productRefGroup = {ident("group:Products")}; projectDirPath = ""; projectRoot = ""; targets = ({app_id}, {test_id},); }}')
 PROJECT.mkdir(exist_ok=True)
 (PROJECT / 'project.pbxproj').write_text('// !$*UTF8*$!\n{\narchiveVersion = 1;\nclasses = {};\nobjectVersion = 56;\nobjects = {\n' + '\n'.join(f'{key} = {value};' for key, value in sorted(objects.items())) + f'\n}};\nrootObject = {project_id};\n}}\n')
 scheme_dir = PROJECT / 'xcshareddata/xcschemes'

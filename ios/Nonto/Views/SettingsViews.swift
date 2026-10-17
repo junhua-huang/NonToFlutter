@@ -40,7 +40,7 @@ struct SettingsView: View {
             ErrorBanner(text: error)
         }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .alert("本机缓存已清理", isPresented: $cacheCleared) { Button("好", role: .cancel) {} }
-            .confirmationDialog("退出当前账号？", isPresented: $confirmLogout) { Button("退出登录", role: .destructive) { do { try session.logout() } catch { self.error = error.localizedDescription } } }
+            .confirmationDialog("退出当前账号？", isPresented: $confirmLogout) { Button("退出登录", role: .destructive) { Task { do { try await session.logout() } catch { self.error = error.localizedDescription } } } }
     }
 }
 
@@ -92,6 +92,8 @@ struct PrivacySettingsView: View {
 }
 struct NotificationSettingsView: View {
     @EnvironmentObject private var session: AppSession
+    @ObservedObject private var push = APNsService.shared
+    @State private var pushEnabled = false
     @State private var message = false
     @State private var sound = false
     @State private var loaded = false
@@ -101,23 +103,28 @@ struct NotificationSettingsView: View {
     var body: some View {
         Form {
             Section("系统通知") {
+                Text(push.status).foregroundStyle(.secondary)
+                Button("重试推送连接") { push.retry() }
+                ErrorBanner(text: push.error)
                 Button("开启系统通知") { Task { do { try await NativeNotifications.shared.requestAuthorization() } catch { self.error = error.localizedDescription } } }
-                Button("发送测试通知") { Task { do { try await NativeNotifications.shared.test() } catch { self.error = error.localizedDescription } } }
+                Button("发送远程测试通知") { Task { do { try await push.testRemote() } catch { self.error = error.localizedDescription } } }.disabled(!push.bound)
+                Button("发送本地测试通知") { Task { do { try await NativeNotifications.shared.test() } catch { self.error = error.localizedDescription } } }
                 if let url = URL(string: UIApplication.openSettingsURLString) { Link("打开系统设置", destination: url) }
             }
+            Toggle("系统推送", isOn: $pushEnabled)
             Toggle("消息提醒", isOn: $message)
             Toggle("通知声音", isOn: $sound)
             Button("保存") { Task { await save() } }.disabled(!loaded || busy)
             if saved { Text("已保存").foregroundStyle(Color.brand) }
             ErrorBanner(text: error)
         }.disabled(busy).navigationTitle("消息提醒").task {
-            do { let j = try await session.api.request("/notifications/settings"); let s = j["settings"].or(j); message = s["notify_message"].bool; sound = s["notify_sound"].bool; loaded = true }
+            do { let j = try await session.api.request("/notifications/settings"); let s = j["settings"].or(j); pushEnabled = s["notify_push"].bool; message = s["notify_message"].bool; sound = s["notify_sound"].bool; loaded = true }
             catch { self.error = error.localizedDescription }
         }
     }
     private func save() async {
         busy = true; defer { busy = false }
-        do { _ = try await session.api.request("/notifications/settings", method: "PUT", body: .object(["notify_message": .bool(message), "notify_sound": .bool(sound)])); NativeNotifications.shared.messageEnabled = message; NativeNotifications.shared.soundEnabled = sound; saved = true }
+        do { _ = try await session.api.request("/notifications/settings", method: "PUT", body: .object(["notify_push": .bool(pushEnabled), "notify_message": .bool(message), "notify_sound": .bool(sound)])); NativeNotifications.shared.pushEnabled = pushEnabled; NativeNotifications.shared.messageEnabled = message; NativeNotifications.shared.soundEnabled = sound; session.syncPush(); saved = true }
         catch { self.error = error.localizedDescription }
     }
 }
@@ -160,7 +167,7 @@ struct DeleteAccountView: View {
             Button("永久注销", role: .destructive) {
                 Task {
                     busy = true; defer { busy = false }
-                    do { _ = try await session.api.request("/auth/account", method: "DELETE"); try? LocalCache.clear(userID: session.user?.id ?? 0); try session.logout() }
+                    do { _ = try await session.api.request("/auth/account", method: "DELETE"); try? LocalCache.clear(userID: session.user?.id ?? 0); try await session.logout() }
                     catch { self.error = error.localizedDescription }
                 }
             }

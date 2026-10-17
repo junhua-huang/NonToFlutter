@@ -24,6 +24,8 @@ final class AppSession: ObservableObject {
     init(api: APIClient? = nil) {
         let api = api ?? APIClient()
         self.api = api; socket = RealtimeClient(api: api)
+        APNsService.shared.attach(api: api)
+        NativeNotifications.shared.onAuthorizationChanged = { [weak self] in self?.syncPush() }
         socket.onLiveEvent = { payload, seq in NativeNotifications.shared.receive(payload, seq: seq) }
         api.onSessionExpired = { [weak self] in self?.clearUI() }
         api.onTokenRefreshed = { [weak self] in
@@ -36,7 +38,7 @@ final class AppSession: ObservableObject {
         defer { restoring = false }
         do {
             try api.restore()
-            guard api.token != nil else { return }
+            guard api.token != nil else { APNsService.shared.setAccount(nil, enabled: false); return }
             try await refreshProfile()
             await loadPreferences()
         } catch {
@@ -75,10 +77,12 @@ final class AppSession: ObservableObject {
         if let json = try? await api.request("/notifications/settings") {
             guard epoch == api.generation else { return }
             let settings = json["settings"].or(json)
+            NativeNotifications.shared.pushEnabled = settings["notify_push"].bool
             NativeNotifications.shared.messageEnabled = settings["notify_message"].bool
             NativeNotifications.shared.soundEnabled = settings["notify_sound"].bool
         }
         guard epoch == api.generation else { return }
+        syncPush()
         if let privacy = try? await api.request("/auth/privacy") {
             guard epoch == api.generation else { return }
             defaultVisibility = ["friends", "friends_only"].contains(privacy["post_default_visibility"].string) ? "friends" : "public"
@@ -95,12 +99,28 @@ final class AppSession: ObservableObject {
         if let n { noticeUnread = n["unread_count"].or(n["count"]).int }
         NativeNotifications.shared.setBadge(messageUnread + noticeUnread)
     }
+    func syncPush() {
+        APNsService.shared.setAccount(user?.id, enabled: NativeNotifications.shared.authorized && NativeNotifications.shared.pushEnabled)
+    }
     func scene(active: Bool) {
         foreground = active
+        APNsService.shared.setForeground(active)
+        if active {
+            Task {
+                await NativeNotifications.shared.refreshAuthorization()
+                syncPush()
+                await refreshCounts()
+            }
+        }
         if active, let id = user?.id { socket.start(userID: id) } else { socket.stop() }
     }
-    func logout() throws { try api.setToken(nil); clearUI() }
+    func logout() async throws {
+        APNsService.shared.setAccount(nil, enabled: false)
+        await APNsService.shared.waitUntilIdle()
+        try api.setToken(nil); clearUI()
+    }
     func clearUI() {
+        APNsService.shared.setAccount(nil, enabled: false)
         socket.stop(); socket.resetRooms(); user = nil; messageUnread = 0; noticeUnread = 0
         NativeNotifications.shared.clear()
         startupError = nil; defaultVisibility = "public"; postChange = nil; postRevision += 1

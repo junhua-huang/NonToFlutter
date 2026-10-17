@@ -32,10 +32,12 @@ protocol CredentialStore {
     func write(_ token: String?) throws
 }
 struct KeychainStore: CredentialStore {
+    private let account: String
+    init(account: String = "access_token") { self.account = account }
     private var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: "online.nonto.native.session",
-         kSecAttrAccount as String: "access_token"]
+         kSecAttrAccount as String: account]
     }
     func read() throws -> String? {
         var q = query; q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
