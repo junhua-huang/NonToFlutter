@@ -120,7 +120,7 @@ final class APNsService: ObservableObject {
                       result["device"]["apns_environment"].string == environment else { throw APIError(status: 0, message: "服务器尚未支持此版本的系统推送") }
                 bound = true; error = nil
                 let configured = result["apns_configured"].bool
-                bindingKey = configured ? key : nil
+                bindingKey = key
                 status = configured ? "系统推送已连接" : "设备已绑定，等待服务器启用推送"
                 lastState = foreground ? "foreground" : "background"; lastStateAt = Date()
             } else {

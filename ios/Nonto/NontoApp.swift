@@ -34,6 +34,7 @@ struct MainTabs: View {
     @State private var compose = false
     @ObservedObject private var notifications = NativeNotifications.shared
     @State private var pushDestination: PushRoute?
+    @State private var pendingPush: PushRoute?
     var body: some View {
         TabView {
             NavigationStack { FeedView(session: session) }
@@ -48,16 +49,20 @@ struct MainTabs: View {
                 .tabItem { Label("我的", systemImage: "person.crop.circle") }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .sheet(isPresented: $compose) { PostComposer() }
+        .sheet(isPresented: $compose, onDismiss: {
+            if let pendingPush { pushDestination = pendingPush; self.pendingPush = nil }
+        }) { PostComposer() }
         .sheet(item: $pushDestination) { route in
             NavigationStack {
-                PushDestinationView(route: route)
+                PushDestinationView(route: route).id(route.id)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { pushDestination = nil } } }
             }
         }
         .onReceive(notifications.$route.compactMap { $0 }) { route in
             guard route.recipientID == session.user?.id else { return }
-            compose = false; pushDestination = route; notifications.route = nil
+            if compose { pendingPush = route; compose = false }
+            else { pushDestination = route }
+            notifications.route = nil
         }
         .environment(\.openComposer, { compose = true })
         .task {

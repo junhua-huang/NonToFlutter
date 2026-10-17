@@ -29,11 +29,11 @@ final class PushTests: XCTestCase {
     func testTokenRegistrationUsesNativeProviderAndDoesNotPersistAPNsToken() async throws {
         var requests: [JSON] = []
         let (service, _, identity) = try setup { request in requests.append(try self.body(request)); return (200, self.ack()) }
-        service.setAccount(1, enabled: true); service.didRegister(Data([0, 1, 255])); await service.waitUntilIdle()
+        service.setAccount(1, enabled: true); service.didRegister(Data(Array(repeating: [UInt8(0), 1, 255], count: 20).flatMap { $0 })); await service.waitUntilIdle()
         XCTAssertTrue(service.bound); XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(requests[0]["apns_token"].string, "0001ff"); XCTAssertEqual(requests[0]["provider"].string, "apns")
+        XCTAssertEqual(requests[0]["apns_token"].string, String(repeating: "0001ff", count: 20)); XCTAssertEqual(requests[0]["provider"].string, "apns")
         XCTAssertEqual(requests[0]["apns_environment"].string, "production")
-        XCTAssertFalse(identity.value?.contains("0001ff") ?? true)
+        XCTAssertFalse(identity.value?.contains(String(repeating: "0001ff", count: 20)) ?? true)
         XCTAssertTrue(requests[0]["device_id"].string.hasPrefix("apns:"))
     }
     func testTokenRotationKeepsInstallationAndUpdatesToken() async throws {
@@ -96,6 +96,16 @@ final class PushTests: XCTestCase {
         notifications.userID = 2; XCTAssertNil(notifications.route)
         notifications.clear(); notifications.open(payload); notifications.userID = 1
         XCTAssertEqual(notifications.route?.destination, .notification(10)); notifications.clear()
+    }
+    func testSuppressedChatNotificationDoesNotReappearAfterLeavingRoom() {
+        let notifications = NativeNotifications.shared; notifications.clear()
+        notifications.userID = 1; notifications.pushEnabled = true; notifications.messageEnabled = true; notifications.activeConversation = 55
+        let payload: JSON = .object(["recipient_id": .id(1), "message_id": .id(99), "dedupe_key": .text("message:99"), "related_type": .text("conversation"), "related_id": .id(55)])
+        XCTAssertTrue(notifications.presentationOptions(for: payload).isEmpty)
+        notifications.activeConversation = nil
+        XCTAssertTrue(notifications.presentationOptions(for: payload).isEmpty)
+        XCTAssertTrue(notifications.presentationOptions(for: payload.merging(.object(["recipient_id": .id(2), "dedupe_key": .text("message:100")]))).isEmpty)
+        notifications.clear()
     }
     func testLocalAndRemoteEventsDeduplicateWithExpiry() {
         var dedupe = PushDeduplicator(); let date = Date()

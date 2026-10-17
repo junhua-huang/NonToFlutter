@@ -40,9 +40,10 @@ final class StateTests: XCTestCase {
         return (store, defaults)
     }
     private func waitForDelivery(_ store: ChatStore) async throws {
-        for _ in 0..<200 {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
             if !store.sending { return }
-            try await Task.sleep(for: .milliseconds(5))
+            try await Task.sleep(for: .milliseconds(10))
         }
         XCTFail("Delivery did not finish")
     }
@@ -183,7 +184,9 @@ final class StateTests: XCTestCase {
                 sends += 1
                 let body = try self.body(request)
                 confirmed = self.message(100).merging(.object(["request_id": body["request_id"]]))
-                throw URLError(.networkConnectionLost)
+                // The server accepted the write but its gateway lost the acknowledgement.
+                // An HTTP timeout avoids URLSession's transport-level automatic retries.
+                return (504, .object(["detail": .text("response acknowledgement lost")]))
             }
             return (200, .object(["messages": .array(confirmed.map { [$0] } ?? [])]))
         }

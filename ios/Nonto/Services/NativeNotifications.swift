@@ -53,14 +53,12 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
         let event = payload["event"].string, envelope = payload["data"].or(payload)
         let data = event == "new_notification" ? envelope["notification"].or(envelope) : envelope
         guard event == "new_message" || event == "new_notification" else { return }
-        if event == "new_message" {
-            guard messageEnabled, data["sender_id"].int != userID,
-                  data["conversation_id"].int != activeConversation else { return }
-        }
+        if event == "new_message", data["sender_id"].int == userID { return }
         // Message notifications and message socket events share the same dedupe key.
         let messageID = event == "new_message" ? data["id"].or(data["message_id"]).int : data["message_id"].int
         let key = messageID > 0 ? "message:\(messageID)" : (data["id"].int > 0 ? "notification:\(data["id"].int)" : "event:\(seq)")
         guard deduplicator.accept(key) else { return }
+        if event == "new_message" && (!messageEnabled || data["conversation_id"].int == activeConversation) { return }
         let content = UNMutableNotificationContent()
         content.title = data["title"].string.isEmpty ? "南图" : data["title"].string
         // Avoid exposing private message content in notification previews.
@@ -80,18 +78,21 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
         if userID == 0 { queuedRoute = target }
         else if target.recipientID == userID { route = target }
     }
+    func presentationOptions(for json: JSON) -> UNNotificationPresentationOptions {
+        guard pushEnabled, userID > 0, json["recipient_id"].int == userID else { return [] }
+        // Remember suppressed messages too, so a late APNs copy cannot alert after leaving the chat.
+        if !json["nonto_local"].bool && !deduplicator.accept(json["dedupe_key"].string) { return [] }
+        let isMessage = json["message_id"].int > 0 || json["type"].string == "message"
+        if isMessage && (!messageEnabled || (json["related_type"].string == "conversation" && json["related_id"].int == activeConversation)) { return [] }
+        return soundEnabled ? [.banner, .sound, .list] : [.banner, .list]
+    }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         if notification.request.identifier == "nonto.native.test" { completionHandler([.banner, .sound, .list]); return }
         let json = PushRoute.decode(notification.request.content.userInfo)
         Task { @MainActor in
-            guard let json else { completionHandler([.banner, .sound, .list]); return }
-            guard self.pushEnabled, self.userID > 0, json["recipient_id"].int == self.userID else { completionHandler([]); return }
-            let isMessage = json["message_id"].int > 0 || json["type"].string == "message"
-            if isMessage && (!self.messageEnabled || (json["related_type"].string == "conversation" && json["related_id"].int == self.activeConversation)) { completionHandler([]); return }
-            if !json["nonto_local"].bool && !self.deduplicator.accept(json["dedupe_key"].string) { completionHandler([]); return }
-            completionHandler(self.soundEnabled ? [.banner, .sound, .list] : [.banner, .list])
+            completionHandler(json.map { self.presentationOptions(for: $0) } ?? [])
         }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
