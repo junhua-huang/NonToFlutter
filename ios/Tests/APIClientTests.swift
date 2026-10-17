@@ -1,12 +1,12 @@
 import XCTest
 @testable import Nonto
 
-private final class MemoryCredentials: CredentialStore {
+final class MemoryCredentials: CredentialStore {
     var value: String?
     func read() throws -> String? { value }
     func write(_ token: String?) throws { value = token }
 }
-private final class StubProtocol: URLProtocol, @unchecked Sendable {
+final class StubProtocol: URLProtocol, @unchecked Sendable {
     static var handler: ((URLRequest) throws -> (Int, JSON))?
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }

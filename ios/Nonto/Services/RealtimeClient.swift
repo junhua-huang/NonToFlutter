@@ -12,6 +12,7 @@ final class RealtimeClient: ObservableObject {
     private var connection: URLSessionWebSocketTask?
     private var rooms = Set<Int>()
     private var userID = 0
+    private var token: String?
     private var runID = UUID()
     private var lastFrame = Date.distantPast
     var onLiveEvent: ((JSON, Int) -> Void)?
@@ -19,14 +20,17 @@ final class RealtimeClient: ObservableObject {
 
     init(api: APIClient) { self.api = api }
     func start(userID: Int) {
-        stop(); self.userID = userID
+        guard userID > 0, let token = api.token else { stop(); return }
+        if self.userID == userID, self.token == token, loop != nil { return }
+        if self.userID != userID { resetRooms() }
+        stop(); self.userID = userID; self.token = token
         let ticket = UUID(); runID = ticket
         loop = Task { [weak self] in
             guard let self else { return }
             var attempt = 0
             while !Task.isCancelled, runID == ticket, api.token != nil {
                 do { try await connect(ticket: ticket); attempt = 0 }
-                catch { connected = false }
+                catch { if runID == ticket { connected = false } }
                 guard !Task.isCancelled, runID == ticket else { break }
                 attempt += 1
                 try? await Task.sleep(for: .seconds(min(30, pow(2, Double(min(attempt, 5))))))
@@ -39,14 +43,16 @@ final class RealtimeClient: ObservableObject {
     }
     func resetRooms() { rooms.removeAll() }
     func room(_ id: Int, joined: Bool) {
-        if joined { rooms.insert(id) } else { rooms.remove(id) }
-        guard connected else { return }
-        Task { try? await send(joined ? "join" : "leave", ["conversation_id": .id(id)]) }
+        guard id > 0 else { return }
+        let changed = joined ? rooms.insert(id).inserted : rooms.remove(id) != nil
+        guard changed, connected, let socket = connection else { return }
+        let ticket = runID
+        Task { try? await send(joined ? "join" : "leave", ["conversation_id": .id(id)], socket: socket, ticket: ticket) }
     }
-    private func send(_ type: String, _ payload: [String: JSON] = [:]) async throws {
-        guard let connection else { throw URLError(.notConnectedToInternet) }
+    private func send(_ type: String, _ payload: [String: JSON] = [:], socket: URLSessionWebSocketTask, ticket: UUID) async throws {
+        guard ticket == runID, connection === socket else { throw CancellationError() }
         let json = JSON.object(["type": .text(type), "payload": .object(payload)])
-        try await connection.send(.string(String(decoding: try json.encoded(), as: UTF8.self)))
+        try await socket.send(.string(String(decoding: try json.encoded(), as: UTF8.self)))
     }
     private func connect(ticket: UUID) async throws {
         guard let token = api.token else { return }
@@ -56,7 +62,7 @@ final class RealtimeClient: ObservableObject {
         let socket = URLSession.shared.webSocketTask(with: url); connection = socket; socket.resume()
         lastFrame = Date()
         defer { socket.cancel(with: .goingAway, reason: nil) }
-        try await send("auth", ["token": .text(token)])
+        try await send("auth", ["token": .text(token)], socket: socket, ticket: ticket)
         let heartbeat = Task { [weak self] in
             while !Task.isCancelled {
                 do {
@@ -65,7 +71,7 @@ final class RealtimeClient: ObservableObject {
                     guard Date().timeIntervalSince(self.lastFrame) < 70 else {
                         socket.cancel(with: .goingAway, reason: nil); return
                     }
-                    try await self.send("ping")
+                    try await self.send("ping", socket: socket, ticket: ticket)
                 } catch { socket.cancel(with: .goingAway, reason: nil); return }
             }
         }
@@ -81,26 +87,31 @@ final class RealtimeClient: ObservableObject {
             case "auth_result":
                 guard payload["success"].bool else { throw APIError(status: 401, message: "实时连接认证失败") }
                 connected = true; revision += 1
-                try await send("sync", ["last_received_seq": .id(UserDefaults.standard.integer(forKey: sequenceKey)), "limit": .id(200)])
-                for id in rooms { try await send("join", ["conversation_id": .id(id)]) }
-            case "message": try await receive(frame, live: true)
+                try await send("sync", ["last_received_seq": .id(UserDefaults.standard.integer(forKey: sequenceKey)), "limit": .id(200)], socket: socket, ticket: ticket)
+                for id in rooms { try await send("join", ["conversation_id": .id(id)], socket: socket, ticket: ticket) }
+            case "message": try await receive(frame, live: true, socket: socket, ticket: ticket)
             case "sync_result":
-                for item in payload["list"].or(payload["messages"]).array { try await receive(item) }
+                let before = UserDefaults.standard.integer(forKey: sequenceKey)
+                let frames = payload["list"].or(payload["messages"]).array.sorted { $0["seq"].int < $1["seq"].int }
+                for item in frames { try await receive(item, socket: socket, ticket: ticket) }
                 let current = UserDefaults.standard.integer(forKey: sequenceKey)
                 let maximum = payload["current_max_seq"].int
                 if payload["has_more"].bool {
-                    try await send("sync", ["last_received_seq": .id(current), "limit": .id(200)])
+                    guard current > before else { throw URLError(.badServerResponse) }
+                    try await send("sync", ["last_received_seq": .id(current), "limit": .id(200)], socket: socket, ticket: ticket)
                 } else if maximum > current { UserDefaults.standard.set(maximum, forKey: sequenceKey) }
                 revision += 1
             default: break
             }
         }
     }
-    private func receive(_ frame: JSON, live: Bool = false) async throws {
+    private func receive(_ frame: JSON, live: Bool = false, socket: URLSessionWebSocketTask, ticket: UUID) async throws {
+        guard ticket == runID else { throw CancellationError() }
         let seq = frame["seq"].int, previous = UserDefaults.standard.integer(forKey: sequenceKey)
         if live && (seq == 0 || seq > previous) { onLiveEvent?(frame["payload"].or(frame), seq) }
-        if seq == 0 || seq > previous { revision += 1 }
+        let event = frame["payload"]["event"].string
+        if (seq == 0 || seq > previous) && !["typing", "stop_typing"].contains(event) { revision += 1 }
         if seq > previous { UserDefaults.standard.set(seq, forKey: sequenceKey) }
-        if seq > 0 { try await send("ack_receive", ["seq": .id(seq)]) }
+        if seq > 0 { try await send("ack_receive", ["seq": .id(seq)], socket: socket, ticket: ticket) }
     }
 }

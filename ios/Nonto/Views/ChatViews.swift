@@ -35,102 +35,115 @@ struct MessagesView: View {
     }
 }
 
-struct PendingMessage: Codable, Identifiable {
-    var id: String = UUID().uuidString
-    var content: String
-    var kind = "text"
-    var media: String? = nil
-    var quoteID: Int? = nil
-    var failure: String? = nil
-}
-
 struct ChatRoomView: View {
     let conversation: Conversation
     @EnvironmentObject private var session: AppSession
+    var body: some View { ChatRoomContent(session: session, conversation: conversation) }
+}
+
+private struct ChatRoomContent: View {
+    let conversation: Conversation
+    @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
-    @State private var messages: [ChatMessage] = []
-    @State private var pending: [PendingMessage] = []
-    @State private var text = ""
-    @State private var error: String?
-    @State private var loading = false
-    @State private var sending = false
-    @State private var page = 1
-    @State private var more = true
-    @State private var roomID = 0
-    @State private var accountID = 0
+    @StateObject private var store: ChatStore
+    @ObservedObject private var socket: RealtimeClient
     @State private var quote: ChatMessage?
     @State private var pick: PhotosPickerItem?
-    @State private var scrollTarget: Int?
+    @State private var uploading = false
     @State private var recall: ChatMessage?
     @State private var confirmRecall = false
+    @State private var visible = false
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
-    private var cacheKey: String { "chat.\(communityID == nil ? "single" : "community").\(communityID ?? conversation.id)" }
-    private var outboxKey: String { "nonto.native.outbox.\(accountID).\(cacheKey)" }
-    private var path: String { if let communityID { return "/communities/\(communityID)/chat" }; return "/chat/conversations/\(conversation.id)/messages" }
+    init(session: AppSession, conversation: Conversation) {
+        self.conversation = conversation
+        _store = StateObject(wrappedValue: ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
+        _socket = ObservedObject(wrappedValue: session.socket)
+    }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 14) {
-                    if more { Button("加载更早的消息") { Task { await load(older: true) } }.disabled(loading).padding(.top) }
-                    if loading { ProgressView() }
-                    ErrorBanner(text: error) { Task { await load() } }.padding(.horizontal)
-                    ForEach(messages) { message in
-                        messageRow(message).id(message.id)
-                    }
-                    ForEach(pending) { item in
+                    if store.more { Button(store.loading ? "正在加载…" : "加载更早的消息") { Task { await store.load(older: true) } }.disabled(store.loading).padding(.top) }
+                    if store.loading && store.messages.isEmpty { ProgressView("正在加载消息…") }
+                    ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
+                    ForEach(store.messages) { message in messageRow(message).id(message.id) }
+                    ForEach(store.pending) { item in
                         VStack(alignment: .trailing, spacing: 6) {
                             Text(item.content.isEmpty ? "[媒体消息]" : item.content).padding(12).background(Color.brand.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
                             if let failure = item.failure {
                                 Text(failure).font(.caption).foregroundStyle(.red)
-                                HStack { Button("重试") { Task { await deliver(item) } }.disabled(sending); Button("移除", role: .destructive) { pending.removeAll { $0.id == item.id }; savePending() } }.font(.caption)
+                                HStack {
+                                    Button("重试") { store.retry(item.id) }.disabled(store.sending)
+                                    if !item.content.isEmpty { Button("复制") { UIPasteboard.general.string = item.content } }
+                                    Button("移除", role: .destructive) { store.remove(item.id) }
+                                }.font(.caption)
                             } else { ProgressView("待发送").font(.caption) }
                         }.frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal)
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }.padding(.bottom)
             }.scrollDismissesKeyboard(.interactively)
-                .onChange(of: scrollTarget) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .onChange(of: pending.count) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+                .defaultScrollAnchor(.bottom, for: .initialOffset)
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.contentSize.height - geometry.visibleRect.maxY < 100
+                } action: { _, value in store.reachedBottom(value) }
+                .onChange(of: store.scrollRequest) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+                .overlay(alignment: .bottomTrailing) {
+                    if store.unread > 0 {
+                        Button { store.jumpToLatest() } label: { Label("\(store.unread) 条新消息", systemImage: "arrow.down") }
+                            .buttonStyle(.glassProminent).padding()
+                    }
+                }
         }
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
                 if let quote { HStack { Text("引用：\(quote.content)").lineLimit(1).font(.caption); Spacer(); Button("取消") { self.quote = nil } }.padding(.horizontal) }
                 HStack(alignment: .bottom) {
-                    PhotosPicker(selection: $pick, matching: .any(of: [.images, .videos])) { Image(systemName: "plus.circle").font(.title2) }.disabled(sending)
-                    TextField("发送消息…", text: $text, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...5)
-                    Button { enqueue() } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }.disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("发送消息")
+                    PhotosPicker(selection: $pick, matching: .any(of: [.images, .videos])) { Image(systemName: "plus.circle").font(.title2) }.disabled(uploading).accessibilityLabel("添加照片或视频")
+                    TextField("发送消息…", text: $store.draft, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...5)
+                    Button {
+                        if store.enqueue(content: store.draft, quoteID: quote?.id) { store.draft = ""; quote = nil; store.saveDraft() }
+                    } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
+                        .disabled(uploading || store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("发送消息")
                 }.floatingGlass()
-                if sending { ProgressView("正在发送…").font(.caption).padding(.horizontal) }
+                if uploading { ProgressView("正在上传…").font(.caption).padding(.horizontal) }
             }.padding(.top, 8)
         }
         .task {
-            accountID = session.user?.id ?? 0
-            roomID = conversation.id
-            NativeNotifications.shared.activeConversation = roomID
-            if let cached = LocalCache.read(userID: accountID, key: cacheKey) { messages = Records.messages([], cached.array.map(ChatMessage.init)) }
-            if let data = UserDefaults.standard.data(forKey: outboxKey), let saved = try? JSONDecoder().decode([PendingMessage].self, from: data) { pending = saved }
-            await load(); await flushPending()
-            // Refresh while visible to recover even if a socket reconnect loses an event.
+            visible = true
+            if phase == .active { await store.activate() }
+            // Socket events drive updates; slow polling recovers missed server events.
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(5)) } catch { break }
-                if phase == .active { await load() }
+                do { try await Task.sleep(for: .seconds(20)) } catch { break }
+                if visible && phase == .active { await store.load() }
             }
         }
-        .onDisappear { session.socket.room(roomID, joined: false); NativeNotifications.shared.activeConversation = nil; savePending(); Task { await session.refreshCounts() } }
-        .onChange(of: phase) { _, value in if value == .active { Task { await load(); await flushPending() } } }
+        .onDisappear { visible = false; store.suspend(); Task { await session.refreshCounts() } }
+        .onChange(of: phase) { _, value in
+            if value == .active && visible { Task { await store.activate() } } else { store.suspend() }
+        }
+        .onChange(of: store.draft) { _, _ in store.saveDraft() }
+        .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(350), scheduler: RunLoop.main)) { _ in
+            if visible && phase == .active { Task { await store.load() } }
+        }
         .task(id: pick) {
-            guard let pick else { return }; sending = true
+            guard let pick else { return }
+            uploading = true; defer { uploading = false; self.pick = nil }
+            let epoch = session.api.generation
             do {
                 let media = try await MediaLoader.load(pick)
+                try Task.checkCancellation()
                 let url = try await session.api.upload(media.data, filename: media.name, mime: media.mime)
-                let item = PendingMessage(content: "", kind: media.isVideo ? "video" : "image", media: url)
-                pending.append(item); savePending(); sending = false; await deliver(item)
-            } catch { self.error = error.localizedDescription; sending = false }
-            self.pick = nil
+                try Task.checkCancellation()
+                guard epoch == session.api.generation else { return }
+                store.enqueue(content: "", kind: media.isVideo ? "video" : "image", media: url)
+            } catch {
+                if !(error is CancellationError), (error as? URLError)?.code != .cancelled, epoch == session.api.generation { store.error = error.localizedDescription }
+            }
         }
         .confirmationDialog("撤回这条消息？", isPresented: $confirmRecall) {
-            Button("撤回", role: .destructive) { if let recall { Task { await recallMessage(recall) } } }
+            Button("撤回", role: .destructive) { if let recall { Task { await store.recall(recall) } } }
         }
     }
     @ViewBuilder private func messageRow(_ message: ChatMessage) -> some View {
@@ -165,63 +178,6 @@ struct ChatRoomView: View {
             }
         }.padding(.horizontal)
     }
-    private func load(older: Bool = false) async {
-        guard !loading, accountID > 0, session.user?.id == accountID else { return }; loading = true; defer { loading = false }
-        let epoch = session.api.generation
-        do {
-            var query = ["per_page": "50", "page": String(older ? page + 1 : 1)]
-            if communityID != nil {
-                query = ["limit": "50"]
-                if older, let first = messages.map(\.id).filter({ $0 > 0 }).min() { query["before_id"] = String(first) }
-            }
-            let j = try await session.api.request(path, query: query)
-            guard session.api.generation == epoch else { return }
-            let rows = j.list("messages", "items").map(ChatMessage.init)
-            let last = messages.last?.id
-            messages = Records.messages(messages, rows)
-            if older { page += 1; more = rows.count >= 50 }
-            else if page == 1 { more = rows.count >= 50 }
-            if communityID != nil, j["conversation"]["id"].int > 0 { roomID = j["conversation"]["id"].int }
-            if roomID > 0 { session.socket.room(roomID, joined: true); NativeNotifications.shared.activeConversation = roomID }
-            // Reconcile a response lost after server acceptance using the idempotency key.
-            let confirmed = Set(rows.flatMap { [$0.raw["request_id"].string, $0.raw["client_msg_id"].string] }.filter { !$0.isEmpty })
-            pending.removeAll { confirmed.contains($0.id) }; savePending()
-            LocalCache.write(.array(Array(messages.suffix(500)).map(\.raw)), userID: accountID, key: cacheKey)
-            if !older && messages.last?.id != last { scrollTarget = messages.last?.id }
-            if roomID > 0 { _ = try? await session.api.request("/chat/conversations/\(roomID)/mark-read", method: "POST") }
-            error = nil
-        } catch { if (error as? URLError)?.code != .cancelled { self.error = error.localizedDescription } }
-    }
-    private func enqueue() {
-        let item = PendingMessage(content: text.trimmingCharacters(in: .whitespacesAndNewlines), quoteID: quote?.id)
-        pending.append(item); text = ""; quote = nil; savePending()
-        Task { await deliver(item) }
-    }
-    private func savePending() { guard accountID > 0 else { return }; if let data = try? JSONEncoder().encode(pending) { UserDefaults.standard.set(data, forKey: outboxKey) } }
-    private func flushPending() async { for item in pending where item.failure == nil { await deliver(item) } }
-    private func deliver(_ item: PendingMessage) async {
-        guard !sending, session.user?.id == accountID else { return }; sending = true; defer { sending = false }
-        let epoch = session.api.generation
-        do {
-            var body: [String: JSON] = ["content": .text(item.content), "message_type": .text(item.kind)]
-            body[communityID == nil ? "request_id" : "client_msg_id"] = .text(item.id)
-            if let media = item.media { body["media_url"] = .text(media) }
-            if let quoteID = item.quoteID { body["quote_message_id"] = .id(quoteID) }
-            let endpoint = communityID == nil ? path : path + "/messages"
-            let j = try await session.api.request(endpoint, method: "POST", body: .object(body))
-            let message = ChatMessage(j["message"].or(j))
-            if message.id > 0 { messages = Records.messages(messages, [message]); scrollTarget = message.id }
-            pending.removeAll { $0.id == item.id }; savePending(); await load()
-        } catch {
-            guard epoch == session.api.generation else { return }
-            if let index = pending.firstIndex(where: { $0.id == item.id }) { pending[index].failure = error.localizedDescription; savePending() }
-        }
-    }
-    private func recallMessage(_ message: ChatMessage) async {
-        guard let communityID else { return }
-        do { _ = try await session.api.request("/communities/\(communityID)/chat/messages/\(message.id)", method: "DELETE"); await load() }
-        catch { self.error = error.localizedDescription }
-    }
 }
 
 struct SharePostView: View {
@@ -231,7 +187,7 @@ struct SharePostView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var sending = false
     @State private var error: String?
-    @State private var requestID = UUID().uuidString
+    @State private var requestIDs: [Int: String] = [:]
     init(session: AppSession, post: Post) {
         self.post = post
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
@@ -250,6 +206,8 @@ struct SharePostView: View {
     }
     private func share(_ conv: Conversation) async {
         sending = true; defer { sending = false }
+        let requestID = requestIDs[conv.id] ?? UUID().uuidString
+        requestIDs[conv.id] = requestID
         do {
             let path = conv.isCommunity ? "/communities/\(conv.communityID ?? 0)/chat/messages" : "/chat/conversations/\(conv.id)/messages"
             _ = try await session.api.request(path, method: "POST", body: .object([

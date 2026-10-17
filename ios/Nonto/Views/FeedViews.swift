@@ -33,6 +33,7 @@ struct PostList: View {
             .refreshable { await resource.load(reset: true) }
             .task { await resource.load(reset: true) }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
+            .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { resource.apply(id: $0.postID, patch: $0.patch) }
     }
 }
 
@@ -105,6 +106,9 @@ struct PostCard: View {
         }.padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(.quaternary, lineWidth: 0.5))
             .onChange(of: post.raw) { _, raw in current = Post(raw) }
+            .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
+                if change.postID == current.id, let patch = change.patch { current = Post(current.raw.merging(patch)) }
+            }
             .sheet(isPresented: $editing) { PostComposer(editing: current) }
             .sheet(isPresented: $quoting) { PostComposer(quoted: current) }
             .sheet(isPresented: $sharing) { SharePostView(session: session, post: current) }
@@ -112,7 +116,7 @@ struct PostCard: View {
             .confirmationDialog("删除这条动态？", isPresented: $deleting, titleVisibility: .visible) {
                 Button("删除动态", role: .destructive) {
                     Task {
-                        do { _ = try await session.api.request("/posts/\(current.id)", method: "DELETE"); session.postRevision += 1 }
+                        do { _ = try await session.api.request("/posts/\(current.id)", method: "DELETE"); session.postChange = PostChange(postID: current.id, patch: nil) }
                         catch { self.error = error.localizedDescription }
                     }
                 }
@@ -124,13 +128,16 @@ struct PostCard: View {
             let result = try await session.api.request("/posts/\(current.id)/like", method: current.liked ? "DELETE" : "POST")
             let liked = !current.liked
             let fallback: JSON = .object(["is_liked": .bool(liked), "like_count": .id(max(0, current.likes + (liked ? 1 : -1)))])
-            current = Post(current.raw.merging(fallback).merging(result)); session.postRevision += 1
+            let patch = fallback.merging(result["post"].or(result))
+            current = Post(current.raw.merging(patch))
+            session.postChange = PostChange(postID: current.id, patch: patch)
         } catch { self.error = error.localizedDescription }
     }
 }
 
 struct PostDetailView: View {
     let postID: Int
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: AppSession
     @StateObject private var comments: PagedResource<Comment>
     @State private var post: Post?
@@ -163,6 +170,11 @@ struct PostDetailView: View {
             .task { await load(); _ = try? await session.api.request("/posts/\(postID)/view", method: "POST") }
             .refreshable { await load() }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await load() } }
+            .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
+                guard change.postID == postID else { return }
+                if let patch = change.patch { post = Post((post?.raw ?? .object([:])).merging(patch)) }
+                else { dismiss() }
+            }
             .scrollDismissesKeyboard(.interactively)
     }
     private func load() async {
@@ -176,7 +188,9 @@ struct PostDetailView: View {
             var body: [String: JSON] = ["content": .text(text.trimmingCharacters(in: .whitespacesAndNewlines))]
             if let reply { body["parent_id"] = reply.raw["parent_id"].isNull ? .id(reply.id) : reply.raw["parent_id"]; body["reply_to_user_id"] = .id(reply.author.id) }
             _ = try await session.api.request("/posts/\(postID)/comments", method: "POST", body: .object(body))
-            text = ""; reply = nil; session.postRevision += 1; await comments.load(reset: true)
+            text = ""; reply = nil
+            if let post { session.postChange = PostChange(postID: postID, patch: .object(["comment_count": .id(post.comments + 1)])) }
+            await comments.load(reset: true)
         } catch { self.error = error.localizedDescription }
     }
 }
@@ -322,7 +336,9 @@ struct PostComposer: View {
         busy = true; error = nil; defer { busy = false; status = "" }
         do {
             if let editing {
-                _ = try await session.api.request("/posts/\(editing.id)", method: "PUT", body: .object(["content": .text(text), "visibility": .text(visibility)]))
+                let patch: JSON = .object(["content": .text(text), "visibility": .text(visibility)])
+                let result = try await session.api.request("/posts/\(editing.id)", method: "PUT", body: patch)
+                session.postChange = PostChange(postID: editing.id, patch: patch.merging(result["post"].or(result)))
             } else {
                 var fields: [String: String] = ["content": text, "visibility": visibility]
                 var images: [String] = []
@@ -341,7 +357,9 @@ struct PostComposer: View {
                 _ = try await session.api.request("/posts", method: "POST", form: fields)
                 UserDefaults.standard.removeObject(forKey: draftKey)
             }
-            published = true; session.postRevision += 1; dismiss()
+            published = true
+            if editing == nil { session.postRevision += 1 }
+            dismiss()
         } catch { self.error = error.localizedDescription }
     }
 }

@@ -26,7 +26,7 @@ struct AuthView: View {
                         Text("南图").font(.system(size: 40, weight: .bold, design: .rounded))
                         Text("发现世界的动态，遇见同频的人。").foregroundStyle(.secondary)
                     }.padding(.vertical, 24)
-                    Picker("账号操作", selection: $mode) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                    Picker("账号操作", selection: Binding(get: { mode }, set: { mode = $0; error = nil; message = nil; code = "" })) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).disabled(busy || sendingCode)
                     VStack(spacing: 18) {
                         if mode == .register { TextField("用户名", text: $username).textContentType(.username) }
                         TextField("邮箱", text: $email).keyboardType(.emailAddress).textContentType(.emailAddress)
@@ -36,7 +36,7 @@ struct AuthView: View {
                             Button(cooldown > 0 ? "\(cooldown) 秒" : "发送验证码") { Task { await sendOTP() } }
                                 .disabled(sendingCode || cooldown > 0 || !email.contains("@") || busy)
                         }
-                    }.textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
+                    }.textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder).disabled(busy || sendingCode)
                     if mode == .register {
                         Toggle("我已阅读并同意用户协议和隐私政策", isOn: $accepted).font(.footnote)
                     }
@@ -49,10 +49,9 @@ struct AuthView: View {
                     Button { Task { await submit() } } label: {
                         HStack { Spacer(); if busy { ProgressView().tint(.white) }; Text(mode == .reset ? "重设密码" : mode.rawValue); Spacer() }.padding(.vertical, 8)
                     }.buttonStyle(.glassProminent).controlSize(.large)
-                        .disabled(busy || email.isEmpty || password.isEmpty || (mode == .register && (!accepted || username.isEmpty || code.isEmpty)) || (mode == .reset && code.isEmpty))
+                        .disabled(busy || sendingCode || email.isEmpty || password.isEmpty || (mode == .register && (!accepted || username.isEmpty || code.isEmpty)) || (mode == .reset && code.isEmpty))
                 }.padding(28).frame(maxWidth: 520)
             }.frame(maxWidth: .infinity).scrollDismissesKeyboard(.interactively)
-                .onChange(of: mode) { _, _ in error = nil; message = nil; code = "" }
                 .onReceive(timer) { _ in if cooldown > 0 { cooldown -= 1 } }
         }
     }
@@ -70,7 +69,7 @@ struct AuthView: View {
             let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
             if mode == .reset {
                 _ = try await session.api.request("/auth/reset-password", method: "POST", body: .object(["email": .text(address), "code": .text(code), "new_password": .text(password)]), authenticated: false)
-                mode = .login; password = ""; message = "密码已重设，请使用新密码登录。"
+                mode = .login; password = ""; code = ""; message = "密码已重设，请使用新密码登录。"
             } else {
                 try await session.authenticate(email: address, password: password, code: code,
                                                username: mode == .register ? username.trimmingCharacters(in: .whitespacesAndNewlines) : nil)

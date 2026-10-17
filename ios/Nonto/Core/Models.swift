@@ -95,7 +95,12 @@ struct Topic: Record {
 
 enum Records {
     static func unique<T: Record>(_ items: [T]) -> [T] {
-        var seen = Set<Int>(); return items.filter { $0.id > 0 && seen.insert($0.id).inserted }
+        var result: [T] = [], positions: [Int: Int] = [:]
+        for item in items where item.id > 0 {
+            if let index = positions[item.id] { result[index] = item }
+            else { positions[item.id] = result.count; result.append(item) }
+        }
+        return result
     }
     static func messages(_ old: [ChatMessage], _ new: [ChatMessage]) -> [ChatMessage] {
         var items = Dictionary(old.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })

@@ -124,6 +124,7 @@ struct EditProfileView: View {
     @State private var bio = ""
     @State private var avatar: PhotosPickerItem?
     @State private var cover: PhotosPickerItem?
+    @State private var initialized = false
     @State private var busy = false
     @State private var error: String?
     var body: some View {
@@ -142,7 +143,7 @@ struct EditProfileView: View {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                     ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(busy) }
                 }.interactiveDismissDisabled(busy)
-                .onAppear { name = session.user?.name ?? ""; bio = session.user?.bio ?? "" }
+                .onAppear { if !initialized { initialized = true; name = session.user?.name ?? ""; bio = session.user?.bio ?? "" } }
                 .task(id: avatar) { if let avatar { await upload(avatar, type: "avatar") } }
                 .task(id: cover) { if let cover { await upload(cover, type: "cover") } }
         }

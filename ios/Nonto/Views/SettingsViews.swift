@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage("nonto.native.appearance") private var appearance = "system"
     @State private var error: String?
     @State private var confirmLogout = false
+    @State private var cacheCleared = false
     var body: some View {
         Form {
             Section("外观") {
@@ -22,7 +23,7 @@ struct SettingsView: View {
                 NavigationLink("我的社群") { CommunityListView(session: session, mine: true) }
                 NavigationLink("漫展") { ComicListView() }
                 Button("清理本机缓存") {
-                    do { try LocalCache.clear(userID: session.user?.id ?? 0); error = "本机缓存已清理" }
+                    do { try LocalCache.clear(userID: session.user?.id ?? 0); error = nil; cacheCleared = true }
                     catch { self.error = error.localizedDescription }
                 }
             }
@@ -38,6 +39,7 @@ struct SettingsView: View {
             }
             ErrorBanner(text: error)
         }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
+            .alert("本机缓存已清理", isPresented: $cacheCleared) { Button("好", role: .cancel) {} }
             .confirmationDialog("退出当前账号？", isPresented: $confirmLogout) { Button("退出登录", role: .destructive) { do { try session.logout() } catch { self.error = error.localizedDescription } } }
     }
 }
@@ -158,7 +160,7 @@ struct DeleteAccountView: View {
             Button("永久注销", role: .destructive) {
                 Task {
                     busy = true; defer { busy = false }
-                    do { _ = try await session.api.request("/auth/account", method: "DELETE"); try LocalCache.clear(userID: session.user?.id ?? 0); try session.logout() }
+                    do { _ = try await session.api.request("/auth/account", method: "DELETE"); try? LocalCache.clear(userID: session.user?.id ?? 0); try session.logout() }
                     catch { self.error = error.localizedDescription }
                 }
             }

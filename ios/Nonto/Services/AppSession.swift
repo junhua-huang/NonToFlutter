@@ -1,5 +1,11 @@
 import Foundation
 import Combine
+import CryptoKit
+
+struct PostChange {
+    let postID: Int
+    let patch: JSON? // nil means deleted
+}
 
 @MainActor
 final class AppSession: ObservableObject {
@@ -9,6 +15,7 @@ final class AppSession: ObservableObject {
     @Published var restoring = true
     @Published var startupError: String?
     @Published var postRevision = 0
+    @Published var postChange: PostChange?
     @Published var messageUnread = 0
     @Published var noticeUnread = 0
     @Published var defaultVisibility = "public"
@@ -45,7 +52,11 @@ final class AppSession: ObservableObject {
         guard !token.isEmpty else { throw APIError(status: 0, message: "登录响应缺少凭据，请重试") }
         try api.setToken(token)
         do { try await refreshProfile() }
-        catch { try? api.setToken(nil); clearUI(); throw error }
+        catch {
+            // Keep a valid freshly issued token when only profile loading fails offline.
+            if api.token != nil { startupError = error.localizedDescription }
+            throw error
+        }
         await loadPreferences()
     }
     func refreshProfile() async throws {
@@ -74,6 +85,7 @@ final class AppSession: ObservableObject {
         }
     }
     func refreshCounts() async {
+        guard foreground, user != nil else { return }
         let epoch = api.generation
         async let chat = try? api.request("/chat/unread-count")
         async let notice = try? api.request("/notifications/unread-count")
@@ -91,7 +103,7 @@ final class AppSession: ObservableObject {
     func clearUI() {
         socket.stop(); socket.resetRooms(); user = nil; messageUnread = 0; noticeUnread = 0
         NativeNotifications.shared.clear()
-        startupError = nil; defaultVisibility = "public"; postRevision += 1
+        startupError = nil; defaultVisibility = "public"; postChange = nil; postRevision += 1
         URLCache.shared.removeAllCachedResponses()
     }
 }
@@ -104,9 +116,8 @@ enum LocalCache {
         guard userID > 0, let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
         let folder = root.appendingPathComponent("Nonto/\(userID)", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // Reversible, collision-free filename for the resource identifier.
-        let name = Data(key.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
-        guard name.count < 220 else { return nil }
+        // Fixed length even for long search terms; query identity is canonicalized below.
+        let name = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
         return folder.appendingPathComponent(name + ".json")
     }
     static func read(userID: Int, key: String) -> JSON? {
@@ -133,6 +144,10 @@ final class PagedResource<T: Record>: ObservableObject {
     private(set) var page = 0
     private var cursor: String?
     private var requestID = UUID()
+    private var activeTask: Task<Void, Never>?
+    private var activeReset = false
+    private var pendingUpdates: [Int: JSON] = [:]
+    private var pendingRemovals = Set<Int>()
     private var api: APIClient
     let path: String
     let keys: [String]
@@ -141,7 +156,12 @@ final class PagedResource<T: Record>: ObservableObject {
     let userID: Int
     let paginated: Bool
     let usesOffset: Bool
-    var cacheKey: String { path + query.keys.sorted().map { "\($0)=\(query[$0]!)" }.joined(separator: "&") }
+    var cacheKey: String {
+        var components = URLComponents()
+        components.path = path
+        components.queryItems = query.keys.sorted().map { URLQueryItem(name: $0, value: query[$0]) }
+        return "resource.v2." + (components.string ?? path) + ":\(pageSize):\(paginated):\(usesOffset)"
+    }
 
     init(api: APIClient, path: String, keys: [String], query: [String: String] = [:],
          userID: Int, pageSize: Int = 20, paginated: Bool = true, usesOffset: Bool = false) {
@@ -150,33 +170,70 @@ final class PagedResource<T: Record>: ObservableObject {
         if let cache = LocalCache.read(userID: userID, key: cacheKey) { items = Records.unique(cache.array.map(T.init)) }
     }
     func load(reset: Bool = false) async {
-        guard reset || (!loading && hasMore) else { return }
+        if let task = activeTask {
+            // Coalesce refresh events; a refresh supersedes an older next-page request.
+            if !reset || activeReset { await task.value; return }
+            task.cancel()
+        } else if !reset && !hasMore { return }
         let ticket = UUID(); requestID = ticket
+        pendingUpdates.removeAll(); pendingRemovals.removeAll()
+        activeReset = reset; loading = true; error = nil
+        let task = Task<Void, Never> { [weak self] in await self?.fetch(reset: reset, ticket: ticket) }
+        activeTask = task
+        await task.value
+        if requestID == ticket { activeTask = nil; loading = false }
+    }
+    private func fetch(reset: Bool, ticket: UUID) async {
         let epoch = api.generation, next = reset ? 1 : page + 1
-        loading = true; error = nil
-        defer { if requestID == ticket { loading = false } }
+        let previousCursor = reset ? nil : cursor
         do {
             var params = query
             if paginated {
                 if usesOffset { params["offset"] = String((next - 1) * pageSize); params["limit"] = String(pageSize) }
                 else { params["page"] = String(next); params["per_page"] = String(pageSize) }
-                if !reset, let cursor { params["cursor"] = cursor }
+                if let previousCursor { params["cursor"] = previousCursor }
             }
             let json = try await api.request(path, query: params)
+            try Task.checkCancellation()
             guard requestID == ticket, api.generation == epoch else { return }
-            let rows: [JSON]
-            if case .array = json { rows = json.array }
-            else { rows = keys.compactMap { key -> [JSON]? in if case .array = json[key] { return json[key].array }; return nil }.first ?? [] }
-            items = Records.unique((reset ? [] : items) + rows.map(T.init))
+            let rows = try Self.rows(json, keys: keys)
+            let parsed = Records.unique(rows.map(T.init))
+            guard rows.isEmpty || !parsed.isEmpty else { throw APIError(status: 0, message: "服务器返回的列表缺少有效记录，请重试") }
+            let incoming = parsed.filter { !pendingRemovals.contains($0.id) }.map { item in
+                T(item.raw.merging(pendingUpdates[item.id] ?? .object([:])))
+            }
+            let added = incoming.contains { row in !items.contains { $0.id == row.id } }
+            items = Records.unique((reset ? [] : items) + incoming)
             page = next
-            cursor = json["next_cursor"].string.isEmpty ? nil : json["next_cursor"].string
-            hasMore = paginated && (json["has_more"].isNull ? rows.count >= pageSize : json["has_more"].bool)
-            if !json["total_pages"].isNull { hasMore = next < json["total_pages"].int }
-            if !json["pages"].isNull { hasMore = next < json["pages"].int }
-            LocalCache.write(.array(Array(items.prefix(100)).map(\.raw)), userID: userID, key: cacheKey)
+            let nextCursor = json["next_cursor"].string
+            cursor = nextCursor.isEmpty ? nil : nextCursor
+            hasMore = paginated && !incoming.isEmpty && (json["has_more"].isNull ? rows.count >= pageSize : json["has_more"].bool)
+            if !json["total_pages"].isNull { hasMore = paginated && !incoming.isEmpty && next < json["total_pages"].int }
+            if !json["pages"].isNull { hasMore = paginated && !incoming.isEmpty && next < json["pages"].int }
+            // A broken cursor or repeated page must not keep the UI in an endless load loop.
+            if !reset && next > 1 && (!added || (cursor != nil && cursor == previousCursor)) { hasMore = false }
+            persist()
         } catch is CancellationError {} catch {
             guard requestID == ticket, api.generation == epoch else { return }
             if (error as? URLError)?.code != .cancelled { self.error = error.localizedDescription }
         }
+    }
+    static func rows(_ json: JSON, keys: [String]) throws -> [JSON] {
+        if case .array(let rows) = json { return rows }
+        for key in keys { if case .array(let rows) = json[key] { return rows } }
+        throw APIError(status: 0, message: "服务器返回的列表不完整，请重试")
+    }
+    func apply(id: Int, patch: JSON?) {
+        if let patch {
+            if loading { pendingUpdates[id] = (pendingUpdates[id] ?? .object([:])).merging(patch) }
+            if let index = items.firstIndex(where: { $0.id == id }) { items[index] = T(items[index].raw.merging(patch)) }
+        } else {
+            if loading { pendingRemovals.insert(id) }
+            items.removeAll { $0.id == id }
+        }
+        persist()
+    }
+    private func persist() {
+        LocalCache.write(.array(Array(items.prefix(100)).map(\.raw)), userID: userID, key: cacheKey)
     }
 }

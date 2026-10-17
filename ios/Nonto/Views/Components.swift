@@ -2,6 +2,7 @@ import SwiftUI
 import AVKit
 import PhotosUI
 import UniformTypeIdentifiers
+import ImageIO
 
 struct AvatarView: View {
     var url: String
@@ -79,9 +80,12 @@ private struct MediaSelection: Identifiable { let id = UUID(); var index: Int }
 struct NativeVideo: View {
     let url: URL
     @State private var player: AVPlayer?
+    @Environment(\.scenePhase) private var phase
     var body: some View {
         VideoPlayer(player: player)
             .onAppear { player = AVPlayer(url: url) }
+            .onChange(of: url) { _, value in player?.pause(); player = AVPlayer(url: value) }
+            .onChange(of: phase) { _, value in if value != .active { player?.pause() } }
             .onDisappear { player?.pause(); player?.replaceCurrentItem(with: nil); player = nil }
     }
 }
@@ -107,35 +111,100 @@ struct ImageGallery: View {
 }
 struct ZoomImage: View {
     let url: String
-    @State private var scale: CGFloat = 1
-    @GestureState private var magnification: CGFloat = 1
+    @State private var image: UIImage?
+    @State private var failed = false
+    @State private var attempt = 0
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            AsyncImage(url: URL(string: url)) { phase in
-                if let image = phase.image { image.resizable().scaledToFit().containerRelativeFrame(.horizontal) }
-                else if phase.error != nil { Image(systemName: "photo.badge.exclamationmark").foregroundStyle(.white).padding(100) }
-                else { ProgressView().tint(.white).padding(100) }
-            }.scaleEffect(scale * magnification)
-                .gesture(MagnificationGesture().updating($magnification) { value, state, _ in state = value }.onEnded { scale = min(5, max(1, scale * $0)) })
-                .onTapGesture(count: 2) { withAnimation { scale = scale > 1 ? 1 : 2 } }
-        }.defaultScrollAnchor(.center)
+        Group {
+            if let image { ZoomImageSurface(image: image) }
+            else if failed {
+                VStack(spacing: 16) {
+                    Label("图片加载失败", systemImage: "photo.badge.exclamationmark").foregroundStyle(.white)
+                    Button("重新加载") { attempt += 1 }.buttonStyle(.glass)
+                }
+            } else { ProgressView().tint(.white) }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task(id: "\(url)#\(attempt)") {
+                image = nil; failed = false
+                do {
+                    guard let link = URL(string: url), ["https", "http"].contains(link.scheme ?? "") else { throw URLError(.badURL) }
+                    let (data, response) = try await URLSession.shared.data(from: link)
+                    guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode), let decoded = UIImage(data: data) else { throw URLError(.cannotDecodeContentData) }
+                    try Task.checkCancellation(); image = decoded
+                } catch { if !Task.isCancelled { failed = true } }
+            }
     }
 }
 
-struct SelectedMedia: Identifiable {
+private struct ZoomImageSurface: UIViewRepresentable {
+    let image: UIImage
+    func makeUIView(context: Context) -> ImageScrollView { ImageScrollView() }
+    func updateUIView(_ view: ImageScrollView, context: Context) { view.display(image) }
+}
+
+/// UIScrollView keeps content size, pan bounds and pinch zoom in sync.
+private final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
+    private let picture = UIImageView()
+    private var fittedSize = CGSize.zero
+    init() {
+        super.init(frame: .zero)
+        delegate = self; backgroundColor = .clear
+        showsHorizontalScrollIndicator = false; showsVerticalScrollIndicator = false
+        contentInsetAdjustmentBehavior = .never
+        picture.isAccessibilityElement = true; picture.accessibilityLabel = "图片，可双指缩放"
+        addSubview(picture)
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleZoom(_:)))
+        doubleTap.numberOfTapsRequired = 2; addGestureRecognizer(doubleTap)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func display(_ image: UIImage) {
+        guard picture.image !== image else { return }
+        zoomScale = 1; picture.image = image; picture.frame = CGRect(origin: .zero, size: image.size)
+        contentSize = image.size; fittedSize = .zero; setNeedsLayout()
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if let image = picture.image, bounds.width > 0, bounds.height > 0, fittedSize != bounds.size {
+            fittedSize = bounds.size
+            let fit = min(bounds.width / image.size.width, bounds.height / image.size.height)
+            minimumZoomScale = fit; maximumZoomScale = fit * 5; zoomScale = fit
+        }
+        centerImage()
+    }
+    private func centerImage() {
+        let x = max(0, (bounds.width - contentSize.width) / 2), y = max(0, (bounds.height - contentSize.height) / 2)
+        let inset = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
+        if contentInset != inset { contentInset = inset }
+    }
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? { picture }
+    func scrollViewDidZoom(_ scrollView: UIScrollView) { centerImage() }
+    @objc private func toggleZoom(_ gesture: UITapGestureRecognizer) {
+        if zoomScale > minimumZoomScale * 1.1 { setZoomScale(minimumZoomScale, animated: true); return }
+        let point = gesture.location(in: picture), scale = minimumZoomScale * 2.5
+        let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
+        zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
+    }
+}
+
+struct SelectedMedia: Identifiable, Sendable {
     let id = UUID()
     let data: Data
     let name: String
     let mime: String
     var isVideo: Bool { mime.hasPrefix("video/") }
     static func image(_ data: Data) throws -> SelectedMedia {
-        guard let image = UIImage(data: data) else { throw APIError(status: 0, message: "无法读取这张照片") }
-        let ratio = min(1, 1920 / max(image.size.width, image.size.height))
-        let size = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
-        let format = UIGraphicsImageRendererFormat(); format.scale = 1
-        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
-        guard let jpeg = rendered.jpegData(compressionQuality: 0.9) else { throw APIError(status: 0, message: "图片转换失败") }
-        return SelectedMedia(data: jpeg, name: "photo-\(UUID().uuidString).jpg", mime: "image/jpeg")
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 1920
+              ] as CFDictionary) else { throw APIError(status: 0, message: "无法读取这张照片") }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { throw APIError(status: 0, message: "图片转换失败") }
+        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { throw APIError(status: 0, message: "图片转换失败") }
+        return SelectedMedia(data: output as Data, name: "photo-\(UUID().uuidString).jpg", mime: "image/jpeg")
     }
 }
 
@@ -162,6 +231,8 @@ enum MediaLoader {
                                  mime: ext == "mp4" ? "video/mp4" : "video/quicktime")
         }
         guard let data = try await item.loadTransferable(type: Data.self) else { throw APIError(status: 0, message: "无法读取照片") }
-        return try await MainActor.run { try SelectedMedia.image(data) }
+        let result = try await Task.detached(priority: .userInitiated) { try SelectedMedia.image(data) }.value
+        try Task.checkCancellation()
+        return result
     }
 }
