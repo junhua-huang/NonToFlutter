@@ -62,4 +62,13 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(error.code, "MODERATION_UNAVAILABLE")
         XCTAssertEqual(error.message, "内容审核服务暂不可用，请稍后重试")
     }
+    @MainActor
+    func testLogoutClearsNativeNotificationAccountPreferences() {
+        let notifications = NativeNotifications.shared
+        notifications.userID = 900001; notifications.activeConversation = 33
+        notifications.messageEnabled = true; notifications.soundEnabled = true
+        notifications.clear()
+        XCTAssertEqual(notifications.userID, 0); XCTAssertNil(notifications.activeConversation)
+        XCTAssertFalse(notifications.messageEnabled); XCTAssertFalse(notifications.soundEnabled)
+    }
 }

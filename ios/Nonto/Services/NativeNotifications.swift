@@ -23,7 +23,7 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
     }
     func setBadge(_ count: Int) { Task { try? await center.setBadgeCount(count) } }
     func clear() {
-        userID = 0; activeConversation = nil
+        userID = 0; activeConversation = nil; messageEnabled = false; soundEnabled = false
         center.removeAllDeliveredNotifications(); center.removeAllPendingNotificationRequests(); setBadge(0)
     }
     func test() async throws {

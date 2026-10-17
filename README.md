@@ -1,17 +1,16 @@
-# NonTo BY FLutter
+# 南图 · iOS 原生版
 
-A new Flutter project.
+[![Native iOS](https://github.com/junhua-huang/NonToFlutter/actions/workflows/native-ios.yml/badge.svg?branch=ios)](https://github.com/junhua-huang/NonToFlutter/actions/workflows/native-ios.yml)
 
-## Getting Started
+`ios` 分支使用 Swift + SwiftUI 构建南图 iPhone / iPad 客户端，连接原有后端。
 
-This project is a starting point for a Flutter application.
+- 保留品牌蓝 **#1D9BF0** 和原 N 图标。
+- 使用 **iOS 26 Liquid Glass**、原生导航、标签栏、表单和系统交互。
+- 直接使用 URLSession、Keychain、UserNotifications、SF Symbols、PhotosPicker、AVPlayer 和系统存储。
+- 原生工程不依赖 Flutter、CocoaPods 或第三方 Swift 包。
 
-A few resources to get you started if this is your first Flutter project:
+打开 `ios/Nonto.xcodeproj`，选择 `Nonto` scheme。需要 Xcode 26+ 和 iOS / iPadOS 26+。Windows 用户可通过仓库的 **Native iOS** GitHub Actions 检查编译和测试；TestFlight 还需要配置苹果签名。
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+[原生版功能、构建和待验证事项](ios/README.md)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Flutter 代码继续保留作为其他平台实现和接口参考；其原始开发分支是 `master`。
