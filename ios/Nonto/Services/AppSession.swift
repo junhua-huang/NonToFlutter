@@ -211,11 +211,15 @@ final class PagedResource<T: Record>: ObservableObject {
             page = next
             let nextCursor = json["next_cursor"].string
             cursor = nextCursor.isEmpty ? nil : nextCursor
-            hasMore = paginated && !incoming.isEmpty && (json["has_more"].isNull ? rows.count >= pageSize : json["has_more"].bool)
-            if !json["total_pages"].isNull { hasMore = paginated && !incoming.isEmpty && next < json["total_pages"].int }
-            if !json["pages"].isNull { hasMore = paginated && !incoming.isEmpty && next < json["pages"].int }
-            // A broken cursor or repeated page must not keep the UI in an endless load loop.
-            if !reset && next > 1 && (!added || (cursor != nil && cursor == previousCursor)) { hasMore = false }
+            let inferredMore: Bool
+            if cursor != nil { inferredMore = true }
+            else if !json["total_pages"].isNull { inferredMore = next < json["total_pages"].int }
+            else if !json["pages"].isNull { inferredMore = next < json["pages"].int }
+            else { inferredMore = rows.count >= pageSize }
+            hasMore = paginated && !parsed.isEmpty && (json["has_more"].isNull ? inferredMore : json["has_more"].bool)
+            // Advancing cursors can legitimately return overlapping records or short pages.
+            // Only a non-advancing cursor, or a repeated page without cursors, ends pagination.
+            if !reset && next > 1 && ((cursor != nil && cursor == previousCursor) || (cursor == nil && !added)) { hasMore = false }
             persist()
         } catch is CancellationError {} catch {
             guard requestID == ticket, api.generation == epoch else { return }

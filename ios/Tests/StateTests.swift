@@ -205,6 +205,21 @@ final class StateTests: XCTestCase {
         await store.load(older: true)
         XCTAssertEqual(store.messages.first?.id, 51); XCTAssertEqual(store.messages.count, 150); store.suspend()
     }
+    func testShortAndOverlappingCursorPagesContinueUntilCursorStops() async throws {
+        var count = 0
+        let api = try client { request in
+            count += 1
+            let cursor = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "cursor" }?.value
+            if count == 1 { XCTAssertNil(cursor) }
+            else { XCTAssertEqual(cursor, count == 2 ? "a" : "b") }
+            return (200, .object(["posts": .array([self.post(1, "page \(count)")]), "next_cursor": .text(count == 1 ? "a" : "b")]))
+        }
+        let feed = resource(api)
+        await feed.load(reset: true); XCTAssertTrue(feed.hasMore)
+        await feed.load(); XCTAssertTrue(feed.hasMore)
+        await feed.load(); XCTAssertFalse(feed.hasMore)
+        XCTAssertEqual(feed.items.count, 1); XCTAssertEqual(feed.items.first?.content, "page 3")
+    }
     func testResourceCannotFetchUnderAnotherAccountsToken() async throws {
         var calls = 0
         let api = try client { _ in calls += 1; return (200, .array([self.post(1, "account B")])) }
