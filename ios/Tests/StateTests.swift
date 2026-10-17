@@ -160,8 +160,62 @@ final class StateTests: XCTestCase {
         try api.setToken("account-B")
         XCTAssertFalse(second.enqueue(content: "must not send")); XCTAssertEqual(sends, 0); second.suspend()
     }
+    func testSuspendedChatDoesNotFetchOrDeliverUntilReactivated() async throws {
+        var calls = 0, sends = 0
+        let api = try client { request in
+            calls += 1
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                sends += 1; return (200, .object(["message": self.message(100)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        let (store, _) = room(api); await store.activate(); store.suspend()
+        let before = calls
+        store.enqueue(content: "queued while away"); await store.load()
+        XCTAssertEqual(calls, before); XCTAssertEqual(sends, 0); XCTAssertEqual(store.pending.count, 1)
+        await store.activate(); try await waitForDelivery(store)
+        XCTAssertEqual(sends, 1); XCTAssertTrue(store.pending.isEmpty); store.suspend()
+    }
+    func testServerHistoryReconcilesAnUnacknowledgedSendWithoutResending() async throws {
+        var sends = 0, confirmed: JSON?
+        let api = try client { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                sends += 1
+                let body = try self.body(request)
+                confirmed = self.message(100).merging(.object(["request_id": body["request_id"]]))
+                throw URLError(.networkConnectionLost)
+            }
+            return (200, .object(["messages": .array(confirmed.map { [$0] } ?? [])]))
+        }
+        let (store, _) = room(api); await store.activate(); store.enqueue(content: "accepted on server")
+        try await waitForDelivery(store); XCTAssertEqual(store.pending.count, 1)
+        store.suspend(); await store.activate(); try await waitForDelivery(store)
+        XCTAssertTrue(store.pending.isEmpty); XCTAssertEqual(sends, 1); XCTAssertEqual(store.messages.last?.id, 100); store.suspend()
+    }
+    func testCachedHistoryOverlapDoesNotHideOlderPages() async throws {
+        let api = try client { request in
+            let page = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "page" }?.value ?? "1"
+            let ids = page == "1" ? Array(151...200) : (page == "2" ? Array(101...150) : Array(51...100))
+            return (200, .object(["messages": .array(ids.map { self.message($0) })]))
+        }
+        let (store, _) = room(api)
+        LocalCache.write(.array((101...200).map { message($0) }), userID: userID, key: "chat.single.55")
+        await store.activate(); await store.load(older: true)
+        XCTAssertTrue(store.more)
+        await store.load(older: true)
+        XCTAssertEqual(store.messages.first?.id, 51); XCTAssertEqual(store.messages.count, 150); store.suspend()
+    }
+    func testResourceCannotFetchUnderAnotherAccountsToken() async throws {
+        var calls = 0
+        let api = try client { _ in calls += 1; return (200, .array([self.post(1, "account B")])) }
+        let old = resource(api)
+        try api.setToken("account-B")
+        await old.load(reset: true)
+        XCTAssertEqual(calls, 0); XCTAssertTrue(old.items.isEmpty)
+    }
     func testPhotoDownsamplingAndInvalidData() throws {
-        let image = UIGraphicsImageRenderer(size: CGSize(width: 3000, height: 1500)).image { context in UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 3000, height: 1500)) }
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 3000, height: 1500), format: format).image { context in UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 3000, height: 1500)) }
         let media = try SelectedMedia.image(XCTUnwrap(image.pngData()))
         let source = try XCTUnwrap(CGImageSourceCreateWithData(media.data as CFData, nil))
         let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])

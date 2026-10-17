@@ -121,11 +121,11 @@ private struct ChatRoomContent: View {
         }
         .onDisappear { visible = false; store.suspend(); Task { await session.refreshCounts() } }
         .onChange(of: phase) { _, value in
-            if value == .active && visible { Task { await store.activate() } } else { store.suspend() }
+            if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
         }
         .onChange(of: store.draft) { _, _ in store.saveDraft() }
         .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(350), scheduler: RunLoop.main)) { _ in
-            if visible && phase == .active { Task { await store.load() } }
+            if visible && phase == .active { Task { if visible && phase == .active { await store.load() } } }
         }
         .task(id: pick) {
             guard let pick else { return }

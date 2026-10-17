@@ -149,6 +149,7 @@ final class PagedResource<T: Record>: ObservableObject {
     private var pendingUpdates: [Int: JSON] = [:]
     private var pendingRemovals = Set<Int>()
     private var api: APIClient
+    private let accountEpoch: UUID
     let path: String
     let keys: [String]
     let query: [String: String]
@@ -165,11 +166,12 @@ final class PagedResource<T: Record>: ObservableObject {
 
     init(api: APIClient, path: String, keys: [String], query: [String: String] = [:],
          userID: Int, pageSize: Int = 20, paginated: Bool = true, usesOffset: Bool = false) {
-        self.api = api; self.path = path; self.keys = keys; self.query = query
+        self.api = api; accountEpoch = api.generation; self.path = path; self.keys = keys; self.query = query
         self.userID = userID; self.pageSize = pageSize; self.paginated = paginated; self.usesOffset = usesOffset
         if let cache = LocalCache.read(userID: userID, key: cacheKey) { items = Records.unique(cache.array.map(T.init)) }
     }
     func load(reset: Bool = false) async {
+        guard api.generation == accountEpoch else { return }
         if let task = activeTask {
             // Coalesce refresh events; a refresh supersedes an older next-page request.
             if !reset || activeReset { await task.value; return }
@@ -184,7 +186,8 @@ final class PagedResource<T: Record>: ObservableObject {
         if requestID == ticket { activeTask = nil; loading = false }
     }
     private func fetch(reset: Bool, ticket: UUID) async {
-        let epoch = api.generation, next = reset ? 1 : page + 1
+        guard requestID == ticket, api.generation == accountEpoch, !Task.isCancelled else { return }
+        let epoch = accountEpoch, next = reset ? 1 : page + 1
         let previousCursor = reset ? nil : cursor
         do {
             var params = query
@@ -202,7 +205,8 @@ final class PagedResource<T: Record>: ObservableObject {
             let incoming = parsed.filter { !pendingRemovals.contains($0.id) }.map { item in
                 T(item.raw.merging(pendingUpdates[item.id] ?? .object([:])))
             }
-            let added = incoming.contains { row in !items.contains { $0.id == row.id } }
+            let known = Set(items.map(\.id))
+            let added = incoming.contains { !known.contains($0.id) }
             items = Records.unique((reset ? [] : items) + incoming)
             page = next
             let nextCursor = json["next_cursor"].string
@@ -224,6 +228,7 @@ final class PagedResource<T: Record>: ObservableObject {
         throw APIError(status: 0, message: "服务器返回的列表不完整，请重试")
     }
     func apply(id: Int, patch: JSON?) {
+        guard api.generation == accountEpoch else { return }
         if let patch {
             if loading { pendingUpdates[id] = (pendingUpdates[id] ?? .object([:])).merging(patch) }
             if let index = items.firstIndex(where: { $0.id == id }) { items[index] = T(items[index].raw.merging(patch)) }

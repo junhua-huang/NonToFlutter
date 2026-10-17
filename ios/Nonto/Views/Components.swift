@@ -201,7 +201,7 @@ struct SelectedMedia: Identifiable, Sendable {
                 kCGImageSourceThumbnailMaxPixelSize: 1920
               ] as CFDictionary) else { throw APIError(status: 0, message: "无法读取这张照片") }
         let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { throw APIError(status: 0, message: "图片转换失败") }
+        guard let destination = CGImageDestinationCreateWithData(output as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil) else { throw APIError(status: 0, message: "图片转换失败") }
         CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw APIError(status: 0, message: "图片转换失败") }
         return SelectedMedia(data: output as Data, name: "photo-\(UUID().uuidString).jpg", mime: "image/jpeg")

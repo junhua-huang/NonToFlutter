@@ -32,6 +32,7 @@ final class ChatStore: ObservableObject {
     private var active = false
     private var restored = false
     private var page = 1
+    private var lastOlderIDs: [Int]?
     private var roomID = 0
     private var markedReadThrough: Int?
     private var loadTask: Task<Void, Never>?
@@ -51,7 +52,7 @@ final class ChatStore: ObservableObject {
         roomID = conversation.id
     }
     func activate() async {
-        guard valid else { return }
+        guard valid, !Task.isCancelled else { return }
         active = true
         if !restored {
             restored = true
@@ -78,7 +79,7 @@ final class ChatStore: ObservableObject {
     func jumpToLatest() { nearBottom = true; unread = 0; scrollRequest += 1 }
     func reachedBottom(_ value: Bool) { nearBottom = value; if value { unread = 0 } }
     func load(older: Bool = false) async {
-        guard active, valid else { return }
+        guard active, valid, !Task.isCancelled else { return }
         if let task = loadTask { await task.value; return }
         let ticket = UUID(); loadID = ticket; loading = true
         let task = Task<Void, Never> { [weak self] in await self?.fetch(older: older, ticket: ticket) }
@@ -87,6 +88,7 @@ final class ChatStore: ObservableObject {
         if loadID == ticket { loadTask = nil; loading = false }
     }
     private func fetch(older: Bool, ticket: UUID) async {
+        guard active, valid, loadID == ticket, !Task.isCancelled else { return }
         do {
             var query = ["per_page": "50", "page": String(older ? page + 1 : 1)]
             if communityID != nil {
@@ -100,8 +102,13 @@ final class ChatStore: ObservableObject {
             let known = Set(messages.map(\.id)), last = messages.last?.id
             let added = rows.filter { $0.id > 0 && !known.contains($0.id) }
             messages = Records.messages(messages, rows)
-            if older { page += 1; more = rows.count >= 50 && !added.isEmpty }
-            else if page == 1 { more = rows.count >= 50 }
+            if older {
+                let ids = rows.map(\.id)
+                page += 1
+                // Cached history can legitimately overlap multiple server pages.
+                more = rows.count >= 50 && ids != lastOlderIDs && (communityID == nil || !added.isEmpty)
+                lastOlderIDs = ids
+            } else if page == 1 { more = rows.count >= 50 }
             if communityID != nil, json["conversation"]["id"].int > 0 { roomID = json["conversation"]["id"].int }
             joinRoom()
             let confirmed = Set(rows.flatMap { [$0.raw["request_id"].string, $0.raw["client_msg_id"].string] }.filter { !$0.isEmpty })
