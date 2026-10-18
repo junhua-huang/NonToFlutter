@@ -190,8 +190,12 @@ private struct ChatRoomContent: View {
             do {
                 var prepared: [SelectedMedia] = []
                 for pick in selection {
-                    prepared.append(try await MediaLoader.load(pick))
+                    let media = try await MediaLoader.load(pick)
                     try Task.checkCancellation()
+                    guard prepared.reduce(0, { $0 + $1.data.count }) + media.data.count <= 80 * 1024 * 1024 else {
+                        throw APIError(status: 0, message: "一次选择的附件总大小不能超过 80 MB，请减少视频数量")
+                    }
+                    prepared.append(media)
                 }
                 guard epoch == session.api.generation, visible else { return }
                 composerFocused = false

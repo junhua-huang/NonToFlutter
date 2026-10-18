@@ -45,6 +45,21 @@ final class ChatExperienceTests: XCTestCase {
         }
         return try JSON.decode(data)
     }
+    func testNotificationConversationLookupFindsTheServerIDBeyondFirstPage() async throws {
+        var pages: [String] = []
+        StubProtocol.handler = { request in
+            XCTAssertTrue(request.url!.path.hasSuffix("/chat/sessions"))
+            let page = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "page" }!.value!
+            pages.append(page)
+            if page == "1" { return (200, .object(["sessions": .array((1...50).map { .object(["id": .id($0)]) }), "has_more": .bool(true)])) }
+            return (200, .object(["sessions": .array([.object(["id": .id(999), "conversation_id": .id(63)])]), "has_more": .bool(false)]))
+        }
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://api.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        try api.setToken("lookup-fixture")
+        let room = try await ConversationLookup.find(63, api: api)
+        XCTAssertEqual(room.id, 63); XCTAssertEqual(pages, ["1", "2"])
+    }
     func testImageBatchIsDurableOrderedAndRejectsAnInvalidBatchAtomically() throws {
         let store = try room { _ in (200, .object([:])) }
         XCTAssertTrue(store.enqueueMedia([(url: "https://example.test/first.jpg", kind: "image"),

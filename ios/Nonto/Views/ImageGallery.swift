@@ -101,7 +101,8 @@ struct ImageGallery: View {
                     }.padding(.horizontal).background(.black.opacity(0.55))
                 }.foregroundStyle(.white).buttonStyle(.plain)
             }
-        }.statusBarHidden(!controls).persistentSystemOverlays(.hidden)
+        }.accessibilityAction(.escape) { dismiss() }
+            .statusBarHidden(!controls).persistentSystemOverlays(.hidden)
             .sheet(item: $sharing) { ImageShareSheet(image: $0.image) }
             .task(id: index) {
                 displayImage = nil; feedback = nil; zoomed = false
