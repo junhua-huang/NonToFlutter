@@ -98,7 +98,7 @@ struct SearchResultsView: View {
             } else if kind == "users" {
                 ForEach(users.items) { user in RouteButton(.profile(user.id)) { PersonRow(person: user) } }; ResourceFooter(resource: users, emptyTitle: "没有找到相关用户", emptyDescription: "试试用户名或显示名称。", emptyIcon: "person.crop.circle.badge.questionmark")
             } else {
-                ForEach(topics.items) { topic in RouteButton(.topic("#\(topic.name)")) { Text("#\(topic.name)") } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
+                ForEach(topics.items) { topic in RouteButton(.topic(topic)) { Text("#\(topic.name)") } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
             }
         }.timelineList().scrollDismissesKeyboard(.interactively).task { await load() }.refreshable { await load() }
     }
@@ -138,7 +138,7 @@ struct FollowedTopicsView: View {
     @StateObject private var resource: PagedResource<Topic>
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/topics/followed", keys: ["topics", "items"], userID: session.user?.id ?? 0)) }
     var body: some View {
-        List { ForEach(resource.items) { topic in RouteButton(.topic("#\(topic.name)")) { Text("#\(topic.name)") } }; ResourceFooter(resource: resource) }
+        List { ForEach(resource.items) { topic in RouteButton(.topic(topic)) { Text("#\(topic.name)") } }; ResourceFooter(resource: resource) }
             .navigationTitle("我的话题").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
 }

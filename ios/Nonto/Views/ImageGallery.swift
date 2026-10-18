@@ -19,7 +19,8 @@ import ImageIO
         let task = Task { () throws -> UIImage in
             let (data, response) = try await session.data(from: url)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), data.count <= 80 * 1024 * 1024 else { throw URLError(.badServerResponse) }
-            return try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let decoded = try await Task.detached(priority: .userInitiated) {
                 guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
                       let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                         kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -28,6 +29,8 @@ import ImageIO
                       ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
                 return UIImage(cgImage: cg)
             }.value
+            try Task.checkCancellation()
+            return decoded
         }
         requests[url] = task
         defer { requests[url] = nil }
