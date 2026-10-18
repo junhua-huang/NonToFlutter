@@ -18,8 +18,8 @@ struct ExploreView: View {
             } else {
                 List {
                     Section {
-                        NavigationLink { CommunityListView(session: session) } label: { Label("发现社群", systemImage: "person.3") }
-                        NavigationLink { FollowedTopicsView(session: session) } label: { Label("我的话题", systemImage: "number") }
+                        RouteButton(.communities()) { Label("发现社群", systemImage: "person.3") }
+                        RouteButton(.followedTopics) { Label("我的话题", systemImage: "number") }
                     }
                     if !history.isEmpty {
                         Section {
@@ -29,7 +29,7 @@ struct ExploreView: View {
                     }
                     Section {
                         ForEach(Array(topics.enumerated()), id: \.element.id) { index, topic in
-                            NavigationLink { TopicDetailView(topic: topic) } label: {
+                            RouteButton(.topic(topic)) {
                                 HStack(alignment: .top, spacing: 16) {
                                     Text("\(index + 1)").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                                         .frame(width: 20, alignment: .leading).padding(.top, 2)
@@ -96,9 +96,9 @@ struct SearchResultsView: View {
             if kind == "posts" {
                 ForEach(posts.items) { PostCard(post: $0).timelinePostRow() }; ResourceFooter(resource: posts, emptyTitle: "没有找到相关动态", emptyDescription: "试试其他关键词，或切换搜索类型。", emptyIcon: "magnifyingglass")
             } else if kind == "users" {
-                ForEach(users.items) { user in NavigationLink { ProfileView(userID: user.id) } label: { PersonRow(person: user) } }; ResourceFooter(resource: users, emptyTitle: "没有找到相关用户", emptyDescription: "试试用户名或显示名称。", emptyIcon: "person.crop.circle.badge.questionmark")
+                ForEach(users.items) { user in RouteButton(.profile(user.id)) { PersonRow(person: user) } }; ResourceFooter(resource: users, emptyTitle: "没有找到相关用户", emptyDescription: "试试用户名或显示名称。", emptyIcon: "person.crop.circle.badge.questionmark")
             } else {
-                ForEach(topics.items) { topic in NavigationLink("#\(topic.name)") { TopicDetailView(topic: topic) } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
+                ForEach(topics.items) { topic in RouteButton(.topic("#\(topic.name)")) { Text("#\(topic.name)") } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
             }
         }.timelineList().scrollDismissesKeyboard(.interactively).task { await load() }.refreshable { await load() }
     }
@@ -138,7 +138,7 @@ struct FollowedTopicsView: View {
     @StateObject private var resource: PagedResource<Topic>
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/topics/followed", keys: ["topics", "items"], userID: session.user?.id ?? 0)) }
     var body: some View {
-        List { ForEach(resource.items) { topic in NavigationLink("#\(topic.name)") { TopicDetailView(topic: topic) } }; ResourceFooter(resource: resource) }
+        List { ForEach(resource.items) { topic in RouteButton(.topic("#\(topic.name)")) { Text("#\(topic.name)") } }; ResourceFooter(resource: resource) }
             .navigationTitle("我的话题").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
 }
@@ -158,7 +158,7 @@ struct NotificationsView: View {
         List {
             ErrorBanner(text: error)
             ForEach(resource.items) { notice in
-                NavigationLink { NoticeDestination(notice: notice) } label: {
+                RouteButton(.notice(notice)) {
                     HStack(alignment: .top, spacing: 12) {
                         AvatarView(url: notice.sender.avatar, name: notice.sender.name, size: 42)
                         VStack(alignment: .leading, spacing: 5) {
@@ -206,18 +206,22 @@ struct NoticeDestination: View {
     let notice: Notice
     @EnvironmentObject private var session: AppSession
     @State private var postID: Int?
+    @State private var resolved = false
     @State private var error: String?
     var body: some View {
         Group {
             if notice.raw["notification_type"].or(notice.raw["type"]).string.hasPrefix("friend_") { FriendsView(session: session) }
+            else if !resolved { ProgressView("正在打开通知…") }
             else if let postID { PostDetailView(session: session, postID: postID) }
             else if notice.raw["related_type"].string == "community" { CommunityDetailView(communityID: notice.raw["related_id"].int) }
             else { ScrollView { VStack(alignment: .leading, spacing: 16) { Text(notice.title).font(.title2.bold()); Text(notice.content); ErrorBanner(text: error) }.padding().frame(maxWidth: .infinity, alignment: .leading) } }
-        }.task {
+        }.task(id: notice.id) {
+            postID = nil; resolved = false; error = nil
+            defer { resolved = true }
             async let acknowledgement = try? session.api.request("/notifications/\(notice.id)/read", method: "POST")
             do {
                 let type = notice.raw["related_type"].string
-                if type == "post" { postID = notice.raw["related_id"].int }
+                if type == "post", notice.raw["related_id"].int > 0 { postID = notice.raw["related_id"].int }
                 else if type == "comment" {
                     let j = try await session.api.request("/comments/\(notice.raw["related_id"].int)")
                     let id = j["comment"].or(j)["post_id"].int; if id > 0 { postID = id }

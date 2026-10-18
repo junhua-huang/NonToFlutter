@@ -18,14 +18,15 @@ extension View {
     }
 
     func timelineList() -> some View {
-        self.listStyle(.plain).listRowSpacing(0)
+        self.listStyle(.plain).listRowSpacing(0).buttonStyle(.plain)
+            .modifier(ScrollingNavigationBar())
             .navigationLinkIndicatorVisibility(.hidden)
             .scrollContentBackground(.hidden)
             .background(Color.timelineBackground)
     }
 
     func timelinePostRow() -> some View {
-        self.listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
+        self.listRowInsets(EdgeInsets()).listRowSeparator(.hidden).buttonStyle(.plain)
             .listRowBackground(Color.timelineBackground)
     }
 }
@@ -82,5 +83,28 @@ struct TimelineActionSymbol: View {
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
         }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+    }
+}
+
+private struct ScrollChromeSample: Equatable {
+    let offset: Double
+    let maximum: Double
+}
+private struct ScrollingNavigationBar: ViewModifier {
+    @State private var chrome = ScrollChrome()
+    @State private var scrolling = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+        content
+            .onScrollPhaseChange { _, phase in scrolling = phase == .interacting || phase == .decelerating }
+            .onScrollGeometryChange(for: ScrollChromeSample.self) { geometry in
+                ScrollChromeSample(offset: Double(geometry.contentOffset.y + geometry.contentInsets.top),
+                                   maximum: Double(max(0, geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom)))
+            } action: { _, sample in
+                if reduceMotion { chrome.update(offset: sample.offset, maximum: sample.maximum, userScrolling: scrolling) }
+                else { withAnimation(.easeInOut(duration: 0.18)) { chrome.update(offset: sample.offset, maximum: sample.maximum, userScrolling: scrolling) } }
+            }
+            .toolbar(chrome.hidden ? .hidden : .visible, for: .navigationBar)
+            .onAppear { chrome.reset() }
     }
 }

@@ -32,11 +32,9 @@ struct PushDestinationView: View {
             if case .conversation(let id) = route.destination {
                 do {
                     // This read-only endpoint applies current membership and block checks.
-                    let json = try await session.api.request("/chat/conversations")
-                    let rows = try PagedResource<Conversation>.rows(json, keys: ["conversations", "sessions", "items"])
+                    let value = try await ConversationLookup.find(id, api: session.api)
                     guard epoch == session.api.generation else { return }
-                    guard let value = rows.first(where: { $0["id"].int == id }) else { throw APIError(status: 404, message: "会话已不可访问") }
-                    conversation = Conversation(value); error = nil
+                    conversation = value; error = nil
                 } catch { if epoch == session.api.generation { self.error = error.localizedDescription } }
             }
             if case .notification(let id) = route.destination {

@@ -29,7 +29,7 @@ struct ComicResults: View {
     var body: some View {
         List {
             ForEach(resource.items) { event in
-                NavigationLink { ComicDetailView(eventID: event.id) } label: {
+                RouteButton(.comic(event.id)) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(event.raw["name"].string).font(.headline)
                         Text("\(event.raw["cityName"].string) · \(event.raw["venue"].string)").font(.subheadline).foregroundStyle(.secondary)

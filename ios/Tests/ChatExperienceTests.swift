@@ -45,6 +45,21 @@ final class ChatExperienceTests: XCTestCase {
         }
         return try JSON.decode(data)
     }
+    func testImageBatchIsDurableOrderedAndRejectsAnInvalidBatchAtomically() throws {
+        let store = try room { _ in (200, .object([:])) }
+        XCTAssertTrue(store.enqueueMedia([(url: "https://example.test/first.jpg", kind: "image"),
+                                         (url: "https://example.test/second.jpg", kind: "image")], caption: "  caption  ", quoteID: 12))
+        XCTAssertEqual(store.pending.map(\.media), ["https://example.test/first.jpg", "https://example.test/second.jpg"])
+        XCTAssertEqual(store.pending.map(\.content), ["caption", ""])
+        XCTAssertEqual(store.pending.map(\.quoteID), [12, nil])
+        XCTAssertEqual(Set(store.pending.map(\.id)).count, 2)
+        XCTAssertFalse(store.enqueueMedia([(url: "file:///private/image", kind: "image")], caption: ""))
+        XCTAssertEqual(store.pending.count, 2)
+        let key = "nonto.native.outbox.\(userID).chat.single.55"
+        let data = try XCTUnwrap(defaults.data(forKey: key))
+        let restored = try JSONDecoder().decode([PendingMessage].self, from: data)
+        XCTAssertEqual(restored.map(\.id), store.pending.map(\.id))
+    }
     func testTimelineSeparatesPausesAndDaysWithoutRepeatingEveryTimestamp() {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let input = [message(1, time: "2026-10-18T23:52:00Z"), message(2, time: "2026-10-18T23:53:00Z"),

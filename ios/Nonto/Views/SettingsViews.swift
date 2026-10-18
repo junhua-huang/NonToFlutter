@@ -13,19 +13,19 @@ struct SettingsView: View {
                 Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }
             }
             Section("账号") {
-                NavigationLink("个人信息与权限") { PersonalInformationView() }
-                NavigationLink("隐私设置") { PrivacySettingsView() }
-                NavigationLink("消息提醒") { NotificationSettingsView() }
-                NavigationLink("修改密码") { PasswordView() }
-                NavigationLink("屏蔽列表") { BlockedUsersView(session: session) }
-                NavigationLink("身份认证") { IdentityCenterView() }
+                RouteButton(.personalInformation) { Text("个人信息与权限") }
+                RouteButton(.privacySettings) { Text("隐私设置") }
+                RouteButton(.notificationSettings) { Text("消息提醒") }
+                RouteButton(.password) { Text("修改密码") }
+                RouteButton(.blockedUsers) { Text("屏蔽列表") }
+                RouteButton(.identity) { Text("身份认证") }
             }
             Section("内容") {
-                NavigationLink("我的话题") { FollowedTopicsView(session: session) }
-                NavigationLink("我的社群") { CommunityListView(session: session, mine: true) }
-                NavigationLink("漫展") { ComicListView() }
+                RouteButton(.followedTopics) { Text("我的话题") }
+                RouteButton(.communities(mine: true)) { Text("我的社群") }
+                RouteButton(.comics) { Text("漫展") }
                 Button("清理本机缓存") {
-                    do { try LocalCache.clear(userID: session.user?.id ?? 0); URLCache.shared.removeAllCachedResponses(); error = nil; cacheCleared = true }
+                    do { try LocalCache.clear(userID: session.user?.id ?? 0); ImageRepository.shared.clear(); URLCache.shared.removeAllCachedResponses(); error = nil; cacheCleared = true }
                     catch { self.error = error.localizedDescription }
                 }
             }
@@ -34,15 +34,15 @@ struct SettingsView: View {
                 if !ComplianceProfile.current.value("appFilingNumber").isEmpty {
                     Link(ComplianceProfile.current.value("appFilingNumber"), destination: URL(string: "https://beian.miit.gov.cn/")!)
                 }
-                NavigationLink("隐私政策") { PolicyView(kind: "privacy") }
-                NavigationLink("服务条款") { PolicyView(kind: "terms") }
+                RouteButton(.policy("privacy")) { Text("隐私政策") }
+                RouteButton(.policy("terms")) { Text("服务条款") }
                 Link("源代码", destination: URL(string: "https://github.com/junhua-huang/NonToFlutter/tree/ios")!)
                 LabeledContent("版本", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
             }
             Section {
                 if loggingOut { ProgressView("正在退出登录…") }
                 Button("退出登录", role: .destructive) { confirmLogout = true }.disabled(loggingOut)
-                NavigationLink("注销账号") { DeleteAccountView() }.foregroundStyle(.red)
+                RouteButton(.deleteAccount) { Text("注销账号") }.foregroundStyle(.red)
             }
             ErrorBanner(text: error)
         }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
@@ -190,7 +190,7 @@ struct DeleteAccountView: View {
             Section {
                 Text("确认后将向服务器申请注销当前账号。与账号关联的信息、上传文件及依法保留的记录，按照隐私说明中的删除与保留规则处理；本机草稿、发送队列与账号缓存也会清理。注销操作无法撤销。")
                     .foregroundStyle(.secondary)
-                NavigationLink("查看删除与保留说明") { PolicyView(kind: "privacy") }
+                RouteButton(.policy("privacy")) { Text("查看删除与保留说明") }
                 TextField("请输入“注销”确认", text: $confirmation)
             }
             ErrorBanner(text: error)

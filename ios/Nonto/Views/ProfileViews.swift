@@ -6,7 +6,7 @@ struct ProfileView: View {
     @EnvironmentObject private var session: AppSession
     @State private var person: Person?
     @State private var friendship: JSON = .null
-    @State private var conversation: Conversation?
+    @Environment(\.navigate) private var navigate
     @State private var editing = false
     @State private var reporting = false
     @State private var confirmBlock = false
@@ -19,7 +19,7 @@ struct ProfileView: View {
     var body: some View {
         PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked).navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if isOwn { NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
+                if isOwn { RouteButton(.settings) { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
                 else {
                     Menu {
                         Button("举报用户", systemImage: "flag") { reporting = true }
@@ -32,7 +32,6 @@ struct ProfileView: View {
             .alert("已屏蔽此用户", isPresented: $blocked) { Button("好", role: .cancel) {} }
             .sheet(isPresented: $editing, onDismiss: { Task { await load() } }) { EditProfileView() }
             .sheet(isPresented: $reporting) { ReportView(kind: "user", targetID: userID) }
-            .navigationDestination(item: $conversation) { ChatRoomView(conversation: $0) }
             .confirmationDialog("屏蔽后将减少彼此的互动，确定继续？", isPresented: $confirmBlock) {
                 Button("屏蔽用户", role: .destructive) { Task { await block() } }
             }
@@ -98,7 +97,7 @@ struct ProfileView: View {
         } catch { self.error = error.localizedDescription }
     }
     private func friendAction() async {
-        busy = true; defer { busy = false }
+        guard !busy else { return }; busy = true; defer { busy = false }
         do {
             if friendship["status"].string == "accepted" { return }
             if friendship["status"].string == "pending" {
@@ -110,13 +109,13 @@ struct ProfileView: View {
         } catch { self.error = error.localizedDescription }
     }
     private func chat() async {
-        busy = true; defer { busy = false }
+        guard !busy else { return }; busy = true; defer { busy = false }
         do {
             let j = try await session.api.request("/chat/conversations/\(userID)")
             var value = j["conversation"].or(j)
             if value["other_user"].isNull { value["other_user"] = person?.raw ?? .null }
             guard value["id"].int > 0 else { throw APIError(status: 0, message: "无法打开会话") }
-            conversation = Conversation(value)
+            navigate(.chat(Conversation(value)))
         } catch { self.error = error.localizedDescription }
     }
     private func block() async {
@@ -166,7 +165,7 @@ struct EditProfileView: View {
         }
     }
     private func save() async {
-        busy = true; defer { busy = false }
+        guard !busy else { return }; busy = true; defer { busy = false }
         do { _ = try await session.api.request("/auth/profile", method: "PUT", body: .object(["display_name": .text(name), "bio": .text(bio)])); try await session.refreshProfile(); dismiss() }
         catch { self.error = error.localizedDescription }
     }
@@ -196,21 +195,21 @@ struct FriendsView: View {
                 ForEach(requests.items) { item in
                     let sender = Person(item.raw["sender"])
                     VStack(alignment: .leading, spacing: 8) {
-                        NavigationLink { ProfileView(userID: sender.id) } label: { PersonRow(person: sender) }
+                        RouteButton(.profile(sender.id)) { PersonRow(person: sender) }
                         HStack { Button("接受") { Task { await respond(item.id, accept: true) } }.buttonStyle(.glassProminent); Button("拒绝") { Task { await respond(item.id, accept: false) } }.buttonStyle(.glass) }.disabled(busy)
                     }
                 }
                 if requests.loading || requests.error != nil { ResourceFooter(resource: requests) }
             }
             Section("我的好友") {
-                ForEach(friends.items) { person in NavigationLink { ProfileView(userID: person.id) } label: { PersonRow(person: person) } }
+                ForEach(friends.items) { person in RouteButton(.profile(person.id)) { PersonRow(person: person) } }
                 ResourceFooter(resource: friends, emptyTitle: "还没有好友", emptyDescription: "去发现页搜索朋友，发送好友申请。", emptyIcon: "person.2")
             }
-        }.navigationTitle("好友").task { await load() }.refreshable { await load() }
+        }.buttonStyle(.plain).navigationTitle("好友").task { await load() }.refreshable { await load() }
     }
     private func load() async { await friends.load(reset: true); await requests.load(reset: true) }
     private func respond(_ id: Int, accept: Bool) async {
-        busy = true; defer { busy = false }
+        guard !busy else { return }; busy = true; defer { busy = false }
         do { _ = try await session.api.request("/friends/request/\(id)/\(accept ? "accept" : "reject")", method: "POST"); await load() }
         catch { self.error = error.localizedDescription }
     }
@@ -243,7 +242,7 @@ struct ReportView: View {
         }
     }
     private func submit() async {
-        busy = true; defer { busy = false }
+        guard !busy else { return }; busy = true; defer { busy = false }
         do { _ = try await session.api.request("/reports/\(kind)", method: "POST", body: .object(["\(kind)_id": .id(targetID), "reason": .text(reason)])); dismiss() }
         catch { self.error = error.localizedDescription }
     }

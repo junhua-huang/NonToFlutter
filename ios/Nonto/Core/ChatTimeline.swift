@@ -21,3 +21,12 @@ enum ChatTimeline {
         }
     }
 }
+
+/// Gallery order follows the visible timeline, excluding recalled/invalid media.
+enum ChatMediaTimeline {
+    struct Item: Identifiable, Equatable { let id: Int; let url: String }
+    static func images(_ messages: [ChatMessage]) -> [Item] {
+        messages.filter { !$0.recalled && $0.kind == "image" && ["https", "http"].contains(URL(string: $0.media)?.scheme?.lowercased() ?? "") }
+            .map { Item(id: $0.id, url: $0.media) }
+    }
+}

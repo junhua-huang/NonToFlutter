@@ -85,20 +85,23 @@ struct PersonRow: View {
 struct MediaView: View {
     let images: [String]
     let video: String
+    var thumbnailHeight: CGFloat? = nil
+    var galleryImages: [String]? = nil
+    var galleryIndex: Int? = nil
     @State private var selected: MediaSelection?
     var body: some View {
         VStack(spacing: 8) {
             if !images.isEmpty {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: images.count == 1 ? 1 : (images.count <= 4 ? 2 : 3)), spacing: 3) {
                     ForEach(Array(images.enumerated()), id: \.offset) { index, link in
-                        MediaThumbnail(url: link, height: images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110), label: "查看图片 \(index + 1)") {
-                            selected = MediaSelection(index: index)
+                        MediaThumbnail(url: link, height: thumbnailHeight ?? (images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110)), label: "查看图片 \(index + 1)") {
+                            selected = MediaSelection(index: galleryIndex ?? index)
                         }
                     }
                 }.clipShape(RoundedRectangle(cornerRadius: 14))
             }
             if let url = URL(string: video), !video.isEmpty { NativeVideo(url: url).frame(height: 260).clipShape(RoundedRectangle(cornerRadius: 14)) }
-        }.fullScreenCover(item: $selected) { selection in ImageGallery(images: images, initial: selection.index) }
+        }.fullScreenCover(item: $selected) { selection in ImageGallery(images: galleryImages ?? images, initial: selection.index) }
     }
 }
 private struct MediaThumbnail: View {
@@ -115,14 +118,16 @@ private struct MediaThumbnail: View {
                     attempt += 1
                 } else { open() }
             } label: {
-                ZStack {
+                GeometryReader { geometry in
+                  ZStack {
                     Color.secondary.opacity(0.08)
-                    if let image = phase.image { image.resizable().scaledToFill() }
+                    if let image = phase.image { image.resizable().scaledToFill().frame(width: geometry.size.width, height: height).clipped() }
                     else if phase.error != nil {
                         VStack(spacing: 6) { Image(systemName: "arrow.clockwise"); Text("点按重试").font(.caption) }.foregroundStyle(.secondary)
                     } else { ProgressView() }
-                }.frame(height: height).frame(maxWidth: .infinity).clipped()
-            }.buttonStyle(.plain).accessibilityLabel(phase.error == nil ? label : "图片加载失败，点按重试")
+                  }.frame(width: geometry.size.width, height: height).contentShape(Rectangle()).clipped()
+                }.frame(height: height).frame(maxWidth: .infinity).contentShape(Rectangle()).clipped()
+            }.buttonStyle(.plain).contentShape(Rectangle()).accessibilityLabel(phase.error == nil ? label : "图片加载失败，点按重试")
         }.id("\(url)#\(attempt)")
     }
 }
@@ -139,103 +144,6 @@ struct NativeVideo: View {
             .onDisappear { player?.pause(); player?.replaceCurrentItem(with: nil); player = nil }
     }
 }
-struct ImageGallery: View {
-    let images: [String]
-    let initial: Int
-    @Environment(\.dismiss) private var dismiss
-    @State private var index = 0
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
-            TabView(selection: $index) {
-                ForEach(Array(images.enumerated()), id: \.offset) { i, link in ZoomImage(url: link).tag(i) }
-            }.tabViewStyle(.page).onAppear { index = initial }
-            HStack {
-                Text("\(index + 1) / \(images.count)").foregroundStyle(.white)
-                Spacer()
-                if images.indices.contains(index), let url = URL(string: images[index]) { ShareLink(item: url).foregroundStyle(.white).padding(.trailing) }
-                Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").font(.largeTitle).foregroundStyle(.white) }.accessibilityLabel("关闭图片")
-            }.padding()
-        }
-    }
-}
-struct ZoomImage: View {
-    let url: String
-    @State private var image: UIImage?
-    @State private var failed = false
-    @State private var attempt = 0
-    var body: some View {
-        Group {
-            if let image { ZoomImageSurface(image: image) }
-            else if failed {
-                VStack(spacing: 16) {
-                    Label("图片加载失败", systemImage: "photo.badge.exclamationmark").foregroundStyle(.white)
-                    Button("重新加载") { attempt += 1 }.buttonStyle(.glass)
-                }
-            } else { ProgressView().tint(.white) }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task(id: "\(url)#\(attempt)") {
-                image = nil; failed = false
-                do {
-                    guard let link = URL(string: url), ["https", "http"].contains(link.scheme ?? "") else { throw URLError(.badURL) }
-                    let (data, response) = try await URLSession.shared.data(from: link)
-                    guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode), let decoded = UIImage(data: data) else { throw URLError(.cannotDecodeContentData) }
-                    try Task.checkCancellation(); image = decoded
-                } catch { if !Task.isCancelled { failed = true } }
-            }
-    }
-}
-
-private struct ZoomImageSurface: UIViewRepresentable {
-    let image: UIImage
-    func makeUIView(context: Context) -> ImageScrollView { ImageScrollView() }
-    func updateUIView(_ view: ImageScrollView, context: Context) { view.display(image) }
-}
-
-/// UIScrollView keeps content size, pan bounds and pinch zoom in sync.
-private final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
-    private let picture = UIImageView()
-    private var fittedSize = CGSize.zero
-    init() {
-        super.init(frame: .zero)
-        delegate = self; backgroundColor = .clear
-        showsHorizontalScrollIndicator = false; showsVerticalScrollIndicator = false
-        contentInsetAdjustmentBehavior = .never
-        picture.isAccessibilityElement = true; picture.accessibilityLabel = "图片，可双指缩放"
-        addSubview(picture)
-        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleZoom(_:)))
-        doubleTap.numberOfTapsRequired = 2; addGestureRecognizer(doubleTap)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func display(_ image: UIImage) {
-        guard picture.image !== image else { return }
-        zoomScale = 1; picture.image = image; picture.frame = CGRect(origin: .zero, size: image.size)
-        contentSize = image.size; fittedSize = .zero; setNeedsLayout()
-    }
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        if let image = picture.image, bounds.width > 0, bounds.height > 0, fittedSize != bounds.size {
-            fittedSize = bounds.size
-            let fit = min(bounds.width / image.size.width, bounds.height / image.size.height)
-            minimumZoomScale = fit; maximumZoomScale = fit * 5; zoomScale = fit
-        }
-        centerImage()
-    }
-    private func centerImage() {
-        let x = max(0, (bounds.width - contentSize.width) / 2), y = max(0, (bounds.height - contentSize.height) / 2)
-        let inset = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
-        if contentInset != inset { contentInset = inset }
-    }
-    func viewForZooming(in scrollView: UIScrollView) -> UIView? { picture }
-    func scrollViewDidZoom(_ scrollView: UIScrollView) { centerImage() }
-    @objc private func toggleZoom(_ gesture: UITapGestureRecognizer) {
-        if zoomScale > minimumZoomScale * 1.1 { setZoomScale(minimumZoomScale, animated: true); return }
-        let point = gesture.location(in: picture), scale = minimumZoomScale * 2.5
-        let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
-        zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
-    }
-}
-
 struct SelectedMedia: Identifiable, Sendable {
     let id = UUID()
     let data: Data

@@ -169,8 +169,24 @@ final class ChatStore: ObservableObject {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || media != nil else { return false }
         let item = PendingMessage(content: text, kind: kind, media: media, quoteID: quoteID)
-        pending.append(item)
-        guard persistPending() else { pending.removeLast(); return false }
+        return appendToOutbox([item])
+    }
+    /// A photo selection becomes one durable, ordered batch after all uploads succeed.
+    @discardableResult
+    func enqueueMedia(_ media: [(url: String, kind: String)], caption: String, quoteID: Int? = nil) -> Bool {
+        guard valid, (1...9).contains(media.count), media.allSatisfy({ item in
+            ["image", "video"].contains(item.kind) && ["http", "https"].contains(URL(string: item.url)?.scheme?.lowercased() ?? "")
+        }) else { return false }
+        let items = media.enumerated().map { index, item in
+            PendingMessage(content: index == 0 ? caption.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+                           kind: item.kind, media: item.url, quoteID: index == 0 ? quoteID : nil)
+        }
+        return appendToOutbox(items)
+    }
+    private func appendToOutbox(_ items: [PendingMessage]) -> Bool {
+        let previous = pending
+        pending.append(contentsOf: items)
+        guard persistPending() else { pending = previous; return false }
         jumpToLatest(); flush(); return true
     }
     func retry(_ id: String) {
@@ -232,5 +248,19 @@ final class ChatStore: ObservableObject {
             await load()
         }
         catch { if active && valid { self.error = error.localizedDescription } }
+    }
+}
+
+@MainActor enum ConversationLookup {
+    static func find(_ id: Int, api: APIClient) async throws -> Conversation {
+        guard id > 0 else { throw APIError(status: 404, message: "无效会话") }
+        for page in 1...20 {
+            try Task.checkCancellation()
+            let json = try await api.request("/chat/sessions", query: ["page": String(page), "per_page": "50"])
+            let rows = try PagedResource<Conversation>.rows(json, keys: ["sessions", "conversations", "items"]).map(Conversation.init)
+            if let value = rows.first(where: { $0.id == id }) { return value }
+            if json["has_more"] == .bool(false) || rows.count < 50 { break }
+        }
+        throw APIError(status: 404, message: "会话已不可访问")
     }
 }

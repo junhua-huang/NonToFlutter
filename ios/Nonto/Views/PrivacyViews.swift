@@ -51,10 +51,10 @@ struct PersonalInformationView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("查看和管理") {
-                NavigationLink("隐私政策与信息处理规则") { PolicyView(kind: "privacy") }
-                NavigationLink("隐私与资料可见范围") { PrivacySettingsView() }
-                NavigationLink("通知权限与提醒") { NotificationSettingsView() }
-                NavigationLink("举报处理记录") { ReportHistoryView(session: session) }
+                RouteButton(.policy("privacy")) { Text("隐私政策与信息处理规则") }
+                RouteButton(.privacySettings) { Text("隐私与资料可见范围") }
+                RouteButton(.notificationSettings) { Text("通知权限与提醒") }
+                RouteButton(.reportHistory) { Text("举报处理记录") }
                 if let contact = profile.contactURL { Link("申请查阅、复制、更正或删除信息", destination: contact) }
                 else { Text("权利申请联系方式尚未配置，当前仅供开发测试。").font(.caption).foregroundStyle(.secondary) }
                 if let filing = profile.values["appFilingNumber"], !filing.string.isEmpty {
@@ -63,7 +63,7 @@ struct PersonalInformationView: View {
             }
             Section {
                 Button("撤回同意并退出登录", role: .destructive) { confirmWithdrawal = true }.disabled(busy)
-                NavigationLink("注销账号") { DeleteAccountView() }
+                RouteButton(.deleteAccount) { Text("注销账号") }
                 Text("撤回后停止使用当前账号服务，并返回离线说明页；不会自动删除服务器账号。注销请使用单独的账号注销入口。")
                     .font(.caption).foregroundStyle(.secondary)
                 if busy { ProgressView("正在退出并关闭账号服务…") }

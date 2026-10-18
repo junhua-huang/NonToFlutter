@@ -11,16 +11,18 @@ struct FeedView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             TimelineTabs(title: "动态范围", tabs: [(0, "推荐"), (1, "最新"), (2, "与你相关")], selection: $filter)
         }
-        .overlay(alignment: .bottomTrailing) { ComposeButton(action: compose).padding(18) }
         .navigationTitle("南图").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                NavigationLink { ProfileView(userID: session.user?.id ?? 0) } label: {
+                RouteButton(.profile(session.user?.id ?? 0)) {
                     AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 30)
                 }.accessibilityLabel("我的主页")
             }
             ToolbarItem(placement: .principal) { Text("南图").font(.headline.weight(.heavy)).foregroundStyle(Color.brand) }
-            ToolbarItem(placement: .topBarTrailing) { NavigationLink { CommunityListView(session: session) } label: { Image(systemName: "person.2") }.accessibilityLabel("社群") }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: compose) { Image(systemName: "square.and.pencil").frame(width: 44, height: 44) }
+                    .accessibilityLabel("发布动态")
+            }
         }
     }
 }
@@ -52,6 +54,7 @@ struct PostList: View {
 struct PostCard: View {
     let post: Post
     var detailed = false
+    var onComment: (() -> Void)? = nil
     @EnvironmentObject private var session: AppSession
     @State private var current: Post
     @State private var busy = false
@@ -61,43 +64,47 @@ struct PostCard: View {
     @State private var sharing = false
     @State private var reporting = false
     @State private var deleting = false
-    init(post: Post, detailed: Bool = false) {
-        self.post = post; self.detailed = detailed; _current = State(initialValue: post)
+    init(post: Post, detailed: Bool = false, onComment: (() -> Void)? = nil) {
+        self.post = post; self.detailed = detailed; self.onComment = onComment; _current = State(initialValue: post)
     }
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
-                if !detailed {
-                    NavigationLink { ProfileView(userID: current.userID) } label: {
-                        AvatarView(url: current.author.avatar, name: current.author.name, size: 42)
-                    }.buttonStyle(.plain).frame(width: 42, height: 42)
-                        .accessibilityLabel("查看\(current.author.name)的主页")
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    authorHeader
-                    if !current.content.isEmpty {
-                        if detailed {
-                            Text(current.content).font(.title3).lineSpacing(4).textSelection(.enabled)
-                        } else {
-                            NavigationLink { PostDetailView(session: session, postID: current.id, initial: current) } label: {
-                                Text(current.content).font(.body).lineSpacing(3).lineLimit(8)
-                                    .frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.primary)
-                            }.buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(spacing: 6) {
+                        RouteButton(.profile(current.userID)) {
+                            AvatarView(url: current.author.avatar, name: current.author.name, size: 42)
+                        }.frame(width: 42, height: 42).accessibilityLabel("查看\(current.author.name)的主页")
+                        if current.quoted != nil {
+                            Rectangle().fill(Color.timelineSeparator).frame(width: 2).frame(maxHeight: .infinity)
+                                .accessibilityHidden(true)
                         }
-                    }
-                    if !current.images.isEmpty || !current.video.isEmpty {
-                        MediaView(images: current.images, video: current.video)
-                    }
-                    quotedContent
-                    if detailed, let date = current.date {
-                        Text(date, format: .dateTime.hour().minute().day().month().year())
-                            .font(.caption).foregroundStyle(.secondary).padding(.top, 4)
-                    }
-                    postActions
-                    if error != nil { ErrorBanner(text: error) }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12)
-                .padding(.bottom, 2).frame(maxWidth: .infinity)
+                    }.frame(width: 42)
+                    VStack(alignment: .leading, spacing: 8) {
+                        authorHeader
+                        if !current.content.isEmpty {
+                            if detailed {
+                                Text(current.content).font(.title3).lineSpacing(4).textSelection(.enabled)
+                            } else {
+                                RouteButton(.post(current.id, initial: current)) {
+                                    Text(current.content).font(.body).lineSpacing(3).lineLimit(8)
+                                        .frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.primary)
+                                }.accessibilityLabel("查看动态：\(current.content)")
+                            }
+                        }
+                        if !current.images.isEmpty || !current.video.isEmpty {
+                            MediaView(images: current.images, video: current.video)
+                        }
+                        if detailed, let date = current.date {
+                            Text(date, format: .dateTime.hour().minute().day().month().year())
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, current.quoted == nil ? 0 : 12)
+                }.fixedSize(horizontal: false, vertical: true)
+                quotedContent
+                postActions.padding(.leading, 52)
+                if error != nil { ErrorBanner(text: error).padding(.leading, 52) }
+            }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12).frame(maxWidth: .infinity)
             Color.timelineSeparator.frame(height: 0.5)
         }.background(Color.timelineBackground).navigationLinkIndicatorVisibility(.hidden)
             .onChange(of: post.raw) { _, raw in current = Post(raw) }
@@ -119,9 +126,8 @@ struct PostCard: View {
     }
     private var authorHeader: some View {
         HStack(alignment: .top, spacing: 4) {
-            NavigationLink { ProfileView(userID: current.userID) } label: {
+            RouteButton(.profile(current.userID)) {
                 HStack(spacing: 8) {
-                    if detailed { AvatarView(url: current.author.avatar, name: current.author.name, size: 42) }
                     VStack(alignment: .leading, spacing: 2) {
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 4) {
@@ -174,32 +180,41 @@ struct PostCard: View {
         } label: {
             Image(systemName: "ellipsis").font(.subheadline).foregroundStyle(.secondary)
                 .frame(width: 44, height: 44).contentShape(Rectangle())
-        }.buttonStyle(.plain).padding(.vertical, -12).padding(.trailing, -10).accessibilityLabel("动态操作")
+        }.buttonStyle(.plain).accessibilityLabel("动态操作")
     }
     @ViewBuilder private var quotedContent: some View {
         if let quote = current.quoted {
-            NavigationLink { PostDetailView(session: session, postID: quote.id, initial: quote) } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        AvatarView(url: quote.author.avatar, name: quote.author.name, size: 20)
-                        Text(quote.author.name).font(.subheadline.bold()).foregroundStyle(.primary)
-                        Text("@\(quote.author.username)").font(.caption).foregroundStyle(.secondary)
-                    }.lineLimit(1)
-                    if !quote.content.isEmpty { Text(quote.content).font(.subheadline).lineLimit(4).foregroundStyle(.primary) }
-                    if !quote.images.isEmpty || !quote.video.isEmpty {
-                        Label("查看引用的媒体", systemImage: "photo.on.rectangle").font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 10) {
+                RouteButton(.profile(quote.userID)) {
+                    AvatarView(url: quote.author.avatar, name: quote.author.name, size: 42)
+                }.frame(width: 42, height: 42).accessibilityLabel("查看引用作者\(quote.author.name)的主页")
+                VStack(alignment: .leading, spacing: 8) {
+                    RouteButton(.profile(quote.userID)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(quote.author.name).font(.subheadline.bold()).foregroundStyle(.primary)
+                            Text("@\(quote.author.username)").font(.caption).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
                     }
-                }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.timelineSeparator, lineWidth: 1))
-            }.buttonStyle(.plain)
+                    RouteButton(.post(quote.id, initial: quote)) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !quote.content.isEmpty { Text(quote.content).font(.body).lineLimit(detailed ? nil : 5).foregroundStyle(.primary) }
+                            Label("查看原动态", systemImage: "arrow.up.forward").font(.caption).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if !quote.images.isEmpty || !quote.video.isEmpty {
+                        MediaView(images: quote.images, video: quote.video)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.padding(.bottom, 4)
         } else if current.raw["quoted_post_unavailable"].bool || current.raw["quoted_post"]["unavailable"].bool {
-            Label("原动态已不可见", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
+            Label("原动态已不可见", systemImage: "lock").font(.caption).foregroundStyle(.secondary).padding(.leading, 52)
         }
     }
     private var postActions: some View {
         HStack(spacing: 0) {
-            NavigationLink { PostDetailView(session: session, postID: current.id, initial: current) } label: {
-                TimelineActionSymbol(symbol: "bubble", count: current.comments)
+            Group {
+                if let onComment { Button(action: onComment) { TimelineActionSymbol(symbol: "bubble", count: current.comments) } }
+                else { RouteButton(.post(current.id, initial: current)) { TimelineActionSymbol(symbol: "bubble", count: current.comments) } }
             }.accessibilityLabel("评论，\(current.comments) 条")
             Button { quoting = true } label: { TimelineActionSymbol(symbol: "arrow.2.squarepath") }
                 .accessibilityLabel("引用动态")
@@ -243,7 +258,7 @@ struct PostDetailView: View {
     }
     var body: some View {
         List {
-            if let post { PostCard(post: post, detailed: true).timelinePostRow() }
+            if let post { PostCard(post: post, detailed: true, onComment: { commentFocused = true }).timelinePostRow() }
             if error != nil { ErrorBanner(text: error) }
             Section("回复") {
                 ForEach(comments.items) { comment in CommentRow(comment: comment, postID: postID, onReply: { reply = $0; commentFocused = true }, onChange: { Task { await comments.load(reset: true) } }) }
@@ -321,11 +336,11 @@ struct CommentRow: View {
     }
     private func row(_ item: Comment) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            NavigationLink { ProfileView(userID: item.author.id) } label: {
+            RouteButton(.profile(item.author.id)) {
                 AvatarView(url: item.author.avatar, name: item.author.name, size: 34)
             }.buttonStyle(.plain).frame(width: 34, height: 34).accessibilityLabel("查看\(item.author.name)的主页")
             VStack(alignment: .leading, spacing: 6) {
-                NavigationLink { ProfileView(userID: item.author.id) } label: {
+                RouteButton(.profile(item.author.id)) {
                     Text(item.author.name).font(.subheadline.bold()).foregroundStyle(.primary)
                 }.buttonStyle(.plain)
                 Text(item.content).font(.body).lineSpacing(3).textSelection(.enabled)

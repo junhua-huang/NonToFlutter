@@ -27,7 +27,8 @@ final class LayoutSnapshotTests: XCTestCase {
             .object(["id": .id(910002), "user_id": .id(userID), "author": user,
                      "content": .text("你好，南图。\n在这里分享想法，和有趣的人相遇。"),
                      "like_count": .id(24), "comment_count": .id(3),
-                     "created_at": .text("2026-10-18T09:00:00Z")])
+                     "created_at": .text("2026-10-18T09:00:00Z"),
+                     "quoted_post": .object(["id": .id(910003), "author": author, "content": .text("一条用头像直线连接的引用动态。")])])
         ]
         StubProtocol.handler = { request in
             if request.url?.path.contains("profile") == true { return (200, .object(["user": user])) }
@@ -48,8 +49,8 @@ final class LayoutSnapshotTests: XCTestCase {
         try await capture(MainTabs(), session: session, name: "timeline-dark", width: 390, dark: true)
         try await capture(MainTabs(), session: session, name: "timeline-small-phone", width: 320)
         try await capture(MainTabs(), session: session, name: "timeline-large-text", width: 390, largeText: true)
-        try await capture(NavigationStack { ProfileView(userID: userID) }, session: session, name: "profile-light", width: 390)
-        try await capture(NavigationStack { ProfileView(userID: userID) }, session: session, name: "profile-dark", width: 390, dark: true)
+        try await capture(AppNavigationStack { ProfileView(userID: userID) }, session: session, name: "profile-light", width: 390)
+        try await capture(AppNavigationStack { ProfileView(userID: userID) }, session: session, name: "profile-dark", width: 390, dark: true)
     }
 
     private func capture<V: View>(_ view: V, session: AppSession, name: String, width: CGFloat,

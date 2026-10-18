@@ -20,7 +20,7 @@ struct Person: Record {
 struct Post: Record {
     var raw: JSON
     init(_ raw: JSON) { self.raw = raw }
-    var userID: Int { raw["user_id"].int }
+    var userID: Int { raw["user_id"].int > 0 ? raw["user_id"].int : author.id }
     var author: Person { Person(raw["author"].or(raw["user"])) }
     var content: String { raw["content"].string }
     var images: [String] {
@@ -39,7 +39,7 @@ struct Post: Record {
     }
     var quoted: Post? {
         let q = raw["quoted_post"].or(raw["quote_post"])
-        return q.isNull || q["unavailable"].bool ? nil : Post(q)
+        return q.isNull || q["unavailable"].bool || q["id"].int <= 0 ? nil : Post(q)
     }
 }
 struct Comment: Record {
@@ -60,6 +60,7 @@ struct ChatMessage: Record {
     var date: Date? { ServerDate.parse(raw["created_at"].or(raw["sent_at"]).or(raw["timestamp"])) }
 }
 struct Conversation: Record {
+    var id: Int { raw["conversation_id"].int > 0 ? raw["conversation_id"].int : raw["id"].int }
     var raw: JSON
     init(_ raw: JSON) { self.raw = raw }
     var isCommunity: Bool { raw["type"].string == "community" }

@@ -4,6 +4,7 @@ struct ChatMessageRow: View {
     let row: ChatTimeline.Row
     let community: Bool
     let showsReceipt: Bool
+    var gallery: [ChatMediaTimeline.Item] = []
     let onQuote: (ChatMessage) -> Void
     let onRecall: (ChatMessage) -> Void
     @EnvironmentObject private var session: AppSession
@@ -21,7 +22,7 @@ struct ChatMessageRow: View {
                 if mine { Spacer(minLength: 48) }
                 else if community {
                     if row.startsRun {
-                        NavigationLink { ProfileView(userID: message.senderID) } label: {
+                        RouteButton(.profile(message.senderID)) {
                             AvatarView(url: sender.avatar, name: sender.name, size: 30)
                         }.accessibilityLabel("查看\(sender.name)的资料")
                     } else { Color.clear.frame(width: 30, height: 1).accessibilityHidden(true) }
@@ -65,10 +66,10 @@ struct ChatMessageRow: View {
                 }.fixedSize(horizontal: false, vertical: true)
             }
             if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
-            else if message.kind == "image" { MediaView(images: [message.media], video: "").frame(maxWidth: 230) }
+            else if message.kind == "image" { MediaView(images: [message.media], video: "", thumbnailHeight: 190, galleryImages: gallery.isEmpty ? nil : gallery.map(\.url), galleryIndex: gallery.firstIndex { $0.id == message.id }).frame(maxWidth: 230) }
             else if message.kind == "video" { MediaView(images: [], video: message.media).frame(maxWidth: 250) }
             else if message.kind == "post", message.raw["related_id"].int > 0 {
-                NavigationLink { PostDetailView(session: session, postID: message.raw["related_id"].int) } label: {
+                RouteButton(.post(message.raw["related_id"].int)) {
                     Label(message.content.isEmpty ? "查看动态" : message.content, systemImage: "doc.richtext").lineLimit(4)
                 }
             } else if message.kind == "file", let url = URL(string: message.media), url.scheme == "https" {
@@ -95,7 +96,7 @@ struct ChatPendingRow: View {
             Spacer(minLength: 48)
             VStack(alignment: .trailing, spacing: 6) {
                 if let media = item.media, item.kind == "image" {
-                    MediaView(images: [media], video: "").frame(maxWidth: 230)
+                    MediaView(images: [media], video: "", thumbnailHeight: 190).frame(maxWidth: 230)
                 } else if item.kind == "video" { Label("视频", systemImage: "video").padding(12) }
                 if !item.content.isEmpty { Text(item.content).font(.body).textSelection(.enabled).padding(12) }
                 if let failure = item.failure {
@@ -117,9 +118,14 @@ struct ChatPendingRow: View {
     }
 }
 
-/// Media stays local until Send; failed uploads retain the preview for retry.
+struct ChatAttachments: Identifiable {
+    let id = UUID()
+    let items: [SelectedMedia]
+}
+
+/// Keep the complete selection local until Send; reuse successful uploads on retry.
 struct ChatAttachmentSheet: View {
-    let media: SelectedMedia
+    let media: [SelectedMedia]
     let api: APIClient
     let store: ChatStore
     let quoteID: Int?
@@ -129,57 +135,88 @@ struct ChatAttachmentSheet: View {
     @State private var submitting = false
     @State private var cancelled = false
     @State private var error: String?
-    @State private var image: UIImage?
-    @State private var videoURL: URL?
-    @State private var uploadedURL: String?
+    @State private var images: [UUID: UIImage] = [:]
+    @State private var videoURLs: [UUID: URL] = [:]
+    @State private var uploaded: [UUID: String] = [:]
+    @State private var excluded = Set<UUID>()
+    @State private var selected = 0
+    @State private var completed = 0
+    private var selection: [SelectedMedia] { media.filter { !excluded.contains($0.id) } }
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    if media.isVideo {
-                        if let videoURL { NativeVideo(url: videoURL).frame(height: 300) }
-                        else { ProgressView("正在准备视频…").frame(height: 300) }
-                    } else if let image {
-                        Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 380).accessibilityLabel("待发送的照片")
-                    } else { ProgressView().frame(height: 200) }
+                    if selection.indices.contains(selected) {
+                        let item = selection[selected]
+                        if item.isVideo {
+                            if let url = videoURLs[item.id] { NativeVideo(url: url).frame(height: 320) }
+                            else { ProgressView("正在准备视频…").frame(height: 320) }
+                        } else if let image = images[item.id] {
+                            ZoomImageSurface(image: image).frame(height: 360).accessibilityLabel("待发送图片，可缩放预览")
+                        } else { ProgressView().frame(height: 200) }
+                    }
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 12) {
+                            ForEach(Array(selection.enumerated()), id: \.element.id) { index, item in
+                                VStack(spacing: 2) {
+                                    Button { selected = index } label: {
+                                        ZStack {
+                                            if let image = images[item.id] {
+                                                Image(uiImage: image).resizable().scaledToFill().frame(width: 66, height: 66).clipped()
+                                            } else { Image(systemName: "video.fill").frame(width: 66, height: 66) }
+                                        }.clipShape(RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected == index ? Color.brand : .clear, lineWidth: 2))
+                                    }.buttonStyle(.plain).accessibilityLabel("预览第 \(index + 1) 个附件")
+                                    Button("移除", role: .destructive) {
+                                        excluded.insert(item.id); selected = GalleryPosition.clamped(selected, count: selection.count)
+                                    }.font(.caption).frame(minWidth: 66, minHeight: 44).disabled(submitting)
+                                }
+                            }
+                        }.padding(3)
+                    }
                     TextField("添加说明（可选）", text: $caption, axis: .vertical).lineLimit(1...5)
                         .padding().background(.quaternary, in: RoundedRectangle(cornerRadius: 16)).disabled(submitting)
                     ErrorBanner(text: error)
-                    if submitting { ProgressView("正在上传并发送…") }
+                    if submitting { ProgressView("正在上传 \(min(completed + 1, selection.count))/\(selection.count)…", value: Double(completed), total: Double(max(1, selection.count))) }
                     Button { submitting = true } label: {
-                        Label(error == nil ? "发送" : "重试发送", systemImage: "arrow.up")
+                        Label(error == nil ? "发送 \(selection.count) 个附件" : "重试发送", systemImage: "arrow.up")
                             .frame(maxWidth: .infinity).padding(.vertical, 6)
-                    }.buttonStyle(.glassProminent).disabled(submitting)
+                    }.buttonStyle(.glassProminent).disabled(submitting || selection.isEmpty)
                 }.padding()
-            }.navigationTitle(media.isVideo ? "发送视频" : "发送照片").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("发送照片与视频").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("取消") { cancelled = true; submitting = false; dismiss() }
                     }
-                }
-                .interactiveDismissDisabled(submitting)
+                }.interactiveDismissDisabled(submitting)
                 .task {
-                    if media.isVideo {
-                        let url = FileManager.default.temporaryDirectory.appendingPathComponent(media.name)
-                        do { try media.data.write(to: url, options: [.atomic, .completeFileProtection]); videoURL = url }
-                        catch { self.error = "无法预览视频：\(error.localizedDescription)" }
-                    } else { image = UIImage(data: media.data) }
+                    for item in media {
+                        if item.isVideo {
+                            let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-preview-" + item.name)
+                            do { try item.data.write(to: url, options: [.atomic, .completeFileProtection]); videoURLs[item.id] = url }
+                            catch { self.error = "无法预览视频" }
+                        } else { images[item.id] = UIImage(data: item.data) }
+                    }
                 }
                 .task(id: submitting) {
                     guard submitting, !cancelled else { return }
-                    let epoch = api.generation
+                    let epoch = api.generation, batch = selection
                     defer { submitting = false }
-                    error = nil
+                    error = nil; completed = 0
                     do {
-                        let url: String
-                        if let uploadedURL { url = uploadedURL }
-                        else {
-                            url = try await api.upload(media.data, filename: media.name, mime: media.mime)
-                            uploadedURL = url
+                        var attachments: [(url: String, kind: String)] = []
+                        for item in batch {
+                            let url: String
+                            if let cached = uploaded[item.id] { url = cached }
+                            else {
+                                url = try await api.upload(item.data, filename: item.name, mime: item.mime)
+                                uploaded[item.id] = url
+                            }
+                            try Task.checkCancellation()
+                            guard !cancelled, epoch == api.generation else { return }
+                            attachments.append((url, item.isVideo ? "video" : "image")); completed += 1
                         }
-                        try Task.checkCancellation()
-                        guard !cancelled, epoch == api.generation else { return }
-                        guard store.enqueue(content: caption, kind: media.isVideo ? "video" : "image", media: url, quoteID: quoteID) else {
+                        guard store.enqueueMedia(attachments, caption: caption, quoteID: quoteID) else {
                             throw APIError(status: 0, message: "无法加入发送队列，请重试")
                         }
                         onSent(); dismiss()
@@ -187,7 +224,7 @@ struct ChatAttachmentSheet: View {
                         if !cancelled, !Task.isCancelled, epoch == api.generation { self.error = error.localizedDescription }
                     }
                 }
-                .onDisappear { if let videoURL { try? FileManager.default.removeItem(at: videoURL) } }
+                .onDisappear { for url in videoURLs.values { try? FileManager.default.removeItem(at: url) } }
         }
     }
 }

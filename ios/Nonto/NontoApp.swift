@@ -26,6 +26,7 @@ struct NontoApp: App {
             .environmentObject(session).environmentObject(consent).tint(.brand)
             .preferredColorScheme(appearance == "system" ? nil : (appearance == "dark" ? .dark : .light))
             .task(id: consent.accepted) { if consent.accepted { await session.bootstrap() } }
+            .onChange(of: session.user?.id) { _, _ in ImageRepository.shared.clear() }
             .onChange(of: phase) { _, value in if consent.accepted { session.scene(active: value == .active) } }
         }
     }
@@ -39,15 +40,15 @@ struct MainTabs: View {
     @State private var pendingPush: PushRoute?
     var body: some View {
         TabView {
-            NavigationStack { FeedView(session: session) }
+            AppNavigationStack { FeedView(session: session) }
                 .tabItem { Label("首页", systemImage: "house") }
-            NavigationStack { ExploreView() }
+            AppNavigationStack { ExploreView() }
                 .tabItem { Label("发现", systemImage: "magnifyingglass") }
-            NavigationStack { NotificationsView(session: session) }
+            AppNavigationStack { NotificationsView(session: session) }
                 .tabItem { Label("通知", systemImage: "bell") }.badge(session.noticeUnread)
-            NavigationStack { MessagesView(session: session) }
+            AppNavigationStack { MessagesView(session: session) }
                 .tabItem { Label("私信", systemImage: "envelope") }.badge(session.messageUnread)
-            NavigationStack { ProfileView(userID: session.user?.id ?? 0) }
+            AppNavigationStack { ProfileView(userID: session.user?.id ?? 0) }
                 .tabItem { Label("我的", systemImage: "person.crop.circle") }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
@@ -55,7 +56,7 @@ struct MainTabs: View {
             if let pendingPush { pushDestination = pendingPush; self.pendingPush = nil }
         }) { PostComposer() }
         .sheet(item: $pushDestination) { route in
-            NavigationStack {
+            AppNavigationStack {
                 PushDestinationView(route: route).id(route.id)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { pushDestination = nil } } }
             }

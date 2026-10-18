@@ -12,7 +12,7 @@ struct CommunityListView: View {
     var body: some View {
         List {
             ForEach(resource.items) { community in
-                NavigationLink { CommunityDetailView(communityID: community.id) } label: {
+                RouteButton(.community(community.id)) {
                     HStack(spacing: 12) {
                         AvatarView(url: community.avatar, name: community.name, size: 52)
                         VStack(alignment: .leading, spacing: 5) {
@@ -24,7 +24,7 @@ struct CommunityListView: View {
                 }
             }
             ResourceFooter(resource: resource, emptyTitle: mine ? "还没有加入社群" : "还没有可见的社群", emptyDescription: "找到感兴趣的社群，或创建自己的社群。", emptyIcon: "person.3")
-        }.navigationTitle(mine ? "我的社群" : "发现社群")
+        }.buttonStyle(.plain).navigationTitle(mine ? "我的社群" : "发现社群")
             .toolbar { Button { creating = true } label: { Image(systemName: "plus") }.accessibilityLabel("创建社群") }
             .sheet(isPresented: $creating, onDismiss: { Task { await resource.load(reset: true) } }) { CommunityEditor() }
             .task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
@@ -53,12 +53,11 @@ struct CommunityDetailView: View {
                     Text(community.description).font(.subheadline).lineLimit(4)
                     if !community.raw["rules"].string.isEmpty { Text("群规：\(community.raw["rules"].string)").font(.caption).foregroundStyle(.secondary).lineLimit(4) }
                     HStack {
-                        NavigationLink { CommunityManageView(community: community) } label: { Label(community.isManager ? "管理社群" : "成员和公告", systemImage: "person.3") }
+                        RouteButton(.communityManage(community)) { Label(community.isManager ? "管理社群" : "成员和公告", systemImage: "person.3") }
                         Spacer()
                         if community.isMember {
-                            NavigationLink {
-                                ChatRoomView(conversation: Conversation(.object(["id": .id(0), "type": .text("community"), "community_id": .id(communityID), "community_name": .text(community.name), "community_avatar": .text(community.avatar)])))
-                            } label: { Label("群聊", systemImage: "bubble.left.and.bubble.right") }
+                            RouteButton(.chat(Conversation(.object(["id": .id(0), "type": .text("community"), "community_id": .id(communityID), "community_name": .text(community.name), "community_avatar": .text(community.avatar)])))) { Label("群聊", systemImage: "bubble.left.and.bubble.right") }
+
                         }
                     }.font(.subheadline)
                 }.padding()
@@ -161,6 +160,7 @@ struct CommunityManageView: View {
     @State private var title = ""
     @State private var content = ""
     @State private var confirm = false
+    @State private var acting = false
     @State private var actionPath = ""
     @State private var actionMethod = "DELETE"
     @State private var actionBody: JSON?
@@ -183,7 +183,7 @@ struct CommunityManageView: View {
                 } else {
                     let user = Person(row["user"].or(row["sender"]).or(row))
                     VStack(alignment: .leading, spacing: 8) {
-                        NavigationLink { ProfileView(userID: user.id) } label: { PersonRow(person: user) }
+                        RouteButton(.profile(user.id)) { PersonRow(person: user) }
                         if community.isManager {
                             HStack {
                                 if tab == "join-requests" {
@@ -211,10 +211,10 @@ struct CommunityManageView: View {
             }
             if community.raw["my_role"].string == "owner" { Button("解散社群", role: .destructive) { prepare(base) } }
             if loading { ProgressView() }
-        }.navigationTitle("社群信息").task(id: tab) { await load() }.refreshable { await load() }
+        }.buttonStyle(.plain).disabled(acting).navigationTitle("社群信息").task(id: tab) { await load() }.refreshable { await load() }
             .confirmationDialog("确定执行此操作？", isPresented: $confirm, titleVisibility: .visible) { Button("确定", role: actionMethod == "DELETE" ? .destructive : nil) { Task { await act() } } }
     }
-    private func prepare(_ path: String, method: String = "DELETE", body: JSON? = nil) { actionPath = path; actionMethod = method; actionBody = body; confirm = true }
+    private func prepare(_ path: String, method: String = "DELETE", body: JSON? = nil) { guard !acting else { return }; actionPath = path; actionMethod = method; actionBody = body; confirm = true }
     private func load(append: Bool = false) async {
         loading = true; defer { loading = false }; let selection = tab
         do {
@@ -226,7 +226,9 @@ struct CommunityManageView: View {
         } catch { if selection == tab { self.error = error.localizedDescription } }
     }
     private func act() async {
-        do { _ = try await session.api.request(actionPath, method: actionMethod, body: actionBody); if actionPath == base { dismiss() } else { await load() } }
+        guard !acting else { return }; acting = true; defer { acting = false }
+        let path = actionPath, method = actionMethod, body = actionBody
+        do { _ = try await session.api.request(path, method: method, body: body); if path == base { dismiss() } else { await load() } }
         catch { self.error = error.localizedDescription }
     }
     private func announce() async {

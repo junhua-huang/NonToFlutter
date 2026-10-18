@@ -12,7 +12,7 @@ struct MessagesView: View {
     var body: some View {
         List {
             ForEach(resource.items) { conversation in
-                NavigationLink { ChatRoomView(conversation: conversation) } label: {
+                RouteButton(.chat(conversation)) {
                     HStack(spacing: 12) {
                         AvatarView(url: conversation.avatar, name: conversation.name, size: 50)
                         VStack(alignment: .leading, spacing: 5) {
@@ -31,7 +31,7 @@ struct MessagesView: View {
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
         }.timelineList().navigationTitle("私信").navigationBarTitleDisplayMode(.inline)
-            .toolbar { NavigationLink { FriendsView(session: session) } label: { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
+            .toolbar { RouteButton(.friends) { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
             .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
@@ -54,9 +54,9 @@ private struct ChatRoomContent: View {
     @StateObject private var store: ChatStore
     @ObservedObject private var socket: RealtimeClient
     @State private var quote: ChatMessage?
-    @State private var pick: PhotosPickerItem?
+    @State private var picks: [PhotosPickerItem] = []
     @State private var preparingMedia = false
-    @State private var attachment: SelectedMedia?
+    @State private var attachment: ChatAttachments?
     @FocusState private var composerFocused: Bool
     @State private var position = ScrollPosition(idType: Int.self)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -70,6 +70,7 @@ private struct ChatRoomContent: View {
         _socket = ObservedObject(wrappedValue: session.socket)
     }
     var body: some View {
+        let gallery = ChatMediaTimeline.images(store.messages)
         let lastOutgoingID = store.messages.last(where: { $0.senderID == session.user?.id })?.id
         ScrollView {
             LazyVStack(spacing: 6) {
@@ -87,6 +88,7 @@ private struct ChatRoomContent: View {
                 ForEach(ChatTimeline.rows(store.messages)) { row in
                     ChatMessageRow(row: row, community: communityID != nil,
                                    showsReceipt: row.id == lastOutgoingID,
+                                   gallery: gallery,
                                    onQuote: { quote = $0; composerFocused = true },
                                    onRecall: { recall = $0; confirmRecall = true }).id(row.id)
                 }
@@ -126,7 +128,7 @@ private struct ChatRoomContent: View {
             }
             if communityID == nil, conversation.other.id > 0 {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink { ProfileView(userID: conversation.other.id) } label: { Image(systemName: "info.circle") }
+                    RouteButton(.profile(conversation.other.id)) { Image(systemName: "info.circle") }
                     .accessibilityLabel("聊天对象资料、举报与屏蔽")
                 }
             }
@@ -143,7 +145,7 @@ private struct ChatRoomContent: View {
                     }.padding(.horizontal)
                 }
                 HStack(alignment: .bottom, spacing: 8) {
-                    PhotosPicker(selection: $pick, matching: .any(of: [.images, .videos])) {
+                    PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
                         Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
                     }.disabled(preparingMedia).accessibilityLabel("添加照片或视频")
                     TextField("发送消息…", text: $store.draft, axis: .vertical)
@@ -173,23 +175,27 @@ private struct ChatRoomContent: View {
         .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
         .onChange(of: composerFocused) { _, focused in if focused && store.nearBottom { store.jumpToLatest() } }
         .sheet(item: $attachment) { media in
-            ChatAttachmentSheet(media: media, api: session.api, store: store, quoteID: quote?.id) {
+            ChatAttachmentSheet(media: media.items, api: session.api, store: store, quoteID: quote?.id) {
                 quote = nil
             }
         }
         .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(350), scheduler: RunLoop.main)) { _ in
             if visible && phase == .active { Task { if visible && phase == .active { await store.load() } } }
         }
-        .task(id: pick) {
-            guard let pick else { return }
-            preparingMedia = true; defer { preparingMedia = false; self.pick = nil }
+        .task(id: picks) {
+            let selection = picks
+            guard !selection.isEmpty else { return }
+            preparingMedia = true; defer { preparingMedia = false; self.picks = [] }
             let epoch = session.api.generation
             do {
-                let media = try await MediaLoader.load(pick)
-                try Task.checkCancellation()
+                var prepared: [SelectedMedia] = []
+                for pick in selection {
+                    prepared.append(try await MediaLoader.load(pick))
+                    try Task.checkCancellation()
+                }
                 guard epoch == session.api.generation, visible else { return }
                 composerFocused = false
-                attachment = media
+                attachment = ChatAttachments(items: prepared)
             } catch {
                 if !(error is CancellationError), (error as? URLError)?.code != .cancelled, epoch == session.api.generation { store.error = error.localizedDescription }
             }
