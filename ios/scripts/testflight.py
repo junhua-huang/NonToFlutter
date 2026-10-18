@@ -326,7 +326,7 @@ def prepare(root, apple, *, initialize=False):
 
 
 def diagnose(apple):
-    """Read-only public signing metadata. Never read or print signing private keys."""
+    """Read-only signing preflight; only report key presence and matching public IDs."""
     certificates = [row for row in list_records(apple, 'certificates')
                     if row['attributes'].get('certificateType') in ('DISTRIBUTION', 'IOS_DISTRIBUTION')]
     print('Distribution certificates visible to this API key:', len(certificates))
@@ -334,6 +334,20 @@ def diagnose(apple):
         attributes = row['attributes']
         print(json.dumps({'id': row['id'], 'type': attributes.get('certificateType'),
                           'expires': attributes.get('expirationDate'), 'serial': attributes.get('serialNumber')}, ensure_ascii=True))
+    if os.environ.get('IOS_SIGNING_KEY', '').strip():
+        key = load_signing_key()
+        matches = []
+        for row in certificates:
+            certificate = x509.load_der_x509_certificate(base64.b64decode(row['attributes']['certificateContent'], validate=True))
+            try:
+                validate_certificate(certificate, key)
+            except ValueError:
+                continue
+            matches.append(row['id'])
+        print('IOS_SIGNING_KEY: configured and valid RSA key')
+        print('Matching valid distribution certificates:', ', '.join(matches) if matches else 'NONE; explicit initialization is required')
+    else:
+        print('IOS_SIGNING_KEY: missing; complete the one-time Windows setup before initialization')
     bundles = apple.request('GET', 'bundleIds', query={'filter[identifier]': BUNDLE})['data']
     require(len(bundles) == 1, 'NonTo App ID was not found.')
     for row in list_records(apple, f'bundleIds/{bundles[0]["id"]}/profiles'):

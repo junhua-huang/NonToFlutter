@@ -337,3 +337,22 @@ class ReusableSigningChecks(unittest.TestCase):
                     tf.cleanup(root)
                     self.assertFalse(Path(state['installed_profile']).exists())
         self.assertTrue(all(call.args[0] == 'GET' for call in apple.request.call_args_list))
+
+    def test_diagnosis_confirms_key_match_without_revealing_private_material_or_writing(self):
+        certificate = self.record()
+        responses = {'certificates': [certificate], 'bundleIds': [{'id': 'bundle'}],
+                     'bundleIds/bundle/profiles': [], 'apps': [{'id': 'app'}],
+                     'builds': [{'attributes': {'version': '2.3', 'processingState': 'VALID'}}]}
+        def request(method, resource, **kwargs):
+            self.assertEqual(method, 'GET')
+            return {'data': responses[resource]}
+        pem = self.key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+        apple = Mock(); apple.request.side_effect = request
+        with patch.dict(os.environ, {'IOS_SIGNING_KEY': pem}), patch('sys.stdout', new_callable=io.StringIO) as output:
+            tf.diagnose(apple)
+        text = output.getvalue()
+        self.assertIn('Matching valid distribution certificates: OWNCERT', text)
+        self.assertIn('2.3 processing: VALID', text)
+        self.assertNotIn('PRIVATE KEY', text)
+        self.assertNotIn(pem, text)
+        self.assertTrue(all(call.args[0] == 'GET' for call in apple.request.call_args_list))

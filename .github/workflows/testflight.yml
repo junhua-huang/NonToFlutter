@@ -166,6 +166,7 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+      IOS_SIGNING_KEY: ${{ secrets.IOS_SIGNING_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
