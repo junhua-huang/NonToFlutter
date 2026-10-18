@@ -1,0 +1,140 @@
+name: TestFlight Internal
+on:
+  push:
+    branches: [ios]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nonto-testflight
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight]'))
+    runs-on: macos-26
+    timeout-minutes: 20
+    outputs:
+      configured: ${{ steps.credentials.outputs.configured }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'cryptography>=45,<47'
+      - name: Check credential availability
+        id: credentials
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os
+          names = ('ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY')
+          missing = [name for name in names if not os.environ.get(name, '').strip()]
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('configured=' + ('false' if missing else 'true') + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## Internal TestFlight\n\n')
+              if missing:
+                  f.write('Validation only; no upload. Add repository Secrets: ' + ', '.join(missing) + '. Then re-run all jobs.\n')
+              else:
+                  f.write('Upload credentials are present. The signing/upload job will run after archive verification.\n')
+          PY
+      - name: Select Xcode and verify internal-only export support
+        run: |
+          python3 - <<'PY'
+          import glob, subprocess
+          candidates = sorted(glob.glob('/Applications/Xcode_26*.app'), reverse=True)
+          if candidates:
+              subprocess.run(['sudo', 'xcode-select', '-s', candidates[0] + '/Contents/Developer'], check=True)
+          version = subprocess.check_output(['xcodebuild', '-version'], text=True)
+          print(version)
+          if int(version.split()[1].split('.')[0]) < 26:
+              raise SystemExit('Xcode 26 or later is required.')
+          help_text = subprocess.run(['xcodebuild', '-help'], capture_output=True, text=True)
+          if 'testFlightInternalTestingOnly' not in help_text.stdout + help_text.stderr:
+              raise SystemExit('This Xcode does not advertise internal-only TestFlight exports.')
+          PY
+      - name: Validate release scripts and generated project
+        run: |
+          python3 -m unittest discover -s ios/scripts/tests -v
+          python3 ios/scripts/generate_project.py
+          git diff --exit-code -- ios/Nonto.xcodeproj
+      - name: Verify unsigned internal archive
+        run: |
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Nonto-check.xcarchive" CODE_SIGNING_ALLOWED=NO APNS_ENVIRONMENT=production NONTO_DISTRIBUTION_CHANNEL=testflight-internal archive
+          python3 ios/scripts/testflight.py verify --archive "$RUNNER_TEMP/Nonto-check.xcarchive" --unsigned
+  upload:
+    needs: verify
+    if: needs.verify.outputs.configured == 'true'
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+      TF_ROOT: ${{ runner.temp }}/nonto-testflight
+      TF_KEYCHAIN: ${{ runner.temp }}/nonto-testflight.keychain-db
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'cryptography>=45,<47'
+      - name: Select Xcode 26
+        run: |
+          python3 - <<'PY'
+          import glob, subprocess
+          candidates = sorted(glob.glob('/Applications/Xcode_26*.app'), reverse=True)
+          if candidates:
+              subprocess.run(['sudo', 'xcode-select', '-s', candidates[0] + '/Contents/Developer'], check=True)
+          version = subprocess.check_output(['xcodebuild', '-version'], text=True)
+          print(version)
+          if int(version.split()[1].split('.')[0]) < 26:
+              raise SystemExit('Xcode 26 or later is required.')
+          PY
+      - name: Create temporary distribution certificate and APNs-enabled profile
+        run: python3 ios/scripts/testflight.py prepare --root "$TF_ROOT"
+      - name: Import signing identity into temporary keychain
+        run: |
+          security create-keychain -p "$TF_KEYCHAIN_PASSWORD" "$TF_KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$TF_KEYCHAIN"
+          security unlock-keychain -p "$TF_KEYCHAIN_PASSWORD" "$TF_KEYCHAIN"
+          security import "$TF_ROOT/Signing.p12" -P "$TF_P12_PASSWORD" -k "$TF_KEYCHAIN" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$TF_KEYCHAIN_PASSWORD" "$TF_KEYCHAIN"
+          security list-keychains -d user -s "$TF_KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+      - name: Archive production-APNs internal build
+        run: |
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Nonto.xcarchive" DEVELOPMENT_TEAM=B2Y3564MKK CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$TF_SIGNING_IDENTITY" PROVISIONING_PROFILE_SPECIFIER="$TF_PROFILE_UUID" CURRENT_PROJECT_VERSION="$TF_BUILD_NUMBER" APNS_ENVIRONMENT=production NONTO_DISTRIBUTION_CHANNEL=testflight-internal archive
+          python3 ios/scripts/testflight.py verify --archive "$RUNNER_TEMP/Nonto.xcarchive"
+      - name: Upload to App Store Connect for internal TestFlight only
+        run: |
+          python3 ios/scripts/testflight.py mark-uploading --root "$TF_ROOT"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Nonto.xcarchive" -exportPath "$RUNNER_TEMP/Nonto-export" -exportOptionsPlist "$TF_ROOT/ExportOptions.plist" -allowProvisioningUpdates -authenticationKeyPath "$TF_ROOT/AuthKey.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+      - name: Wait for Apple processing
+        run: |
+          python3 ios/scripts/testflight.py wait --root "$TF_ROOT"
+          python3 - <<'PY'
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## Apple processing completed\n\nBuild ' + os.environ['TF_BUILD_NUMBER'] + ' is processed. In App Store Connect, open NonTo → TestFlight → Internal Testing and add the build to your internal group. Tester invitations are not sent by this workflow.\n')
+          PY
+      - name: Clean up only this run's Apple signing resources
+        if: always()
+        run: python3 ios/scripts/testflight.py cleanup --root "$TF_ROOT"
+      - name: Remove runner signing material
+        if: always()
+        run: |
+          if [ -f "$TF_KEYCHAIN" ]; then security delete-keychain "$TF_KEYCHAIN"; fi
+          python3 - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'nonto-testflight'
+          if root.exists():
+              shutil.rmtree(root)
+          PY

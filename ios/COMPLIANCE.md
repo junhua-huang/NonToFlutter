@@ -53,6 +53,10 @@
 | P1 | 权利与许可来源 | 仓库根目录未发现可据以认定全项目许可的 LICENSE。核实自有代码、原 N 图标、素材、字体及其他平台依赖的权利；不能擅自为未知权利材料指定许可证。 |
 | P1 | 自动化推荐 | 服务端有个性化推荐；客户端保留“最新”入口。确认实际推荐使用的数据、必要的用户控制，以及是否触发其他算法推荐业务管理要求；本次未代办或认定完成。 |
 
+## TestFlight 内部联调
+
+用户授权内部真机测试后，增加明确的 `testflight-internal` 归档通道：仍检查清单与文案结构、保留开发测试提示，但不把尚缺运营资料当作编译错误。云端导出强制 `testFlightInternalTestingOnly=true`，不用于外部测试或 App Store 提交。普通归档仍执行严格发布检查；未将任何 `verification` 或 `releaseReviewed` 设置为已完成。详见 [TESTFLIGHT.md](TESTFLIGHT.md)。
+
 ## 配置与发布检查
 
 1. 填写 `Nonto/Resources/Compliance.json` 的真实信息。`processorSummary` 应包含每个实际处理方的名称/联系方式或政策入口、数据种类、用途及处理方式；`retentionSummary` 应区分账号、消息、媒体、日志、审核证据和备份及注销的处理安排。

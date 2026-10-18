@@ -48,3 +48,9 @@ app.*.map.json
 
 # Vendor push configuration contains environment-specific credentials
 /android/app/agconnect-services.json
+
+# Apple signing and upload credentials stay in GitHub Secrets / runner temp.
+*.p8
+*.p12
+*.mobileprovision
+*.xcarchive/

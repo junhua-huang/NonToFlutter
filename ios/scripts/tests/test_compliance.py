@@ -64,12 +64,12 @@ class ComplianceChecks(unittest.TestCase):
         data = json.loads(path.read_text()); data['contactEmail'] = 'support@facebook-clone.app'
         path.write_text(json.dumps(data))
         self.assertTrue(any('contactEmail' in item for item in checker.inspect(self.resources)[1]))
-    def run_build_action(self, action):
+    def run_build_action(self, action, channel="app-store"):
         scripts = self.root / 'scripts'; scripts.mkdir()
         shutil.copy(SCRIPTS / 'check_compliance.py', scripts / 'check_compliance.py')
         tree = ast.parse((SCRIPTS / 'generate_project.py').read_text())
         script = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'archive_script' for target in node.targets))
-        env = dict(os.environ, ACTION=action, SRCROOT=str(self.root))
+        env = dict(os.environ, ACTION=action, SRCROOT=str(self.root), NONTO_DISTRIBUTION_CHANNEL=channel)
         return subprocess.run(['/bin/sh', '-c', script], env=env, capture_output=True, text=True)
     def test_archive_blocks_incomplete_operator_information(self):
         result = self.run_build_action('install')
@@ -77,3 +77,14 @@ class ComplianceChecks(unittest.TestCase):
         self.assertIn('RELEASE BLOCKER', result.stdout)
     def test_normal_build_is_available_for_local_testing(self):
         self.assertEqual(self.run_build_action('build').returncode, 0)
+
+    def test_internal_archive_keeps_structural_checks_but_allows_testing(self):
+        result = self.run_build_action('install', 'testflight-internal')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('RELEASE BLOCKER', result.stdout)
+
+    def test_internal_archive_rejects_broken_privacy_manifest(self):
+        path = self.resources / 'PrivacyInfo.xcprivacy'
+        data = plistlib.loads(path.read_bytes()); data['NSPrivacyTracking'] = True
+        path.write_bytes(plistlib.dumps(data))
+        self.assertNotEqual(self.run_build_action('install', 'testflight-internal').returncode, 0)

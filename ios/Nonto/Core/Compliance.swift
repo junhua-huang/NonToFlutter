@@ -10,7 +10,10 @@ struct ComplianceProfile {
         return Self(values: json.object)
     }()
     func value(_ key: String) -> String { values[key]?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
-    var reviewed: Bool { values["releaseReviewed"] == .bool(true) }
+    var reviewed: Bool {
+        values["releaseReviewed"] == .bool(true) &&
+        (Bundle.main.object(forInfoDictionaryKey: "NontoDistributionChannel") as? String) != "testflight-internal"
+    }
     var contactURL: URL? {
         let email = value("contactEmail")
         guard email.contains("@"), !email.contains(where: { $0.isWhitespace }), !email.contains("?") else { return nil }

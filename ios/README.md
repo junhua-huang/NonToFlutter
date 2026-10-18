@@ -73,6 +73,8 @@ xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto \
 
 初始 Bundle ID 为 `online.nonto.native`。维护者应在苹果开发者账户中确认相应 App ID、App Store Connect 应用、Development Team 和签名描述文件，或先修改工程生成脚本中的 Bundle ID 再重新生成。需要云端签名上传时再配置该仓库的证书及 App Store Connect 凭据；不将这些凭据提交到代码。
 
+云端内部测试的具体步骤见 [TestFlight 发布](TESTFLIGHT.md)。`TestFlight Internal` 是单独的手动请求流程，区别于上面的未签名编译验证。
+
 ## 后端契约
 
 默认仍连接 `https://www.nonto.online/api` 与 `wss://www.nonto.online/ws`。可在 `APIClient` 初始化时注入其他地址以开发和测试。HTTP 使用配套后端已支持的 `Authorization: Bearer`，WebSocket 使用现有首帧 `auth`，连接 URL 不携带账号令牌；上线前需核实实际部署支持。令牌仅发送到自己的 API，COS 请求不携带应用凭据。跨域重定向被拒绝，401 只共享一次续期，并保留原始分页/筛选参数；账号变化后丢弃旧会话响应。
