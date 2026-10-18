@@ -76,8 +76,6 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
-      TF_ROOT: ${{ runner.temp }}/nonto-testflight
-      TF_KEYCHAIN: ${{ runner.temp }}/nonto-testflight.keychain-db
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,6 +96,10 @@ jobs:
           if int(version.split()[1].split('.')[0]) < 26:
               raise SystemExit('Xcode 26 or later is required.')
           PY
+      - name: Set runner signing paths
+        run: |
+          echo "TF_ROOT=$RUNNER_TEMP/nonto-testflight" >> "$GITHUB_ENV"
+          echo "TF_KEYCHAIN=$RUNNER_TEMP/nonto-testflight.keychain-db" >> "$GITHUB_ENV"
       - name: Create temporary distribution certificate and APNs-enabled profile
         run: python3 ios/scripts/testflight.py prepare --root "$TF_ROOT"
       - name: Import signing identity into temporary keychain
