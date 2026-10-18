@@ -49,8 +49,8 @@ final class LayoutSnapshotTests: XCTestCase {
         try await capture(MainTabs(), session: session, name: "timeline-dark", width: 390, dark: true)
         try await capture(MainTabs(), session: session, name: "timeline-small-phone", width: 320)
         try await capture(MainTabs(), session: session, name: "timeline-large-text", width: 390, largeText: true)
-        try await capture(AppNavigationStack { ProfileView(userID: userID) }, session: session, name: "profile-light", width: 390)
-        try await capture(AppNavigationStack { ProfileView(userID: userID) }, session: session, name: "profile-dark", width: 390, dark: true)
+        try await capture(AppNavigationStack { ProfileView(userID: self.userID) }, session: session, name: "profile-light", width: 390)
+        try await capture(AppNavigationStack { ProfileView(userID: self.userID) }, session: session, name: "profile-dark", width: 390, dark: true)
     }
 
     private func capture<V: View>(_ view: V, session: AppSession, name: String, width: CGFloat,
