@@ -10,6 +10,18 @@
 
 旧版临时方案中，runner 结束时已销毁临时私钥。Apple 只能重新下载公有证书，不能恢复私钥；因此缺少原配私钥的旧证书不能直接用于重新签名。如果你保存了现成的发行 P12，可以导入其中的私钥并复用对应证书。
 
+## Windows 配置助手
+
+也可以将仓库中的 `ios/scripts/setup_signing.ps1` 下载到 `C:\NonToAppleConnect`，在 PowerShell 运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\NonToAppleConnect\setup_signing.ps1
+```
+
+此执行策略参数只作用于这一次进程，不修改系统策略。助手使用本机 Python 3，缺少 cryptography 时安装依赖。已有本地签名私钥会保留；GitHub CLI 已登录并有该仓库 Secrets 权限时，会直接保存 `IOS_SIGNING_KEY`；否则复制私钥到本机剪贴板并打开该仓库的新建 Secret 页面，你只需填名称、粘贴并保存。它不会登录其他账号，也不会创建或撤销 Apple 证书。已有同名 Secret 时，CLI 模式会保留该 Secret 并停止，不会覆盖未知的签名身份。
+
+已有发行 P12 时，可用 `-ImportP12 C:\路径\Distribution.p12` 导入（需在本机输入 P12 密码，且目标目录不得已有签名私钥）。完成 Secret 保存后，再运行下面的签名初始化；旧证书额度或冲突仍需先核对处理。
+
 ## 1. 一次性准备长期签名私钥
 
 在 Windows 上更新本仓库的 `ios` 分支，打开仓库目录的 PowerShell，执行：
