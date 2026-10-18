@@ -1,7 +1,7 @@
 {
   "policyVersion": "2026-10-18.1",
   "operatorName": "",
-  "contactEmail": "",
+  "contactEmail": "nonto@foxmail.com",
   "contactAddress": "",
   "privacyPolicyURL": "",
   "termsURL": "",
@@ -21,5 +21,13 @@
     "minorProtectionReviewed": false,
     "storageAndProcessorsReviewed": false,
     "appStorePrivacyLabelsReviewed": false
+  },
+  "websiteFiling": {
+    "domain": "nonto.online",
+    "number": "桂ICP备2026012531号",
+    "sourceURL": "https://nonto.online/",
+    "observedAt": "2026-10-18",
+    "verificationStatus": "website_disclosure_only",
+    "note": "官网页脚公示，工信部官方查询结果尚未取得；不代表 online.nonto.native 的 APP 备案已确认。"
   }
 }
