@@ -108,6 +108,9 @@ jobs:
         run: |
           echo "TF_ROOT=$RUNNER_TEMP/nonto-testflight" >> "$GITHUB_ENV"
           echo "TF_KEYCHAIN=$RUNNER_TEMP/nonto-testflight.keychain-db" >> "$GITHUB_ENV"
+      - name: Retire only the approved lost-key NonTo legacy certificate
+        if: github.repository == 'junhua-huang/NonToFlutter' && contains(github.event.head_commit.message, '[retire-legacy-signing-37RD8K9T45]')
+        run: python3 ios/scripts/retire_legacy_signing.py --execute
       - name: Reuse distribution certificate and APNs-enabled profile
         run: |
           if [ "$TF_SIGNING_SETUP" = "true" ]; then
