@@ -49,7 +49,11 @@ private struct ChatRoomContent: View {
     @ObservedObject private var socket: RealtimeClient
     @State private var quote: ChatMessage?
     @State private var pick: PhotosPickerItem?
-    @State private var uploading = false
+    @State private var preparingMedia = false
+    @State private var attachment: SelectedMedia?
+    @FocusState private var composerFocused: Bool
+    @State private var position = ScrollPosition(idType: Int.self)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var recall: ChatMessage?
     @State private var confirmRecall = false
     @State private var visible = false
@@ -60,54 +64,76 @@ private struct ChatRoomContent: View {
         _socket = ObservedObject(wrappedValue: session.socket)
     }
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 14) {
-                    if store.more { Button(store.loading ? "正在加载…" : "加载更早的消息") { Task { await store.load(older: true) } }.disabled(store.loading).padding(.top) }
-                    if store.loading && store.messages.isEmpty { ProgressView("正在加载消息…") }
-                    ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
-                    ForEach(store.messages) { message in messageRow(message).id(message.id) }
-                    ForEach(store.pending) { item in
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Text(item.content.isEmpty ? "[媒体消息]" : item.content).padding(12).background(Color.brand.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
-                            if let failure = item.failure {
-                                Text(failure).font(.caption).foregroundStyle(.red)
-                                HStack {
-                                    Button("重试") { store.retry(item.id) }.disabled(store.sending)
-                                    if !item.content.isEmpty { Button("复制") { UIPasteboard.general.string = item.content } }
-                                    Button("移除", role: .destructive) { store.remove(item.id) }
-                                }.font(.caption)
-                            } else { ProgressView("待发送").font(.caption) }
-                        }.frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal)
-                    }
-                    Color.clear.frame(height: 1).id("bottom")
-                }.padding(.bottom)
-            }.scrollDismissesKeyboard(.interactively)
-                .defaultScrollAnchor(.bottom, for: .initialOffset)
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    geometry.contentSize.height - geometry.visibleRect.maxY < 100
-                } action: { _, value in store.reachedBottom(value) }
-                .onChange(of: store.scrollRequest) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .overlay(alignment: .bottomTrailing) {
-                    if store.unread > 0 {
-                        Button { store.jumpToLatest() } label: { Label("\(store.unread) 条新消息", systemImage: "arrow.down") }
-                            .buttonStyle(.glassProminent).padding()
-                    }
+        let lastOutgoingID = store.messages.last(where: { $0.senderID == session.user?.id })?.id
+        ScrollView {
+            LazyVStack(spacing: 6) {
+                if store.more {
+                    Button { Task { await store.load(older: true) } } label: {
+                        if store.loadingOlder { ProgressView("正在加载历史消息…") }
+                        else { Label("更早的消息", systemImage: "clock.arrow.circlepath") }
+                    }.font(.subheadline).disabled(store.loadingOlder).padding(.vertical, 12)
                 }
+                if store.loading && store.messages.isEmpty { ProgressView("正在加载消息…").padding() }
+                if !store.loading && store.messages.isEmpty && store.pending.isEmpty && store.error == nil {
+                    ContentUnavailableView("开始聊天", systemImage: "bubble.left.and.bubble.right", description: Text("发一条消息，开启对话吧"))
+                }
+                ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
+                ForEach(ChatTimeline.rows(store.messages)) { row in
+                    ChatMessageRow(row: row, community: communityID != nil,
+                                   showsReceipt: row.id == lastOutgoingID,
+                                   onQuote: { quote = $0; composerFocused = true },
+                                   onRecall: { recall = $0; confirmRecall = true }).id(row.id)
+                }
+                ForEach(store.pending) { item in
+                    ChatPendingRow(item: item, sending: store.sendingID == item.id,
+                                   blocked: store.pending.first?.failure != nil && store.pending.first?.id != item.id,
+                                   retry: { store.retry(item.id) }, remove: { store.remove(item.id) })
+                }
+                Color.clear.frame(height: 1).id(Int.min)
+            }.scrollTargetLayout().padding(.vertical, 8)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .scrollPosition($position)
+        .defaultScrollAnchor(.bottom, for: .initialOffset)
+        .defaultScrollAnchor(.bottom, for: .alignment)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentSize.height - geometry.visibleRect.maxY < 100
+        } action: { _, value in if !store.loadingOlder { store.reachedBottom(value) } }
+        .onChange(of: store.scrollRequest) { _, _ in
+            if reduceMotion { position.scrollTo(edge: .bottom) }
+            else { withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(edge: .bottom) } }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if store.unread > 0 {
+                Button { store.jumpToLatest() } label: { Label("\(store.unread) 条新消息", systemImage: "arrow.down") }
+                    .buttonStyle(.glassProminent).padding().accessibilityHint("跳到最新消息")
+            }
         }
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
-                if let quote { HStack { Text("引用：\(quote.content)").lineLimit(1).font(.caption); Spacer(); Button("取消") { self.quote = nil } }.padding(.horizontal) }
-                HStack(alignment: .bottom) {
-                    PhotosPicker(selection: $pick, matching: .any(of: [.images, .videos])) { Image(systemName: "plus.circle").font(.title2) }.disabled(uploading).accessibilityLabel("添加照片或视频")
-                    TextField("发送消息…", text: $store.draft, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...5)
-                    Button {
-                        if store.enqueue(content: store.draft, quoteID: quote?.id) { store.draft = ""; quote = nil; store.saveDraft() }
-                    } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
-                        .disabled(uploading || store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("发送消息")
+                if let quote {
+                    HStack(spacing: 8) {
+                        Image(systemName: "quote.bubble").foregroundStyle(Color.brand)
+                        Text(quote.content.isEmpty ? "引用媒体消息" : quote.content).lineLimit(2).font(.caption)
+                        Spacer()
+                        Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }
+                            .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44)
+                    }.padding(.horizontal)
+                }
+                HStack(alignment: .bottom, spacing: 8) {
+                    PhotosPicker(selection: $pick, matching: .any(of: [.images, .videos])) {
+                        Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
+                    }.disabled(preparingMedia).accessibilityLabel("添加照片或视频")
+                    TextField("发送消息…", text: $store.draft, axis: .vertical)
+                        .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11)
+                        .focused($composerFocused).accessibilityLabel("消息内容")
+                    Button(action: sendText) {
+                        Image(systemName: "arrow.up.circle.fill").font(.title).frame(width: 44, height: 44)
+                    }.disabled(store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息")
                 }.floatingGlass()
-                if uploading { ProgressView("正在上传…").font(.caption).padding(.horizontal) }
+                if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
             }.padding(.top, 8)
         }
         .task {
@@ -123,21 +149,26 @@ private struct ChatRoomContent: View {
         .onChange(of: phase) { _, value in
             if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
         }
-        .onChange(of: store.draft) { _, _ in store.saveDraft() }
+        .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
+        .onChange(of: composerFocused) { _, focused in if focused && store.nearBottom { store.jumpToLatest() } }
+        .sheet(item: $attachment) { media in
+            ChatAttachmentSheet(media: media, api: session.api, store: store, quoteID: quote?.id) {
+                quote = nil
+            }
+        }
         .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(350), scheduler: RunLoop.main)) { _ in
             if visible && phase == .active { Task { if visible && phase == .active { await store.load() } } }
         }
         .task(id: pick) {
             guard let pick else { return }
-            uploading = true; defer { uploading = false; self.pick = nil }
+            preparingMedia = true; defer { preparingMedia = false; self.pick = nil }
             let epoch = session.api.generation
             do {
                 let media = try await MediaLoader.load(pick)
                 try Task.checkCancellation()
-                let url = try await session.api.upload(media.data, filename: media.name, mime: media.mime)
-                try Task.checkCancellation()
-                guard epoch == session.api.generation else { return }
-                store.enqueue(content: "", kind: media.isVideo ? "video" : "image", media: url)
+                guard epoch == session.api.generation, visible else { return }
+                composerFocused = false
+                attachment = media
             } catch {
                 if !(error is CancellationError), (error as? URLError)?.code != .cancelled, epoch == session.api.generation { store.error = error.localizedDescription }
             }
@@ -146,37 +177,10 @@ private struct ChatRoomContent: View {
             Button("撤回", role: .destructive) { if let recall { Task { await store.recall(recall) } } }
         }
     }
-    @ViewBuilder private func messageRow(_ message: ChatMessage) -> some View {
-        let mine = message.senderID == session.user?.id
-        VStack(alignment: mine ? .trailing : .leading, spacing: 5) {
-            if let date = message.date { Text(date, format: .dateTime.month().day().hour().minute()).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity) }
-            HStack(alignment: .top, spacing: 8) {
-                if mine { Spacer(minLength: 40) }
-                else if communityID != nil {
-                    let sender = Person(message.raw["sender"].or(message.raw["user"]))
-                    NavigationLink { ProfileView(userID: message.senderID) } label: { AvatarView(url: sender.avatar, name: sender.name, size: 30) }
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    if !message.raw["quote_preview"].string.isEmpty { Text(message.raw["quote_preview"].string).font(.caption).foregroundStyle(.secondary) }
-                    if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
-                    else if message.kind == "image" { MediaView(images: [message.media], video: "").frame(maxWidth: 230) }
-                    else if message.kind == "video" { MediaView(images: [], video: message.media).frame(maxWidth: 250) }
-                    else if message.kind == "post", message.raw["related_id"].int > 0 {
-                        NavigationLink { PostDetailView(session: session, postID: message.raw["related_id"].int) } label: { Label(message.content.isEmpty ? "查看动态" : message.content, systemImage: "doc.richtext").lineLimit(4) }
-                    } else if message.kind == "file", let url = URL(string: message.media), url.scheme == "https" { Link(message.content.isEmpty ? "打开文件" : message.content, destination: url) }
-                    else { Text(message.content).textSelection(.enabled) }
-                    if mine && message.raw["is_read"].bool { Text("已读").font(.caption2).foregroundStyle(.secondary) }
-                }.padding(12).background(mine ? Color.brand.opacity(0.15) : Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-                    .contextMenu {
-                        if !message.recalled {
-                            Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
-                            if communityID != nil { Button("引用", systemImage: "quote.bubble") { quote = message } }
-                            if mine, communityID != nil { Button("撤回", systemImage: "arrow.uturn.backward", role: .destructive) { recall = message; confirmRecall = true } }
-                        }
-                    }
-                if !mine { Spacer(minLength: 40) }
-            }
-        }.padding(.horizontal)
+    private func sendText() {
+        if store.enqueue(content: store.draft, quoteID: quote?.id) {
+            store.draft = ""; quote = nil; store.saveDraft()
+        }
     }
 }
 

@@ -16,7 +16,9 @@ final class ChatStore: ObservableObject {
     @Published private(set) var messages: [ChatMessage] = []
     @Published private(set) var pending: [PendingMessage] = []
     @Published private(set) var loading = false
+    @Published private(set) var loadingOlder = false
     @Published private(set) var sending = false
+    @Published private(set) var sendingID: String?
     @Published private(set) var more = true
     @Published var error: String?
     @Published var draft = ""
@@ -37,8 +39,10 @@ final class ChatStore: ObservableObject {
     private var markedReadThrough: Int?
     private var loadTask: Task<Void, Never>?
     private var sendTask: Task<Void, Never>?
+    private var draftTask: Task<Void, Never>?
     private var loadID = UUID()
     private var sendID = UUID()
+    private var lifecycleID = UUID()
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     private var cacheKey: String { "chat.\(communityID == nil ? "single" : "community").\(communityID ?? conversation.id)" }
     private var outboxKey: String { "nonto.native.outbox.\(accountID).\(cacheKey)" }
@@ -67,25 +71,48 @@ final class ChatStore: ObservableObject {
     }
     func suspend() {
         active = false
-        loadID = UUID(); loadTask?.cancel(); loadTask = nil; loading = false
-        sendID = UUID(); sendTask?.cancel(); sendTask = nil; sending = false
+        lifecycleID = UUID()
+        loadID = UUID(); loadTask?.cancel(); loadTask = nil; loading = false; loadingOlder = false
+        sendID = UUID(); sendTask?.cancel(); sendTask = nil; sending = false; sendingID = nil
         if valid {
             socket?.room(roomID, joined: false)
             if NativeNotifications.shared.activeConversation == roomID { NativeNotifications.shared.activeConversation = nil }
         }
         saveDraft()
     }
-    func saveDraft() { guard valid else { return }; defaults.set(draft, forKey: draftKey) }
+    func scheduleDraftSave() {
+        draftTask?.cancel()
+        draftTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+            self?.saveDraft()
+        }
+    }
+    func saveDraft() {
+        draftTask?.cancel(); draftTask = nil
+        guard valid else { return }; defaults.set(draft, forKey: draftKey)
+    }
     func jumpToLatest() { nearBottom = true; unread = 0; scrollRequest += 1 }
     func reachedBottom(_ value: Bool) { nearBottom = value; if value { unread = 0 } }
     func load(older: Bool = false) async {
         guard active, valid, !Task.isCancelled else { return }
-        if let task = loadTask { await task.value; return }
-        let ticket = UUID(); loadID = ticket; loading = true
+        if let task = loadTask {
+            let ticket = loadID, wasOlder = loadingOlder, lifecycle = lifecycleID
+            await task.value
+            guard active, valid, lifecycleID == lifecycle, !Task.isCancelled else { return }
+            finishLoad(ticket)
+            // A history request must not disappear behind a realtime refresh (or vice versa).
+            if older != wasOlder { await load(older: older) }
+            return
+        }
+        guard !older || more else { return }
+        let ticket = UUID(); loadID = ticket; loading = true; loadingOlder = older
         let task = Task<Void, Never> { [weak self] in await self?.fetch(older: older, ticket: ticket) }
         loadTask = task
         await task.value
-        if loadID == ticket { loadTask = nil; loading = false }
+        finishLoad(ticket)
+    }
+    private func finishLoad(_ ticket: UUID) {
+        if loadID == ticket { loadTask = nil; loading = false; loadingOlder = false }
     }
     private func fetch(older: Bool, ticket: UUID) async {
         guard active, valid, loadID == ticket, !Task.isCancelled else { return }
@@ -106,13 +133,14 @@ final class ChatStore: ObservableObject {
                 let ids = rows.map(\.id)
                 page += 1
                 // Cached history can legitimately overlap multiple server pages.
-                more = rows.count >= 50 && ids != lastOlderIDs && (communityID == nil || !added.isEmpty)
+                more = json["has_more"] != .bool(false) && rows.count >= 50 && ids != lastOlderIDs && (communityID == nil || !added.isEmpty)
                 lastOlderIDs = ids
-            } else if page == 1 { more = rows.count >= 50 }
+            } else if page == 1 { more = json["has_more"] != .bool(false) && rows.count >= 50 }
             if communityID != nil, json["conversation"]["id"].int > 0 { roomID = json["conversation"]["id"].int }
             joinRoom()
             let confirmed = Set(rows.flatMap { [$0.raw["request_id"].string, $0.raw["client_msg_id"].string] }.filter { !$0.isEmpty })
             pending.removeAll { confirmed.contains($0.id) }; persistPending()
+            flush()
             persistMessages()
             if !older && messages.last?.id != last {
                 if nearBottom || known.isEmpty { jumpToLatest() }
@@ -149,16 +177,20 @@ final class ChatStore: ObservableObject {
         guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
         pending[index].failure = nil; persistPending(); flush()
     }
-    func remove(_ id: String) { pending.removeAll { $0.id == id }; persistPending(); flush() }
+    func remove(_ id: String) {
+        guard id != sendingID else { return }
+        pending.removeAll { $0.id == id }; persistPending(); flush()
+    }
     func flush() {
-        guard active, valid, sendTask == nil else { return }
+        guard active, valid, sendTask == nil, let first = pending.first, first.failure == nil else { return }
         let ticket = UUID(); sendID = ticket; sending = true
         sendTask = Task { [weak self] in
             guard let self else { return }
-            defer { if sendID == ticket { sending = false; sendTask = nil } }
+            defer { if sendID == ticket { sending = false; sendingID = nil; sendTask = nil } }
             while active, valid, !Task.isCancelled, sendID == ticket,
                   let item = pending.first {
                 guard item.failure == nil else { break }
+                sendingID = item.id
                 do {
                     var body: [String: JSON] = ["content": .text(item.content), "message_type": .text(item.kind)]
                     body[communityID == nil ? "request_id" : "client_msg_id"] = .text(item.id)
@@ -189,7 +221,16 @@ final class ChatStore: ObservableObject {
     }
     func recall(_ message: ChatMessage) async {
         guard active, valid, let communityID else { return }
-        do { _ = try await api.request("/communities/\(communityID)/chat/messages/\(message.id)", method: "DELETE"); await load() }
+        do {
+            _ = try await api.request("/communities/\(communityID)/chat/messages/\(message.id)", method: "DELETE")
+            guard active, valid, !Task.isCancelled else { return }
+            // The history endpoint excludes recalled messages; merging alone would leave the old bubble visible.
+            let recalled = ChatMessage(message.raw.merging(.object([
+                "is_recalled": .bool(true), "content": .text(""), "media_url": .null, "quote_preview": .text("")
+            ])))
+            messages = Records.messages(messages, [recalled]); persistMessages()
+            await load()
+        }
         catch { if active && valid { self.error = error.localizedDescription } }
     }
 }
