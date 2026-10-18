@@ -19,6 +19,7 @@ extension View {
 
     func timelineList() -> some View {
         self.listStyle(.plain).listRowSpacing(0)
+            .navigationLinkIndicatorVisibility(.hidden)
             .scrollContentBackground(.hidden)
             .background(Color.timelineBackground)
     }
@@ -36,7 +37,7 @@ struct TimelineTabs<Selection: Hashable>: View {
     @Binding var selection: Selection
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .bottom, spacing: 0) {
             ForEach(tabs.indices, id: \.self) { index in
                 let tab = tabs[index]
                 Button { selection = tab.value } label: {
@@ -76,7 +77,10 @@ struct TimelineActionSymbol: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: symbol).font(.system(size: 17))
-            if count > 0 { Text(count, format: .number.notation(.compactName)).font(.caption).monospacedDigit() }
+            if count > 0 {
+                Text(count, format: .number.notation(.compactName)).font(.caption).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
         }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
     }
 }

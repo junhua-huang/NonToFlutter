@@ -40,6 +40,9 @@ final class LayoutSnapshotTests: XCTestCase {
         try api.setToken("layout-fixture")
         let session = AppSession(api: api); session.user = Person(user); session.restoring = false
         try? LocalCache.clear(userID: userID)
+        let feed = PagedResource<Post>(api: api, path: "/recommendations/feed", keys: ["posts", "items"], userID: userID)
+        await feed.load(reset: true)
+        XCTAssertEqual(feed.items.count, 2, "Visual review requires loaded fixture content")
 
         try await capture(MainTabs(), session: session, name: "timeline-light", width: 390)
         try await capture(MainTabs(), session: session, name: "timeline-dark", width: 390, dark: true)

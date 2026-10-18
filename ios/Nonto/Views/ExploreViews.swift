@@ -164,7 +164,7 @@ struct NotificationsView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(notice.title.isEmpty ? notice.sender.name : notice.title).font(.headline)
                             Text(notice.content).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
-                            if let d = ServerDate.parse(notice.raw["created_at"]) { Text(d, style: .relative).font(.caption2).foregroundStyle(.secondary) }
+                            if let d = ServerDate.parse(notice.raw["created_at"]) { Text(d, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).font(.caption2).foregroundStyle(.secondary) }
                         }
                         if !notice.isRead { Circle().fill(Color.brand).frame(width: 8, height: 8) }
                     }.padding(.vertical, 10)

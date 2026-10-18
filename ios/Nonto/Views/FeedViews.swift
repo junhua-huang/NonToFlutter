@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct FeedView: View {
-    let session: AppSession
+    @ObservedObject var session: AppSession
     @Environment(\.openComposer) private var compose
     @State private var filter = 0
     private var path: String { filter == 0 ? "/recommendations/feed" : (filter == 1 ? "/posts/" : "/posts/related-to-me") }
@@ -70,7 +70,8 @@ struct PostCard: View {
                 if !detailed {
                     NavigationLink { ProfileView(userID: current.userID) } label: {
                         AvatarView(url: current.author.avatar, name: current.author.name, size: 42)
-                    }.buttonStyle(.plain).accessibilityLabel("查看\(current.author.name)的主页")
+                    }.buttonStyle(.plain).frame(width: 42, height: 42)
+                        .accessibilityLabel("查看\(current.author.name)的主页")
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     authorHeader
@@ -98,7 +99,7 @@ struct PostCard: View {
             }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12)
                 .padding(.bottom, 2).frame(maxWidth: .infinity)
             Color.timelineSeparator.frame(height: 0.5)
-        }.background(Color.timelineBackground)
+        }.background(Color.timelineBackground).navigationLinkIndicatorVisibility(.hidden)
             .onChange(of: post.raw) { _, raw in current = Post(raw) }
             .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
                 if change.postID == current.id, let patch = change.patch { current = Post(current.raw.merging(patch)) }
@@ -127,7 +128,7 @@ struct PostCard: View {
                                 authorName
                                 if !detailed {
                                     Text("@\(current.author.username)").foregroundStyle(.secondary)
-                                    if let date = current.date { Text("·").foregroundStyle(.secondary); Text(date, style: .relative).foregroundStyle(.secondary) }
+                                    if let date = current.date { Text("·").foregroundStyle(.secondary); Text(date, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).foregroundStyle(.secondary) }
                                 }
                             }.font(.subheadline).fixedSize(horizontal: true, vertical: false)
                             VStack(alignment: .leading, spacing: 2) {
@@ -135,7 +136,7 @@ struct PostCard: View {
                                 if !detailed {
                                     HStack(spacing: 4) {
                                         Text("@\(current.author.username)")
-                                        if let date = current.date { Text("·"); Text(date, style: .relative) }
+                                        if let date = current.date { Text("·"); Text(date, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)) }
                                     }.font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
@@ -243,8 +244,8 @@ struct PostDetailView: View {
     var body: some View {
         List {
             if let post { PostCard(post: post, detailed: true).timelinePostRow() }
-            ErrorBanner(text: error)
-            Section("评论") {
+            if error != nil { ErrorBanner(text: error) }
+            Section("回复") {
                 ForEach(comments.items) { comment in CommentRow(comment: comment, postID: postID, onReply: { reply = $0; commentFocused = true }, onChange: { Task { await comments.load(reset: true) } }) }
                 ResourceFooter(resource: comments)
             }
@@ -319,19 +320,30 @@ struct CommentRow: View {
             }
     }
     private func row(_ item: Comment) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            NavigationLink { ProfileView(userID: item.author.id) } label: { HStack { AvatarView(url: item.author.avatar, name: item.author.name, size: 28); Text(item.author.name).font(.subheadline.weight(.semibold)) } }.buttonStyle(.plain)
-            Text(item.content).textSelection(.enabled)
-            HStack(spacing: 22) {
-                Button("回复") { onReply(item) }
-                Button { Task { await mutate(item, method: item.raw["is_liked"].bool ? "DELETE" : "POST", suffix: "/like") } } label: { Label("\(item.raw["like_count"].int)", systemImage: item.raw["is_liked"].bool ? "heart.fill" : "heart") }.disabled(busy)
-                if item.id == comment.id {
-                    Menu {
-                        if item.raw["user_id"].int == session.user?.id { Button("删除", role: .destructive) { deleting = true } }
-                        else { Button("举报") { report = true } }
-                    } label: { Image(systemName: "ellipsis") }
-                }
-            }.font(.caption).foregroundStyle(.secondary).buttonStyle(.plain)
+        HStack(alignment: .top, spacing: 10) {
+            NavigationLink { ProfileView(userID: item.author.id) } label: {
+                AvatarView(url: item.author.avatar, name: item.author.name, size: 34)
+            }.buttonStyle(.plain).frame(width: 34, height: 34).accessibilityLabel("查看\(item.author.name)的主页")
+            VStack(alignment: .leading, spacing: 6) {
+                NavigationLink { ProfileView(userID: item.author.id) } label: {
+                    Text(item.author.name).font(.subheadline.bold()).foregroundStyle(.primary)
+                }.buttonStyle(.plain)
+                Text(item.content).font(.body).lineSpacing(3).textSelection(.enabled)
+                HStack(spacing: 20) {
+                    Button("回复") { onReply(item) }.frame(minHeight: 44)
+                    Button { Task { await mutate(item, method: item.raw["is_liked"].bool ? "DELETE" : "POST", suffix: "/like") } } label: {
+                        Label("\(item.raw["like_count"].int)", systemImage: item.raw["is_liked"].bool ? "heart.fill" : "heart")
+                            .frame(minHeight: 44).foregroundStyle(item.raw["is_liked"].bool ? Color.brandLike : Color.secondary)
+                    }.disabled(busy)
+                    Spacer(minLength: 0)
+                    if item.id == comment.id {
+                        Menu {
+                            if item.raw["user_id"].int == session.user?.id { Button("删除", role: .destructive) { deleting = true } }
+                            else { Button("举报") { report = true } }
+                        } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("评论操作")
+                    }
+                }.font(.caption).foregroundStyle(.secondary).buttonStyle(.plain)
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
     private func mutate(_ item: Comment, method: String, suffix: String = "") async {

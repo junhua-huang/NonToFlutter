@@ -16,7 +16,7 @@ struct MessagesView: View {
                     HStack(spacing: 12) {
                         AvatarView(url: conversation.avatar, name: conversation.name, size: 50)
                         VStack(alignment: .leading, spacing: 5) {
-                            HStack { Text(conversation.name).font(.headline); Spacer(); if let d = conversation.last.date { Text(d, style: .relative).font(.caption2).foregroundStyle(.secondary) } }
+                            HStack { Text(conversation.name).font(.headline); Spacer(); if let d = conversation.last.date { Text(d, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).font(.caption2).foregroundStyle(.secondary) } }
                             Text(conversation.last.recalled ? "消息已撤回" : preview(conversation.last))
                                 .font(.subheadline.weight(conversation.unread > 0 ? .medium : .regular))
                                 .foregroundStyle(conversation.unread > 0 ? Color.primary : Color.secondary).lineLimit(2)
