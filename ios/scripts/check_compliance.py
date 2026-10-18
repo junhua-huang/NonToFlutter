@@ -38,8 +38,12 @@ def inspect(resources=RESOURCES):
         text = (resources / (name + '.txt')).read_text()
         if PLACEHOLDER.search(text):
             errors.append(name + ' contains a stale sample contact or placeholder promise')
-        if '{{operatorName}}' not in text or '{{contactEmail}}' not in text:
-            errors.append(name + ' must identify the operator and contact')
+        if '{{contactEmail}}' not in text:
+            errors.append(name + ' must include the contact email')
+        # Development UI may omit identity at the owner's request. It must not
+        # silently become release-ready just because internal metadata is filled.
+        if '{{operatorName}}' not in text:
+            blockers.append('Public operator identity disclosure is missing: ' + name)
         for key in re.findall(r'\{\{(\w+)\}\}', text):
             if key not in config:
                 errors.append(name + ' has an unknown template key: ' + key)

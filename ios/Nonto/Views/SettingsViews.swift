@@ -30,13 +30,12 @@ struct SettingsView: View {
                 }
             }
             Section("关于南图") {
-                LabeledContent("运营者", value: ComplianceProfile.current.value("operatorName").isEmpty ? "开发测试，运营信息待补全" : ComplianceProfile.current.value("operatorName"))
                 if let contact = ComplianceProfile.current.contactURL { Link("联系与投诉", destination: contact) }
                 if !ComplianceProfile.current.value("appFilingNumber").isEmpty {
                     Link(ComplianceProfile.current.value("appFilingNumber"), destination: URL(string: "https://beian.miit.gov.cn/")!)
                 }
                 NavigationLink("隐私政策") { PolicyView(kind: "privacy") }
-                NavigationLink("用户协议") { PolicyView(kind: "terms") }
+                NavigationLink("服务条款") { PolicyView(kind: "terms") }
                 Link("源代码", destination: URL(string: "https://github.com/junhua-huang/NonToFlutter/tree/ios")!)
                 LabeledContent("版本", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
             }
@@ -241,11 +240,32 @@ struct BlockedUsersView: View {
 struct PolicyView: View {
     let kind: String
     var body: some View {
-        ScrollView {
-            Text(text).frame(maxWidth: 700, alignment: .leading).padding(24).textSelection(.enabled)
-        }.navigationTitle(kind == "privacy" ? "隐私政策" : "用户协议").navigationBarTitleDisplayMode(.inline)
-    }
-    private var text: String {
-        ComplianceProfile.current.document(kind)
+        let text = ComplianceProfile.current.document(kind)
+        let sections = PolicySection.parse(text)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 28) {
+                    ForEach(sections) { section in
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(section.title).font(.title3.bold()).accessibilityAddTraits(.isHeader)
+                            ForEach(Array(section.paragraphs.enumerated()), id: \.offset) { _, paragraph in
+                                Text(paragraph).font(.body).lineSpacing(5).textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading).id(section.id)
+                    }
+                }.frame(maxWidth: 700, alignment: .leading).padding(24).frame(maxWidth: .infinity)
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        ForEach(sections) { section in
+                            Button(section.title) { withAnimation { proxy.scrollTo(section.id, anchor: .top) } }
+                        }
+                    } label: { Label("目录", systemImage: "list.bullet") }
+                    ShareLink(item: text) { Label("分享全文", systemImage: "square.and.arrow.up") }
+                }
+            }
+        }.navigationTitle(kind == "privacy" ? "隐私政策" : "服务条款").navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -51,6 +51,13 @@ class ComplianceChecks(unittest.TestCase):
         self.assertTrue(checker.inspect(self.resources)[1])
         data['verification'] = {key: True for key in checker.EVIDENCE}
         path.write_text(json.dumps(data))
+        errors, blockers = checker.inspect(self.resources)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(blockers), 2)
+        self.assertTrue(all('Public operator identity disclosure' in item for item in blockers))
+        for name in ('privacy', 'terms'):
+            policy = self.resources / (name + '.txt')
+            policy.write_text(policy.read_text() + '\n运营者：{{operatorName}}\n')
         self.assertEqual(checker.inspect(self.resources), ([], []))
     def test_example_contacts_remain_blocked(self):
         path = self.resources / 'Compliance.json'

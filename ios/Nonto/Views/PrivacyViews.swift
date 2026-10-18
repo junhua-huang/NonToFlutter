@@ -10,21 +10,21 @@ struct PrivacyWelcomeView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(Color.brand)
                     Text(declined ? "你可以先了解南图" : "欢迎使用南图").font(.largeTitle.bold())
-                    Text("请先阅读用户协议和隐私说明，再决定是否使用账号与社交服务。")
+                    Text("请先阅读服务条款和隐私政策，再决定是否使用账号与社交服务。")
                     if !profile.reviewed {
-                        Label("开发测试版：运营主体与服务器规则待补全，不应向公众提供服务。", systemImage: "info.circle").font(.subheadline).foregroundStyle(.secondary)
+                        Label("开发测试版：服务规则尚未完成审核，当前仅供开发测试。", systemImage: "info.circle").font(.subheadline).foregroundStyle(.secondary)
                     }
                     Text("账号服务会处理邮箱、账号资料、你主动发送的内容和服务安全信息。照片与视频仅在你选择时读取；通知在你开启时申请，不影响文字功能。")
-                    NavigationLink("阅读隐私说明") { PolicyView(kind: "privacy") }
-                    NavigationLink("阅读用户协议") { PolicyView(kind: "terms") }
-                    if let contact = profile.contactURL { Link("联系运营者", destination: contact) }
+                    NavigationLink("阅读隐私政策") { PolicyView(kind: "privacy") }
+                    NavigationLink("阅读服务条款") { PolicyView(kind: "terms") }
+                    if let contact = profile.contactURL { Link("联系与投诉", destination: contact) }
                     if declined {
                         Text("当前保留离线说明页面。你可以稍后重新决定是否继续。不会因此注销现有账号。")
                             .font(.subheadline).foregroundStyle(.secondary)
                         Button("重新查看使用说明") { declined = false }.buttonStyle(.glass)
                     } else {
                         Button { consent.accept() } label: {
-                            Text(profile.reviewed ? "同意协议与隐私说明并继续" : "同意说明，继续开发测试").frame(maxWidth: .infinity).padding(.vertical, 6)
+                            Text(profile.reviewed ? "同意服务条款与隐私政策并继续" : "同意说明，继续开发测试").frame(maxWidth: .infinity).padding(.vertical, 6)
                         }.buttonStyle(.glassProminent)
                         Button("暂不同意，仅查看说明") { declined = true }.buttonStyle(.glass).frame(maxWidth: .infinity)
                     }
@@ -51,12 +51,12 @@ struct PersonalInformationView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("查看和管理") {
-                NavigationLink("隐私说明与服务提供方") { PolicyView(kind: "privacy") }
+                NavigationLink("隐私政策与信息处理规则") { PolicyView(kind: "privacy") }
                 NavigationLink("隐私与资料可见范围") { PrivacySettingsView() }
                 NavigationLink("通知权限与提醒") { NotificationSettingsView() }
                 NavigationLink("举报处理记录") { ReportHistoryView(session: session) }
                 if let contact = profile.contactURL { Link("申请查阅、复制、更正或删除信息", destination: contact) }
-                else { Text("运营者的权利申请联系方式尚未配置，本版本尚不具备正式发布条件。").font(.caption).foregroundStyle(.secondary) }
+                else { Text("权利申请联系方式尚未配置，当前仅供开发测试。").font(.caption).foregroundStyle(.secondary) }
                 if let filing = profile.values["appFilingNumber"], !filing.string.isEmpty {
                     Link(filing.string, destination: URL(string: "https://beian.miit.gov.cn/")!)
                 }

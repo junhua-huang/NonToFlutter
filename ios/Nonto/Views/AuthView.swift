@@ -41,7 +41,7 @@ struct AuthView: View {
                         Toggle("我已阅读并同意用户协议和隐私政策", isOn: $accepted).font(.footnote)
                     }
                     HStack {
-                        NavigationLink("用户协议") { PolicyView(kind: "terms") }
+                        NavigationLink("服务条款") { PolicyView(kind: "terms") }
                         NavigationLink("隐私政策") { PolicyView(kind: "privacy") }
                     }.font(.footnote)
                     ErrorBanner(text: error)

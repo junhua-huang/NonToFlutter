@@ -61,7 +61,7 @@ final class ComplianceTests: XCTestCase {
     func testMissingOperatorInformationIsVisibleInsteadOfFakeContact() {
         let profile = ComplianceProfile(values: [:])
         let text = profile.render("{{operatorName}}\n{{contactEmail}}")
-        XCTAssertTrue(text.contains("开发测试版")); XCTAssertTrue(text.contains("待运营者补全"))
+        XCTAssertTrue(text.contains("开发测试版")); XCTAssertTrue(text.contains("尚未完成核验"))
         XCTAssertFalse(text.contains("{{")); XCTAssertNil(profile.contactURL)
     }
     func testConfiguredContactsAndSecurePolicyLinks() {
@@ -83,6 +83,14 @@ final class ComplianceTests: XCTestCase {
         XCTAssertFalse(privacy.contains("{{")); XCTAssertFalse(terms.contains("facebookclone"))
         XCTAssertEqual(ComplianceProfile.revision.count, 64)
         XCTAssertEqual(profile.document("../../private"), "暂时无法读取说明，请稍后重试。")
+    }
+    func testPolicySectionsKeepPreambleAndDoNotSplitInlineReferences() {
+        let sections = PolicySection.parse("南图隐私政策\n版本：2\n\n一、范围\n\n内容提及一、但不是标题\n还有下一行\n\n十一、更新\n\n更新内容\n\n")
+        XCTAssertEqual(sections.map(\.title), ["阅读提示", "一、范围", "十一、更新"])
+        XCTAssertEqual(sections[0].paragraphs, ["南图隐私政策\n版本：2"])
+        XCTAssertEqual(sections[1].paragraphs, ["内容提及一、但不是标题\n还有下一行"])
+        XCTAssertEqual(sections.map(\.id), [0, 1, 2])
+        XCTAssertTrue(PolicySection.parse(" \n\n ").isEmpty)
     }
     func testHTTPURLCannotIncludeEvenCallerSuppliedCredentialQuery() throws {
         let api = APIClient(baseURL: URL(string: "https://api.example.test/api")!, credentials: MemoryCredentials())

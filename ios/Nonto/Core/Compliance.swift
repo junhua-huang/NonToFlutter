@@ -30,9 +30,9 @@ struct ComplianceProfile {
         var text = template
         for key in ["policyVersion", "operatorName", "contactEmail", "contactAddress", "appFilingNumber", "storageSummary", "retentionSummary", "processorSummary", "minorProtectionSummary", "realNameVerificationSummary", "rightsResponseSummary"] {
             let replacement = value(key)
-            text = text.replacingOccurrences(of: "{{\(key)}}", with: replacement.isEmpty ? "待运营者补全（不可用于正式发布）" : replacement)
+            text = text.replacingOccurrences(of: "{{\(key)}}", with: replacement.isEmpty ? "该项尚未完成核验，当前仅供开发测试。" : replacement)
         }
-        return reviewed ? text : "开发测试版说明：运营主体和服务器处理规则尚未审核完成，本说明不能作为正式发布政策。请勿提交真实敏感个人信息。\n\n" + text
+        return reviewed ? text : "开发测试版说明：服务规则尚未完成审核，本说明不能作为正式发布政策。请勿提交真实敏感个人信息。\n\n" + text
     }
     static var revision: String {
         var data = Data()
@@ -40,6 +40,27 @@ struct ComplianceProfile {
             if let url = Bundle.main.url(forResource: name, withExtension: ext), let contents = try? Data(contentsOf: url) { data.append(contents) }
         }
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+struct PolicySection: Identifiable {
+    let id: Int
+    let title: String
+    var paragraphs: [String]
+
+    static func parse(_ text: String) -> [PolicySection] {
+        var sections: [PolicySection] = []
+        for block in text.components(separatedBy: "\n\n") {
+            let paragraph = block.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !paragraph.isEmpty else { continue }
+            if paragraph.range(of: "^[一二三四五六七八九十百]+、[^\\n]+$", options: .regularExpression) != nil {
+                sections.append(Self(id: sections.count, title: paragraph, paragraphs: []))
+            } else {
+                if sections.isEmpty { sections.append(Self(id: 0, title: "阅读提示", paragraphs: [])) }
+                sections[sections.count - 1].paragraphs.append(paragraph)
+            }
+        }
+        return sections
     }
 }
 
