@@ -118,6 +118,7 @@ struct ChatAttachmentSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var caption = ""
     @State private var submitting = false
+    @State private var cancelled = false
     @State private var error: String?
     @State private var image: UIImage?
     @State private var videoURL: URL?
@@ -142,7 +143,11 @@ struct ChatAttachmentSheet: View {
                     }.buttonStyle(.glassProminent).disabled(submitting)
                 }.padding()
             }.navigationTitle(media.isVideo ? "发送视频" : "发送照片").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { cancelled = true; submitting = false; dismiss() }
+                    }
+                }
                 .interactiveDismissDisabled(submitting)
                 .task {
                     if media.isVideo {
@@ -152,7 +157,7 @@ struct ChatAttachmentSheet: View {
                     } else { image = UIImage(data: media.data) }
                 }
                 .task(id: submitting) {
-                    guard submitting else { return }
+                    guard submitting, !cancelled else { return }
                     let epoch = api.generation
                     defer { submitting = false }
                     error = nil
@@ -164,13 +169,13 @@ struct ChatAttachmentSheet: View {
                             uploadedURL = url
                         }
                         try Task.checkCancellation()
-                        guard epoch == api.generation else { return }
+                        guard !cancelled, epoch == api.generation else { return }
                         guard store.enqueue(content: caption, kind: media.isVideo ? "video" : "image", media: url, quoteID: quoteID) else {
                             throw APIError(status: 0, message: "无法加入发送队列，请重试")
                         }
                         onSent(); dismiss()
                     } catch {
-                        if !Task.isCancelled, epoch == api.generation { self.error = error.localizedDescription }
+                        if !cancelled, !Task.isCancelled, epoch == api.generation { self.error = error.localizedDescription }
                     }
                 }
                 .onDisappear { if let videoURL { try? FileManager.default.removeItem(at: videoURL) } }
