@@ -21,10 +21,10 @@ def create_key(path, source=None, password=None):
             key, _, _ = pkcs12.load_key_and_certificates(Path(source).read_bytes(), password)
         except ValueError:
             raise ValueError('Could not open P12; check the file and password.') from None
-        if not isinstance(key, rsa.RSAPrivateKey) or key.key_size < 2048:
-            raise ValueError('P12 must contain an RSA distribution signing private key of at least 2048 bits.')
+        if not isinstance(key, rsa.RSAPrivateKey) or key.key_size != 2048:
+            raise ValueError('P12 must contain an RSA distribution signing private key of exactly 2048 bits.')
     else:
-        key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     data = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

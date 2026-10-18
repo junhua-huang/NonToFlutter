@@ -79,6 +79,8 @@ def apple_error_diagnostic(error):
         hint = 'Apple reports a certificate limit/current-certificate conflict. Review existing distribution certificates; none were revoked.'
     elif 'agreement' in detail or 'contract' in detail:
         hint = 'Apple reports an agreement/contract issue; the account holder must review agreements.'
+    elif ('csr' in detail or 'certificate signing request' in detail) and ('algorithm' in detail or 'size' in detail):
+        hint = 'Apple rejected the CSR algorithm/key size. Apple Distribution initialization requires RSA 2048.'
     elif 'csr' in detail or 'certificate signing request' in detail:
         hint = 'Apple rejected the certificate signing request.'
     elif 'permission' in detail or 'not authorized' in detail:
@@ -236,6 +238,7 @@ def reusable_certificate(apple, key, *, initialize=False):
     if candidates:
         return max(candidates, key=lambda item: item[1].not_valid_after_utc)
     require(initialize, 'No valid distribution certificate matches IOS_SIGNING_KEY. Run explicit [signing-setup] initialization once. Daily uploads never create certificates.')
+    require(key.key_size == 2048, 'Apple Distribution certificate initialization requires RSA 2048. Repair the unsupported key once with setup_signing.ps1 -RepairUnsupportedKeySize and update IOS_SIGNING_KEY; no certificate was created.')
     csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, 'NonTo Distribution'),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, TEAM),
@@ -344,7 +347,7 @@ def diagnose(apple):
             except ValueError:
                 continue
             matches.append(row['id'])
-        print('IOS_SIGNING_KEY: configured and valid RSA key')
+        print('IOS_SIGNING_KEY: configured and valid RSA key; bits:', key.key_size)
         print('Matching valid distribution certificates:', ', '.join(matches) if matches else 'NONE; explicit initialization is required')
     else:
         print('IOS_SIGNING_KEY: missing; complete the one-time Windows setup before initialization')

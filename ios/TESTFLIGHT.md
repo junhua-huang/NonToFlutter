@@ -12,6 +12,14 @@
 
 ## Windows 配置助手
 
+新建 Apple Distribution 身份使用 **RSA 2048**。早期辅助脚本生成的 RSA 3072 私钥可能被 Apple 的 CSR 校验拒绝。遇到该情况，下载当前版本的 Windows 辅助脚本，运行一次修复：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\NonToAppleConnect\setup_signing.ps1 -RepairUnsupportedKeySize
+```
+
+修复模式会先在本机保存旧密钥备份，再创建 RSA 2048 私钥，并更新 **本仓库**的 `IOS_SIGNING_KEY`（无 GitHub CLI 时打开现有 Secret 编辑页，粘贴后点 Update secret）。重复修复会复用已兼容的本机密钥。备份已存在时拒绝覆盖；脚本不会调用 Apple API。
+
 也可以将仓库中的 `ios/scripts/setup_signing.ps1` 下载到 `C:\NonToAppleConnect`，在 PowerShell 运行：
 
 ```powershell

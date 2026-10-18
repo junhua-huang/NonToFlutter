@@ -57,3 +57,7 @@ app.*.map.json
 *.csr
 *.mobileprovision
 *.xcarchive/
+
+# Local one-time signing-key repair backups
+*.key.*.backup
+*.key.replacement

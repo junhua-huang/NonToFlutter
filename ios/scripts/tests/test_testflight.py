@@ -238,6 +238,13 @@ class ReusableSigningChecks(unittest.TestCase):
         tf.reusable_certificate(apple, self.key, initialize=True)
         self.assertEqual([call.args for call in apple.request.call_args_list], [('GET', 'certificates')])
 
+    def test_unsupported_initialization_key_size_is_rejected_without_posting_csr(self):
+        key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+        apple = Mock(); apple.request.return_value = {'data': []}
+        with self.assertRaisesRegex(ValueError, 'requires RSA 2048'):
+            tf.reusable_certificate(apple, key, initialize=True)
+        self.assertTrue(all(call.args[0] == 'GET' for call in apple.request.call_args_list))
+
     def test_profiles_reuse_validated_matching_profile_and_create_only_explicitly(self):
         row = {'id': 'PROFILE', 'attributes': {'name': tf.PROFILE_PREFIX + 'OWNCERT-1234',
                                                'profileType': 'IOS_APP_STORE', 'profileState': 'ACTIVE'}}
@@ -286,6 +293,7 @@ class ReusableSigningChecks(unittest.TestCase):
     def test_apple_error_diagnosis_reports_known_causes_without_raw_secrets(self):
         for detail, expected in [('You already have the maximum number of distribution certificates. token=secret', 'certificate limit'),
                                  ('The CSR is invalid; secret', 'signing request'),
+                                 ('CSR algorithm/size incorrect. Expected: RSA(2048) secret', 'RSA 2048'),
                                  ('Accept your agreement secret', 'agreement')]:
             body = json.dumps({'errors': [{'code': 'ENTITY_ERROR.ATTRIBUTE.INVALID', 'detail': detail}]}).encode()
             error = HTTPError('https://secret.test', 409, 'secret', {}, io.BytesIO(body))
@@ -300,7 +308,9 @@ class ReusableSigningChecks(unittest.TestCase):
             path = Path(temp) / 'signing.key'
             fingerprint = helper.create_key(path)
             saved = path.read_bytes(); self.assertEqual(len(fingerprint), 64)
-            self.assertIsInstance(serialization.load_pem_private_key(saved, password=None), rsa.RSAPrivateKey)
+            loaded = serialization.load_pem_private_key(saved, password=None)
+            self.assertIsInstance(loaded, rsa.RSAPrivateKey)
+            self.assertEqual(loaded.key_size, 2048)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(ValueError): helper.create_key(path)
             self.assertEqual(path.read_bytes(), saved)
