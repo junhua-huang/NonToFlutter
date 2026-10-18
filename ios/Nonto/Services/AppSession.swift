@@ -14,6 +14,7 @@ struct NoticeChange {
 final class AppSession: ObservableObject {
     let api: APIClient
     let socket: RealtimeClient
+    private let consent: PrivacyConsent
     @Published var user: Person?
     @Published var restoring = true
     @Published var startupError: String?
@@ -25,8 +26,9 @@ final class AppSession: ObservableObject {
     @Published var defaultVisibility = "public"
     private var foreground = true
 
-    init(api: APIClient? = nil) {
+    init(api: APIClient? = nil, consent: PrivacyConsent? = nil) {
         let api = api ?? APIClient()
+        self.consent = consent ?? PrivacyConsent.shared
         self.api = api; socket = RealtimeClient(api: api)
         APNsService.shared.attach(api: api)
         NativeNotifications.shared.onAuthorizationChanged = { [weak self] in self?.syncPush() }
@@ -38,6 +40,7 @@ final class AppSession: ObservableObject {
         }
     }
     func bootstrap() async {
+        guard consent.accepted else { restoring = false; return }
         restoring = true; startupError = nil
         defer { restoring = false }
         do {
@@ -50,6 +53,7 @@ final class AppSession: ObservableObject {
         }
     }
     func authenticate(email: String, password: String, code: String, username: String? = nil) async throws {
+        guard consent.accepted else { throw APIError(status: 0, message: "请先阅读并决定是否同意隐私说明") }
         var body: [String: JSON] = ["email": .text(email), "password": .text(password)]
         if !code.isEmpty { body["email_code"] = .text(code) }
         if let username { body["username"] = .text(username) }
@@ -107,6 +111,7 @@ final class AppSession: ObservableObject {
         APNsService.shared.setAccount(user?.id, enabled: NativeNotifications.shared.authorized && NativeNotifications.shared.pushEnabled)
     }
     func scene(active: Bool) {
+        guard consent.accepted else { socket.stop(); return }
         foreground = active
         APNsService.shared.setForeground(active)
         if active {

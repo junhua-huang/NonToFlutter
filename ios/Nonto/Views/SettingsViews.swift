@@ -13,6 +13,7 @@ struct SettingsView: View {
                 Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }
             }
             Section("账号") {
+                NavigationLink("个人信息与权限") { PersonalInformationView() }
                 NavigationLink("隐私设置") { PrivacySettingsView() }
                 NavigationLink("消息提醒") { NotificationSettingsView() }
                 NavigationLink("修改密码") { PasswordView() }
@@ -29,6 +30,11 @@ struct SettingsView: View {
                 }
             }
             Section("关于南图") {
+                LabeledContent("运营者", value: ComplianceProfile.current.value("operatorName").isEmpty ? "开发测试，运营信息待补全" : ComplianceProfile.current.value("operatorName"))
+                if let contact = ComplianceProfile.current.contactURL { Link("联系与投诉", destination: contact) }
+                if !ComplianceProfile.current.value("appFilingNumber").isEmpty {
+                    Link(ComplianceProfile.current.value("appFilingNumber"), destination: URL(string: "https://beian.miit.gov.cn/")!)
+                }
                 NavigationLink("隐私政策") { PolicyView(kind: "privacy") }
                 NavigationLink("用户协议") { PolicyView(kind: "terms") }
                 Link("源代码", destination: URL(string: "https://github.com/junhua-huang/NonToFlutter/tree/ios")!)
@@ -182,14 +188,25 @@ struct DeleteAccountView: View {
     @State private var error: String?
     var body: some View {
         Form {
-            Section { Text("注销会永久删除账号和相关数据，无法撤销。").foregroundStyle(.red); TextField("请输入“注销”确认", text: $confirmation) }
+            Section {
+                Text("确认后将向服务器申请注销当前账号。与账号关联的信息、上传文件及依法保留的记录，按照隐私说明中的删除与保留规则处理；本机草稿、发送队列与账号缓存也会清理。注销操作无法撤销。")
+                    .foregroundStyle(.secondary)
+                NavigationLink("查看删除与保留说明") { PolicyView(kind: "privacy") }
+                TextField("请输入“注销”确认", text: $confirmation)
+            }
             ErrorBanner(text: error)
             Button("永久注销账号", role: .destructive) { confirm = true }.disabled(confirmation != "注销" || busy)
-        }.navigationTitle("注销账号").confirmationDialog("永久删除账号和相关数据？此操作无法撤销。", isPresented: $confirm, titleVisibility: .visible) {
+            if busy { ProgressView("正在处理注销…") }
+        }.disabled(busy).navigationTitle("注销账号").confirmationDialog("申请注销账号？此操作无法撤销。", isPresented: $confirm, titleVisibility: .visible) {
             Button("永久注销", role: .destructive) {
                 Task {
                     busy = true; defer { busy = false }
-                    do { _ = try await session.api.request("/auth/account", method: "DELETE"); try? LocalCache.clear(userID: session.user?.id ?? 0); try await session.logout() }
+                    do {
+                        let userID = session.user?.id ?? 0
+                        _ = try await session.api.request("/auth/account", method: "DELETE")
+                        try await session.logout()
+                        try? AccountLocalData.clear(userID: userID)
+                    }
                     catch { self.error = error.localizedDescription }
                 }
             }
@@ -229,7 +246,6 @@ struct PolicyView: View {
         }.navigationTitle(kind == "privacy" ? "隐私政策" : "用户协议").navigationBarTitleDisplayMode(.inline)
     }
     private var text: String {
-        guard let url = Bundle.main.url(forResource: kind, withExtension: "txt"), let s = try? String(contentsOf: url, encoding: .utf8) else { return "暂时无法读取，请稍后重试。" }
-        return s
+        ComplianceProfile.current.document(kind)
     }
 }

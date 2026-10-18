@@ -170,11 +170,13 @@ final class APIClient: ObservableObject {
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { throw URLError(.badURL) }
         components.path = baseURL.path + path
         var params = query
-        if let token { params["access_token"] = token }
-        components.queryItems = params.keys.sorted().map { URLQueryItem(name: $0, value: params[$0]) }
+        // The paired backend accepts Bearer headers. Keep credentials out of URL/access logs.
+        params.removeValue(forKey: "access_token")
+        components.queryItems = params.isEmpty ? nil : params.keys.sorted().map { URLQueryItem(name: $0, value: params[$0]) }
         guard let url = components.url else { throw URLError(.badURL) }
         var request = URLRequest(url: url); request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         return request
     }
     func upload(_ data: Data, filename: String, mime: String, type: String = "post") async throws -> String {

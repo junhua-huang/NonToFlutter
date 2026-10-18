@@ -50,14 +50,17 @@ def configs(name, settings):
 
 sources = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'Nonto').rglob('*.swift'))
 tests = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'Tests').rglob('*.swift'))
-resources = ['Nonto/Resources/Assets.xcassets', 'Nonto/Resources/PrivacyInfo.xcprivacy', 'Nonto/Resources/privacy.txt', 'Nonto/Resources/terms.txt']
+resources = ['Nonto/Resources/Assets.xcassets', 'Nonto/Resources/PrivacyInfo.xcprivacy', 'Nonto/Resources/privacy.txt', 'Nonto/Resources/terms.txt', 'Nonto/Resources/Compliance.json']
 source_refs = [ref(p, 'sourcecode.swift') for p in sources]
 test_refs = [ref(p, 'sourcecode.swift') for p in tests]
 resource_refs = [ref(p, 'folder.assetcatalog' if p.endswith('.xcassets') else ('text.plist.xml' if p.endswith('.xcprivacy') else 'text')) for p in resources]
 app_product = add('product:app', '{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nonto.app; sourceTree = BUILT_PRODUCTS_DIR; }')
 test_product = add('product:tests', '{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NontoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; }')
 main_group = group('Nonto', [group('Application', source_refs), group('Resources', resource_refs + [ref('Nonto/Resources/Info.plist', 'text.plist.xml'), ref('Nonto/Resources/Nonto.entitlements', 'text.plist.xml')]), group('Tests', test_refs), group('Products', [app_product, test_product])])
-app_phases = [phase('app:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(sources, source_refs)]), phase('app:frameworks', 'PBXFrameworksBuildPhase', []), phase('app:resources', 'PBXResourcesBuildPhase', [build(p, r) for p, r in zip(resources, resource_refs)])]
+archive_script = 'if [ "$ACTION" = "install" ]; then\n  /usr/bin/env python3 "$SRCROOT/scripts/check_compliance.py" --release\nfi'
+archive_inputs = ['$(SRCROOT)/scripts/check_compliance.py'] + ['$(SRCROOT)/Nonto/Resources/' + name for name in ['Compliance.json', 'PrivacyInfo.xcprivacy', 'privacy.txt', 'terms.txt']]
+archive_check = add('phase:app:compliance', '{isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = ' + array([quote(p) for p in archive_inputs]) + '; outputPaths = (); name = "Check release disclosures"; runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = ' + quote(archive_script) + '; alwaysOutOfDate = 1; }')
+app_phases = [archive_check, phase('app:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(sources, source_refs)]), phase('app:frameworks', 'PBXFrameworksBuildPhase', []), phase('app:resources', 'PBXResourcesBuildPhase', [build(p, r) for p, r in zip(resources, resource_refs)])]
 test_phases = [phase('tests:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(tests, test_refs)]), phase('tests:frameworks', 'PBXFrameworksBuildPhase', []), phase('tests:resources', 'PBXResourcesBuildPhase', [])]
 common = {'IPHONEOS_DEPLOYMENT_TARGET': '26.0', 'SDKROOT': 'iphoneos', 'SWIFT_VERSION': '5.0', 'CLANG_ENABLE_MODULES': 'YES', 'TARGETED_DEVICE_FAMILY': '1,2', 'CODE_SIGN_STYLE': 'Automatic', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO'}
 app_config = configs('app', common | {'CODE_SIGN_ENTITLEMENTS': 'Nonto/Resources/Nonto.entitlements', 'PRODUCT_NAME': 'Nonto', 'PRODUCT_BUNDLE_IDENTIFIER': 'online.nonto.native', 'INFOPLIST_FILE': 'Nonto/Resources/Info.plist', 'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'MARKETING_VERSION': '1.0.0', 'CURRENT_PROJECT_VERSION': '1', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'ENABLE_USER_SCRIPT_SANDBOXING': 'YES'})

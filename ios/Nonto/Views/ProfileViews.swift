@@ -209,14 +209,21 @@ struct ReportView: View {
     @State private var reason = ""
     @State private var error: String?
     @State private var busy = false
+    init(kind: String, targetID: Int, context: String = "") {
+        self.kind = kind; self.targetID = targetID; _reason = State(initialValue: context)
+    }
     var body: some View {
         NavigationStack {
             Form {
-                Section("举报原因") { TextField("请描述需要反馈的问题", text: $reason, axis: .vertical).lineLimit(5...12) }
+                Section("举报原因") {
+                    TextField("请描述需要反馈的问题", text: $reason, axis: .vertical).lineLimit(5...12)
+                    Text("\(reason.count)/200").font(.caption).foregroundStyle(reason.count > 200 ? Color.red : Color.secondary)
+                    Text("请简要说明，勿填写密码、身份证号码等无关敏感信息。").font(.caption).foregroundStyle(.secondary)
+                }
                 ErrorBanner(text: error)
             }.navigationTitle("举报").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
-                ToolbarItem(placement: .confirmationAction) { Button("提交") { Task { await submit() } }.disabled(busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                ToolbarItem(placement: .confirmationAction) { Button("提交") { Task { await submit() } }.disabled(busy || reason.count > 200 || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }.interactiveDismissDisabled(busy)
         }
     }

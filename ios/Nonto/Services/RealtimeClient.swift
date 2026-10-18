@@ -54,11 +54,17 @@ final class RealtimeClient: ObservableObject {
         let json = JSON.object(["type": .text(type), "payload": .object(payload)])
         try await socket.send(.string(String(decoding: try json.encoded(), as: UTF8.self)))
     }
+    static func connectionURL(_ url: URL) throws -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.scheme == "wss", components.host != nil, components.user == nil else { throw URLError(.badURL) }
+        let query = (components.queryItems ?? []).filter { $0.name != "access_token" }
+        components.queryItems = query.isEmpty ? nil : query
+        guard let result = components.url else { throw URLError(.badURL) }
+        return result
+    }
     private func connect(ticket: UUID) async throws {
         guard let token = api.token else { return }
-        var c = URLComponents(url: api.socketURL, resolvingAgainstBaseURL: false)!
-        c.queryItems = [URLQueryItem(name: "access_token", value: token)]
-        guard let url = c.url else { throw URLError(.badURL) }
+        let url = try Self.connectionURL(api.socketURL)
         let socket = URLSession.shared.webSocketTask(with: url); connection = socket; socket.resume()
         lastFrame = Date()
         defer { socket.cancel(with: .goingAway, reason: nil) }

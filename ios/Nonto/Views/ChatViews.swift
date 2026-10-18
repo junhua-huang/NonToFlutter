@@ -110,6 +110,12 @@ private struct ChatRoomContent: View {
             }
         }
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if communityID == nil, conversation.other.id > 0 {
+                NavigationLink { ProfileView(userID: conversation.other.id) } label: { Image(systemName: "person.crop.circle") }
+                    .accessibilityLabel("聊天对象资料、举报与屏蔽")
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
                 if let quote {

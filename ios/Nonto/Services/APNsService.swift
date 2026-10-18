@@ -145,9 +145,14 @@ final class NontoAppDelegate: NSObject, UIApplicationDelegate {
         _ = NativeNotifications.shared
         return true
     }
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) { APNsService.shared.didRegister(deviceToken) }
-    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) { APNsService.shared.didFail(error) }
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        if PrivacyConsent.shared.accepted { APNsService.shared.didRegister(deviceToken) }
+    }
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        if PrivacyConsent.shared.accepted { APNsService.shared.didFail(error) }
+    }
     func applicationDidEnterBackground(_ application: UIApplication) {
+        guard PrivacyConsent.shared.accepted else { return }
         // Give a lifecycle update a bounded opportunity to reach the server.
         var task: UIBackgroundTaskIdentifier = .invalid
         task = application.beginBackgroundTask(withName: "Push device state") { if task != .invalid { application.endBackgroundTask(task); task = .invalid } }

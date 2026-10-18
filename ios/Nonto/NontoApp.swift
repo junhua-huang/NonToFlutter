@@ -5,12 +5,14 @@ import SwiftUI
 struct NontoApp: App {
     @UIApplicationDelegateAdaptor(NontoAppDelegate.self) private var appDelegate
     @StateObject private var session = AppSession()
+    @StateObject private var consent = PrivacyConsent.shared
     @Environment(\.scenePhase) private var phase
     @AppStorage("nonto.native.appearance") private var appearance = "system"
     var body: some Scene {
         WindowGroup {
             Group {
-                if session.restoring { ProgressView("正在打开南图…") }
+                if !consent.accepted { PrivacyWelcomeView() }
+                else if session.restoring { ProgressView("正在打开南图…") }
                 else if let error = session.startupError {
                     ContentUnavailableView {
                         Label("暂时无法恢复登录", systemImage: "wifi.exclamationmark")
@@ -21,10 +23,10 @@ struct NontoApp: App {
                 } else if let user = session.user { MainTabs().id(user.id) }
                 else { AuthView() }
             }
-            .environmentObject(session).tint(.brand)
+            .environmentObject(session).environmentObject(consent).tint(.brand)
             .preferredColorScheme(appearance == "system" ? nil : (appearance == "dark" ? .dark : .light))
-            .task { await session.bootstrap() }
-            .onChange(of: phase) { _, value in session.scene(active: value == .active) }
+            .task(id: consent.accepted) { if consent.accepted { await session.bootstrap() } }
+            .onChange(of: phase) { _, value in if consent.accepted { session.scene(active: value == .active) } }
         }
     }
 }

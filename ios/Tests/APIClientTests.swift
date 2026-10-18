@@ -31,14 +31,14 @@ final class APIClientTests: XCTestCase {
         let api = APIClient(baseURL: URL(string: "https://api.example.test/api")!, session: URLSession(configuration: c), credentials: credentials)
         return (api, credentials)
     }
-    func testQueryTokenPreservesPaginationAndFilters() throws {
+    func testBearerTokenPreservesPaginationAndFilters() throws {
         let (api, _) = client { _ in (200, .null) }
         let request = try api.makeRequest("/search/posts", query: ["q": "a & 中文", "page": "3"], token: "secret")
         let values = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
         XCTAssertEqual(values.first { $0.name == "q" }?.value, "a & 中文")
         XCTAssertEqual(values.first { $0.name == "page" }?.value, "3")
-        XCTAssertEqual(values.first { $0.name == "access_token" }?.value, "secret")
-        XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+        XCTAssertNil(values.first { $0.name == "access_token" })
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret")
     }
     func testAbsolutePathsAndTraversalAreRejected() throws {
         let (api, _) = client { _ in (200, .null) }
@@ -52,7 +52,7 @@ final class APIClientTests: XCTestCase {
             calls += 1
             let q = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
             XCTAssertEqual(q.first { $0.name == "page" }?.value, "4")
-            return q.first { $0.name == "access_token" }?.value == "old" ? (401, .null) : (200, .object(["ok": .bool(true)]))
+            return request.value(forHTTPHeaderField: "Authorization") == "Bearer old" ? (401, .null) : (200, .object(["ok": .bool(true)]))
         }
         try api.setToken("old")
         let result = try await api.request("/posts/", query: ["page": "4"])
@@ -73,8 +73,8 @@ final class APIClientTests: XCTestCase {
                 lock.lock(); refreshes += 1; lock.unlock()
                 return (200, .object(["access_token": .text("new")]))
             }
-            let q = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            return q.first { $0.name == "access_token" }?.value == "old" ? (401, .null) : (200, .object(["ok": .bool(true)]))
+            XCTAssertFalse(request.url!.absoluteString.contains("access_token"))
+            return request.value(forHTTPHeaderField: "Authorization") == "Bearer old" ? (401, .null) : (200, .object(["ok": .bool(true)]))
         }
         try api.setToken("old")
         async let first = api.request("/posts/")

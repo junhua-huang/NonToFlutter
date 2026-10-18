@@ -381,7 +381,7 @@ struct PostComposer: View {
     }
     private func saveDraft() {
         draftSaveTask?.cancel(); draftSaveTask = nil
-        if accountID > 0 && editing == nil && !published {
+        if accountID > 0 && accountEpoch == session.api.generation && editing == nil && !published {
             PostDraftStore().save(PostDraft(text: text, visibility: visibility, role: role), userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0)
         }
     }

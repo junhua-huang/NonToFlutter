@@ -7,6 +7,7 @@ struct ChatMessageRow: View {
     let onQuote: (ChatMessage) -> Void
     let onRecall: (ChatMessage) -> Void
     @EnvironmentObject private var session: AppSession
+    @State private var reporting = false
     private var message: ChatMessage { row.message }
     private var mine: Bool { message.senderID == session.user?.id }
     private var sender: Person { Person(message.raw["sender"].or(message.raw["user"])) }
@@ -38,6 +39,9 @@ struct ChatMessageRow: View {
                             if mine && community {
                                 Button("撤回", systemImage: "arrow.uturn.backward", role: .destructive) { onRecall(message) }
                             }
+                            if !mine && message.senderID > 0 {
+                                Button("举报消息发送者", systemImage: "flag") { reporting = true }
+                            }
                         }
                         if let date = message.date { Text(date, format: .dateTime.year().month().day().hour().minute().second()) }
                     }
@@ -48,6 +52,9 @@ struct ChatMessageRow: View {
                 if !mine { Spacer(minLength: 48) }
             }
         }.padding(.horizontal).padding(.top, row.startsRun ? 6 : 0)
+            .sheet(isPresented: $reporting) {
+                ReportView(kind: "user", targetID: message.senderID, context: "聊天消息 #\(message.id)：\n")
+            }
     }
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 6) {

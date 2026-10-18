@@ -19,6 +19,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check generated project
         run: |
+          python3 ios/scripts/check_compliance.py
+          python3 -m unittest discover -s ios/scripts/tests
           python3 ios/scripts/generate_project.py
           git diff --exit-code -- ios/Nonto.xcodeproj
           python3 - <<'PYCODE'

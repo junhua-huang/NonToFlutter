@@ -1,0 +1,25 @@
+{
+  "policyVersion": "2026-10-18.1",
+  "operatorName": "",
+  "contactEmail": "",
+  "contactAddress": "",
+  "privacyPolicyURL": "",
+  "termsURL": "",
+  "appFilingNumber": "",
+  "storageSummary": "",
+  "retentionSummary": "",
+  "processorSummary": "",
+  "minorProtectionSummary": "",
+  "realNameVerificationSummary": "",
+  "rightsResponseSummary": "",
+  "releaseReviewed": false,
+  "verification": {
+    "accountDeletionVerified": false,
+    "moderationOperational": false,
+    "rightsRequestsOperational": false,
+    "realNameVerificationVerified": false,
+    "minorProtectionReviewed": false,
+    "storageAndProcessorsReviewed": false,
+    "appStorePrivacyLabelsReviewed": false
+  }
+}
