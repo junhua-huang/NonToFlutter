@@ -177,3 +177,21 @@ jobs:
       - run: python3 -m pip install 'cryptography>=45,<47'
       - name: Read signing metadata and existing build status without changes
         run: python3 ios/scripts/testflight.py diagnose
+  diagnose-crashes:
+    if: github.repository == 'junhua-huang/NonToFlutter' && github.ref == 'refs/heads/ios' && contains(github.event.head_commit.message, '[crash-check]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'cryptography>=45,<47'
+      - name: Read technical crash evidence for NonTo 21.1 only
+        run: python3 .github/scripts/read_nonto_crashes.py
