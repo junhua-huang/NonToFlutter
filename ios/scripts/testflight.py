@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 import uuid
 
@@ -29,6 +29,7 @@ TEAM = 'B2Y3564MKK'
 BUNDLE = 'online.nonto.native'
 CHANNEL = 'testflight-internal'
 API = 'https://api.appstoreconnect.apple.com/v1/'
+PROFILE_PREFIX = 'NonTo-TestFlight-'
 
 
 def require(condition, message):
@@ -65,6 +66,28 @@ class AppleUnavailable(ValueError):
     """A temporary API failure; callers may retry read-only status checks."""
 
 
+def apple_error_diagnostic(error):
+    """Classify Apple's error without logging raw bodies, headers or credentials."""
+    try:
+        errors = json.loads(error.read(65536)).get('errors', [])
+        detail = ' '.join(str(item.get('detail', '')) for item in errors).casefold()
+        codes = sorted({item.get('code', '') for item in errors
+                        if re.fullmatch(r'(?:ENTITY_ERROR|STATE_ERROR|PARAMETER_ERROR|FORBIDDEN_ERROR|NOT_FOUND|UNAUTHORIZED_ERROR|RATE_LIMIT_EXCEEDED|INTERNAL_ERROR)(?:[._][A-Z0-9_]+)*', item.get('code', ''))})
+    except (ValueError, TypeError, AttributeError, OSError):
+        return 'No structured diagnostic was available.'
+    if 'certificate' in detail and any(word in detail for word in ('maximum', 'limit', 'already have', 'too many')):
+        hint = 'Apple reports a certificate limit/current-certificate conflict. Review existing distribution certificates; none were revoked.'
+    elif 'agreement' in detail or 'contract' in detail:
+        hint = 'Apple reports an agreement/contract issue; the account holder must review agreements.'
+    elif 'csr' in detail or 'certificate signing request' in detail:
+        hint = 'Apple rejected the certificate signing request.'
+    elif 'permission' in detail or 'not authorized' in detail:
+        hint = 'Apple reports insufficient API permissions.'
+    else:
+        hint = 'Use the read-only signing diagnosis and review the Apple account configuration.'
+    return ('Codes: ' + ', '.join(codes) + '. ' if codes else '') + hint
+
+
 class Apple:
     def __init__(self):
         self.key_id = os.environ.get('ASC_KEY_ID', '').strip()
@@ -91,10 +114,10 @@ class Apple:
                 raw = response.read()
                 return json.loads(raw) if raw else {}
         except HTTPError as error:
-            # Never expose response bodies, JWTs, private keys, or request headers.
+            # Never expose raw response bodies, JWTs, private keys, or headers.
             if error.code in (408, 429, 500, 502, 503, 504):
                 raise AppleUnavailable(f'Apple API {method} {resource}: temporary HTTP {error.code}.') from None
-            raise ValueError(f'Apple API {method} {resource}: HTTP {error.code}. Check API access, agreements, and certificate quotas in Apple Developer.') from None
+            raise ValueError(f'Apple API {method} {resource}: HTTP {error.code}. ' + apple_error_diagnostic(error)) from None
         except (URLError, TimeoutError, OSError):
             raise AppleUnavailable('Apple API connection failed; no credential details were logged.') from None
 
@@ -107,7 +130,7 @@ def validate_profile(profile, certificate):
     require(entitlements.get('aps-environment') == 'production', 'App Store profile must enable production APNs.')
     require(entitlements.get('get-task-allow') is False, 'Development profiles cannot be uploaded to TestFlight.')
     require(not profile.get('ProvisionedDevices') and not profile.get('ProvisionsAllDevices'), 'An App Store distribution profile is required.')
-    require(certificate in profile.get('DeveloperCertificates', []), 'Profile does not contain this run\'s certificate.')
+    require(certificate in profile.get('DeveloperCertificates', []), 'Profile does not contain the configured signing certificate.')
     require(re.fullmatch(r'[A-Fa-f0-9-]{36}', profile.get('UUID', '')), 'Invalid provisioning profile UUID.')
     expiry = profile.get('ExpirationDate')
     require(isinstance(expiry, datetime) and expiry.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc), 'Expired provisioning profile.')
@@ -156,7 +179,114 @@ def save_state(root, state):
     write_private(state_path(root), json.dumps(state).encode())
 
 
-def prepare(root, apple):
+def list_records(apple, resource, query=None):
+    """Follow pagination only within the same authenticated Apple API resource."""
+    rows, seen = [], set()
+    for _ in range(20):
+        page = apple.request('GET', resource, query=query or {'limit': '200'})
+        rows.extend(page['data'])
+        following = page.get('links', {}).get('next')
+        if not following:
+            return rows
+        parsed = urlsplit(following)
+        require(parsed.scheme == 'https' and parsed.netloc == 'api.appstoreconnect.apple.com'
+                and parsed.path == '/v1/' + resource and not parsed.fragment,
+                'Refusing an unexpected Apple pagination URL.')
+        require(following not in seen, 'Apple pagination repeated; refusing incomplete signing lookup.')
+        seen.add(following); query = dict(parse_qsl(parsed.query))
+    raise ValueError('Apple signing lookup exceeded the page limit; no resources were created.')
+
+
+def load_signing_key():
+    pem = os.environ.get('IOS_SIGNING_KEY', '').strip().encode()
+    require(pem, 'Add IOS_SIGNING_KEY once in repository Actions Secrets; see ios/TESTFLIGHT.md. No certificate was created.')
+    try:
+        key = serialization.load_pem_private_key(pem, password=None)
+    except (ValueError, TypeError):
+        raise ValueError('IOS_SIGNING_KEY must be the unencrypted PEM signing private key, not an APNs or App Store Connect key.') from None
+    require(isinstance(key, rsa.RSAPrivateKey) and key.key_size >= 2048,
+            'IOS_SIGNING_KEY must be an RSA signing key of at least 2048 bits.')
+    return key
+
+
+def validate_certificate(certificate, key):
+    require(certificate.public_key().public_numbers() == key.public_key().public_numbers(),
+            'Certificate does not match IOS_SIGNING_KEY.')
+    require(any(a.value == TEAM for a in certificate.subject.get_attributes_for_oid(NameOID.ORGANIZATIONAL_UNIT_NAME)),
+            'Signing certificate belongs to another team.')
+    now = datetime.now(timezone.utc)
+    require(certificate.not_valid_before_utc <= now < certificate.not_valid_after_utc,
+            'Signing certificate is not currently valid; explicitly initialize or renew signing.')
+
+
+def reusable_certificate(apple, key, *, initialize=False):
+    candidates = []
+    for row in list_records(apple, 'certificates'):
+        attributes = row['attributes']
+        if attributes.get('certificateType') not in ('DISTRIBUTION', 'IOS_DISTRIBUTION'):
+            continue
+        certificate = x509.load_der_x509_certificate(base64.b64decode(attributes['certificateContent'], validate=True))
+        if certificate.public_key().public_numbers() != key.public_key().public_numbers():
+            continue
+        try:
+            validate_certificate(certificate, key)
+        except ValueError:
+            continue
+        candidates.append((row, certificate))
+    if candidates:
+        return max(candidates, key=lambda item: item[1].not_valid_after_utc)
+    require(initialize, 'No valid distribution certificate matches IOS_SIGNING_KEY. Run explicit [signing-setup] initialization once. Daily uploads never create certificates.')
+    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, 'NonTo Distribution'),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, TEAM),
+    ])).sign(key, hashes.SHA256())
+    row = apple.request('POST', 'certificates', data={'data': {'type': 'certificates', 'attributes': {
+        'certificateType': 'DISTRIBUTION', 'csrContent': csr.public_bytes(serialization.Encoding.PEM).decode()}}})['data']
+    certificate = x509.load_der_x509_certificate(base64.b64decode(row['attributes']['certificateContent'], validate=True))
+    validate_certificate(certificate, key)
+    print('Initialized reusable signing certificate:', row['id'])
+    return row, certificate
+
+
+def decode_profile(root, row, certificate_der):
+    path = root / 'NonTo.mobileprovision'
+    write_private(path, base64.b64decode(row['attributes']['profileContent'], validate=True))
+    decoded = subprocess.run(['security', 'cms', '-D', '-i', str(path)], check=True, capture_output=True).stdout
+    profile = plistlib.loads(decoded)
+    return validate_profile(profile, certificate_der), profile['ExpirationDate']
+
+
+def reusable_profile(root, apple, bundle_id, cert, certificate_der, *, initialize=False):
+    prefix = PROFILE_PREFIX + cert['id'] + '-'
+    candidates = []
+    for row in list_records(apple, f'bundleIds/{bundle_id}/profiles'):
+        attributes = row['attributes']
+        if not (attributes.get('name', '').startswith(prefix) and attributes.get('profileType') == 'IOS_APP_STORE'
+                and attributes.get('profileState') == 'ACTIVE'):
+            continue
+        try:
+            profile_uuid, expiry = decode_profile(root, row, certificate_der)
+        except ValueError:
+            continue
+        candidates.append((row, profile_uuid, expiry))
+    if candidates:
+        row, profile_uuid, _ = max(candidates, key=lambda item: item[2])
+        # The last decoded candidate may differ from the selected profile.
+        decode_profile(root, row, certificate_der)
+        return row, profile_uuid
+    require(initialize, 'No valid reusable App Store profile is available. Run explicit [signing-setup] initialization or renewal. Daily uploads never create profiles.')
+    row = apple.request('POST', 'profiles', data={'data': {'type': 'profiles', 'attributes': {
+        'name': prefix + uuid.uuid4().hex[:8], 'profileType': 'IOS_APP_STORE'}, 'relationships': {
+        'bundleId': {'data': {'type': 'bundleIds', 'id': bundle_id}},
+        'certificates': {'data': [{'type': 'certificates', 'id': cert['id']}]}}}})['data']
+    profile_uuid, _ = decode_profile(root, row, certificate_der)
+    print('Initialized reusable provisioning profile:', row['id'])
+    return row, profile_uuid
+
+
+def prepare(root, apple, *, initialize=False):
+    # Fail before any Apple request if the one-time signing key is absent/invalid.
+    signing_key = load_signing_key()
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
     run = os.environ.get('GITHUB_RUN_NUMBER', '1')
     attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '1')
@@ -171,45 +301,51 @@ def prepare(root, apple):
     bundle_id = bundles[0]['id']
     capabilities = apple.request('GET', f'bundleIds/{bundle_id}/bundleIdCapabilities')['data']
     require(any(c['attributes']['capabilityType'] == 'PUSH_NOTIFICATIONS' for c in capabilities), 'Enable Push Notifications for the App ID first.')
+    cert, certificate = reusable_certificate(apple, signing_key, initialize=initialize)
+    cert_der = certificate.public_bytes(serialization.Encoding.DER)
+    profile, profile_uuid = reusable_profile(root, apple, bundle_id, cert, cert_der, initialize=initialize)
+    state.update(signing_certificate=cert['id'], signing_profile=profile['id'])
+    save_state(root, state)
+    print('Using reusable signing certificate:', cert['id'], 'profile:', profile['id'])
     write_private(root / 'AuthKey.p8', apple.pem)
-    signing_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, 'NonTo TestFlight CI'),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, TEAM),
-    ])).sign(signing_key, hashes.SHA256())
-    cert = apple.request('POST', 'certificates', data={'data': {'type': 'certificates', 'attributes': {
-        'certificateType': 'DISTRIBUTION', 'csrContent': csr.public_bytes(serialization.Encoding.PEM).decode()}}})['data']
-    state['certificate'] = cert['id']; save_state(root, state)
-    print('Created temporary signing certificate:', cert['id'])
-    cert_der = base64.b64decode(cert['attributes']['certificateContent'], validate=True)
-    certificate = x509.load_der_x509_certificate(cert_der)
-    require(certificate.public_key().public_numbers() == signing_key.public_key().public_numbers(), 'Certificate public key does not match this run.')
-    require(any(a.value == TEAM for a in certificate.subject.get_attributes_for_oid(NameOID.ORGANIZATIONAL_UNIT_NAME)), 'Certificate belongs to another team.')
-    profile = apple.request('POST', 'profiles', data={'data': {'type': 'profiles', 'attributes': {
-        'name': 'NonTo-TF-' + state['run'] + '-' + attempt, 'profileType': 'IOS_APP_STORE'}, 'relationships': {
-        'bundleId': {'data': {'type': 'bundleIds', 'id': bundle_id}},
-        'certificates': {'data': [{'type': 'certificates', 'id': cert['id']}]}}}})['data']
-    state['profile'] = profile['id']; save_state(root, state)
-    print('Created temporary provisioning profile:', profile['id'])
-    profile_path = root / 'NonTo.mobileprovision'
-    write_private(profile_path, base64.b64decode(profile['attributes']['profileContent'], validate=True))
-    decoded = subprocess.run(['security', 'cms', '-D', '-i', str(profile_path)], check=True, capture_output=True).stdout
-    profile_id = validate_profile(plistlib.loads(decoded), cert_der)
-    install = Path.home() / 'Library/MobileDevice/Provisioning Profiles' / (profile_id + '.mobileprovision')
+    install = Path.home() / 'Library/MobileDevice/Provisioning Profiles' / (profile_uuid + '.mobileprovision')
     install.parent.mkdir(parents=True, exist_ok=True)
-    write_private(install, profile_path.read_bytes())
+    require(not install.exists(), 'Runner already has this profile installed; refusing to overwrite existing signing material.')
+    write_private(install, (root / 'NonTo.mobileprovision').read_bytes())
     state['installed_profile'] = str(install); save_state(root, state)
-    password = secrets.token_urlsafe(32)
-    keychain_password = secrets.token_urlsafe(32)
+    password, keychain_password = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     print('::add-mask::' + password); print('::add-mask::' + keychain_password)
     write_private(root / 'Signing.p12', signing_p12(signing_key, certificate, password))
     identity = hashlib.sha1(cert_der).hexdigest().upper()
-    write_private(root / 'ExportOptions.plist', plistlib.dumps(export_options(profile_id, identity)))
-    variables = {'TF_PROFILE_UUID': profile_id, 'TF_SIGNING_IDENTITY': identity, 'TF_P12_PASSWORD': password,
+    write_private(root / 'ExportOptions.plist', plistlib.dumps(export_options(profile_uuid, identity)))
+    variables = {'TF_PROFILE_UUID': profile_uuid, 'TF_SIGNING_IDENTITY': identity, 'TF_P12_PASSWORD': password,
                  'TF_KEYCHAIN_PASSWORD': keychain_password, 'TF_BUILD_NUMBER': state['build']}
     with open(os.environ['GITHUB_ENV'], 'a') as f:
-        for key, value in variables.items():
-            f.write(key + '=' + value + '\n')
+        for name, value in variables.items():
+            f.write(name + '=' + value + '\n')
+
+
+def diagnose(apple):
+    """Read-only public signing metadata. Never read or print signing private keys."""
+    certificates = [row for row in list_records(apple, 'certificates')
+                    if row['attributes'].get('certificateType') in ('DISTRIBUTION', 'IOS_DISTRIBUTION')]
+    print('Distribution certificates visible to this API key:', len(certificates))
+    for row in certificates:
+        attributes = row['attributes']
+        print(json.dumps({'id': row['id'], 'type': attributes.get('certificateType'),
+                          'expires': attributes.get('expirationDate'), 'serial': attributes.get('serialNumber')}, ensure_ascii=True))
+    bundles = apple.request('GET', 'bundleIds', query={'filter[identifier]': BUNDLE})['data']
+    require(len(bundles) == 1, 'NonTo App ID was not found.')
+    for row in list_records(apple, f'bundleIds/{bundles[0]["id"]}/profiles'):
+        attributes = row['attributes']
+        print(json.dumps({'profile': row['id'], 'name': attributes.get('name'), 'state': attributes.get('profileState'),
+                          'expires': attributes.get('expirationDate')}, ensure_ascii=True))
+    apps = apple.request('GET', 'apps', query={'filter[bundleId]': BUNDLE})['data']
+    require(len(apps) == 1, 'NonTo App Store Connect record was not found.')
+    for row in apple.request('GET', 'builds', query={'filter[app]': apps[0]['id'], 'limit': '10'})['data']:
+        attributes = row['attributes']
+        print('Build:', attributes.get('version'), 'processing:', attributes.get('processingState'))
+    print('Read-only diagnosis complete. No certificate/profile was created, revoked, or deleted.')
 
 
 def build_status(apple, state):
@@ -238,63 +374,47 @@ def wait_for_build(root, apple):
     raise ValueError('Upload returned, but Apple processing is still pending. Check TestFlight later; this is not a confirmed successful release.')
 
 
-def preserve_signing(state):
-    message = ('Apple processing is unconfirmed. Preserving temporary signing resources. '
-               f'Build {state["build"]}; certificate: {state.get("certificate")}; profile: {state.get("profile")}. '
-               'Check TestFlight before uploading again. After processing finishes, remove only these temporary resources in Apple Developer.')
-    print('::warning::' + message, flush=True)
-    summary = os.environ.get('GITHUB_STEP_SUMMARY')
-    if summary:
-        with open(summary, 'a') as f:
-            f.write('\n## Signing resources preserved\n\n' + message + '\n')
-
-
-def cleanup(root, apple):
+def cleanup(root):
+    """Remove only this runner's installed copy. Reusable Apple resources stay."""
     if not state_path(root).exists():
         return
     state = json.loads(state_path(root).read_text())
-    require(state.get('team') == TEAM and state.get('bundle') == BUNDLE and state.get('run') == os.environ.get('GITHUB_RUN_ID', 'local'), 'Refusing cleanup of another run\'s signing resources.')
-    if state.get('upload_attempted') and not state.get('processed'):
-        try:
-            status = build_status(apple, state)
-        except AppleUnavailable:
-            preserve_signing(state)
-            return
-        if status not in ('VALID', 'FAILED', 'INVALID'):
-            preserve_signing(state)
-            return
-    failed = False
-    for resource in ('profile', 'certificate'):
-        resource_id = state.get(resource)
-        if resource_id:
-            try:
-                apple.request('DELETE', ('profiles/' if resource == 'profile' else 'certificates/') + resource_id)
-                state.pop(resource); save_state(root, state)
-            except ValueError as error:
-                failed = True; print('Cleanup incomplete:', resource, resource_id, str(error))
+    require(state.get('team') == TEAM and state.get('bundle') == BUNDLE
+            and state.get('run') == os.environ.get('GITHUB_RUN_ID', 'local'),
+            'Refusing cleanup of another run\'s local signing material.')
     if state.get('installed_profile'):
-        Path(state['installed_profile']).unlink(missing_ok=True)
-    require(not failed, 'Some temporary Apple resources require manual cleanup. Existing certificates were not modified.')
+        path = Path(state['installed_profile'])
+        expected = Path.home() / 'Library/MobileDevice/Provisioning Profiles'
+        require(path.parent == expected and re.fullmatch(r'[A-Fa-f0-9-]{36}\.mobileprovision', path.name),
+                'Refusing cleanup outside the runner provisioning-profile directory.')
+        path.unlink(missing_ok=True)
+    print('Runner profile copy removed. Reusable Apple certificate and profile were retained.')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['prepare', 'verify', 'mark-uploading', 'wait', 'cleanup'])
+    parser.add_argument('command', choices=['prepare', 'verify', 'mark-uploading', 'wait', 'cleanup', 'diagnose'])
     parser.add_argument('--root', type=Path)
     parser.add_argument('--archive', type=Path)
     parser.add_argument('--unsigned', action='store_true')
+    parser.add_argument('--initialize-signing', action='store_true', help='Explicitly allow one-time signing setup/renewal; never used by ordinary uploads.')
     args = parser.parse_args()
     try:
         if args.command == 'verify':
             require(args.archive is not None, '--archive is required.')
             verify_archive(args.archive, unsigned=args.unsigned)
+        elif args.command == 'diagnose':
+            diagnose(Apple())
         else:
             require(args.root is not None, '--root is required.')
             if args.command == 'mark-uploading':
                 state = json.loads(state_path(args.root).read_text()); state['upload_attempted'] = True; save_state(args.root, state)
+            elif args.command == 'cleanup':
+                cleanup(args.root)
+            elif args.command == 'prepare':
+                prepare(args.root, Apple(), initialize=args.initialize_signing)
             else:
-                apple = Apple()
-                {'prepare': prepare, 'wait': wait_for_build, 'cleanup': cleanup}[args.command](args.root, apple)
+                wait_for_build(args.root, Apple())
         return 0
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         # Subprocess stderr / API payloads can contain credentials; do not dump them.

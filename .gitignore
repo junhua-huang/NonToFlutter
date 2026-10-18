@@ -52,5 +52,8 @@ app.*.map.json
 # Apple signing and upload credentials stay in GitHub Secrets / runner temp.
 *.p8
 *.p12
+*.key
+*.pem
+*.csr
 *.mobileprovision
 *.xcarchive/

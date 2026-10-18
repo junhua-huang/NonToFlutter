@@ -1,62 +1,112 @@
 # Windows → GitHub → TestFlight 内部测试
 
-此流程打包原生 `NonToFlutter/ios`，连接 `https://www.nonto.online/api` 和 `wss://www.nonto.online/ws`；App ID 为 `online.nonto.native`，Apple Team 为 `B2Y3564MKK`。无需本机安装 Xcode。上传和实际可安装是不同阶段；只有 Apple 处理完成并加入内部测试组后，测试者才可在 TestFlight 安装。
+原生 App 连接 `https://www.nonto.online/api` 和 `wss://www.nonto.online/ws`；Bundle ID 为 `online.nonto.native`，Team 为 `B2Y3564MKK`。Windows 可完成一次性签名配置，GitHub 的 macOS runner 负责构建和上传。
 
-## 1. Apple 后台准备
+## 签名资源长期复用
 
-- 在 Apple Developer 为 App ID 开启 Push Notifications。App Store Connect 已创建匹配的 iOS 应用记录；账号协议已由账号持有人自行确认。
-- 在 App Store Connect 的“用户与访问 → 集成 → App Store Connect API → 团队密钥”创建专用密钥。自动生成发行证书和描述文件需要 Admin 权限；团队密钥覆盖账号全部应用，请只放在本仓库的 Actions Secrets，不公开分享。
-- 这不是 APNs 密钥。APNs `.p8` 保留在 Python 服务器，不能用于签名或上传。iOS 安装包也不包含任何私钥。
+`IOS_SIGNING_KEY` 是发行证书配套的长期 RSA 私钥。日常发布通过 Apple API 按公钥查找匹配的有效发行证书，再获取该 App 对应的、已经验证过的描述文件。**普通上传不会创建、撤销或删除 Apple 证书与描述文件。**
 
-## 2. 配置仓库 Secrets
+仅显式触发 `[signing-setup]`（或手动运行时勾选初始化）才允许创建缺失或已失效的资源。即使重复初始化，已有有效匹配资源也会复用。初始化请求中断后，可用同一私钥再次查找已创建的证书，避免换私钥重复申请。
 
-打开 GitHub 仓库 `junhua-huang/NonToFlutter` → Settings → Secrets and variables → Actions → New repository secret，添加：
+旧版临时方案中，runner 结束时已销毁临时私钥。Apple 只能重新下载公有证书，不能恢复私钥；因此缺少原配私钥的旧证书不能直接用于重新签名。如果你保存了现成的发行 P12，可以导入其中的私钥并复用对应证书。
 
-| 名称 | 值 |
+## 1. 一次性准备长期签名私钥
+
+在 Windows 上更新本仓库的 `ios` 分支，打开仓库目录的 PowerShell，执行：
+
+```powershell
+python -m pip install "cryptography>=45,<47"
+python ios/scripts/create_signing_key.py --output C:\NonToAppleConnect\NonToDistribution.key
+```
+
+脚本只在本机生成 RSA 私钥，不访问 Apple，不创建证书，不显示私钥内容。输出文件已存在时拒绝覆盖，避免意外更换签名身份。请保留安全备份。
+
+如果已有包含私钥的发行 `.p12`，改用：
+
+```powershell
+python ios/scripts/create_signing_key.py --from-p12 C:\NonToAppleConnect\Distribution.p12 --output C:\NonToAppleConnect\NonToDistribution.key
+```
+
+按提示在本机输入 P12 密码（输入隐藏）。不能用只有公钥的 `.cer`、APNs `.p8` 或 App Store Connect `.p8` 替代签名私钥。
+
+## 2. 只配置一次 Actions Secrets
+
+打开 GitHub 仓库 `junhua-huang/NonToFlutter` → Settings → Secrets and variables → Actions。
+
+| Secret | 内容 |
 | --- | --- |
-| `ASC_KEY_ID` | App Store Connect 团队密钥的 Key ID |
-| `ASC_ISSUER_ID` | 同一账号页面的 Issuer ID |
-| `ASC_PRIVATE_KEY` | 对应 `.p8` 文件的完整 PEM 文本，包括 BEGIN/END 行与真实换行 |
+| `ASC_KEY_ID` | App Store Connect 团队 API Key ID，已有配置可继续使用 |
+| `ASC_ISSUER_ID` | 同一账号的 Issuer ID，已有配置可继续使用 |
+| `ASC_PRIVATE_KEY` | 对应 App Store Connect `.p8` 完整 PEM，已有配置可继续使用 |
+| `IOS_SIGNING_KEY` | 上一步本机 `NonToDistribution.key` 的完整 PEM，包含 BEGIN/END 行和真实换行 |
 
-不要上传 `.p8` 到仓库或 Issue。密钥不可用时验证任务只编译检查，上传任务跳过；不会把验证成功说成上传成功。
+可在本机复制签名私钥：
 
-## 3. 触发内部上传
+```powershell
+Get-Content -Raw C:\NonToAppleConnect\NonToDistribution.key | Set-Clipboard
+```
 
-仓库的 `TestFlight Internal` 工作流只处理 `ios` 分支。以 `[testflight]` 为标记的提交触发内部发布；其他提交不会自动上传。
+把剪贴板内容粘贴到新的 `IOS_SIGNING_KEY` Secret。不要发到聊天、Issue 或提交到仓库。APNs 私钥继续保留在 Python 服务器，本方案不更换 APNs Key。
 
-首次流程提交会生成一条验证运行。添加 Secrets 后，打开 Actions → TestFlight Internal → 对应最新代码的运行 → Re-run all jobs。重试会重新读取当前 Secrets，并使用新的构建号。
+当前初始化需要有证书和描述文件管理权限的 API Key；此前配置的专用 Admin 团队密钥可以使用。普通上传只查询签名资源，但上传权限仍须满足 Apple 要求。
 
-以后可在 Windows 的 Git 终端中执行：
+## 3. 只读检查与首次初始化
 
-```sh
+先确认 Apple Developer 的 App ID 已开启 Push Notifications，App Store Connect 中已存在匹配的应用记录，并已处理账号协议。
+
+只读检查不需要 `IOS_SIGNING_KEY`，可以立即执行：
+
+```powershell
+git switch ios
+git pull --ff-only origin ios
+git commit --allow-empty -m "[signing-check] Inspect reusable signing resources"
+git push origin ios
+```
+
+该运行只查询发行证书的 ID、序列号和到期时间、此 App 的描述文件，以及已有构建的处理状态；不会创建或删除资源。Apple API 错误会输出错误码和已识别的原因，不打印原始响应、私钥或 JWT。
+
+配置好长期私钥后，首次初始化并上传：
+
+```powershell
+git commit --allow-empty -m "[signing-setup] Initialize reusable signing and upload internal build"
+git push origin ios
+```
+
+如果 Apple 报证书额度或现有证书冲突，先根据只读检查结果在 Apple Developer 核对旧证书的用途，再处理确实不再使用的证书。不能靠反复点击重跑释放额度，本流程也不会自动撤销证书。旧临时描述文件的名称为 `NonTo-TF-<旧运行ID>-<尝试次数>`；新的长期描述文件名称以 `NonTo-TestFlight-<证书ID>-` 开头。
+
+## 4. 以后发布
+
+以后只需：
+
+```powershell
 git switch ios
 git pull --ff-only origin ios
 git commit --allow-empty -m "[testflight] Upload internal build"
 git push origin ios
 ```
 
-如果工作流已在仓库默认分支注册并显示 Run workflow，也可手动运行并选择 `ios`。GitHub 的 workflow_dispatch 有默认分支要求，所以此流程同时支持提交触发与重试，无需为了发布修改其他平台的默认分支。
+已有签名资源直接复用。若证书、私钥或描述文件不匹配，或资源已过期，普通发布会在归档签名前停止，并给出初始化/续期提示，不会隐式创建替代资源。
 
-## 4. 云端执行与限制
+手动 Run workflow（在默认分支注册后可见）选择 `ios` 即可，日常发布不勾选初始化。重跑旧运行会使用该运行原有的旧版脚本；迁移到本方案后请运行包含本次修复的新提交。
 
-- 验证 Python 发布检查、生成工程一致性及 Xcode 26 的 internal-only 导出能力，先做未签名的内部归档检查。
-- 获取此 App 的已有记录，验证 Push Notifications 能力，创建本次运行专用的 Apple Distribution 证书和 App Store 描述文件。验证团队、App ID、证书关联、有效期和 `aps-environment=production`，使用临时 Keychain 签名。
-- Release 归档明确设置 `NONTO_DISTRIBUTION_CHANNEL=testflight-internal`，保留开发测试提示。普通 App Store Archive 仍执行严格发布检查；不伪造运营资料、备案或服务器验证结果。
-- Xcode 的 `testFlightInternalTestingOnly=true` 限制上传构建只用于内部测试，不能转作外部 TestFlight 或 App Store 正式提交。此限制不表示 App 已完成法律、内容治理或正式发布合规审核。
-- 构建号为本工作流运行序号和重试次数，例如 `1.2`。当前 App 版本为 `1.0.0`。构建号冲突时新建带标记提交；不要反复用同一个已上传构建号。
-- 当前原生 App 的网络和安全存储依赖 Apple 系统能力，仅使用系统加密与摘要，没有自有非豁免加密实现；Info.plist 的 `ITSAppUsesNonExemptEncryption=false` 对应这一范围。新增自有加密、第三方加密库或业务变化时，应重新核对 Apple 出口合规问题，不能沿用未复核的声明。
-- 上传成功后立即写入 Actions 摘要，再独立查询 Apple processingState，最多等待约 10 分钟（正在执行的请求可能额外等待至超时）。连接超时、HTTP 429 和暂时性服务错误会继续查询；权限错误或明确拒绝构建会立即报错。`VALID` 才报告处理完成；失败或超时不声称可安装。没有自动邀请测试者、创建外部公开链接或提交正式审核。
-- 正常完成后，仅删除本次创建的描述文件和发行证书，不触碰其他 App 的现有证书。证书额度已满时失败并要求维护者处理，绝不自动撤销已有证书。
-- 如果上传结果或 Apple 处理状态不确定，包括清理前的状态查询暂时不可用，保留本次 Apple 资源，避免撤销证书使正在处理的上传失效。日志及 Actions 摘要记录构建号与资源 ID，待 Apple 处理完成后可在 Apple Developer 手动核对并清理这些临时资源。先查看 TestFlight 的现有构建，不要因为状态查询失败而直接重复上传。强制终止任务也可能需要手动清理。临时私钥、P12 和 Keychain 不作为 artifact 上传，runner 结束时销毁。
+缺少任一 Secret 时，只做未签名验证，上传跳过，Actions 摘要列出缺少的名称；不能把验证通过当成上传成功。
 
-## 5. 在 iPhone 安装并验证 APNs
+## 5. 云端验证与清理
 
-在 App Store Connect 确认 Apple 处理完成后，打开南图 → TestFlight → 内部测试，创建或选择内部测试组，把该构建和自己的 App Store Connect 用户加入组。即使 Actions 的状态查询失败，已上传的构建仍可能正常处理完毕，以 Apple 后台实际状态为准。按页面要求补齐测试资料、处理提示；在 iPhone 安装 Apple TestFlight 并用获邀账号安装南图。此内部构建不能邀请账号外的普通外部测试者。
+- 运行发布脚本测试、生成工程一致性检查及 Xcode 26 内部归档检查。
+- 验证证书与私钥公钥匹配、团队、有效期，以及描述文件的团队、Bundle ID、证书关联、有效期和 production APNs 权限。
+- 临时 P12 和 Keychain 只用于本次 runner 的导入；证书和配套私钥本身保持不变，P12 不上传为 artifact。
+- Release 归档设置 `NONTO_DISTRIBUTION_CHANNEL=testflight-internal`；保留开发测试说明。普通 App Store Archive 继续执行严格发布检查，不伪造运营资料、备案或服务端验证结果。
+- `testFlightInternalTestingOnly=true` 只允许内部测试，不用于外部 TestFlight 或 App Store 正式发布。
+- 构建号使用工作流运行序号与尝试次数，如 `7.1`。上传成功立即写入摘要，然后独立等待 Apple 处理。暂时性连接故障会重试，只有 `VALID` 才报告处理完成。
+- 清理只移除当前 runner 安装的描述文件副本、临时私钥容器和 Keychain，不调用 Apple 删除接口，也不依赖 Apple 状态查询能否成功。GitHub Secret 里的长期私钥和 Apple 上的签名资源保留以供下次发布。
 
-在南图“设置 → 消息提醒”开启系统通知和系统推送、保存，等待设备绑定后点“发送远程测试通知”。本地测试不能证明 APNs 接通。退到桌面或锁屏后，再验证另一账号的私信提醒、点击进入会话、退出解绑和不重复提醒。Production 密钥用于这种发行签名的 App；开发签名对应 Sandbox，不能混用。
+## 6. iPhone 安装与 APNs 真机验证
 
-## 验证边界
+Apple 处理完成后，在 App Store Connect → 南图 → TestFlight → 内部测试，把构建加入测试组并添加自己的账号；按页面要求补齐测试资料。在 iPhone 的 TestFlight 接受邀请并安装。本流程不自动发送测试者邀请。
 
-未配置 Secrets 时，只能验证脚本、编译和未签名归档。自动签名、Apple API 权限、证书额度、上传与真机投递必须在实际账号配置后验证，不能用 mock 测试代替。云端验证通过也不会自动解决 `COMPLIANCE.md` 中的正式发布待办。
+在南图“设置 → 消息提醒”开启通知并保存，设备绑定后点击“发送远程测试通知”。本地测试不能证明 APNs 已接通。退到桌面或锁屏后，继续验证另一账号的私信提醒、点击进入会话、退出解绑和不重复提醒。
 
-参考：[Apple API 密钥](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/)、[创建证书](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-certificates)、[创建描述文件](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-profiles)、[内部测试](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers/)、[系统加密出口说明](https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations)。
+当前 `ITSAppUsesNonExemptEncryption=false` 对应仅使用 Apple 系统加密和摘要的原生 App；新增加密实现时需重新审核。内部构建不表示已完成 `COMPLIANCE.md` 的正式发布待办。
+
+参考：[Apple 证书查询](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-certificates)、[描述文件查询](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-profiles)、[API 密钥](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/)、[内部测试](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers/)、[GitHub Secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)。

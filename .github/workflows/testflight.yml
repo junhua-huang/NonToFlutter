@@ -3,6 +3,11 @@ on:
   push:
     branches: [ios]
   workflow_dispatch:
+    inputs:
+      initialize_signing:
+        description: 'Explicit one-time signing initialization / renewal'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -10,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   verify:
-    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight]'))
+    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight]') || contains(github.event.head_commit.message, '[signing-setup]'))
     runs-on: macos-26
     timeout-minutes: 20
     outputs:
@@ -29,10 +34,11 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          IOS_SIGNING_KEY: ${{ secrets.IOS_SIGNING_KEY }}
         run: |
           python3 - <<'PY'
           import os
-          names = ('ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY')
+          names = ('ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY', 'IOS_SIGNING_KEY')
           missing = [name for name in names if not os.environ.get(name, '').strip()]
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write('configured=' + ('false' if missing else 'true') + '\n')
@@ -76,6 +82,8 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+      IOS_SIGNING_KEY: ${{ secrets.IOS_SIGNING_KEY }}
+      TF_SIGNING_SETUP: ${{ github.event.inputs.initialize_signing == 'true' || contains(github.event.head_commit.message, '[signing-setup]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -100,8 +108,13 @@ jobs:
         run: |
           echo "TF_ROOT=$RUNNER_TEMP/nonto-testflight" >> "$GITHUB_ENV"
           echo "TF_KEYCHAIN=$RUNNER_TEMP/nonto-testflight.keychain-db" >> "$GITHUB_ENV"
-      - name: Create temporary distribution certificate and APNs-enabled profile
-        run: python3 ios/scripts/testflight.py prepare --root "$TF_ROOT"
+      - name: Reuse distribution certificate and APNs-enabled profile
+        run: |
+          if [ "$TF_SIGNING_SETUP" = "true" ]; then
+            python3 ios/scripts/testflight.py prepare --root "$TF_ROOT" --initialize-signing
+          else
+            python3 ios/scripts/testflight.py prepare --root "$TF_ROOT"
+          fi
       - name: Import signing identity into temporary keychain
         run: |
           security create-keychain -p "$TF_KEYCHAIN_PASSWORD" "$TF_KEYCHAIN"
@@ -131,7 +144,7 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
               f.write('## Apple processing completed\n\nBuild ' + os.environ['TF_BUILD_NUMBER'] + ' is processed. In App Store Connect, open NonTo → TestFlight → Internal Testing and add the build to your internal group. Tester invitations are not sent by this workflow.\n')
           PY
-      - name: Clean up only this run's Apple signing resources
+      - name: Remove runner profile copy and retain reusable Apple signing resources
         if: always()
         run: python3 ios/scripts/testflight.py cleanup --root "$TF_ROOT"
       - name: Remove runner signing material
@@ -145,3 +158,21 @@ jobs:
           if root.exists():
               shutil.rmtree(root)
           PY
+  diagnose-signing:
+    if: github.ref == 'refs/heads/ios' && contains(github.event.head_commit.message, '[signing-check]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'cryptography>=45,<47'
+      - name: Read signing metadata and existing build status without changes
+        run: python3 ios/scripts/testflight.py diagnose

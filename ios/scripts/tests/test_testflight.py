@@ -1,6 +1,7 @@
 import base64
 from datetime import datetime, timedelta
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,7 @@ from urllib.error import HTTPError
 from cryptography import x509
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
@@ -100,7 +101,7 @@ class TestFlightChecks(unittest.TestCase):
             root = Path(temp); tf.save_state(root, {'team': 'OTHER', 'bundle': tf.BUNDLE, 'run': 'local', 'certificate': 'old'})
             apple = Mock()
             with self.assertRaises(ValueError):
-                tf.cleanup(root, apple)
+                tf.cleanup(root)
             apple.request.assert_not_called()
 
     def test_temporary_api_failures_are_distinct_and_mutations_are_not_replayed(self):
@@ -150,37 +151,24 @@ class TestFlightChecks(unittest.TestCase):
             sleep.assert_not_called()
             self.assertNotIn('processed', json.loads(tf.state_path(root).read_text()))
 
-    def test_cleanup_outage_preserves_resources_and_reports_ids_for_recovery(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_cleanup_is_offline_and_never_revokes_reusable_or_legacy_resources(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(tf, 'Apple') as apple:
             root = Path(temp)
             state = {'team': tf.TEAM, 'bundle': tf.BUNDLE, 'run': os.environ.get('GITHUB_RUN_ID', 'local'),
-                     'app': 'own-app', 'build': '2.3', 'upload_attempted': True,
-                     'certificate': 'new-cert', 'profile': 'new-profile'}
+                     'build': '2.3', 'upload_attempted': True, 'certificate': 'legacy-cert',
+                     'profile': 'legacy-profile', 'signing_certificate': 'reusable-cert'}
             tf.save_state(root, state)
-            summary = root / 'summary.md'
-            apple = Mock(); apple.request.side_effect = tf.AppleUnavailable('Timeout')
-            with patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(summary)}):
-                tf.cleanup(root, apple)
+            tf.cleanup(root)
+            apple.assert_not_called()
             self.assertEqual(json.loads(tf.state_path(root).read_text()), state)
-            self.assertEqual(apple.request.call_count, 1)
-            self.assertIn('new-cert', summary.read_text())
-            self.assertIn('new-profile', summary.read_text())
-            self.assertIn('2.3', summary.read_text())
 
-    def test_pending_upload_preserves_signing_and_cleanup_deletes_only_owned_resources(self):
+    def test_cleanup_rejects_profile_path_outside_runner_directory(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            state = {'team': tf.TEAM, 'bundle': tf.BUNDLE, 'run': os.environ.get('GITHUB_RUN_ID', 'local'),
-                     'app': 'own-app', 'build': '1.1', 'upload_attempted': True, 'certificate': 'new-cert', 'profile': 'new-profile'}
-            tf.save_state(root, state)
-            apple = Mock(); apple.request.return_value = {'data': [{'attributes': {'processingState': 'PROCESSING'}}]}
-            tf.cleanup(root, apple)
-            self.assertEqual(apple.request.call_count, 1)
-            self.assertEqual(json.loads(tf.state_path(root).read_text())['certificate'], 'new-cert')
-            state['processed'] = True; tf.save_state(root, state); apple.reset_mock()
-            tf.cleanup(root, apple)
-            self.assertEqual([call.args for call in apple.request.call_args_list], [('DELETE', 'profiles/new-profile'), ('DELETE', 'certificates/new-cert')])
-            self.assertNotIn('certificate', json.loads(tf.state_path(root).read_text()))
+            root = Path(temp); victim = root / 'keep.key'; victim.write_text('fixture')
+            tf.save_state(root, {'team': tf.TEAM, 'bundle': tf.BUNDLE,
+                                'run': os.environ.get('GITHUB_RUN_ID', 'local'), 'installed_profile': str(victim)})
+            with self.assertRaises(ValueError): tf.cleanup(root)
+            self.assertTrue(victim.exists())
 
     def test_credential_files_are_owner_only_and_redirects_are_refused(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -201,3 +189,151 @@ class TestFlightChecks(unittest.TestCase):
         self.assertEqual(restored_cert.fingerprint(hashes.SHA256()), cert.fingerprint(hashes.SHA256()))
         with self.assertRaises(ValueError):
             pkcs12.load_key_and_certificates(data, b'wrong-password')
+
+
+class ReusableSigningChecks(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cls.other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    def certificate(self, key=None, *, expired=False, team=tf.TEAM):
+        key = key or self.key
+        subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Synthetic distribution'),
+                            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, team)])
+        now = datetime.now()
+        return (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
+                .serial_number(1).not_valid_before(now - timedelta(days=2))
+                .not_valid_after(now + timedelta(days=-1 if expired else 30)).sign(key, hashes.SHA256()))
+
+    def record(self, key=None, **kwargs):
+        cert = self.certificate(key, **kwargs)
+        return {'id': 'OWNCERT', 'attributes': {'certificateType': 'DISTRIBUTION',
+                'certificateContent': base64.b64encode(cert.public_bytes(serialization.Encoding.DER)).decode()}}
+
+    def test_daily_reuse_never_creates_a_certificate_even_in_initialization_mode(self):
+        for initialize in (False, True):
+            apple = Mock(); apple.request.return_value = {'data': [self.record()]}
+            row, certificate = tf.reusable_certificate(apple, self.key, initialize=initialize)
+            self.assertEqual(row['id'], 'OWNCERT'); tf.validate_certificate(certificate, self.key)
+            self.assertEqual([call.args for call in apple.request.call_args_list], [('GET', 'certificates')])
+
+    def test_missing_expired_wrong_team_and_wrong_key_never_trigger_daily_creation(self):
+        for records in [[], [self.record(expired=True)], [self.record(team='OTHER')], [self.record(self.other_key)]]:
+            apple = Mock(); apple.request.return_value = {'data': records}
+            with self.assertRaisesRegex(ValueError, 'Daily uploads never create'):
+                tf.reusable_certificate(apple, self.key)
+            self.assertEqual(apple.request.call_count, 1)
+
+    def test_explicit_initialization_creates_once_and_reuses_afterward(self):
+        row = self.record(); apple = Mock()
+        apple.request.side_effect = [{'data': []}, {'data': row}]
+        created, _ = tf.reusable_certificate(apple, self.key, initialize=True)
+        self.assertEqual(created['id'], row['id'])
+        csr_text = apple.request.call_args.kwargs['data']['data']['attributes']['csrContent']
+        csr = x509.load_pem_x509_csr(csr_text.encode())
+        self.assertEqual(csr.public_key().public_numbers(), self.key.public_key().public_numbers())
+        self.assertTrue(csr.is_signature_valid)
+        apple.request.side_effect = None; apple.request.return_value = {'data': [row]}; apple.reset_mock()
+        tf.reusable_certificate(apple, self.key, initialize=True)
+        self.assertEqual([call.args for call in apple.request.call_args_list], [('GET', 'certificates')])
+
+    def test_profiles_reuse_validated_matching_profile_and_create_only_explicitly(self):
+        row = {'id': 'PROFILE', 'attributes': {'name': tf.PROFILE_PREFIX + 'OWNCERT-1234',
+                                               'profileType': 'IOS_APP_STORE', 'profileState': 'ACTIVE'}}
+        with tempfile.TemporaryDirectory() as temp, patch.object(tf, 'decode_profile', return_value=('uuid', datetime.now())):
+            root = Path(temp); apple = Mock(); apple.request.return_value = {'data': [row]}
+            for initialize in (False, True):
+                apple.reset_mock()
+                selected, _ = tf.reusable_profile(root, apple, 'bundle', {'id': 'OWNCERT'}, b'der', initialize=initialize)
+                self.assertEqual(selected['id'], 'PROFILE')
+                self.assertTrue(all(call.args[0] == 'GET' for call in apple.request.call_args_list))
+            apple.request.return_value = {'data': []}
+            with self.assertRaisesRegex(ValueError, 'Daily uploads never create'):
+                tf.reusable_profile(root, apple, 'bundle', {'id': 'OWNCERT'}, b'der')
+            apple.request.side_effect = [{'data': []}, {'data': row}]
+            tf.reusable_profile(root, apple, 'bundle', {'id': 'OWNCERT'}, b'der', initialize=True)
+            self.assertEqual(apple.request.call_args.args, ('POST', 'profiles'))
+
+    def test_profile_validation_rejects_mismatch_without_creating_replacement(self):
+        row = {'id': 'PROFILE', 'attributes': {'name': tf.PROFILE_PREFIX + 'OWNCERT-1234',
+                                               'profileType': 'IOS_APP_STORE', 'profileState': 'ACTIVE'}}
+        with tempfile.TemporaryDirectory() as temp, patch.object(tf, 'decode_profile', side_effect=ValueError('Wrong team')):
+            apple = Mock(); apple.request.return_value = {'data': [row]}
+            with self.assertRaises(ValueError): tf.reusable_profile(Path(temp), apple, 'bundle', {'id': 'OWNCERT'}, b'der')
+            self.assertEqual(apple.request.call_count, 1)
+
+    def test_signing_key_is_required_and_apns_key_is_rejected_before_api_calls(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for pem in ['', 'malformed', ec.generate_private_key(ec.SECP256R1()).private_bytes(
+                    serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()]:
+                apple = Mock()
+                with patch.dict(os.environ, {'IOS_SIGNING_KEY': pem}), self.assertRaises(ValueError):
+                    tf.prepare(Path(temp) / 'signing', apple)
+                apple.request.assert_not_called()
+
+    def test_lookup_follows_safe_pagination_and_never_creates_on_incomplete_results(self):
+        apple = Mock(); apple.request.side_effect = [
+            {'data': [], 'links': {'next': tf.API + 'certificates?cursor=next'}}, {'data': [self.record()]}]
+        tf.reusable_certificate(apple, self.key)
+        self.assertEqual(apple.request.call_count, 2)
+        self.assertEqual(apple.request.call_args.kwargs['query'], {'cursor': 'next'})
+        apple.request.side_effect = None
+        apple.request.return_value = {'data': [], 'links': {'next': 'https://other.test/certificates'}}
+        with self.assertRaises(ValueError): tf.reusable_certificate(apple, self.key, initialize=True)
+        self.assertTrue(all(call.args[0] == 'GET' for call in apple.request.call_args_list))
+
+    def test_apple_error_diagnosis_reports_known_causes_without_raw_secrets(self):
+        for detail, expected in [('You already have the maximum number of distribution certificates. token=secret', 'certificate limit'),
+                                 ('The CSR is invalid; secret', 'signing request'),
+                                 ('Accept your agreement secret', 'agreement')]:
+            body = json.dumps({'errors': [{'code': 'ENTITY_ERROR.ATTRIBUTE.INVALID', 'detail': detail}]}).encode()
+            error = HTTPError('https://secret.test', 409, 'secret', {}, io.BytesIO(body))
+            message = tf.apple_error_diagnostic(error)
+            self.assertIn(expected, message); self.assertIn('ENTITY_ERROR.ATTRIBUTE.INVALID', message)
+            self.assertNotIn('secret', message)
+
+    def test_local_key_creation_is_stable_and_never_overwrites(self):
+        spec = importlib.util.spec_from_file_location('create_signing_key', Path(__file__).parents[1] / 'create_signing_key.py')
+        helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'signing.key'
+            fingerprint = helper.create_key(path)
+            saved = path.read_bytes(); self.assertEqual(len(fingerprint), 64)
+            self.assertIsInstance(serialization.load_pem_private_key(saved, password=None), rsa.RSAPrivateKey)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            with self.assertRaises(ValueError): helper.create_key(path)
+            self.assertEqual(path.read_bytes(), saved)
+
+    def test_two_upload_preparations_keep_same_identity_and_make_only_get_requests(self):
+        row = self.record()
+        cert_der = base64.b64decode(row['attributes']['certificateContent'])
+        profile = {'UUID': '11111111-2222-3333-4444-555555555555', 'TeamIdentifier': [tf.TEAM],
+                   'DeveloperCertificates': [cert_der], 'ExpirationDate': datetime.now() + timedelta(days=2),
+                   'Entitlements': {'application-identifier': tf.TEAM + '.' + tf.BUNDLE,
+                                    'com.apple.developer.team-identifier': tf.TEAM,
+                                    'aps-environment': 'production', 'get-task-allow': False}}
+        profile_row = {'id': 'PROFILE', 'attributes': {'name': tf.PROFILE_PREFIX + 'OWNCERT-stable',
+                       'profileType': 'IOS_APP_STORE', 'profileState': 'ACTIVE',
+                       'profileContent': base64.b64encode(b'synthetic-cms').decode()}}
+        responses = {'apps': [{'id': 'app'}], 'bundleIds': [{'id': 'bundle'}],
+                     'bundleIds/bundle/bundleIdCapabilities': [{'attributes': {'capabilityType': 'PUSH_NOTIFICATIONS'}}],
+                     'certificates': [row], 'bundleIds/bundle/profiles': [profile_row]}
+        def request(method, resource, **kwargs):
+            self.assertEqual(method, 'GET')
+            return {'data': responses[resource]}
+        apple = Mock(); apple.pem = b'synthetic-asc-key'; apple.request.side_effect = request
+        pem = self.key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+        with tempfile.TemporaryDirectory() as temp, patch.object(tf.subprocess, 'run', return_value=Mock(stdout=plistlib.dumps(profile))):
+            parent = Path(temp)
+            with patch.dict(os.environ, {'HOME': str(parent), 'IOS_SIGNING_KEY': pem, 'GITHUB_ENV': str(parent / 'env'),
+                                         'GITHUB_RUN_ID': 'synthetic-run', 'GITHUB_RUN_NUMBER': '7', 'GITHUB_RUN_ATTEMPT': '1'}):
+                for index in (1, 2):
+                    root = parent / str(index); tf.prepare(root, apple)
+                    state = json.loads(tf.state_path(root).read_text())
+                    self.assertEqual(state['signing_certificate'], 'OWNCERT')
+                    self.assertEqual(state['signing_profile'], 'PROFILE')
+                    self.assertTrue(Path(state['installed_profile']).exists())
+                    tf.cleanup(root)
+                    self.assertFalse(Path(state['installed_profile']).exists())
+        self.assertTrue(all(call.args[0] == 'GET' for call in apple.request.call_args_list))
