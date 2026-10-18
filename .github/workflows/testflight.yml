@@ -118,6 +118,11 @@ jobs:
         run: |
           python3 ios/scripts/testflight.py mark-uploading --root "$TF_ROOT"
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Nonto.xcarchive" -exportPath "$RUNNER_TEMP/Nonto-export" -exportOptionsPlist "$TF_ROOT/ExportOptions.plist" -allowProvisioningUpdates -authenticationKeyPath "$TF_ROOT/AuthKey.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          python3 - <<'PY'
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## Upload succeeded\n\nBuild ' + os.environ['TF_BUILD_NUMBER'] + ' was uploaded to Apple. Processing and tester availability are not yet confirmed. If a later status query fails, check this build in App Store Connect → TestFlight before uploading again.\n')
+          PY
       - name: Wait for Apple processing
         run: |
           python3 ios/scripts/testflight.py wait --root "$TF_ROOT"

@@ -45,13 +45,13 @@ git push origin ios
 - Xcode 的 `testFlightInternalTestingOnly=true` 限制上传构建只用于内部测试，不能转作外部 TestFlight 或 App Store 正式提交。此限制不表示 App 已完成法律、内容治理或正式发布合规审核。
 - 构建号为本工作流运行序号和重试次数，例如 `1.2`。当前 App 版本为 `1.0.0`。构建号冲突时新建带标记提交；不要反复用同一个已上传构建号。
 - 当前原生 App 的网络和安全存储依赖 Apple 系统能力，仅使用系统加密与摘要，没有自有非豁免加密实现；Info.plist 的 `ITSAppUsesNonExemptEncryption=false` 对应这一范围。新增自有加密、第三方加密库或业务变化时，应重新核对 Apple 出口合规问题，不能沿用未复核的声明。
-- 上传后最多等待约 10 分钟查询 Apple processingState。`VALID` 才报告处理完成；失败或超时不声称可安装。没有自动邀请测试者、创建外部公开链接或提交正式审核。
+- 上传成功后立即写入 Actions 摘要，再独立查询 Apple processingState，最多等待约 10 分钟（正在执行的请求可能额外等待至超时）。连接超时、HTTP 429 和暂时性服务错误会继续查询；权限错误或明确拒绝构建会立即报错。`VALID` 才报告处理完成；失败或超时不声称可安装。没有自动邀请测试者、创建外部公开链接或提交正式审核。
 - 正常完成后，仅删除本次创建的描述文件和发行证书，不触碰其他 App 的现有证书。证书额度已满时失败并要求维护者处理，绝不自动撤销已有证书。
-- 如果上传结果或 Apple 处理状态不确定，保留本次 Apple 资源，避免撤销证书使正在处理的上传失效。日志打印资源 ID，待 Apple 处理完成后可在 Apple Developer 手动核对并清理这些临时资源。强制终止任务也可能需要手动清理。临时私钥、P12 和 Keychain 不作为 artifact 上传，runner 结束时销毁。
+- 如果上传结果或 Apple 处理状态不确定，包括清理前的状态查询暂时不可用，保留本次 Apple 资源，避免撤销证书使正在处理的上传失效。日志及 Actions 摘要记录构建号与资源 ID，待 Apple 处理完成后可在 Apple Developer 手动核对并清理这些临时资源。先查看 TestFlight 的现有构建，不要因为状态查询失败而直接重复上传。强制终止任务也可能需要手动清理。临时私钥、P12 和 Keychain 不作为 artifact 上传，runner 结束时销毁。
 
 ## 5. 在 iPhone 安装并验证 APNs
 
-工作流确认 Apple 处理完成后，打开 App Store Connect → 南图 → TestFlight → 内部测试，创建或选择内部测试组，把该构建和自己的 App Store Connect 用户加入组。按页面要求补齐测试资料、处理提示；在 iPhone 安装 Apple TestFlight 并用获邀账号安装南图。此内部构建不能邀请账号外的普通外部测试者。
+在 App Store Connect 确认 Apple 处理完成后，打开南图 → TestFlight → 内部测试，创建或选择内部测试组，把该构建和自己的 App Store Connect 用户加入组。即使 Actions 的状态查询失败，已上传的构建仍可能正常处理完毕，以 Apple 后台实际状态为准。按页面要求补齐测试资料、处理提示；在 iPhone 安装 Apple TestFlight 并用获邀账号安装南图。此内部构建不能邀请账号外的普通外部测试者。
 
 在南图“设置 → 消息提醒”开启系统通知和系统推送、保存，等待设备绑定后点“发送远程测试通知”。本地测试不能证明 APNs 接通。退到桌面或锁屏后，再验证另一账号的私信提醒、点击进入会话、退出解绑和不重复提醒。Production 密钥用于这种发行签名的 App；开发签名对应 Sandbox，不能混用。
 

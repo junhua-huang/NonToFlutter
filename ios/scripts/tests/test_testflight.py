@@ -103,6 +103,70 @@ class TestFlightChecks(unittest.TestCase):
                 tf.cleanup(root, apple)
             apple.request.assert_not_called()
 
+    def test_temporary_api_failures_are_distinct_and_mutations_are_not_replayed(self):
+        apple = tf.Apple.__new__(tf.Apple)
+        apple.key = ec.generate_private_key(ec.SECP256R1())
+        apple.key_id = 'ABC123DEF4'; apple.issuer = 'synthetic-issuer'; apple.opener = Mock()
+        for error in [TimeoutError('secret'), HTTPError('https://secret.test', 429, 'secret', {}, None),
+                      HTTPError('https://secret.test', 503, 'secret', {}, None)]:
+            with self.subTest(error=type(error).__name__):
+                apple.opener.reset_mock(); apple.opener.open.side_effect = error
+                with self.assertRaises(tf.AppleUnavailable) as failure:
+                    apple.request('POST', 'certificates', data={'data': {}})
+                self.assertNotIn('secret', str(failure.exception))
+                self.assertEqual(apple.opener.open.call_count, 1)
+
+    def test_processing_recovers_after_timeout_without_uploading_again(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(tf.time, 'sleep'):
+            root = Path(temp); tf.save_state(root, {'app': 'own-app', 'build': '2.3'})
+            apple = Mock()
+            apple.request.side_effect = [tf.AppleUnavailable('Timeout'), {'data': []},
+                                        {'data': [{'attributes': {'processingState': 'VALID'}}]}]
+            tf.wait_for_build(root, apple)
+            self.assertTrue(json.loads(tf.state_path(root).read_text())['processed'])
+            self.assertEqual(apple.request.call_count, 3)
+            self.assertTrue(all(call.args == ('GET', 'builds') for call in apple.request.call_args_list))
+
+    def test_processing_outage_is_bounded_and_never_marked_successful(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(tf.time, 'sleep'), \
+                patch.object(tf.time, 'monotonic', side_effect=[0, 0, 601]):
+            root = Path(temp); tf.save_state(root, {'app': 'own-app', 'build': '2.3'})
+            apple = Mock(); apple.request.side_effect = tf.AppleUnavailable('Timeout')
+            with self.assertRaisesRegex(ValueError, 'still pending'):
+                tf.wait_for_build(root, apple)
+            self.assertNotIn('processed', json.loads(tf.state_path(root).read_text()))
+            self.assertEqual(apple.request.call_count, 1)
+
+    def test_processing_does_not_retry_access_errors_or_rejected_builds(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(tf.time, 'sleep') as sleep:
+            root = Path(temp); tf.save_state(root, {'app': 'own-app', 'build': '2.3'})
+            apple = Mock(); apple.request.side_effect = ValueError('HTTP 403')
+            with self.assertRaisesRegex(ValueError, 'HTTP 403'):
+                tf.wait_for_build(root, apple)
+            apple.request.side_effect = None
+            apple.request.return_value = {'data': [{'attributes': {'processingState': 'INVALID'}}]}
+            with self.assertRaisesRegex(ValueError, 'Apple rejected'):
+                tf.wait_for_build(root, apple)
+            sleep.assert_not_called()
+            self.assertNotIn('processed', json.loads(tf.state_path(root).read_text()))
+
+    def test_cleanup_outage_preserves_resources_and_reports_ids_for_recovery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            state = {'team': tf.TEAM, 'bundle': tf.BUNDLE, 'run': os.environ.get('GITHUB_RUN_ID', 'local'),
+                     'app': 'own-app', 'build': '2.3', 'upload_attempted': True,
+                     'certificate': 'new-cert', 'profile': 'new-profile'}
+            tf.save_state(root, state)
+            summary = root / 'summary.md'
+            apple = Mock(); apple.request.side_effect = tf.AppleUnavailable('Timeout')
+            with patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(summary)}):
+                tf.cleanup(root, apple)
+            self.assertEqual(json.loads(tf.state_path(root).read_text()), state)
+            self.assertEqual(apple.request.call_count, 1)
+            self.assertIn('new-cert', summary.read_text())
+            self.assertIn('new-profile', summary.read_text())
+            self.assertIn('2.3', summary.read_text())
+
     def test_pending_upload_preserves_signing_and_cleanup_deletes_only_owned_resources(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

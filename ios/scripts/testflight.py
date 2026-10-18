@@ -61,6 +61,10 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+class AppleUnavailable(ValueError):
+    """A temporary API failure; callers may retry read-only status checks."""
+
+
 class Apple:
     def __init__(self):
         self.key_id = os.environ.get('ASC_KEY_ID', '').strip()
@@ -88,9 +92,11 @@ class Apple:
                 return json.loads(raw) if raw else {}
         except HTTPError as error:
             # Never expose response bodies, JWTs, private keys, or request headers.
+            if error.code in (408, 429, 500, 502, 503, 504):
+                raise AppleUnavailable(f'Apple API {method} {resource}: temporary HTTP {error.code}.') from None
             raise ValueError(f'Apple API {method} {resource}: HTTP {error.code}. Check API access, agreements, and certificate quotas in Apple Developer.') from None
         except (URLError, TimeoutError, OSError):
-            raise ValueError('Apple API connection failed; no credential details were logged.') from None
+            raise AppleUnavailable('Apple API connection failed; no credential details were logged.') from None
 
 
 def validate_profile(profile, certificate):
@@ -214,8 +220,14 @@ def build_status(apple, state):
 
 def wait_for_build(root, apple):
     state = json.loads(state_path(root).read_text())
-    for _ in range(30):
-        status = build_status(apple, state)
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        try:
+            status = build_status(apple, state)
+        except AppleUnavailable as error:
+            print('Apple processing query temporarily unavailable; retrying:', error, flush=True)
+            time.sleep(20)
+            continue
         print('Apple build processing:', status, flush=True)
         if status == 'VALID':
             state['processed'] = True; save_state(root, state)
@@ -226,16 +238,30 @@ def wait_for_build(root, apple):
     raise ValueError('Upload returned, but Apple processing is still pending. Check TestFlight later; this is not a confirmed successful release.')
 
 
+def preserve_signing(state):
+    message = ('Apple processing is unconfirmed. Preserving temporary signing resources. '
+               f'Build {state["build"]}; certificate: {state.get("certificate")}; profile: {state.get("profile")}. '
+               'Check TestFlight before uploading again. After processing finishes, remove only these temporary resources in Apple Developer.')
+    print('::warning::' + message, flush=True)
+    summary = os.environ.get('GITHUB_STEP_SUMMARY')
+    if summary:
+        with open(summary, 'a') as f:
+            f.write('\n## Signing resources preserved\n\n' + message + '\n')
+
+
 def cleanup(root, apple):
     if not state_path(root).exists():
         return
     state = json.loads(state_path(root).read_text())
     require(state.get('team') == TEAM and state.get('bundle') == BUNDLE and state.get('run') == os.environ.get('GITHUB_RUN_ID', 'local'), 'Refusing cleanup of another run\'s signing resources.')
     if state.get('upload_attempted') and not state.get('processed'):
-        status = build_status(apple, state)
+        try:
+            status = build_status(apple, state)
+        except AppleUnavailable:
+            preserve_signing(state)
+            return
         if status not in ('VALID', 'FAILED', 'INVALID'):
-            print('Apple processing is unconfirmed. Preserving temporary signing resources to avoid invalidating a pending build:')
-            print('certificate:', state.get('certificate'), 'profile:', state.get('profile'))
+            preserve_signing(state)
             return
     failed = False
     for resource in ('profile', 'certificate'):
