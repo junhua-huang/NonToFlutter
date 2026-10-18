@@ -14,17 +14,23 @@ struct MessagesView: View {
             ForEach(resource.items) { conversation in
                 NavigationLink { ChatRoomView(conversation: conversation) } label: {
                     HStack(spacing: 12) {
-                        AvatarView(url: conversation.avatar, name: conversation.name)
+                        AvatarView(url: conversation.avatar, name: conversation.name, size: 50)
                         VStack(alignment: .leading, spacing: 5) {
                             HStack { Text(conversation.name).font(.headline); Spacer(); if let d = conversation.last.date { Text(d, style: .relative).font(.caption2).foregroundStyle(.secondary) } }
-                            Text(conversation.last.recalled ? "消息已撤回" : preview(conversation.last)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            Text(conversation.last.recalled ? "消息已撤回" : preview(conversation.last))
+                                .font(.subheadline.weight(conversation.unread > 0 ? .medium : .regular))
+                                .foregroundStyle(conversation.unread > 0 ? Color.primary : Color.secondary).lineLimit(2)
                         }
-                        if conversation.unread > 0 { Text("\(conversation.unread)").font(.caption.bold()).padding(6).background(Color.brand, in: Capsule()).foregroundStyle(.white) }
-                    }.padding(.vertical, 6)
+                        if conversation.unread > 0 {
+                            Text(conversation.unread > 99 ? "99+" : "\(conversation.unread)").font(.caption2.bold())
+                                .padding(.horizontal, 7).padding(.vertical, 4).background(Color.brand.opacity(0.15), in: Capsule())
+                                .foregroundStyle(.primary).accessibilityLabel("\(conversation.unread) 条未读消息")
+                        }
+                    }.padding(.vertical, 10)
                 }
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
-        }.listStyle(.plain).navigationTitle("消息")
+        }.timelineList().navigationTitle("私信").navigationBarTitleDisplayMode(.inline)
             .toolbar { NavigationLink { FriendsView(session: session) } label: { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
@@ -110,10 +116,19 @@ private struct ChatRoomContent: View {
             }
         }
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 8) {
+                    AvatarView(url: conversation.avatar, name: conversation.name, size: 30)
+                    Text(conversation.name).font(.headline).lineLimit(1)
+                }.accessibilityElement(children: .combine)
+            }
             if communityID == nil, conversation.other.id > 0 {
-                NavigationLink { ProfileView(userID: conversation.other.id) } label: { Image(systemName: "person.crop.circle") }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { ProfileView(userID: conversation.other.id) } label: { Image(systemName: "info.circle") }
                     .accessibilityLabel("聊天对象资料、举报与屏蔽")
+                }
             }
         }
         .safeAreaInset(edge: .bottom) {

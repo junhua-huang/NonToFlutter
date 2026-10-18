@@ -8,7 +8,7 @@ objects = {
 01371748B8549E373AAFCB57 = {isa = PBXBuildFile; fileRef = 5A63C5C7E5D096D30C2C3E27; };
 0C04B6CD1F0159BB4BC8A77E = {isa = PBXBuildFile; fileRef = 8A4AA1DB8E9E84795C1981AF; };
 12D04D787E90C9B967248BFD = {isa = XCConfigurationList; buildConfigurations = (877A6BA951A2EA0025A2ABE8, 959134B361DD7E21ADEA3164,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-156052F04525D0F710673CF0 = {isa = PBXGroup; name = "Tests"; children = (339F185589ADF1C06880185A, 80C1A754EBA6B8B4A88D894E, 287C21C1BD147813A3E1A2BC, F868C652134E87F1230C4B88, 670C6E333BC7974495E9C712, 207A8AB513ACD481892762C2, CE855BCAC3D7A1BD899C7736,); sourceTree = "<group>"; };
+156052F04525D0F710673CF0 = {isa = PBXGroup; name = "Tests"; children = (339F185589ADF1C06880185A, 80C1A754EBA6B8B4A88D894E, 287C21C1BD147813A3E1A2BC, F868C652134E87F1230C4B88, AC30BE198C76D9985598F5D6, 670C6E333BC7974495E9C712, 207A8AB513ACD481892762C2, CE855BCAC3D7A1BD899C7736,); sourceTree = "<group>"; };
 16A9186D49C6724845AB6B95 = {isa = PBXBuildFile; fileRef = E8960046BC0254BC231E422B; };
 18B6D1D7A21ADD37511234E2 = {isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = ("$(SRCROOT)/scripts/check_compliance.py", "$(SRCROOT)/Nonto/Resources/Compliance.json", "$(SRCROOT)/Nonto/Resources/PrivacyInfo.xcprivacy", "$(SRCROOT)/Nonto/Resources/privacy.txt", "$(SRCROOT)/Nonto/Resources/terms.txt",); outputPaths = (); name = "Check release disclosures"; runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "if [ \"$ACTION\" = \"install\" ]; then\n  if [ \"$NONTO_DISTRIBUTION_CHANNEL\" = \"testflight-internal\" ]; then\n    echo \"Internal TestFlight only: outstanding release disclosures remain unresolved.\"\n    /usr/bin/env python3 \"$SRCROOT/scripts/check_compliance.py\"\n  else\n    /usr/bin/env python3 \"$SRCROOT/scripts/check_compliance.py\" --release\n  fi\nfi"; alwaysOutOfDate = 1; };
 1E6B2FF8987D490BDE15D9D1 = {isa = PBXBuildFile; fileRef = 46CE7F286C03C46DF06D2506; };
@@ -26,6 +26,7 @@ objects = {
 2BD6B9B82414E6AB1198F133 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 2D85D4561FDAA4FDCED893BE = {isa = PBXBuildFile; fileRef = 287C21C1BD147813A3E1A2BC; };
 2DA720A20D66388CCF73020E = {isa = PBXBuildFile; fileRef = 207A8AB513ACD481892762C2; };
+2E127305AEE3CDA9E5B171F1 = {isa = PBXBuildFile; fileRef = AC30BE198C76D9985598F5D6; };
 32995943DE67267A65D32CA9 = {isa = XCConfigurationList; buildConfigurations = (3CF6A4F2E05B3AAE7E2CBFEE, 23FB2CAEB38545C3793097DD,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 33765F539F08A292E8243A2B = {isa = PBXBuildFile; fileRef = F868C652134E87F1230C4B88; };
 339F185589ADF1C06880185A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/APIClientTests.swift"; sourceTree = "<group>"; };
@@ -84,10 +85,11 @@ A024F06580C79B7582C3806A = {isa = PBXGroup; name = "Resources"; children = (4B0C
 A2F92F45F68E63300DF98106 = {isa = PBXBuildFile; fileRef = 971BD8F51E9F5787F8215EBC; };
 A5435AB28C78CD56609E63FE = {isa = PBXBuildFile; fileRef = 39DA7DBFCE683231040B77A6; };
 ABA0ABE524670BC64A89D1D9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/CommunityViews.swift"; sourceTree = "<group>"; };
+AC30BE198C76D9985598F5D6 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LayoutSnapshotTests.swift"; sourceTree = "<group>"; };
 B2AE51CE5B928B47A2C8D8B4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/PushDestinationView.swift"; sourceTree = "<group>"; };
 B4343C19535B18410503AED7 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CLANG_ENABLE_MODULES = "YES"; CODE_SIGN_STYLE = "Automatic"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; GENERATE_INFOPLIST_FILE = "YES"; IPHONEOS_DEPLOYMENT_TARGET = "26.0"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; PRODUCT_BUNDLE_IDENTIFIER = "online.nonto.native.tests"; PRODUCT_NAME = "NontoTests"; SDKROOT = "iphoneos"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = "NO"; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = "5.0"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nonto.app/Nonto"; TEST_TARGET_NAME = "Nonto";}; name = Release; };
 B6CDB6E5D160E013280D3C68 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nonto.app; sourceTree = BUILT_PRODUCTS_DIR; };
-B6F43314D0693B2B792DAE17 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (FD82AB5DD1BF6AE39AE85460, CE720FCEE2BE140C651BE473, 2D85D4561FDAA4FDCED893BE, 33765F539F08A292E8243A2B, 879FEE2D34DE09493EF470C1, 2DA720A20D66388CCF73020E, 47852831EF22151942784191,); runOnlyForDeploymentPostprocessing = 0; };
+B6F43314D0693B2B792DAE17 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (FD82AB5DD1BF6AE39AE85460, CE720FCEE2BE140C651BE473, 2D85D4561FDAA4FDCED893BE, 33765F539F08A292E8243A2B, 2E127305AEE3CDA9E5B171F1, 879FEE2D34DE09493EF470C1, 2DA720A20D66388CCF73020E, 47852831EF22151942784191,); runOnlyForDeploymentPostprocessing = 0; };
 BB71755FD3C9161CB39AEB71 = {isa = PBXGroup; name = "Nonto"; children = (D45F72567C128575D32721F6, A024F06580C79B7582C3806A, 156052F04525D0F710673CF0, 5151B46607EBC8890D8DFCC2,); sourceTree = "<group>"; };
 BC5516F1647B2F78FC1E7FAE = {isa = PBXBuildFile; fileRef = CB0BD98446D8935B9477B4EF; };
 BDE53D6B77273584A6FE6625 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Nonto/Resources/Nonto.entitlements"; sourceTree = "<group>"; };

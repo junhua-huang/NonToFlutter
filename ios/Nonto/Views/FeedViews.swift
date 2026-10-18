@@ -7,14 +7,20 @@ struct FeedView: View {
     @State private var filter = 0
     private var path: String { filter == 0 ? "/recommendations/feed" : (filter == 1 ? "/posts/" : "/posts/related-to-me") }
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("动态范围", selection: $filter) { Text("推荐").tag(0); Text("最新").tag(1); Text("与我相关").tag(2) }.pickerStyle(.segmented).padding()
-            PostList(session: session, path: path).id(filter)
+        PostList(session: session, path: path).id(filter)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            TimelineTabs(title: "动态范围", tabs: [(0, "推荐"), (1, "最新"), (2, "与你相关")], selection: $filter)
         }
-        .navigationTitle("南图")
+        .overlay(alignment: .bottomTrailing) { ComposeButton(action: compose).padding(18) }
+        .navigationTitle("南图").navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { NavigationLink { CommunityListView(session: session) } label: { Image(systemName: "person.3") }.accessibilityLabel("社群") }
-            ToolbarItem(placement: .topBarTrailing) { Button(action: compose) { Image(systemName: "square.and.pencil") }.accessibilityLabel("发布动态") }
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink { ProfileView(userID: session.user?.id ?? 0) } label: {
+                    AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 30)
+                }.accessibilityLabel("我的主页")
+            }
+            ToolbarItem(placement: .principal) { Text("南图").font(.headline.weight(.heavy)).foregroundStyle(Color.brand) }
+            ToolbarItem(placement: .topBarTrailing) { NavigationLink { CommunityListView(session: session) } label: { Image(systemName: "person.2") }.accessibilityLabel("社群") }
         }
     }
 }
@@ -30,9 +36,9 @@ struct PostList: View {
     var body: some View {
         List {
             if let header { header.listRowInsets(EdgeInsets()).listRowSeparator(.hidden) }
-            ForEach(resource.items) { post in PostCard(post: post).listRowSeparator(.hidden).listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)) }
+            ForEach(resource.items) { post in PostCard(post: post).timelinePostRow() }
             ResourceFooter(resource: resource, emptyTitle: "还没有动态", emptyDescription: "分享此刻的想法，或下拉刷新看看。", emptyIcon: "text.bubble")
-        }.listStyle(.plain).scrollDismissesKeyboard(.interactively)
+        }.timelineList().scrollDismissesKeyboard(.interactively)
             .refreshable { await resource.load(reset: true) }
             .task { await resource.loadIfNeeded() }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
@@ -59,58 +65,40 @@ struct PostCard: View {
         self.post = post; self.detailed = detailed; _current = State(initialValue: post)
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                NavigationLink { ProfileView(userID: current.userID) } label: {
-                    HStack(spacing: 10) {
-                        AvatarView(url: current.author.avatar, name: current.author.name)
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack {
-                                Text(current.author.name).font(.headline)
-                                if !current.raw["display_role_label"].string.isEmpty { Text(current.raw["display_role_label"].string).font(.caption2).foregroundStyle(Color.brand) }
-                            }
-                            HStack(spacing: 5) {
-                                if let date = current.date { Text(date, style: .relative) }
-                                if current.visibilityForEdit == "friends" { Image(systemName: "person.2.fill") }
-                            }.font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 10) {
+                if !detailed {
+                    NavigationLink { ProfileView(userID: current.userID) } label: {
+                        AvatarView(url: current.author.avatar, name: current.author.name, size: 42)
+                    }.buttonStyle(.plain).accessibilityLabel("查看\(current.author.name)的主页")
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    authorHeader
+                    if !current.content.isEmpty {
+                        if detailed {
+                            Text(current.content).font(.title3).lineSpacing(4).textSelection(.enabled)
+                        } else {
+                            NavigationLink { PostDetailView(session: session, postID: current.id, initial: current) } label: {
+                                Text(current.content).font(.body).lineSpacing(3).lineLimit(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.primary)
+                            }.buttonStyle(.plain)
                         }
                     }
-                }.buttonStyle(.plain)
-                Spacer()
-                Menu {
-                    Button("引用动态", systemImage: "quote.bubble") { quoting = true }
-                    Button("分享给好友", systemImage: "paperplane") { sharing = true }
-                    if let url = URL(string: "https://www.nonto.online/posts/\(current.id)") { ShareLink(item: url) { Label("系统分享", systemImage: "square.and.arrow.up") } }
-                    if current.userID == session.user?.id {
-                        Button("编辑", systemImage: "pencil") { editing = true }
-                        Button("删除", systemImage: "trash", role: .destructive) { deleting = true }
-                    } else { Button("举报", systemImage: "flag") { reporting = true } }
-                } label: { Image(systemName: "ellipsis").padding(8).contentShape(Rectangle()) }.accessibilityLabel("动态操作")
-            }
-            if !current.content.isEmpty {
-                if detailed { Text(current.content).textSelection(.enabled) }
-                else { NavigationLink { PostDetailView(session: session, postID: current.id, initial: current) } label: { Text(current.content).lineLimit(8).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.primary) }.buttonStyle(.plain) }
-            }
-            MediaView(images: current.images, video: current.video)
-            if let quote = current.quoted {
-                NavigationLink { PostDetailView(session: session, postID: quote.id, initial: quote) } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("引用 @\(quote.author.username)").font(.caption).foregroundStyle(.secondary)
-                        Text(quote.content).lineLimit(4).foregroundStyle(.primary)
-                    }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-                }.buttonStyle(.plain)
-            } else if current.raw["quoted_post_unavailable"].bool || current.raw["quoted_post"]["unavailable"].bool {
-                Label("原动态已不可见", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
-            }
-            HStack(spacing: 24) {
-                Button { Task { await toggleLike() } } label: { Label("\(current.likes)", systemImage: current.liked ? "heart.fill" : "heart").foregroundStyle(current.liked ? Color.brandLike : Color.secondary) }.disabled(busy)
-                NavigationLink { PostDetailView(session: session, postID: current.id, initial: current) } label: { Label("\(current.comments)", systemImage: "bubble.right").foregroundStyle(.secondary) }
-                Spacer()
-                Button { sharing = true } label: { Image(systemName: "paperplane").foregroundStyle(.secondary) }.accessibilityLabel("分享动态")
-            }.font(.subheadline).buttonStyle(.plain)
-            ErrorBanner(text: error)
-        }.padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(.quaternary, lineWidth: 0.5))
+                    if !current.images.isEmpty || !current.video.isEmpty {
+                        MediaView(images: current.images, video: current.video)
+                    }
+                    quotedContent
+                    if detailed, let date = current.date {
+                        Text(date, format: .dateTime.hour().minute().day().month().year())
+                            .font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+                    }
+                    postActions
+                    if error != nil { ErrorBanner(text: error) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12)
+                .padding(.bottom, 2).frame(maxWidth: .infinity)
+            Color.timelineSeparator.frame(height: 0.5)
+        }.background(Color.timelineBackground)
             .onChange(of: post.raw) { _, raw in current = Post(raw) }
             .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
                 if change.postID == current.id, let patch = change.patch { current = Post(current.raw.merging(patch)) }
@@ -127,6 +115,100 @@ struct PostCard: View {
                     }
                 }
             }
+    }
+    private var authorHeader: some View {
+        HStack(alignment: .top, spacing: 4) {
+            NavigationLink { ProfileView(userID: current.userID) } label: {
+                HStack(spacing: 8) {
+                    if detailed { AvatarView(url: current.author.avatar, name: current.author.name, size: 42) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 4) {
+                                authorName
+                                if !detailed {
+                                    Text("@\(current.author.username)").foregroundStyle(.secondary)
+                                    if let date = current.date { Text("·").foregroundStyle(.secondary); Text(date, style: .relative).foregroundStyle(.secondary) }
+                                }
+                            }.font(.subheadline).fixedSize(horizontal: true, vertical: false)
+                            VStack(alignment: .leading, spacing: 2) {
+                                authorName
+                                if !detailed {
+                                    HStack(spacing: 4) {
+                                        Text("@\(current.author.username)")
+                                        if let date = current.date { Text("·"); Text(date, style: .relative) }
+                                    }.font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                        }
+                        if detailed { Text("@\(current.author.username)").font(.subheadline).foregroundStyle(.secondary) }
+                    }
+                    if current.visibilityForEdit == "friends" {
+                        Image(systemName: "person.2.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("仅好友可见")
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            postMenu
+        }
+    }
+    private var authorName: some View {
+        HStack(spacing: 4) {
+            Text(current.author.name).font(.subheadline.bold()).foregroundStyle(.primary).lineLimit(1)
+            if !current.raw["display_role_label"].string.isEmpty {
+                Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.brand).font(.caption)
+                    .accessibilityLabel(current.raw["display_role_label"].string)
+            }
+        }
+    }
+    private var postMenu: some View {
+        Menu {
+            Button("引用动态", systemImage: "quote.bubble") { quoting = true }
+            Button("分享给好友", systemImage: "paperplane") { sharing = true }
+            if let url = URL(string: "https://www.nonto.online/posts/\(current.id)") {
+                ShareLink(item: url) { Label("系统分享", systemImage: "square.and.arrow.up") }
+            }
+            if current.userID == session.user?.id {
+                Button("编辑", systemImage: "pencil") { editing = true }
+                Button("删除", systemImage: "trash", role: .destructive) { deleting = true }
+            } else { Button("举报", systemImage: "flag") { reporting = true } }
+        } label: {
+            Image(systemName: "ellipsis").font(.subheadline).foregroundStyle(.secondary)
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain).padding(.vertical, -12).padding(.trailing, -10).accessibilityLabel("动态操作")
+    }
+    @ViewBuilder private var quotedContent: some View {
+        if let quote = current.quoted {
+            NavigationLink { PostDetailView(session: session, postID: quote.id, initial: quote) } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        AvatarView(url: quote.author.avatar, name: quote.author.name, size: 20)
+                        Text(quote.author.name).font(.subheadline.bold()).foregroundStyle(.primary)
+                        Text("@\(quote.author.username)").font(.caption).foregroundStyle(.secondary)
+                    }.lineLimit(1)
+                    if !quote.content.isEmpty { Text(quote.content).font(.subheadline).lineLimit(4).foregroundStyle(.primary) }
+                    if !quote.images.isEmpty || !quote.video.isEmpty {
+                        Label("查看引用的媒体", systemImage: "photo.on.rectangle").font(.caption).foregroundStyle(.secondary)
+                    }
+                }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.timelineSeparator, lineWidth: 1))
+            }.buttonStyle(.plain)
+        } else if current.raw["quoted_post_unavailable"].bool || current.raw["quoted_post"]["unavailable"].bool {
+            Label("原动态已不可见", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+    private var postActions: some View {
+        HStack(spacing: 0) {
+            NavigationLink { PostDetailView(session: session, postID: current.id, initial: current) } label: {
+                TimelineActionSymbol(symbol: "bubble", count: current.comments)
+            }.accessibilityLabel("评论，\(current.comments) 条")
+            Button { quoting = true } label: { TimelineActionSymbol(symbol: "arrow.2.squarepath") }
+                .accessibilityLabel("引用动态")
+            Button { Task { await toggleLike() } } label: {
+                TimelineActionSymbol(symbol: current.liked ? "heart.fill" : "heart", count: current.likes)
+                    .foregroundStyle(current.liked ? Color.brandLike : Color.secondary)
+            }.disabled(busy).accessibilityLabel("\(current.liked ? "取消点赞" : "点赞")，\(current.likes) 个赞")
+            Button { sharing = true } label: { TimelineActionSymbol(symbol: "square.and.arrow.up") }
+                .accessibilityLabel("分享动态")
+        }.foregroundStyle(.secondary).buttonStyle(.plain)
     }
     private func toggleLike() async {
         guard !busy else { return }
@@ -160,18 +242,18 @@ struct PostDetailView: View {
     }
     var body: some View {
         List {
-            if let post { PostCard(post: post, detailed: true).listRowSeparator(.hidden) }
+            if let post { PostCard(post: post, detailed: true).timelinePostRow() }
             ErrorBanner(text: error)
             Section("评论") {
                 ForEach(comments.items) { comment in CommentRow(comment: comment, postID: postID, onReply: { reply = $0; commentFocused = true }, onChange: { Task { await comments.load(reset: true) } }) }
                 ResourceFooter(resource: comments)
             }
-        }.listStyle(.plain).navigationTitle("动态详情").navigationBarTitleDisplayMode(.inline)
+        }.timelineList().navigationTitle("动态").navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading, spacing: 8) {
                     if let reply { HStack { Text("回复 @\(reply.author.username)").font(.caption); Spacer(); Button("取消") { self.reply = nil } }.padding(.horizontal) }
                     HStack {
-                        TextField("说点什么…", text: $text, axis: .vertical).lineLimit(1...5).textFieldStyle(.roundedBorder).focused($commentFocused).accessibilityLabel("评论内容")
+                        TextField("说点什么…", text: $text, axis: .vertical).lineLimit(1...5).textFieldStyle(.plain).padding(.vertical, 10).padding(.leading, 8).focused($commentFocused).accessibilityLabel("评论内容")
                         Button { Task { await send() } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up.circle.fill").font(.title) } }.disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("发送评论")
                     }.floatingGlass()
                 }.padding(.top, 8)
@@ -299,38 +381,63 @@ struct PostComposer: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("此刻，想分享什么？", text: $text, axis: .vertical).lineLimit(8...20)
-                    if let quoted { Label("引用 @\(quoted.author.username)：\(quoted.content)", systemImage: "quote.bubble").font(.caption).lineLimit(3) }
-                }
-                if editing == nil {
-                    Section("照片和视频") {
-                        PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) { Label("选择照片或一段视频", systemImage: "photo.on.rectangle.angled") }.disabled(busy || reading)
-                        if reading { ProgressView("正在准备媒体…") }
-                        ForEach(media) { item in
-                            HStack {
-                                if !item.isVideo, let image = UIImage(data: item.data) { Image(uiImage: image).resizable().scaledToFill().frame(width: 64, height: 64).clipped().clipShape(RoundedRectangle(cornerRadius: 8)) }
-                                else { Image(systemName: "video").font(.title).frame(width: 64) }
-                                Text(item.isVideo ? "视频" : "照片"); Spacer()
-                                Text(ByteCountFormatter.string(fromByteCount: Int64(item.data.count), countStyle: .file)).font(.caption).foregroundStyle(.secondary)
-                                Button(role: .destructive) { media.removeAll { $0.id == item.id } } label: { Image(systemName: "xmark.circle") }.disabled(busy)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .top, spacing: 12) {
+                        AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 42)
+                        VStack(alignment: .leading, spacing: 12) {
+                            TextField("有什么新鲜事？", text: $text, axis: .vertical)
+                                .font(.title3).lineSpacing(4).lineLimit(6...20)
+                                .textFieldStyle(.plain).accessibilityLabel("动态内容")
+                            if let quoted {
+                                Label("引用 @\(quoted.author.username)：\(quoted.content)", systemImage: "quote.bubble")
+                                    .font(.subheadline).lineLimit(4).padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.timelineSeparator, lineWidth: 1))
                             }
                         }
                     }
-                }
-                Section("发布设置") {
-                    Picker("谁可以看", selection: $visibility) { Text("公开").tag("public"); Text("仅好友").tag("friends") }
+                    if editing == nil {
+                        ForEach(media) { item in
+                            HStack(spacing: 12) {
+                                if !item.isVideo, let image = UIImage(data: item.data) {
+                                    Image(uiImage: image).resizable().scaledToFill().frame(width: 72, height: 72)
+                                        .clipped().clipShape(RoundedRectangle(cornerRadius: 12))
+                                } else { Image(systemName: "video").font(.title).frame(width: 72, height: 72) }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.isVideo ? "视频" : "照片").font(.subheadline.bold())
+                                    Text(ByteCountFormatter.string(fromByteCount: Int64(item.data.count), countStyle: .file))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button(role: .destructive) { media.removeAll { $0.id == item.id } } label: {
+                                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                                }.accessibilityLabel(item.isVideo ? "移除视频" : "移除照片").disabled(busy)
+                            }
+                        }
+                        if reading { ProgressView("正在准备媒体…") }
+                    }
+                    Divider()
+                    ViewThatFits(in: .horizontal) {
+                        HStack {
+                            mediaPicker
+                            Spacer()
+                            visibilityPicker
+                        }
+                        VStack(alignment: .leading, spacing: 12) { mediaPicker; visibilityPicker }
+                    }
                     if editing == nil, let user = session.user, !user.raw["verified_roles"].array.isEmpty {
                         Picker("展示身份", selection: $role) {
                             Text("不展示").tag("")
-                            ForEach(Array(user.raw["verified_roles"].array.enumerated()), id: \.offset) { i, value in Text(user.verifiedLabels.indices.contains(i) ? user.verifiedLabels[i] : value.string).tag(value.string) }
-                        }
+                            ForEach(Array(user.raw["verified_roles"].array.enumerated()), id: \.offset) { i, value in
+                                Text(user.verifiedLabels.indices.contains(i) ? user.verifiedLabels[i] : value.string).tag(value.string)
+                            }
+                        }.pickerStyle(.menu)
                     }
-                }
-                if !status.isEmpty { ProgressView(status) }
-                ErrorBanner(text: error)
-                if editing == nil { Text("未发布的文字会保存在本机草稿中；照片和视频需重新选择。").font(.caption).foregroundStyle(.secondary) }
+                    if !status.isEmpty { ProgressView(status) }
+                    if error != nil { ErrorBanner(text: error) }
+                    if editing == nil { Text("文字自动保存为草稿").font(.caption).foregroundStyle(.secondary) }
+                }.padding(16).frame(maxWidth: 720).frame(maxWidth: .infinity, alignment: .top)
             }.disabled(busy).scrollDismissesKeyboard(.interactively)
                 .navigationTitle(editing == nil ? "发布动态" : "编辑动态").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -378,6 +485,20 @@ struct PostComposer: View {
                     } catch is CancellationError {} catch { self.error = error.localizedDescription }
                 }
         }
+    }
+    @ViewBuilder private var mediaPicker: some View {
+        if editing == nil {
+            PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
+                Label("照片 / 视频", systemImage: "photo.on.rectangle.angled")
+                    .font(.subheadline).frame(minHeight: 44)
+            }.disabled(busy || reading)
+        }
+    }
+    private var visibilityPicker: some View {
+        Picker("谁可以看", selection: $visibility) {
+            Label("公开", systemImage: "globe.asia.australia").tag("public")
+            Label("仅好友", systemImage: "person.2").tag("friends")
+        }.pickerStyle(.menu).font(.subheadline)
     }
     private func saveDraft() {
         draftSaveTask?.cancel(); draftSaveTask = nil

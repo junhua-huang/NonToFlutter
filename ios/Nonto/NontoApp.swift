@@ -40,13 +40,13 @@ struct MainTabs: View {
     var body: some View {
         TabView {
             NavigationStack { FeedView(session: session) }
-                .tabItem { Label("动态", systemImage: "house") }
+                .tabItem { Label("首页", systemImage: "house") }
             NavigationStack { ExploreView() }
-                .tabItem { Label("发现", systemImage: "safari") }
-            NavigationStack { MessagesView(session: session) }
-                .tabItem { Label("消息", systemImage: "bubble.left.and.bubble.right") }.badge(session.messageUnread)
+                .tabItem { Label("发现", systemImage: "magnifyingglass") }
             NavigationStack { NotificationsView(session: session) }
                 .tabItem { Label("通知", systemImage: "bell") }.badge(session.noticeUnread)
+            NavigationStack { MessagesView(session: session) }
+                .tabItem { Label("私信", systemImage: "envelope") }.badge(session.messageUnread)
             NavigationStack { ProfileView(userID: session.user?.id ?? 0) }
                 .tabItem { Label("我的", systemImage: "person.crop.circle") }
         }

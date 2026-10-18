@@ -77,8 +77,10 @@ struct ChatMessageRow: View {
             if !message.recalled && ["image", "video"].contains(message.kind) && !message.content.isEmpty {
                 Text(message.content).textSelection(.enabled)
             }
-        }.padding(12)
-            .background(mine ? Color.brand.opacity(0.15) : Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+        }.padding(.horizontal, 14).padding(.vertical, 11)
+            .background(mine ? Color.brand.opacity(0.16) : Color(uiColor: .secondarySystemBackground),
+                        in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: mine ? 20 : 6,
+                                                   bottomTrailingRadius: mine ? 6 : 20, topTrailingRadius: 20))
     }
 }
 

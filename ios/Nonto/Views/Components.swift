@@ -16,6 +16,20 @@ struct AvatarView: View {
         .frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
     }
 }
+
+struct ProfileCover: View {
+    let url: String
+    var body: some View {
+        GeometryReader { geometry in
+            AsyncImage(url: URL(string: url)) { phase in
+                if let image = phase.image { image.resizable().scaledToFill() }
+                else {
+                    LinearGradient(colors: [Color.brand.opacity(0.28), Color.brand.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
+            }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
+        }.frame(height: 144).accessibilityHidden(true)
+    }
+}
 struct ErrorBanner: View {
     var text: String?
     var retry: (() -> Void)? = nil
@@ -65,7 +79,7 @@ struct PersonRow: View {
                 Text("@\(person.username)").font(.caption).foregroundStyle(.secondary)
                 if !person.bio.isEmpty { Text(person.bio).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
             }
-        }.padding(.vertical, 4)
+        }.padding(.vertical, 8)
     }
 }
 struct MediaView: View {
@@ -75,9 +89,9 @@ struct MediaView: View {
     var body: some View {
         VStack(spacing: 8) {
             if !images.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: images.count == 1 ? 1 : min(3, images.count)), spacing: 5) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: images.count == 1 ? 1 : (images.count <= 4 ? 2 : 3)), spacing: 3) {
                     ForEach(Array(images.enumerated()), id: \.offset) { index, link in
-                        MediaThumbnail(url: link, height: images.count == 1 ? 300 : 120, label: "查看图片 \(index + 1)") {
+                        MediaThumbnail(url: link, height: images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110), label: "查看图片 \(index + 1)") {
                             selected = MediaSelection(index: index)
                         }
                     }

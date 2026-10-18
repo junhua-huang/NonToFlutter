@@ -17,7 +17,7 @@ struct ProfileView: View {
     @State private var blocked = false
     private var isOwn: Bool { session.user?.id == userID }
     var body: some View {
-        PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked).navigationTitle(isOwn ? "我的主页" : "个人主页").navigationBarTitleDisplayMode(.inline)
+        PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked).navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if isOwn { NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
                 else {
@@ -42,31 +42,46 @@ struct ProfileView: View {
     }
     private var profileHeader: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                    if let user = person ?? (isOwn ? session.user : nil) {
-                        if let url = URL(string: user.cover), !user.cover.isEmpty {
-                            AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Color.brand.opacity(0.1) }.frame(height: 140).clipped().clipShape(RoundedRectangle(cornerRadius: 16))
+            if let user = person ?? (isOwn ? session.user : nil) {
+                ProfileCover(url: user.cover)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        AvatarView(url: user.avatar, name: user.name, size: 82)
+                            .padding(4).background(Color.timelineBackground, in: Circle())
+                        Spacer(minLength: 8)
+                        if isOwn {
+                            Button("编辑资料") { editing = true }.font(.subheadline.bold())
+                                .buttonStyle(.glass).controlSize(.regular).padding(.bottom, 4)
+                        } else {
+                            Button { Task { await chat() } } label: {
+                                Image(systemName: "envelope").frame(width: 28, height: 28)
+                            }.buttonStyle(.glass).accessibilityLabel("发送私信").disabled(busy)
+                            Button(friendLabel) { Task { await friendAction() } }
+                                .font(.subheadline.bold()).buttonStyle(.glassProminent)
+                                .disabled(busy || friendship.isNull).padding(.bottom, 4)
                         }
-                        HStack {
-                            AvatarView(url: user.avatar, name: user.name, size: 72)
-                            VStack(alignment: .leading, spacing: 5) { Text(user.name).font(.title2.bold()); Text("@\(user.username)").foregroundStyle(.secondary) }
-                            Spacer()
-                            if isOwn { Button("编辑") { editing = true }.buttonStyle(.glass) }
-                        }
-                        if !user.verifiedLabels.isEmpty { Label(user.verifiedLabels.joined(separator: " · "), systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.brand) }
-                        if !user.bio.isEmpty { Text(user.bio).textSelection(.enabled) }
-                        if let email = user.publicEmail, !email.isEmpty { Text(email).font(.caption).foregroundStyle(.secondary) }
-                        if !isOwn {
-                            HStack {
-                                Button(friendLabel) { Task { await friendAction() } }.buttonStyle(.glassProminent).disabled(busy || friendship.isNull)
-                                Button("私信") { Task { await chat() } }.buttonStyle(.glass).disabled(busy)
-                            }
-                        }
-                    } else if error == nil { ProgressView() }
+                    }.padding(.top, -38)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(user.name).font(.title2.weight(.heavy))
+                        Text("@\(user.username)").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    if !user.verifiedLabels.isEmpty {
+                        Label(user.verifiedLabels.joined(separator: " · "), systemImage: "checkmark.seal.fill")
+                            .font(.caption).foregroundStyle(Color.brand)
+                    }
+                    if !user.bio.isEmpty { Text(user.bio).font(.body).lineSpacing(3).textSelection(.enabled) }
+                    if let email = user.publicEmail, !email.isEmpty {
+                        Label(email, systemImage: "envelope").font(.subheadline).foregroundStyle(.secondary)
+                    }
                     ErrorBanner(text: error) { Task { await load() } }
-                }.padding()
-            Picker("动态类型", selection: $liked) { Text("动态").tag(false); Text("赞过").tag(true) }.pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 8)
-        }
+                }.padding(.horizontal, 16).padding(.bottom, 16)
+                    .frame(maxWidth: 752).frame(maxWidth: .infinity)
+            } else {
+                if error == nil { ProgressView().padding(32) }
+                ErrorBanner(text: error) { Task { await load() } }.padding(.horizontal)
+            }
+            TimelineTabs(title: "主页动态类型", tabs: [(false, "动态"), (true, "赞过")], selection: $liked)
+        }.background(Color.timelineBackground)
     }
     private var friendLabel: String {
         switch friendship["status"].string {

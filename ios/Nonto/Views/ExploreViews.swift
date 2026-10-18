@@ -11,9 +11,9 @@ struct ExploreView: View {
     @State private var queryError: String?
     var body: some View {
         VStack(spacing: 0) {
-            ErrorBanner(text: queryError).padding(.horizontal)
+            if queryError != nil { ErrorBanner(text: queryError).padding(.horizontal) }
             if !submitted.isEmpty {
-                Picker("搜索类型", selection: $kind) { Text("动态").tag("posts"); Text("用户").tag("users"); Text("话题").tag("topics") }.pickerStyle(.segmented).padding()
+                TimelineTabs(title: "搜索类型", tabs: [("posts", "动态"), ("users", "用户"), ("topics", "话题")], selection: $kind)
                 SearchResultsView(session: session, query: submitted, kind: kind).id(submitted + kind)
             } else {
                 List {
@@ -27,13 +27,25 @@ struct ExploreView: View {
                             Button("清空搜索记录", role: .destructive) { Task { await clearHistory() } }
                         } header: { Text("最近搜索") }
                     }
-                    Section("热门话题") {
-                        ForEach(topics) { topic in NavigationLink { TopicDetailView(topic: topic) } label: { HStack { Image(systemName: "number").foregroundStyle(Color.brand); Text(topic.name); Spacer(); Text("\(topic.raw["post_count"].int) 动态").font(.caption).foregroundStyle(.secondary) } } }
-                    }
-                    ErrorBanner(text: error)
-                }.listStyle(.insetGrouped).refreshable { await load() }
+                    Section {
+                        ForEach(Array(topics.enumerated()), id: \.element.id) { index, topic in
+                            NavigationLink { TopicDetailView(topic: topic) } label: {
+                                HStack(alignment: .top, spacing: 16) {
+                                    Text("\(index + 1)").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                                        .frame(width: 20, alignment: .leading).padding(.top, 2)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text("热门话题").font(.caption).foregroundStyle(.secondary)
+                                        Text("#\(topic.name)").font(.body.bold()).foregroundStyle(.primary)
+                                        Text("\(topic.raw["post_count"].int) 条动态").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }.padding(.vertical, 8)
+                            }
+                        }
+                    } header: { Text("正在热议").font(.title3.bold()).foregroundStyle(.primary).textCase(nil) }
+                    if error != nil { ErrorBanner(text: error) }
+                }.timelineList().refreshable { await load() }
             }
-        }.navigationTitle("发现")
+        }.navigationTitle("发现").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "搜索动态、用户和话题")
             .onSubmit(of: .search, search)
             .onChange(of: query) { _, value in
@@ -82,13 +94,13 @@ struct SearchResultsView: View {
     var body: some View {
         List {
             if kind == "posts" {
-                ForEach(posts.items) { PostCard(post: $0).listRowSeparator(.hidden) }; ResourceFooter(resource: posts, emptyTitle: "没有找到相关动态", emptyDescription: "试试其他关键词，或切换搜索类型。", emptyIcon: "magnifyingglass")
+                ForEach(posts.items) { PostCard(post: $0).timelinePostRow() }; ResourceFooter(resource: posts, emptyTitle: "没有找到相关动态", emptyDescription: "试试其他关键词，或切换搜索类型。", emptyIcon: "magnifyingglass")
             } else if kind == "users" {
                 ForEach(users.items) { user in NavigationLink { ProfileView(userID: user.id) } label: { PersonRow(person: user) } }; ResourceFooter(resource: users, emptyTitle: "没有找到相关用户", emptyDescription: "试试用户名或显示名称。", emptyIcon: "person.crop.circle.badge.questionmark")
             } else {
                 ForEach(topics.items) { topic in NavigationLink("#\(topic.name)") { TopicDetailView(topic: topic) } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
             }
-        }.listStyle(.plain).scrollDismissesKeyboard(.interactively).task { await load() }.refreshable { await load() }
+        }.timelineList().scrollDismissesKeyboard(.interactively).task { await load() }.refreshable { await load() }
     }
     private func load() async {
         if kind == "posts" { await posts.load(reset: true) }
@@ -106,7 +118,7 @@ struct TopicDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             if !topic.raw["description"].string.isEmpty { Text(topic.raw["description"].string).font(.subheadline).foregroundStyle(.secondary).padding() }
-            ErrorBanner(text: error)
+            if error != nil { ErrorBanner(text: error) }
             PostList(session: session, path: "/topics/\(topic.id)/posts")
         }.navigationTitle("#\(topic.name)").navigationBarTitleDisplayMode(.inline)
             .toolbar { Button(following ? "已关注" : "关注") { Task { await toggle() } }.disabled(busy) }
@@ -148,20 +160,20 @@ struct NotificationsView: View {
             ForEach(resource.items) { notice in
                 NavigationLink { NoticeDestination(notice: notice) } label: {
                     HStack(alignment: .top, spacing: 12) {
-                        AvatarView(url: notice.sender.avatar, name: notice.sender.name)
+                        AvatarView(url: notice.sender.avatar, name: notice.sender.name, size: 42)
                         VStack(alignment: .leading, spacing: 5) {
                             Text(notice.title.isEmpty ? notice.sender.name : notice.title).font(.headline)
                             Text(notice.content).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
                             if let d = ServerDate.parse(notice.raw["created_at"]) { Text(d, style: .relative).font(.caption2).foregroundStyle(.secondary) }
                         }
                         if !notice.isRead { Circle().fill(Color.brand).frame(width: 8, height: 8) }
-                    }.padding(.vertical, 6)
+                    }.padding(.vertical, 10)
                 }.disabled(removing.contains(notice.id)).swipeActions {
                     Button(role: .destructive) { Task { await remove(notice) } } label: { Label("删除", systemImage: "trash") }
-                }
+                }.listRowBackground(notice.isRead ? Color.timelineBackground : Color.brand.opacity(0.045))
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有通知", emptyDescription: "新的互动和提醒会出现在这里。", emptyIcon: "bell")
-        }.navigationTitle("通知").listStyle(.plain)
+        }.navigationTitle("通知").navigationBarTitleDisplayMode(.inline).timelineList()
             .toolbar { Button("全部已读") { Task { await readAll() } }.disabled(readingAll || session.noticeUnread == 0) }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
