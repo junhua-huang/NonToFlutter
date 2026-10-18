@@ -6,6 +6,9 @@ struct PostChange {
     let postID: Int
     let patch: JSON? // nil means deleted
 }
+struct NoticeChange {
+    let id: Int? // nil marks all currently loaded notifications as read
+}
 
 @MainActor
 final class AppSession: ObservableObject {
@@ -16,6 +19,7 @@ final class AppSession: ObservableObject {
     @Published var startupError: String?
     @Published var postRevision = 0
     @Published var postChange: PostChange?
+    @Published var noticeChange: NoticeChange?
     @Published var messageUnread = 0
     @Published var noticeUnread = 0
     @Published var defaultVisibility = "public"
@@ -123,7 +127,7 @@ final class AppSession: ObservableObject {
         APNsService.shared.setAccount(nil, enabled: false)
         socket.stop(); socket.resetRooms(); user = nil; messageUnread = 0; noticeUnread = 0
         NativeNotifications.shared.clear()
-        startupError = nil; defaultVisibility = "public"; postChange = nil; postRevision += 1
+        startupError = nil; defaultVisibility = "public"; postChange = nil; noticeChange = nil; postRevision += 1
         URLCache.shared.removeAllCachedResponses()
     }
 }
@@ -161,7 +165,10 @@ final class PagedResource<T: Record>: ObservableObject {
     @Published var loading = false
     @Published var error: String?
     @Published var hasMore = true
+    @Published private(set) var showingCache = false
     private(set) var page = 0
+    private var lastLoadedAt: Date?
+    private var failedReset = true
     private var cursor: String?
     private var requestID = UUID()
     private var activeTask: Task<Void, Never>?
@@ -188,7 +195,21 @@ final class PagedResource<T: Record>: ObservableObject {
          userID: Int, pageSize: Int = 20, paginated: Bool = true, usesOffset: Bool = false) {
         self.api = api; accountEpoch = api.generation; self.path = path; self.keys = keys; self.query = query
         self.userID = userID; self.pageSize = pageSize; self.paginated = paginated; self.usesOffset = usesOffset
-        if let cache = LocalCache.read(userID: userID, key: cacheKey) { items = Records.unique(cache.array.map(T.init)) }
+        if let cache = LocalCache.read(userID: userID, key: cacheKey) {
+            items = Records.unique(cache.array.map(T.init)); showingCache = !items.isEmpty
+        }
+    }
+    func loadIfNeeded(maxAge: TimeInterval = 60) async {
+        if error == nil, let lastLoadedAt, Date().timeIntervalSince(lastLoadedAt) < maxAge { return }
+        await load(reset: true)
+    }
+    func retry() async { await load(reset: failedReset) }
+    func applyAll(patch: JSON) {
+        guard api.generation == accountEpoch else { return }
+        if loading {
+            for item in items { pendingUpdates[item.id] = (pendingUpdates[item.id] ?? .object([:])).merging(patch) }
+        }
+        items = items.map { T($0.raw.merging(patch)) }; persist()
     }
     func load(reset: Bool = false) async {
         guard api.generation == accountEpoch else { return }
@@ -229,6 +250,7 @@ final class PagedResource<T: Record>: ObservableObject {
             let added = incoming.contains { !known.contains($0.id) }
             items = Records.unique((reset ? [] : items) + incoming)
             page = next
+            lastLoadedAt = Date(); showingCache = false
             let nextCursor = json["next_cursor"].string
             cursor = nextCursor.isEmpty ? nil : nextCursor
             let inferredMore: Bool
@@ -243,7 +265,9 @@ final class PagedResource<T: Record>: ObservableObject {
             persist()
         } catch is CancellationError {} catch {
             guard requestID == ticket, api.generation == epoch else { return }
-            if (error as? URLError)?.code != .cancelled { self.error = error.localizedDescription }
+            if (error as? URLError)?.code != .cancelled {
+                failedReset = reset; self.error = error.localizedDescription
+            }
         }
     }
     static func rows(_ json: JSON, keys: [String]) throws -> [JSON] {

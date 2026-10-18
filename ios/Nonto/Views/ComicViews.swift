@@ -39,7 +39,7 @@ struct ComicResults: View {
                 }
             }
             ResourceFooter(resource: resource)
-        }.listStyle(.plain).task { await resource.load(reset: true) }.refreshable { await resource.load(reset: true) }
+        }.listStyle(.plain).task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
 }
 struct ComicDetailView: View {
@@ -93,8 +93,10 @@ struct ComicDetailView: View {
         catch { self.error = error.localizedDescription }
     }
     private func send() async {
+        guard !busy else { return }
+        let submittedText = text
         busy = true; defer { busy = false }
-        do { _ = try await session.api.request("/comic/events/\(eventID)/comments", method: "POST", body: .object(["content": .text(text)])); text = ""; await loadComments() }
+        do { _ = try await session.api.request("/comic/events/\(eventID)/comments", method: "POST", body: .object(["content": .text(text)])); if text == submittedText { text = "" }; await loadComments() }
         catch { self.error = error.localizedDescription }
     }
 }

@@ -23,11 +23,11 @@ struct CommunityListView: View {
                     }.padding(.vertical, 6)
                 }
             }
-            ResourceFooter(resource: resource)
+            ResourceFooter(resource: resource, emptyTitle: mine ? "还没有加入社群" : "还没有可见的社群", emptyDescription: "找到感兴趣的社群，或创建自己的社群。", emptyIcon: "person.3")
         }.navigationTitle(mine ? "我的社群" : "发现社群")
             .toolbar { Button { creating = true } label: { Image(systemName: "plus") }.accessibilityLabel("创建社群") }
             .sheet(isPresented: $creating, onDismiss: { Task { await resource.load(reset: true) } }) { CommunityEditor() }
-            .task { await resource.load(reset: true) }.refreshable { await resource.load(reset: true) }
+            .task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
 }
 
@@ -109,6 +109,7 @@ struct CommunityEditor: View {
     @State private var banner: PhotosPickerItem?
     @State private var avatarURL = ""
     @State private var bannerURL = ""
+    @State private var initialized = false
     @State private var busy = false
     @State private var error: String?
     var body: some View {
@@ -129,7 +130,7 @@ struct CommunityEditor: View {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                     ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
                 }.interactiveDismissDisabled(busy)
-                .onAppear { if let community { name = community.name; description = community.description; rules = community.raw["rules"].string; policy = community.raw["join_policy"].string; avatarURL = community.avatar; bannerURL = community.raw["banner_url"].string } }
+                .onAppear { guard !initialized else { return }; initialized = true; if let community { name = community.name; description = community.description; rules = community.raw["rules"].string; policy = community.raw["join_policy"].string; avatarURL = community.avatar; bannerURL = community.raw["banner_url"].string } }
                 .task(id: avatar) { if let avatar { await upload(avatar, isAvatar: true) } }
                 .task(id: banner) { if let banner { await upload(banner, isAvatar: false) } }
         }

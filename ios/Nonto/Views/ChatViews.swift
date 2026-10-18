@@ -23,12 +23,12 @@ struct MessagesView: View {
                     }.padding(.vertical, 6)
                 }
             }
-            ResourceFooter(resource: resource)
+            ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
         }.listStyle(.plain).navigationTitle("消息")
             .toolbar { NavigationLink { FriendsView(session: session) } label: { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
-            .task { await resource.load(reset: true) }
+            .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
-            .onReceive(socket.$revision.debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
+            .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
     }
     private func preview(_ message: ChatMessage) -> String {
         switch message.kind { case "image": return "[图片]"; case "video": return "[视频]"; case "post": return "[动态]"; case "file": return "[文件]"; default: return message.content }
@@ -205,7 +205,7 @@ struct SharePostView: View {
                 }
                 ResourceFooter(resource: resource)
             }.navigationTitle("分享动态").toolbar { Button("取消") { dismiss() }.disabled(sending) }
-                .task { await resource.load(reset: true) }.interactiveDismissDisabled(sending)
+                .task { await resource.loadIfNeeded() }.interactiveDismissDisabled(sending)
         }
     }
     private func share(_ conv: Conversation) async {

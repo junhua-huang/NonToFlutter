@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var error: String?
     @State private var confirmLogout = false
     @State private var cacheCleared = false
+    @State private var loggingOut = false
     var body: some View {
         Form {
             Section("外观") {
@@ -23,7 +24,7 @@ struct SettingsView: View {
                 NavigationLink("我的社群") { CommunityListView(session: session, mine: true) }
                 NavigationLink("漫展") { ComicListView() }
                 Button("清理本机缓存") {
-                    do { try LocalCache.clear(userID: session.user?.id ?? 0); error = nil; cacheCleared = true }
+                    do { try LocalCache.clear(userID: session.user?.id ?? 0); URLCache.shared.removeAllCachedResponses(); error = nil; cacheCleared = true }
                     catch { self.error = error.localizedDescription }
                 }
             }
@@ -34,13 +35,20 @@ struct SettingsView: View {
                 LabeledContent("版本", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
             }
             Section {
-                Button("退出登录", role: .destructive) { confirmLogout = true }
+                if loggingOut { ProgressView("正在退出登录…") }
+                Button("退出登录", role: .destructive) { confirmLogout = true }.disabled(loggingOut)
                 NavigationLink("注销账号") { DeleteAccountView() }.foregroundStyle(.red)
             }
             ErrorBanner(text: error)
         }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .alert("本机缓存已清理", isPresented: $cacheCleared) { Button("好", role: .cancel) {} }
-            .confirmationDialog("退出当前账号？", isPresented: $confirmLogout) { Button("退出登录", role: .destructive) { Task { do { try await session.logout() } catch { self.error = error.localizedDescription } } } }
+            .confirmationDialog("退出当前账号？", isPresented: $confirmLogout) { Button("退出登录", role: .destructive) {
+                Task {
+                    guard !loggingOut else { return }
+                    loggingOut = true; defer { loggingOut = false }
+                    do { try await session.logout() } catch { self.error = error.localizedDescription }
+                }
+            } }
     }
 }
 
@@ -86,7 +94,7 @@ struct PrivacySettingsView: View {
             _ = try await session.api.request("/auth/privacy", method: "PUT", body: .object([
                 "profile_visibility": .text(profile), "post_default_visibility": .text(visibility),
                 "show_email": .bool(email), "allow_search": .bool(searchable), "allow_friend_requests": .text(requests)]))
-            session.defaultVisibility = visibility; try await session.refreshProfile(); saved = true; error = nil
+            session.defaultVisibility = visibility; saved = true; error = nil; try? await session.refreshProfile()
         } catch { self.error = error.localizedDescription }
     }
 }
@@ -97,6 +105,7 @@ struct NotificationSettingsView: View {
     @State private var message = false
     @State private var sound = false
     @State private var loaded = false
+    @State private var loading = false
     @State private var busy = false
     @State private var error: String?
     @State private var saved = false
@@ -111,19 +120,30 @@ struct NotificationSettingsView: View {
                 Button("发送本地测试通知") { Task { do { try await NativeNotifications.shared.test() } catch { self.error = error.localizedDescription } } }
                 if let url = URL(string: UIApplication.openSettingsURLString) { Link("打开系统设置", destination: url) }
             }
-            Toggle("系统推送", isOn: $pushEnabled)
-            Toggle("消息提醒", isOn: $message)
-            Toggle("通知声音", isOn: $sound)
+            Section("提醒偏好") {
+                Toggle("系统推送", isOn: $pushEnabled)
+                Toggle("消息提醒", isOn: $message)
+                Toggle("通知声音", isOn: $sound)
+            }.disabled(!loaded || busy || loading)
+            if loading { ProgressView("正在读取设置…") }
+            if busy { ProgressView("正在保存…") }
             Button("保存") { Task { await save() } }.disabled(!loaded || busy)
             if saved { Text("已保存").foregroundStyle(Color.brand) }
-            ErrorBanner(text: error)
-        }.disabled(busy).navigationTitle("消息提醒").task {
-            do { let j = try await session.api.request("/notifications/settings"); let s = j["settings"].or(j); pushEnabled = s["notify_push"].bool; message = s["notify_message"].bool; sound = s["notify_sound"].bool; loaded = true }
-            catch { self.error = error.localizedDescription }
-        }
+            ErrorBanner(text: error) { Task { await load() } }
+        }.disabled(busy).navigationTitle("消息提醒").task { if !loaded { await load() } }
+            .onChange(of: [pushEnabled, message, sound]) { _, _ in saved = false }
+    }
+    private func load() async {
+        guard !loading else { return }
+        loading = true; error = nil; defer { loading = false }
+        do {
+            let j = try await session.api.request("/notifications/settings"); let s = j["settings"].or(j)
+            pushEnabled = s["notify_push"].bool; message = s["notify_message"].bool; sound = s["notify_sound"].bool; loaded = true
+        } catch { self.error = error.localizedDescription }
     }
     private func save() async {
-        busy = true; defer { busy = false }
+        guard !busy else { return }
+        busy = true; saved = false; error = nil; defer { busy = false }
         do { _ = try await session.api.request("/notifications/settings", method: "PUT", body: .object(["notify_push": .bool(pushEnabled), "notify_message": .bool(message), "notify_sound": .bool(sound)])); NativeNotifications.shared.pushEnabled = pushEnabled; NativeNotifications.shared.messageEnabled = message; NativeNotifications.shared.soundEnabled = sound; session.syncPush(); saved = true }
         catch { self.error = error.localizedDescription }
     }
@@ -144,10 +164,12 @@ struct PasswordView: View {
             ErrorBanner(text: error)
             if saved { Text("密码已修改").foregroundStyle(Color.brand) }
             Button("修改密码") { Task { await save() } }.disabled(busy || old.isEmpty || new.count < 8 || new != repeatPassword)
-        }.navigationTitle("修改密码")
+            if busy { ProgressView("正在修改…") }
+        }.disabled(busy).scrollDismissesKeyboard(.interactively).navigationTitle("修改密码")
     }
     private func save() async {
-        busy = true; defer { busy = false }
+        guard !busy else { return }
+        busy = true; saved = false; error = nil; defer { busy = false }
         do { _ = try await session.api.request("/auth/change-password", method: "POST", body: .object(["old_password": .text(old), "new_password": .text(new)])); old = ""; new = ""; repeatPassword = ""; saved = true }
         catch { self.error = error.localizedDescription }
     }
@@ -191,11 +213,11 @@ struct BlockedUsersView: View {
                 HStack { PersonRow(person: Person(item.raw)); Spacer(); Button("解除屏蔽") { Task { await unblock(item.id) } }.disabled(busy).buttonStyle(.glass) }
             }
             ResourceFooter(resource: resource)
-        }.navigationTitle("屏蔽列表").task { await resource.load(reset: true) }.refreshable { await resource.load(reset: true) }
+        }.navigationTitle("屏蔽列表").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
     private func unblock(_ id: Int) async {
         busy = true; defer { busy = false }
-        do { _ = try await session.api.request("/blocks/\(id)", method: "DELETE"); resource.items.removeAll { $0.id == id }; session.postRevision += 1 }
+        do { _ = try await session.api.request("/blocks/\(id)", method: "DELETE"); resource.apply(id: id, patch: nil); session.postRevision += 1 }
         catch { self.error = error.localizedDescription }
     }
 }

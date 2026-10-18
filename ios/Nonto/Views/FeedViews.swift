@@ -22,16 +22,19 @@ struct FeedView: View {
 struct PostList: View {
     @StateObject private var resource: PagedResource<Post>
     @EnvironmentObject private var session: AppSession
-    init(session: AppSession, path: String, query: [String: String] = [:]) {
+    private let header: AnyView?
+    init(session: AppSession, path: String, query: [String: String] = [:], header: AnyView? = nil) {
+        self.header = header
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: path, keys: ["posts", "items"], query: query, userID: session.user?.id ?? 0))
     }
     var body: some View {
         List {
+            if let header { header.listRowInsets(EdgeInsets()).listRowSeparator(.hidden) }
             ForEach(resource.items) { post in PostCard(post: post).listRowSeparator(.hidden).listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)) }
-            ResourceFooter(resource: resource)
+            ResourceFooter(resource: resource, emptyTitle: "还没有动态", emptyDescription: "分享此刻的想法，或下拉刷新看看。", emptyIcon: "text.bubble")
         }.listStyle(.plain).scrollDismissesKeyboard(.interactively)
             .refreshable { await resource.load(reset: true) }
-            .task { await resource.load(reset: true) }
+            .task { await resource.loadIfNeeded() }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
             .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
                 let removeUnliked = resource.path == "/posts/user/\(session.user?.id ?? 0)/liked" && change.patch?["is_liked"] == .bool(false)
@@ -126,11 +129,13 @@ struct PostCard: View {
             }
     }
     private func toggleLike() async {
+        guard !busy else { return }
+        let liked = !current.liked
+        let fallbackCount = max(0, current.likes + (liked ? 1 : -1))
         busy = true; error = nil; defer { busy = false }
         do {
-            let result = try await session.api.request("/posts/\(current.id)/like", method: current.liked ? "DELETE" : "POST")
-            let liked = !current.liked
-            let fallback: JSON = .object(["is_liked": .bool(liked), "like_count": .id(max(0, current.likes + (liked ? 1 : -1)))])
+            let result = try await session.api.request("/posts/\(current.id)/like", method: liked ? "POST" : "DELETE")
+            let fallback: JSON = .object(["is_liked": .bool(liked), "like_count": .id(fallbackCount)])
             let patch = fallback.merging(result["post"].or(result))
             current = Post(current.raw.merging(patch))
             session.postChange = PostChange(postID: current.id, patch: patch)
@@ -148,6 +153,7 @@ struct PostDetailView: View {
     @State private var text = ""
     @State private var reply: Comment?
     @State private var sending = false
+    @FocusState private var commentFocused: Bool
     init(session: AppSession, postID: Int, initial: Post? = nil) {
         self.postID = postID; _post = State(initialValue: initial)
         _comments = StateObject(wrappedValue: PagedResource(api: session.api, path: "/posts/\(postID)/comments", keys: ["comments", "items"], userID: session.user?.id ?? 0))
@@ -157,7 +163,7 @@ struct PostDetailView: View {
             if let post { PostCard(post: post, detailed: true).listRowSeparator(.hidden) }
             ErrorBanner(text: error)
             Section("评论") {
-                ForEach(comments.items) { comment in CommentRow(comment: comment, postID: postID, onReply: { reply = $0 }, onChange: { Task { await comments.load(reset: true) } }) }
+                ForEach(comments.items) { comment in CommentRow(comment: comment, postID: postID, onReply: { reply = $0; commentFocused = true }, onChange: { Task { await comments.load(reset: true) } }) }
                 ResourceFooter(resource: comments)
             }
         }.listStyle(.plain).navigationTitle("动态详情").navigationBarTitleDisplayMode(.inline)
@@ -165,7 +171,7 @@ struct PostDetailView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if let reply { HStack { Text("回复 @\(reply.author.username)").font(.caption); Spacer(); Button("取消") { self.reply = nil } }.padding(.horizontal) }
                     HStack {
-                        TextField("说点什么…", text: $text, axis: .vertical).lineLimit(1...5).textFieldStyle(.roundedBorder)
+                        TextField("说点什么…", text: $text, axis: .vertical).lineLimit(1...5).textFieldStyle(.roundedBorder).focused($commentFocused).accessibilityLabel("评论内容")
                         Button { Task { await send() } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up.circle.fill").font(.title) } }.disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("发送评论")
                     }.floatingGlass()
                 }.padding(.top, 8)
@@ -186,12 +192,17 @@ struct PostDetailView: View {
         await comments.load(reset: true)
     }
     private func send() async {
+        guard !sending else { return }
+        let submittedText = text, submittedReplyID = reply?.id
         sending = true; error = nil; defer { sending = false }
         do {
             var body: [String: JSON] = ["content": .text(text.trimmingCharacters(in: .whitespacesAndNewlines))]
             if let reply { body["parent_id"] = reply.raw["parent_id"].isNull ? .id(reply.id) : reply.raw["parent_id"]; body["reply_to_user_id"] = .id(reply.author.id) }
             _ = try await session.api.request("/posts/\(postID)/comments", method: "POST", body: .object(body))
-            text = ""; reply = nil
+            if text == submittedText {
+                text = ""
+                if reply?.id == submittedReplyID { reply = nil }
+            }
             if let post { session.postChange = PostChange(postID: postID, patch: .object(["comment_count": .id(post.comments + 1)])) }
             await comments.load(reset: true)
         } catch { self.error = error.localizedDescription }
@@ -277,7 +288,15 @@ struct PostComposer: View {
     @State private var published = false
     @State private var draftLoaded = false
     @State private var accountID = 0
-    private var draftKey: String { "nonto.native.draft.\(accountID).\(communityID ?? 0).\(quoted?.id ?? 0)" }
+    @State private var accountEpoch: UUID?
+    @State private var confirmClose = false
+    @State private var draftSaveTask: Task<Void, Never>?
+    @Environment(\.scenePhase) private var phase
+    private var hasChanges: Bool {
+        if let editing { return text != editing.content || visibility != editing.visibilityForEdit }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !media.isEmpty || quoted != nil
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -312,18 +331,43 @@ struct PostComposer: View {
                 if !status.isEmpty { ProgressView(status) }
                 ErrorBanner(text: error)
                 if editing == nil { Text("未发布的文字会保存在本机草稿中；照片和视频需重新选择。").font(.caption).foregroundStyle(.secondary) }
-            }.navigationTitle(editing == nil ? "发布动态" : "编辑动态").navigationBarTitleDisplayMode(.inline)
+            }.disabled(busy).scrollDismissesKeyboard(.interactively)
+                .navigationTitle(editing == nil ? "发布动态" : "编辑动态").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { if hasChanges { confirmClose = true } else { dismiss() } }.disabled(busy) }
                     ToolbarItem(placement: .confirmationAction) { Button(editing == nil ? "发布" : "保存") { Task { await publish() } }.disabled(busy || reading || (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && media.isEmpty && quoted == nil && editing?.images.isEmpty != false && editing?.video.isEmpty != false)) }
-                }.interactiveDismissDisabled(busy)
+                }.interactiveDismissDisabled(busy || !media.isEmpty || (editing != nil && hasChanges))
+                .confirmationDialog(editing == nil ? "关闭发布？" : "放弃尚未保存的修改？", isPresented: $confirmClose, titleVisibility: .visible) {
+                    if editing == nil {
+                        Button("保存文字草稿并关闭") { saveDraft(); dismiss() }
+                    }
+                    Button(editing == nil ? "放弃本次内容" : "放弃修改", role: .destructive) {
+                        draftSaveTask?.cancel()
+                        if editing == nil { published = true; clearDraft() }
+                        dismiss()
+                    }
+                    Button("继续编辑", role: .cancel) {}
+                } message: {
+                    if editing == nil && !media.isEmpty { Text("照片和视频不会保存在文字草稿中。") }
+                }
                 .onAppear {
                     guard !draftLoaded else { return }; draftLoaded = true
-                    accountID = session.user?.id ?? 0
-                    text = editing?.content ?? UserDefaults.standard.string(forKey: draftKey) ?? ""
-                    visibility = editing?.visibilityForEdit ?? session.defaultVisibility
+                    accountID = session.user?.id ?? 0; accountEpoch = session.api.generation
+                    let saved = PostDraftStore().read(userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0, defaultVisibility: session.defaultVisibility)
+                    text = editing?.content ?? saved.text
+                    visibility = editing?.visibilityForEdit ?? saved.visibility
+                    let roles = session.user?.raw["verified_roles"].array.map(\.string) ?? []
+                    role = roles.contains(saved.role) ? saved.role : ""
                 }
-                .onDisappear { if accountID > 0 && editing == nil && !published { UserDefaults.standard.set(text, forKey: draftKey) } }
+                .onDisappear { saveDraft() }
+                .onChange(of: [text, visibility, role]) { _, _ in
+                    draftSaveTask?.cancel()
+                    draftSaveTask = Task {
+                        do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+                        saveDraft()
+                    }
+                }
+                .onChange(of: phase) { _, value in if value != .active { saveDraft() } }
                 .task(id: picks) {
                     guard !picks.isEmpty else { return }; reading = true; defer { reading = false }
                     do {
@@ -335,9 +379,25 @@ struct PostComposer: View {
                 }
         }
     }
+    private func saveDraft() {
+        draftSaveTask?.cancel(); draftSaveTask = nil
+        if accountID > 0 && editing == nil && !published {
+            PostDraftStore().save(PostDraft(text: text, visibility: visibility, role: role), userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0)
+        }
+    }
+    private func clearDraft() {
+        draftSaveTask?.cancel(); draftSaveTask = nil
+        PostDraftStore().remove(userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0)
+    }
+    private func checkAccount() throws {
+        try Task.checkCancellation()
+        guard accountEpoch == session.api.generation, accountID == session.user?.id else { throw APIError.sessionChanged }
+    }
     private func publish() async {
+        guard !busy else { return }
         busy = true; error = nil; defer { busy = false; status = "" }
         do {
+            try checkAccount()
             if let editing {
                 let patch: JSON = .object(["content": .text(text), "visibility": .text(visibility)])
                 let result = try await session.api.request("/posts/\(editing.id)", method: "PUT", body: patch)
@@ -346,6 +406,7 @@ struct PostComposer: View {
                 var fields: [String: String] = ["content": text, "visibility": visibility]
                 var images: [String] = []
                 for (i, item) in media.enumerated() {
+                    try checkAccount()
                     status = "上传媒体 \(i + 1)/\(media.count)…"
                     let url: String
                     if let existing = uploaded[item.id] { url = existing }
@@ -356,9 +417,10 @@ struct PostComposer: View {
                 if !role.isEmpty { fields["display_role_type"] = role }
                 if let communityID { fields["community_id"] = String(communityID) }
                 if let quoted { fields["quoted_post_id"] = String(quoted.id) }
+                try checkAccount()
                 status = "正在发布…"
                 _ = try await session.api.request("/posts", method: "POST", form: fields)
-                UserDefaults.standard.removeObject(forKey: draftKey)
+                clearDraft()
             }
             published = true
             if editing == nil { session.postRevision += 1 }

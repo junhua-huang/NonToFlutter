@@ -31,12 +31,27 @@ struct ErrorBanner: View {
 }
 struct ResourceFooter<T: Record>: View {
     @ObservedObject var resource: PagedResource<T>
+    var emptyTitle = "这里还没有内容"
+    var emptyDescription = "稍后再来看看，或下拉刷新。"
+    var emptyIcon = "tray"
     var body: some View {
         Group {
-            if resource.loading { ProgressView().frame(maxWidth: .infinity).padding() }
-            else if let error = resource.error { ErrorBanner(text: error) { Task { await resource.load(reset: resource.items.isEmpty) } } }
-            else if resource.hasMore { Button("加载更多") { Task { await resource.load() } }.frame(maxWidth: .infinity).padding() }
-            else if resource.items.isEmpty { ContentUnavailableView("这里还没有内容", systemImage: "tray", description: Text("稍后再来看看，或下拉刷新。")) }
+            if let error = resource.error {
+                VStack(spacing: 8) {
+                    if resource.showingCache { Label("当前显示本机缓存", systemImage: "internaldrive").font(.caption).foregroundStyle(.secondary) }
+                    ErrorBanner(text: error) { Task { await resource.retry() } }
+                }
+            } else if resource.loading || (resource.page == 0 && resource.items.isEmpty) {
+                ProgressView(resource.items.isEmpty ? "正在加载…" : "正在更新…").frame(maxWidth: .infinity).padding()
+            } else if resource.hasMore {
+                Button("加载更多") { Task { await resource.load() } }.frame(maxWidth: .infinity).padding()
+                    .task(id: resource.page) {
+                        guard resource.page > 0, !Task.isCancelled else { return }
+                        await resource.load()
+                    }
+            } else if resource.items.isEmpty {
+                ContentUnavailableView(emptyTitle, systemImage: emptyIcon, description: Text(emptyDescription))
+            } else { Text("已显示全部内容").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding() }
         }.listRowSeparator(.hidden)
     }
 }
@@ -62,18 +77,39 @@ struct MediaView: View {
             if !images.isEmpty {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: images.count == 1 ? 1 : min(3, images.count)), spacing: 5) {
                     ForEach(Array(images.enumerated()), id: \.offset) { index, link in
-                        Button { selected = MediaSelection(index: index) } label: {
-                            AsyncImage(url: URL(string: link)) { phase in
-                                if let image = phase.image { image.resizable().scaledToFill() }
-                                else { ZStack { Color.secondary.opacity(0.08); Image(systemName: "photo").foregroundStyle(.secondary) } }
-                            }
-                            .frame(height: images.count == 1 ? 300 : 120).frame(maxWidth: .infinity).clipped()
-                        }.buttonStyle(.plain).accessibilityLabel("查看图片 \(index + 1)")
+                        MediaThumbnail(url: link, height: images.count == 1 ? 300 : 120, label: "查看图片 \(index + 1)") {
+                            selected = MediaSelection(index: index)
+                        }
                     }
                 }.clipShape(RoundedRectangle(cornerRadius: 14))
             }
             if let url = URL(string: video), !video.isEmpty { NativeVideo(url: url).frame(height: 260).clipShape(RoundedRectangle(cornerRadius: 14)) }
         }.fullScreenCover(item: $selected) { selection in ImageGallery(images: images, initial: selection.index) }
+    }
+}
+private struct MediaThumbnail: View {
+    let url: String
+    let height: CGFloat
+    let label: String
+    let open: () -> Void
+    @State private var attempt = 0
+    var body: some View {
+        AsyncImage(url: URL(string: url)) { phase in
+            Button {
+                if phase.error != nil {
+                    if let url = URL(string: url) { URLCache.shared.removeCachedResponse(for: URLRequest(url: url)) }
+                    attempt += 1
+                } else { open() }
+            } label: {
+                ZStack {
+                    Color.secondary.opacity(0.08)
+                    if let image = phase.image { image.resizable().scaledToFill() }
+                    else if phase.error != nil {
+                        VStack(spacing: 6) { Image(systemName: "arrow.clockwise"); Text("点按重试").font(.caption) }.foregroundStyle(.secondary)
+                    } else { ProgressView() }
+                }.frame(height: height).frame(maxWidth: .infinity).clipped()
+            }.buttonStyle(.plain).accessibilityLabel(phase.error == nil ? label : "图片加载失败，点按重试")
+        }.id("\(url)#\(attempt)")
     }
 }
 private struct MediaSelection: Identifiable { let id = UUID(); var index: Int }

@@ -24,8 +24,8 @@ final class APNsService: ObservableObject {
     @Published private(set) var bound = false
     private let identityStore: CredentialStore
     private let defaults: UserDefaults
-    private let register: () -> Void
-    private let unregister: () -> Void
+    private let register: @MainActor () -> Void
+    private let unregister: @MainActor () -> Void
     private let environment: String
     private let topic: String
     private var api: APIClient?
@@ -44,8 +44,8 @@ final class APNsService: ObservableObject {
 
     init(identityStore: CredentialStore = KeychainStore(account: "push_installation"), defaults: UserDefaults = .standard,
          environment: String? = nil, topic: String? = nil,
-         register: @escaping () -> Void = { UIApplication.shared.registerForRemoteNotifications() },
-         unregister: @escaping () -> Void = { UIApplication.shared.unregisterForRemoteNotifications() }) {
+         register: @escaping @MainActor () -> Void = { UIApplication.shared.registerForRemoteNotifications() },
+         unregister: @escaping @MainActor () -> Void = { UIApplication.shared.unregisterForRemoteNotifications() }) {
         self.identityStore = identityStore; self.defaults = defaults
         self.environment = environment ?? (Bundle.main.object(forInfoDictionaryKey: "NontoAPNSEnvironment") as? String ?? "development")
         self.topic = topic ?? Bundle.main.bundleIdentifier ?? "online.nonto.native"

@@ -8,8 +8,10 @@ struct ExploreView: View {
     @State private var topics: [Topic] = []
     @State private var history: [String] = []
     @State private var error: String?
+    @State private var queryError: String?
     var body: some View {
         VStack(spacing: 0) {
+            ErrorBanner(text: queryError).padding(.horizontal)
             if !submitted.isEmpty {
                 Picker("搜索类型", selection: $kind) { Text("动态").tag("posts"); Text("用户").tag("users"); Text("话题").tag("topics") }.pickerStyle(.segmented).padding()
                 SearchResultsView(session: session, query: submitted, kind: kind).id(submitted + kind)
@@ -34,13 +36,16 @@ struct ExploreView: View {
         }.navigationTitle("发现")
             .searchable(text: $query, prompt: "搜索动态、用户和话题")
             .onSubmit(of: .search, search)
-            .onChange(of: query) { _, value in if value.isEmpty { submitted = "" } }
+            .onChange(of: query) { _, value in
+                queryError = nil
+                if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { submitted = "" }
+            }
             .task { await load() }
     }
     private func search() {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.count >= 2 else { error = "搜索关键词至少需要 2 个字符"; return }
-        submitted = text
+        guard text.count >= 2 else { queryError = "搜索关键词至少需要 2 个字符"; return }
+        queryError = nil; submitted = text
         Task {
             _ = try? await session.api.request("/search/history", method: "POST", body: .object(["query": .text(text), "type": .text(kind)]))
             await load()
@@ -77,13 +82,13 @@ struct SearchResultsView: View {
     var body: some View {
         List {
             if kind == "posts" {
-                ForEach(posts.items) { PostCard(post: $0).listRowSeparator(.hidden) }; ResourceFooter(resource: posts)
+                ForEach(posts.items) { PostCard(post: $0).listRowSeparator(.hidden) }; ResourceFooter(resource: posts, emptyTitle: "没有找到相关动态", emptyDescription: "试试其他关键词，或切换搜索类型。", emptyIcon: "magnifyingglass")
             } else if kind == "users" {
-                ForEach(users.items) { user in NavigationLink { ProfileView(userID: user.id) } label: { PersonRow(person: user) } }; ResourceFooter(resource: users)
+                ForEach(users.items) { user in NavigationLink { ProfileView(userID: user.id) } label: { PersonRow(person: user) } }; ResourceFooter(resource: users, emptyTitle: "没有找到相关用户", emptyDescription: "试试用户名或显示名称。", emptyIcon: "person.crop.circle.badge.questionmark")
             } else {
-                ForEach(topics.items) { topic in NavigationLink("#\(topic.name)") { TopicDetailView(topic: topic) } }; ResourceFooter(resource: topics)
+                ForEach(topics.items) { topic in NavigationLink("#\(topic.name)") { TopicDetailView(topic: topic) } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
             }
-        }.listStyle(.plain).task { await load() }.refreshable { await load() }
+        }.listStyle(.plain).scrollDismissesKeyboard(.interactively).task { await load() }.refreshable { await load() }
     }
     private func load() async {
         if kind == "posts" { await posts.load(reset: true) }
@@ -122,7 +127,7 @@ struct FollowedTopicsView: View {
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/topics/followed", keys: ["topics", "items"], userID: session.user?.id ?? 0)) }
     var body: some View {
         List { ForEach(resource.items) { topic in NavigationLink("#\(topic.name)") { TopicDetailView(topic: topic) } }; ResourceFooter(resource: resource) }
-            .navigationTitle("我的话题").task { await resource.load(reset: true) }.refreshable { await resource.load(reset: true) }
+            .navigationTitle("我的话题").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
 }
 
@@ -131,6 +136,8 @@ struct NotificationsView: View {
     @StateObject private var resource: PagedResource<Notice>
     @ObservedObject private var socket: RealtimeClient
     @State private var error: String?
+    @State private var readingAll = false
+    @State private var removing = Set<Int>()
     init(session: AppSession) {
         _socket = ObservedObject(wrappedValue: session.socket)
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/notifications/", keys: ["notifications", "items"], userID: session.user?.id ?? 0))
@@ -149,23 +156,36 @@ struct NotificationsView: View {
                         }
                         if !notice.isRead { Circle().fill(Color.brand).frame(width: 8, height: 8) }
                     }.padding(.vertical, 6)
-                }.swipeActions {
+                }.disabled(removing.contains(notice.id)).swipeActions {
                     Button(role: .destructive) { Task { await remove(notice) } } label: { Label("删除", systemImage: "trash") }
                 }
             }
-            ResourceFooter(resource: resource)
+            ResourceFooter(resource: resource, emptyTitle: "还没有通知", emptyDescription: "新的互动和提醒会出现在这里。", emptyIcon: "bell")
         }.navigationTitle("通知").listStyle(.plain)
-            .toolbar { Button("全部已读") { Task { await readAll() } }.disabled(session.noticeUnread == 0) }
-            .task { await resource.load(reset: true) }
+            .toolbar { Button("全部已读") { Task { await readAll() } }.disabled(readingAll || session.noticeUnread == 0) }
+            .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
-            .onReceive(socket.$revision.debounce(for: .milliseconds(500), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true); await session.refreshCounts() } }
+            .onReceive(session.$noticeChange.dropFirst().compactMap { $0 }) { change in
+                let patch: JSON = .object(["is_read": .bool(true)])
+                if let id = change.id { resource.apply(id: id, patch: patch) }
+                else { resource.applyAll(patch: patch) }
+            }
+            .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(500), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true); await session.refreshCounts() } }
     }
     private func readAll() async {
-        do { _ = try await session.api.request("/notifications/mark-all-read", method: "POST"); await resource.load(reset: true); await session.refreshCounts() }
+        guard !readingAll else { return }
+        readingAll = true; error = nil; defer { readingAll = false }
+        do {
+            _ = try await session.api.request("/notifications/mark-all-read", method: "POST")
+            session.noticeChange = NoticeChange(id: nil)
+            await session.refreshCounts()
+        }
         catch { self.error = error.localizedDescription }
     }
     private func remove(_ notice: Notice) async {
-        do { _ = try await session.api.request("/notifications/\(notice.id)", method: "DELETE"); resource.items.removeAll { $0.id == notice.id }; await session.refreshCounts() }
+        guard removing.insert(notice.id).inserted else { return }
+        error = nil; defer { removing.remove(notice.id) }
+        do { _ = try await session.api.request("/notifications/\(notice.id)", method: "DELETE"); resource.apply(id: notice.id, patch: nil); await session.refreshCounts() }
         catch { self.error = error.localizedDescription }
     }
 }
@@ -182,8 +202,8 @@ struct NoticeDestination: View {
             else if notice.raw["related_type"].string == "community" { CommunityDetailView(communityID: notice.raw["related_id"].int) }
             else { ScrollView { VStack(alignment: .leading, spacing: 16) { Text(notice.title).font(.title2.bold()); Text(notice.content); ErrorBanner(text: error) }.padding().frame(maxWidth: .infinity, alignment: .leading) } }
         }.task {
+            async let acknowledgement = try? session.api.request("/notifications/\(notice.id)/read", method: "POST")
             do {
-                _ = try await session.api.request("/notifications/\(notice.id)/read", method: "POST"); await session.refreshCounts()
                 let type = notice.raw["related_type"].string
                 if type == "post" { postID = notice.raw["related_id"].int }
                 else if type == "comment" {
@@ -191,6 +211,10 @@ struct NoticeDestination: View {
                     let id = j["comment"].or(j)["post_id"].int; if id > 0 { postID = id }
                 }
             } catch { self.error = error.localizedDescription }
+            if await acknowledgement != nil {
+                session.noticeChange = NoticeChange(id: notice.id)
+                await session.refreshCounts()
+            }
         }
     }
 }

@@ -14,11 +14,35 @@ struct ProfileView: View {
     @State private var error: String?
     @State private var busy = false
     @State private var liked = false
+    @State private var blocked = false
     private var isOwn: Bool { session.user?.id == userID }
     var body: some View {
+        PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked).navigationTitle(isOwn ? "我的主页" : "个人主页").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if isOwn { NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
+                else {
+                    Menu {
+                        Button("举报用户", systemImage: "flag") { reporting = true }
+                        Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { confirmBlock = true }
+                        if friendship["status"].string == "accepted" { Button("删除好友", role: .destructive) { confirmUnfriend = true } }
+                    } label: { Image(systemName: "ellipsis") }
+                }
+            }
+            .task { await load() }
+            .alert("已屏蔽此用户", isPresented: $blocked) { Button("好", role: .cancel) {} }
+            .sheet(isPresented: $editing, onDismiss: { Task { await load() } }) { EditProfileView() }
+            .sheet(isPresented: $reporting) { ReportView(kind: "user", targetID: userID) }
+            .navigationDestination(item: $conversation) { ChatRoomView(conversation: $0) }
+            .confirmationDialog("屏蔽后将减少彼此的互动，确定继续？", isPresented: $confirmBlock) {
+                Button("屏蔽用户", role: .destructive) { Task { await block() } }
+            }
+            .confirmationDialog("删除这位好友？", isPresented: $confirmUnfriend) {
+                Button("删除好友", role: .destructive) { Task { await unfriend() } }
+            }
+    }
+    private var profileHeader: some View {
         VStack(spacing: 0) {
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 14) {
                     if let user = person ?? (isOwn ? session.user : nil) {
                         if let url = URL(string: user.cover), !user.cover.isEmpty {
                             AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Color.brand.opacity(0.1) }.frame(height: 140).clipped().clipShape(RoundedRectangle(cornerRadius: 16))
@@ -41,30 +65,8 @@ struct ProfileView: View {
                     } else if error == nil { ProgressView() }
                     ErrorBanner(text: error) { Task { await load() } }
                 }.padding()
-            }.frame(maxHeight: 320)
             Picker("动态类型", selection: $liked) { Text("动态").tag(false); Text("赞过").tag(true) }.pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 8)
-            PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")").id(liked)
-        }.navigationTitle(isOwn ? "我的主页" : "个人主页").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if isOwn { NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
-                else {
-                    Menu {
-                        Button("举报用户", systemImage: "flag") { reporting = true }
-                        Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { confirmBlock = true }
-                        if friendship["status"].string == "accepted" { Button("删除好友", role: .destructive) { confirmUnfriend = true } }
-                    } label: { Image(systemName: "ellipsis") }
-                }
-            }
-            .task { await load() }
-            .sheet(isPresented: $editing, onDismiss: { Task { await load() } }) { EditProfileView() }
-            .sheet(isPresented: $reporting) { ReportView(kind: "user", targetID: userID) }
-            .navigationDestination(item: $conversation) { ChatRoomView(conversation: $0) }
-            .confirmationDialog("屏蔽后将减少彼此的互动，确定继续？", isPresented: $confirmBlock) {
-                Button("屏蔽用户", role: .destructive) { Task { await block() } }
-            }
-            .confirmationDialog("删除这位好友？", isPresented: $confirmUnfriend) {
-                Button("删除好友", role: .destructive) { Task { await unfriend() } }
-            }
+        }
     }
     private var friendLabel: String {
         switch friendship["status"].string {
@@ -103,7 +105,7 @@ struct ProfileView: View {
         } catch { self.error = error.localizedDescription }
     }
     private func block() async {
-        do { _ = try await session.api.request("/blocks", method: "POST", body: .object(["user_id": .id(userID)])); session.postRevision += 1; error = "已屏蔽此用户" }
+        do { _ = try await session.api.request("/blocks", method: "POST", body: .object(["user_id": .id(userID)])); session.postRevision += 1; error = nil; blocked = true }
         catch { self.error = error.localizedDescription }
     }
     private func unfriend() async {
@@ -187,7 +189,7 @@ struct FriendsView: View {
             }
             Section("我的好友") {
                 ForEach(friends.items) { person in NavigationLink { ProfileView(userID: person.id) } label: { PersonRow(person: person) } }
-                ResourceFooter(resource: friends)
+                ResourceFooter(resource: friends, emptyTitle: "还没有好友", emptyDescription: "去发现页搜索朋友，发送好友申请。", emptyIcon: "person.2")
             }
         }.navigationTitle("好友").task { await load() }.refreshable { await load() }
     }
