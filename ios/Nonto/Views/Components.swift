@@ -8,26 +8,34 @@ struct AvatarView: View {
     var url: String
     var name: String
     var size: CGFloat = 44
+    @State private var image: UIImage?
     var body: some View {
-        AsyncImage(url: URL(string: url)) { phase in
-            if let image = phase.image { image.resizable().scaledToFill() }
-            else { ZStack { Color.brand.opacity(0.12); Text(String(name.prefix(1))).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(Color.brand) } }
-        }
-        .frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
+        ZStack {
+            Color.brand.opacity(0.12)
+            if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipped() }
+            else { Text(String(name.prefix(1))).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(Color.brand) }
+        }.frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
+            .task(id: url) {
+                image = nil
+                if let result = try? await ImageRepository.shared.image(at: url, maxPixelSize: 256), !Task.isCancelled { image = result }
+            }
     }
 }
 
 struct ProfileCover: View {
     let url: String
+    @State private var image: UIImage?
     var body: some View {
         GeometryReader { geometry in
-            AsyncImage(url: URL(string: url)) { phase in
-                if let image = phase.image { image.resizable().scaledToFill() }
-                else {
-                    LinearGradient(colors: [Color.brand.opacity(0.28), Color.brand.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                }
+            ZStack {
+                if let image { Image(uiImage: image).resizable().scaledToFill() }
+                else { LinearGradient(colors: [Color.brand.opacity(0.28), Color.brand.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing) }
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.frame(height: 144).accessibilityHidden(true)
+            .task(id: url) {
+                image = nil
+                if let result = try? await ImageRepository.shared.image(at: url, maxPixelSize: 1200), !Task.isCancelled { image = result }
+            }
     }
 }
 struct ErrorBanner: View {
@@ -110,25 +118,29 @@ private struct MediaThumbnail: View {
     let label: String
     let open: () -> Void
     @State private var attempt = 0
+    @State private var image: UIImage?
+    @State private var failed = false
     var body: some View {
-        AsyncImage(url: URL(string: url)) { phase in
-            Button {
-                if phase.error != nil {
-                    if let url = URL(string: url) { URLCache.shared.removeCachedResponse(for: URLRequest(url: url)) }
-                    attempt += 1
-                } else { open() }
-            } label: {
-                GeometryReader { geometry in
-                  ZStack {
+        Button {
+            if failed { attempt += 1 } else { open() }
+        } label: {
+            GeometryReader { geometry in
+                ZStack {
                     Color.secondary.opacity(0.08)
-                    if let image = phase.image { image.resizable().scaledToFill().frame(width: geometry.size.width, height: height).clipped() }
-                    else if phase.error != nil {
+                    if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: geometry.size.width, height: height).clipped() }
+                    else if failed {
                         VStack(spacing: 6) { Image(systemName: "arrow.clockwise"); Text("点按重试").font(.caption) }.foregroundStyle(.secondary)
                     } else { ProgressView() }
-                  }.frame(width: geometry.size.width, height: height).contentShape(Rectangle()).clipped()
-                }.frame(height: height).frame(maxWidth: .infinity).contentShape(Rectangle()).clipped()
-            }.buttonStyle(.plain).contentShape(Rectangle()).accessibilityLabel(phase.error == nil ? label : "图片加载失败，点按重试")
-        }.id("\(url)#\(attempt)")
+                }.frame(width: geometry.size.width, height: height).contentShape(Rectangle()).clipped()
+            }.frame(height: height).frame(maxWidth: .infinity).contentShape(Rectangle()).clipped()
+        }.buttonStyle(.plain).contentShape(Rectangle()).accessibilityLabel(failed ? "图片加载失败，点按重试" : label)
+            .task(id: "\(url)#\(attempt)") {
+                image = nil; failed = false
+                do {
+                    let result = try await ImageRepository.shared.image(at: url, maxPixelSize: 960, reload: attempt > 0)
+                    try Task.checkCancellation(); image = result
+                } catch { if !Task.isCancelled { failed = true } }
+            }
     }
 }
 private struct MediaSelection: Identifiable { let id = UUID(); var index: Int }

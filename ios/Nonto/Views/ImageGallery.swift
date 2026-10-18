@@ -4,38 +4,48 @@ import ImageIO
 
 @MainActor final class ImageRepository {
     static let shared = ImageRepository()
-    private let cache = NSCache<NSURL, UIImage>()
-    private var requests: [URL: Task<UIImage, Error>] = [:]
+    private let cache = NSCache<NSString, UIImage>()
+    private var requests: [String: Task<UIImage, Error>] = [:]
+    private var generation = UUID()
     private let session: URLSession
     init(session: URLSession = .shared) {
-        self.session = session; cache.totalCostLimit = 64 * 1024 * 1024; cache.countLimit = 24
+        self.session = session; cache.totalCostLimit = 48 * 1024 * 1024; cache.countLimit = 40
     }
-    func clear() { cache.removeAllObjects(); for request in requests.values { request.cancel() }; requests.removeAll() }
-    func image(at text: String, reload: Bool = false) async throws -> UIImage {
+    func clear() {
+        generation = UUID(); cache.removeAllObjects()
+        for request in requests.values { request.cancel() }; requests.removeAll()
+    }
+    nonisolated static func decode(_ data: Data, maxPixelSize: Int) throws -> UIImage {
+        guard data.count <= 80 * 1024 * 1024,
+              let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: min(4096, max(64, maxPixelSize))
+              ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
+        return UIImage(cgImage: cg)
+    }
+    func image(at text: String, maxPixelSize: Int = 3072, reload: Bool = false) async throws -> UIImage {
         guard let url = URL(string: text), ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { throw URLError(.badURL) }
-        if reload { cache.removeObject(forKey: url as NSURL); session.configuration.urlCache?.removeCachedResponse(for: URLRequest(url: url)) }
-        if let image = cache.object(forKey: url as NSURL) { return image }
-        if let task = requests[url] { return try await task.value }
+        let pixels = min(4096, max(64, maxPixelSize)), epoch = generation
+        let key = url.absoluteString + "#nonto-decode-" + String(pixels)
+        if reload { cache.removeObject(forKey: key as NSString); session.configuration.urlCache?.removeCachedResponse(for: URLRequest(url: url)) }
+        if let image = cache.object(forKey: key as NSString) { return image }
+        if let task = requests[key] { return try await task.value }
         let task = Task { () throws -> UIImage in
             let (data, response) = try await session.data(from: url)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), data.count <= 80 * 1024 * 1024 else { throw URLError(.badServerResponse) }
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
             try Task.checkCancellation()
-            let decoded = try await Task.detached(priority: .userInitiated) {
-                guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-                      let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                        kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceThumbnailMaxPixelSize: 4096
-                      ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
-                return UIImage(cgImage: cg)
-            }.value
+            let decoded = try await Task.detached(priority: .userInitiated) { try Self.decode(data, maxPixelSize: pixels) }.value
             try Task.checkCancellation()
             return decoded
         }
-        requests[url] = task
-        defer { requests[url] = nil }
+        requests[key] = task
+        defer { if epoch == generation { requests[key] = nil } }
         let image = try await task.value
-        cache.setObject(image, forKey: url as NSURL, cost: Int(image.size.width * image.size.height * 4))
+        guard epoch == generation else { throw CancellationError() }
+        cache.setObject(image, forKey: key as NSString, cost: Int(image.size.width * image.size.height * 4))
         return image
     }
 }

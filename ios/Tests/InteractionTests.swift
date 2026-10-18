@@ -59,6 +59,16 @@ import UIKit
                         ChatMessage(.object(["id": .id(4), "message_type": .text("image"), "media_url": .text("https://example.test/c.jpg")]))]
         XCTAssertEqual(ChatMediaTimeline.images(messages).map(\.id), [1, 4])
     }
+    func testLargePhotoDecodeIsBoundedBeforeItBecomesATimelineThumbnail() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let data = UIGraphicsImageRenderer(size: CGSize(width: 1000, height: 2000), format: format).pngData { context in
+            UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 1000, height: 2000))
+        }
+        let thumbnail = try ImageRepository.decode(data, maxPixelSize: 128)
+        XCTAssertEqual(thumbnail.size.width, 64, accuracy: 1)
+        XCTAssertEqual(thumbnail.size.height, 128, accuracy: 1)
+        XCTAssertThrowsError(try ImageRepository.decode(Data([0, 1, 2]), maxPixelSize: 128))
+    }
     func testPinchSurfaceFitsImageAndKeepsHorizontalSwipesAvailableUntilZoomed() {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 800))
         let image = renderer.image { context in UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 1200, height: 800)) }

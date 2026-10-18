@@ -82,30 +82,32 @@ struct AppNavigationStack<Root: View>: View {
             root().navigationDestination(for: AppRoute.self) { route in destination(route) }
         }.environment(\.navigate, navigation.open)
     }
-    @ViewBuilder private func destination(_ route: AppRoute) -> some View {
+    // Bound the registry type instead of nesting every screen into one
+    // conditional view type during navigation setup.
+    private func destination(_ route: AppRoute) -> AnyView {
         switch route {
-        case .profile(let id): ProfileView(userID: id)
-        case .post(let id, let initial): PostDetailView(session: session, postID: id, initial: initial)
-        case .chat(let room): ChatRoomView(conversation: room)
-        case .community(let id): CommunityDetailView(communityID: id)
-        case .topic(let topic): TopicDetailView(topic: topic)
-        case .notice(let notice): NoticeDestination(notice: notice)
-        case .communityManage(let community): CommunityManageView(community: community)
-        case .comic(let id): ComicDetailView(eventID: id)
-        case .settings: SettingsView()
-        case .personalInformation: PersonalInformationView()
-        case .privacySettings: PrivacySettingsView()
-        case .notificationSettings: NotificationSettingsView()
-        case .password: PasswordView()
-        case .blockedUsers: BlockedUsersView(session: session)
-        case .identity: IdentityCenterView()
-        case .followedTopics: FollowedTopicsView(session: session)
-        case .communities(let mine): CommunityListView(session: session, mine: mine)
-        case .comics: ComicListView()
-        case .policy(let kind): PolicyView(kind: kind)
-        case .deleteAccount: DeleteAccountView()
-        case .reportHistory: ReportHistoryView(session: session)
-        case .friends: FriendsView(session: session)
+        case .profile(let id): return AnyView(ProfileView(userID: id))
+        case .post(let id, let initial): return AnyView(PostDetailView(session: session, postID: id, initial: initial))
+        case .chat(let room): return AnyView(ChatRoomView(conversation: room))
+        case .community(let id): return AnyView(CommunityDetailView(communityID: id))
+        case .topic(let topic): return AnyView(TopicDetailView(topic: topic))
+        case .notice(let notice): return AnyView(NoticeDestination(notice: notice))
+        case .communityManage(let community): return AnyView(CommunityManageView(community: community))
+        case .comic(let id): return AnyView(ComicDetailView(eventID: id))
+        case .settings: return AnyView(SettingsView())
+        case .personalInformation: return AnyView(PersonalInformationView())
+        case .privacySettings: return AnyView(PrivacySettingsView())
+        case .notificationSettings: return AnyView(NotificationSettingsView())
+        case .password: return AnyView(PasswordView())
+        case .blockedUsers: return AnyView(BlockedUsersView(session: session))
+        case .identity: return AnyView(IdentityCenterView())
+        case .followedTopics: return AnyView(FollowedTopicsView(session: session))
+        case .communities(let mine): return AnyView(CommunityListView(session: session, mine: mine))
+        case .comics: return AnyView(ComicListView())
+        case .policy(let kind): return AnyView(PolicyView(kind: kind))
+        case .deleteAccount: return AnyView(DeleteAccountView())
+        case .reportHistory: return AnyView(ReportHistoryView(session: session))
+        case .friends: return AnyView(FriendsView(session: session))
         }
     }
 }
