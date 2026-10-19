@@ -1,4 +1,4 @@
-"""Read technical crash evidence for NonTo 21.1 without tester identities."""
+"""Read recent technical NonTo crash evidence without tester identities."""
 import importlib.util
 import json
 from pathlib import Path
@@ -48,6 +48,11 @@ def main():
         'filter[build]': builds[0]['id'], 'limit': '20', 'sort': '-createdDate',
         'fields[betaFeedbackCrashSubmissions]': 'createdDate,deviceModel,osVersion,appUptimeInMilliseconds,buildBundleId'})['data']
     print('NonTo build 21.1 crash submissions:', len(reports), flush=True)
+    if not reports:
+        reports = apple.request('GET', f'apps/{apps[0]["id"]}/betaFeedbackCrashSubmissions', query={
+            'limit': '20', 'sort': '-createdDate',
+            'fields[betaFeedbackCrashSubmissions]': 'createdDate,deviceModel,osVersion,appUptimeInMilliseconds,buildBundleId'})['data']
+        print('Recent NonTo crash submissions across all builds:', len(reports), flush=True)
     for report in reports[:5]:
         print(json.dumps({key: report['attributes'].get(key) for key in
                           ('createdDate', 'deviceModel', 'osVersion', 'appUptimeInMilliseconds', 'buildBundleId')}), flush=True)

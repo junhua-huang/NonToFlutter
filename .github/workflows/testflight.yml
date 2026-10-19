@@ -193,5 +193,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m pip install 'cryptography>=45,<47'
-      - name: Read technical crash evidence for NonTo 21.1 only
+      - name: Read recent technical NonTo crash evidence
         run: python3 .github/scripts/read_nonto_crashes.py
