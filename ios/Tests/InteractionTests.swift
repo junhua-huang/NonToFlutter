@@ -3,25 +3,40 @@ import UIKit
 @testable import Nonto
 
 @MainActor final class InteractionTests: XCTestCase {
-    func testScrollChromeHidesOnUpwardSwipeAndRestoresOnPullDownWithoutBounceFlicker() {
-        var chrome = ScrollChrome()
-        chrome.update(offset: 0, maximum: 1000, userScrolling: true)
-        chrome.update(offset: 30, maximum: 1000, userScrolling: true)
-        XCTAssertTrue(chrome.hidden)
-        chrome.update(offset: 25, maximum: 1000, userScrolling: true)
-        XCTAssertTrue(chrome.hidden)
-        chrome.update(offset: 8, maximum: 1000, userScrolling: true)
-        XCTAssertFalse(chrome.hidden)
-        chrome.update(offset: -40, maximum: 1000, userScrolling: true)
-        XCTAssertFalse(chrome.hidden)
-        chrome.update(offset: 0, maximum: 1000, userScrolling: true)
-        chrome.update(offset: 600, maximum: 1000, userScrolling: false)
-        XCTAssertFalse(chrome.hidden)
-        chrome.update(offset: 640, maximum: 1000, userScrolling: true)
-        XCTAssertTrue(chrome.hidden)
-        chrome.update(offset: 1200, maximum: 1000, userScrolling: true)
-        XCTAssertTrue(chrome.hidden)
-        chrome.reset(); XCTAssertFalse(chrome.hidden)
+    func testLeavingTimelineRestoresVisibleNavigationBarAndPreviousSwipePolicy() {
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        let chrome = ScrollChrome()
+        chrome.enableSwipe(in: navigation)
+        XCTAssertTrue(navigation.hidesBarsOnSwipe)
+        navigation.setNavigationBarHidden(true, animated: false)
+        chrome.viewWillDisappear(false)
+        XCTAssertFalse(navigation.hidesBarsOnSwipe)
+        XCTAssertFalse(navigation.isNavigationBarHidden)
+
+        navigation.hidesBarsOnSwipe = true
+        chrome.enableSwipe(in: navigation)
+        chrome.restoreNavigationBar()
+        XCTAssertTrue(navigation.hidesBarsOnSwipe)
+    }
+    func testReplacingTimelineCannotLetOldCleanupDisableTheVisibleTimeline() {
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        let oldList = ScrollChrome(), newList = ScrollChrome()
+        oldList.enableSwipe(in: navigation)
+        newList.enableSwipe(in: navigation)
+        oldList.restoreNavigationBar()
+        XCTAssertTrue(navigation.hidesBarsOnSwipe)
+        newList.restoreNavigationBar()
+        XCTAssertFalse(navigation.hidesBarsOnSwipe)
+    }
+    func testTimelineSwipePolicyStaysIndependentAcrossTabs() {
+        let feed = UINavigationController(rootViewController: UIViewController())
+        let profile = UINavigationController(rootViewController: UIViewController())
+        let feedChrome = ScrollChrome(), profileChrome = ScrollChrome()
+        feedChrome.enableSwipe(in: feed); profileChrome.enableSwipe(in: profile)
+        feedChrome.restoreNavigationBar()
+        XCTAssertFalse(feed.hidesBarsOnSwipe)
+        XCTAssertTrue(profile.hidesBarsOnSwipe)
+        profileChrome.restoreNavigationBar()
     }
     func testNavigationRoutesRemainIndependentAndIgnoreRepeatedOrInvalidTaps() {
         let feed = AppNavigation(), inbox = AppNavigation()

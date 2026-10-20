@@ -69,6 +69,9 @@ final class LayoutSnapshotTests: XCTestCase {
         // Let navigation, fixture requests and SwiftUI's layout transactions settle.
         try await Task.sleep(for: .milliseconds(700))
         controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
+        let navigations = descendants(of: controller).compactMap { $0 as? UINavigationController }
+        XCTAssertTrue(navigations.contains(where: { $0.hidesBarsOnSwipe }),
+                      "A visible SwiftUI timeline must attach its native scroll policy")
         let format = UIGraphicsImageRendererFormat(); format.scale = 2
         let image = UIGraphicsImageRenderer(size: window.bounds.size, format: format).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
@@ -76,5 +79,9 @@ final class LayoutSnapshotTests: XCTestCase {
         let attachment = XCTAttachment(image: image)
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
         XCTAssertEqual(image.size.width, width, accuracy: 1, "Snapshot must use the requested phone width")
+    }
+
+    private func descendants(of controller: UIViewController) -> [UIViewController] {
+        [controller] + controller.children.flatMap { descendants(of: $0) }
     }
 }

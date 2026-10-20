@@ -57,7 +57,7 @@ jobs:
       - name: Verify optimized Release startup and authenticated root
         run: |
           set -o pipefail
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/ReleaseStartup -resultBundlePath build/ReleaseStartup.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -only-testing:NontoTests/LayoutSnapshotTests -parallel-testing-enabled NO test | tee build-release-startup.log
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/ReleaseStartup -resultBundlePath build/ReleaseStartup.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -only-testing:NontoTests/LayoutSnapshotTests -only-testing:NontoTests/InteractionTests -parallel-testing-enabled NO test | tee build-release-startup.log
       - name: Build for iPhone
         run: xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/Device CODE_SIGNING_ALLOWED=NO build
       - name: Export layout review screenshots

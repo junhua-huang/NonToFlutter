@@ -19,7 +19,7 @@ extension View {
 
     func timelineList() -> some View {
         self.listStyle(.plain).listRowSpacing(0).buttonStyle(.plain)
-            .modifier(ScrollingNavigationBar())
+            .background(ScrollingNavigationBar().frame(width: 0, height: 0))
             .navigationLinkIndicatorVisibility(.hidden)
             .scrollContentBackground(.hidden)
             .background(Color.timelineBackground)
@@ -86,25 +86,12 @@ struct TimelineActionSymbol: View {
     }
 }
 
-private struct ScrollChromeSample: Equatable {
-    let offset: Double
-    let maximum: Double
-}
-private struct ScrollingNavigationBar: ViewModifier {
-    @State private var chrome = ScrollChrome()
-    @State private var scrolling = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    func body(content: Content) -> some View {
-        content
-            .onScrollPhaseChange { _, phase in scrolling = phase == .interacting || phase == .decelerating }
-            .onScrollGeometryChange(for: ScrollChromeSample.self) { geometry in
-                ScrollChromeSample(offset: Double(geometry.contentOffset.y + geometry.contentInsets.top),
-                                   maximum: Double(max(0, geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom)))
-            } action: { _, sample in
-                if reduceMotion { chrome.update(offset: sample.offset, maximum: sample.maximum, userScrolling: scrolling) }
-                else { withAnimation(.easeInOut(duration: 0.18)) { chrome.update(offset: sample.offset, maximum: sample.maximum, userScrolling: scrolling) } }
-            }
-            .toolbar(chrome.hidden ? .hidden : .visible, for: .navigationBar)
-            .onAppear { chrome.reset() }
+private struct ScrollingNavigationBar: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> ScrollChrome { ScrollChrome() }
+    // Layout updates must never change toolbar visibility. UIKit owns the swipe
+    // gesture and its bar animation, without feeding insets back into SwiftUI.
+    func updateUIViewController(_ controller: ScrollChrome, context: Context) {}
+    static func dismantleUIViewController(_ controller: ScrollChrome, coordinator: ()) {
+        controller.restoreNavigationBar()
     }
 }
