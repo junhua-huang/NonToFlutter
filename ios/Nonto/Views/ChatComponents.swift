@@ -294,7 +294,9 @@ struct ChatAttachmentSheet: View {
                                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected == index ? Color.brand : .clear, lineWidth: 2))
                                     }.buttonStyle(.plain).accessibilityLabel("预览第 \(index + 1) 个附件")
                                     Button("移除", role: .destructive) {
-                                        excluded.insert(item.id); selected = GalleryPosition.clamped(selected, count: selection.count)
+                                        let currentID = selection.indices.contains(selected) ? selection[selected].id : nil
+                                        excluded.insert(item.id)
+                                        selected = selection.firstIndex { $0.id == currentID } ?? GalleryPosition.clamped(selected, count: selection.count)
                                     }.font(.caption).frame(minWidth: 66, minHeight: 44).disabled(submitting)
                                 }
                             }
