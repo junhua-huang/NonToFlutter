@@ -15,6 +15,12 @@ import ImageIO
         generation = UUID(); cache.removeAllObjects()
         for request in requests.values { request.cancel() }; requests.removeAll()
     }
+    /// The uploaded bytes are already available locally; do not download them again for the sent thumbnail.
+    func rememberUploadedPreview(_ image: UIImage, at text: String) {
+        guard let url = URL(string: text), ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return }
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? Int(image.size.width * image.size.height * 4)
+        cache.setObject(image, forKey: (url.absoluteString + "#uploaded-preview") as NSString, cost: cost)
+    }
     nonisolated static func decode(_ data: Data, maxPixelSize: Int) throws -> UIImage {
         guard data.count <= 80 * 1024 * 1024,
               let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
@@ -30,7 +36,12 @@ import ImageIO
         guard let url = URL(string: text), ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { throw URLError(.badURL) }
         let pixels = min(4096, max(64, maxPixelSize)), epoch = generation
         let key = url.absoluteString + "#nonto-decode-" + String(pixels)
-        if reload { cache.removeObject(forKey: key as NSString); session.configuration.urlCache?.removeCachedResponse(for: URLRequest(url: url)) }
+        let previewKey = (url.absoluteString + "#uploaded-preview") as NSString
+        if reload {
+            cache.removeObject(forKey: key as NSString); cache.removeObject(forKey: previewKey)
+            session.configuration.urlCache?.removeCachedResponse(for: URLRequest(url: url))
+        }
+        if let image = cache.object(forKey: previewKey) { return image }
         if let image = cache.object(forKey: key as NSString) { return image }
         if let task = requests[key] { return try await task.value }
         let task = Task { () throws -> UIImage in

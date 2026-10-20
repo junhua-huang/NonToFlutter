@@ -109,6 +109,28 @@ final class APIClientTests: XCTestCase {
         let url = try await api.upload(Data([1, 2, 3]), filename: "p.jpg", mime: "image/jpeg")
         XCTAssertTrue(uploaded); XCTAssertEqual(url, "https://cos.example.test/p.jpg")
     }
+    func testProgressUploadKeepsCOSCredentialsIsolatedAndRequiresServerConfirmation() async throws {
+        var uploaded = false, confirmed = false
+        let (api, _) = client { request in
+            if request.url?.host == "cos.example.test" {
+                uploaded = true
+                XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "image/jpeg")
+                XCTAssertEqual(request.httpMethod, "PUT")
+                return (200, .null)
+            }
+            if request.url!.path.hasSuffix("presign") {
+                return (200, .object(["upload_url": .text("https://cos.example.test/p.jpg?signature=cos-only"), "cos_key": .text("p.jpg")]))
+            }
+            confirmed = true; XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer app-secret")
+            return (200, .object(["url": .text("https://cos.example.test/p.jpg")]))
+        }
+        try api.setToken("app-secret")
+        let url = try await api.upload(Data([1, 2, 3]), filename: "p.jpg", mime: "image/jpeg", progress: { value in
+            XCTAssertTrue((0...1).contains(value))
+        })
+        XCTAssertTrue(uploaded); XCTAssertTrue(confirmed); XCTAssertEqual(url, "https://cos.example.test/p.jpg")
+    }
     func testFailedUploadConfirmationIsNotSuccess() async throws {
         let (api, _) = client { request in
             if request.url!.path.hasSuffix("presign") { return (200, .object(["upload_url": .text("https://cos.example.test/p.jpg"), "cos_key": .text("p.jpg")])) }

@@ -24,6 +24,7 @@ struct AvatarView: View {
 
 struct ProfileCover: View {
     let url: String
+    var height: CGFloat? = 144
     @State private var image: UIImage?
     var body: some View {
         GeometryReader { geometry in
@@ -31,7 +32,7 @@ struct ProfileCover: View {
                 if let image { Image(uiImage: image).resizable().scaledToFill() }
                 else { LinearGradient(colors: [Color.brand.opacity(0.28), Color.brand.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing) }
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
-        }.frame(height: 144).accessibilityHidden(true)
+        }.frame(height: height).accessibilityHidden(true)
             .task(id: url) {
                 image = nil
                 if let result = try? await ImageRepository.shared.image(at: url, maxPixelSize: 1200), !Task.isCancelled { image = result }
@@ -105,24 +106,32 @@ struct MediaView: View {
     var galleryImages: [String]? = nil
     var galleryIndex: Int? = nil
     var postLayout = false
+    var fitImage = false
+    var onPresentationChange: (Bool) -> Void = { _ in }
     @State private var selected: MediaSelection?
     var body: some View {
         VStack(spacing: 8) {
             if !images.isEmpty {
                 if postLayout && images.count > 1 {
-                    PostImageGrid(images: images) { selected = MediaSelection(index: $0) }
+                    PostImageGrid(images: images, open: open)
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: images.count == 1 ? 1 : (images.count <= 4 ? 2 : 3)), spacing: 3) {
                     ForEach(Array(images.enumerated()), id: \.offset) { index, link in
-                        MediaThumbnail(url: link, height: thumbnailHeight ?? (images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110)), label: "查看图片 \(index + 1)") {
-                            selected = MediaSelection(index: galleryIndex ?? index)
+                        MediaThumbnail(url: link, height: thumbnailHeight ?? (images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110)), label: "查看图片 \(index + 1)", fitImage: fitImage) {
+                            open(galleryIndex ?? index)
                         }
                     }
                     }.clipShape(RoundedRectangle(cornerRadius: 14))
                 }
             }
-            if let url = URL(string: video), !video.isEmpty { NativeVideo(url: url).frame(height: 260).clipShape(RoundedRectangle(cornerRadius: 14)) }
-        }.fullScreenCover(item: $selected) { selection in ImageGallery(images: galleryImages ?? images, initial: selection.index) }
+            if let url = URL(string: video), !video.isEmpty { NativeVideo(url: url).frame(height: thumbnailHeight ?? 260).clipShape(RoundedRectangle(cornerRadius: 14)) }
+        }.fullScreenCover(item: $selected, onDismiss: { onPresentationChange(false) }) { selection in
+            ImageGallery(images: galleryImages ?? images, initial: selection.index)
+        }
+    }
+    private func open(_ index: Int) {
+        onPresentationChange(true)
+        selected = MediaSelection(index: index)
     }
 }
 private struct PostImageGrid: View {
@@ -165,6 +174,7 @@ private struct MediaThumbnail: View {
     let url: String
     let height: CGFloat
     let label: String
+    var fitImage = false
     let open: () -> Void
     @State private var attempt = 0
     @State private var image: UIImage?
@@ -176,7 +186,7 @@ private struct MediaThumbnail: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.secondary.opacity(0.08)
-                    if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: geometry.size.width, height: height).clipped() }
+                    if let image { Image(uiImage: image).resizable().aspectRatio(contentMode: fitImage ? .fit : .fill).frame(width: geometry.size.width, height: height).clipped() }
                     else if failed {
                         VStack(spacing: 6) { Image(systemName: "arrow.clockwise"); Text("点按重试").font(.caption) }.foregroundStyle(.secondary)
                     } else { ProgressView() }

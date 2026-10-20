@@ -24,7 +24,7 @@ final class ChatStore: ObservableObject {
     @Published var draft = ""
     @Published private(set) var scrollRequest = 0
     @Published private(set) var unread = 0
-    var nearBottom = true
+    @Published private(set) var nearBottom = true
     private let api: APIClient
     private let socket: RealtimeClient?
     private let accountID: Int
@@ -92,7 +92,10 @@ final class ChatStore: ObservableObject {
         guard valid else { return }; defaults.set(draft, forKey: draftKey)
     }
     func jumpToLatest() { nearBottom = true; unread = 0; scrollRequest += 1 }
-    func reachedBottom(_ value: Bool) { nearBottom = value; if value { unread = 0 } }
+    func reachedBottom(_ value: Bool) {
+        if nearBottom != value { nearBottom = value }
+        if value && unread > 0 { unread = 0 }
+    }
     func load(older: Bool = false) async {
         guard active, valid, !Task.isCancelled else { return }
         if let task = loadTask {

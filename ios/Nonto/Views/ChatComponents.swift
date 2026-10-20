@@ -49,12 +49,14 @@ struct ChatMessageRow: View {
     let community: Bool
     let showsReceipt: Bool
     var gallery: [ChatMediaTimeline.Item] = []
+    var onMediaPresentation: (Bool) -> Void = { _ in }
     let onQuote: (ChatMessage) -> Void
     let onRecall: (ChatMessage) -> Void
     @EnvironmentObject private var session: AppSession
     @State private var reporting = false
     private var message: ChatMessage { row.message }
-    private var caption: String { message.kind == "image" ? ImageMessageCaption.text(message.content, media: message.media) : message.content }
+    private var caption: String { ["image", "video"].contains(message.kind) ? ImageMessageCaption.text(message.content, media: message.media) : message.content }
+    private var bareMedia: Bool { !message.recalled && ["image", "video"].contains(message.kind) }
     private var mine: Bool { message.senderID == session.user?.id }
     private var sender: Person { Person(message.raw["sender"].or(message.raw["user"])) }
     var body: some View {
@@ -111,8 +113,11 @@ struct ChatMessageRow: View {
                 }.fixedSize(horizontal: false, vertical: true)
             }
             if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
-            else if message.kind == "image" { MediaView(images: [message.media], video: "", thumbnailHeight: 190, galleryImages: gallery.isEmpty ? nil : gallery.map(\.url), galleryIndex: gallery.firstIndex { $0.id == message.id }).frame(maxWidth: 230) }
-            else if message.kind == "video" { MediaView(images: [], video: message.media).frame(maxWidth: 250) }
+            else if message.kind == "image" { MediaView(images: [message.media], video: "", thumbnailHeight: 190,
+                          galleryImages: gallery.isEmpty ? nil : gallery.map(\.url),
+                          galleryIndex: gallery.firstIndex { $0.id == message.id }, fitImage: true,
+                          onPresentationChange: onMediaPresentation).frame(maxWidth: 250) }
+            else if message.kind == "video" { MediaView(images: [], video: message.media, thumbnailHeight: 190).frame(maxWidth: 250) }
             else if message.kind == "post", message.raw["related_id"].int > 0 {
                 RouteButton(.post(message.raw["related_id"].int)) {
                     Label(message.content.isEmpty ? "查看动态" : message.content, systemImage: "doc.richtext").lineLimit(4)
@@ -123,10 +128,23 @@ struct ChatMessageRow: View {
             if !message.recalled && ["image", "video"].contains(message.kind) && !caption.isEmpty {
                 Text(caption).textSelection(.enabled)
             }
-        }.padding(.horizontal, 14).padding(.vertical, 11)
-            .background(mine ? Color.brand.opacity(0.16) : Color(uiColor: .secondarySystemBackground),
-                        in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: mine ? 20 : 6,
-                                                   bottomTrailingRadius: mine ? 6 : 20, topTrailingRadius: 20))
+        }.modifier(ChatBubbleSurface(media: bareMedia, mine: mine))
+            .frame(maxWidth: bareMedia ? 250 : nil, alignment: mine ? .trailing : .leading)
+    }
+}
+
+/// Media keeps its own rounded viewport; only text messages have a chat bubble.
+private struct ChatBubbleSurface: ViewModifier {
+    let media: Bool
+    let mine: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if media { content }
+        else {
+            content.padding(.horizontal, 14).padding(.vertical, 11)
+                .background(mine ? Color.brand.opacity(0.16) : Color(uiColor: .secondarySystemBackground),
+                            in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: mine ? 20 : 6,
+                                                       bottomTrailingRadius: mine ? 6 : 20, topTrailingRadius: 20))
+        }
     }
 }
 
@@ -136,31 +154,44 @@ struct ChatPendingRow: View {
     let blocked: Bool
     let retry: () -> Void
     let remove: () -> Void
-    private var caption: String { item.kind == "image" ? ImageMessageCaption.text(item.content, media: item.media ?? "") : item.content }
+    var onMediaPresentation: (Bool) -> Void = { _ in }
+    private var bareMedia: Bool { ["image", "video"].contains(item.kind) && item.media != nil }
+    private var caption: String { bareMedia ? ImageMessageCaption.text(item.content, media: item.media ?? "") : item.content }
     var body: some View {
         HStack {
             Spacer(minLength: 48)
             VStack(alignment: .trailing, spacing: 6) {
-                if let media = item.media, item.kind == "image" {
-                    MediaView(images: [media], video: "", thumbnailHeight: 190).frame(maxWidth: 230)
-                } else if item.kind == "video" { Label("视频", systemImage: "video").padding(12) }
-                if !caption.isEmpty { Text(caption).font(.body).textSelection(.enabled).padding(12) }
-                if let failure = item.failure {
-                    Label("未发送", systemImage: "exclamationmark.circle.fill").foregroundStyle(.red)
-                    Text(failure).foregroundStyle(.secondary)
-                    HStack {
-                        Button("重试", action: retry).buttonStyle(.glass)
-                        Button("移除", role: .destructive, action: remove).buttonStyle(.glass)
-                    }.controlSize(.small)
-                } else if sending { ProgressView("正在发送…") }
-                else {
-                    Label(blocked ? "等待上一条消息重试" : "等待发送", systemImage: "clock")
-                        .foregroundStyle(.secondary)
-                    Button("取消发送", role: .destructive, action: remove)
+                if bareMedia, let media = item.media {
+                    MediaView(images: item.kind == "image" ? [media] : [], video: item.kind == "video" ? media : "",
+                              thumbnailHeight: 190, fitImage: true, onPresentationChange: onMediaPresentation)
+                        .frame(maxWidth: 250)
+                    if !caption.isEmpty { Text(caption).font(.body).textSelection(.enabled).frame(maxWidth: 250, alignment: .trailing) }
+                } else {
+                    Text(caption).font(.body).textSelection(.enabled)
+                        .modifier(ChatBubbleSurface(media: false, mine: true))
                 }
-            }.font(.caption).padding(10)
-                .background(Color.brand.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                deliveryStatus
+            }
         }.padding(.horizontal).padding(.top, 6)
+    }
+    private var deliveryStatus: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if let failure = item.failure {
+                HStack(spacing: 12) {
+                    Label("未发送", systemImage: "exclamationmark.circle.fill").foregroundStyle(.red)
+                    Button("重试", action: retry).frame(minHeight: 44)
+                    Button("移除", role: .destructive, action: remove).frame(minHeight: 44)
+                }.buttonStyle(.plain)
+                Text(failure).foregroundStyle(.secondary).lineLimit(3)
+            } else if sending {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("正在发送…") }.foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 10) {
+                    Label(blocked ? "等待上一条消息重试" : "等待发送", systemImage: "clock").foregroundStyle(.secondary)
+                    Button("取消", role: .destructive, action: remove).frame(minHeight: 44)
+                }.buttonStyle(.plain)
+            }
+        }.font(.caption)
     }
 }
 
@@ -187,6 +218,7 @@ struct ChatAttachmentSheet: View {
     @State private var excluded = Set<UUID>()
     @State private var selected = 0
     @State private var completed = 0
+    @State private var uploadProgress: Double = 0
     private var selection: [SelectedMedia] { media.filter { !excluded.contains($0.id) } }
     var body: some View {
         NavigationStack {
@@ -223,7 +255,14 @@ struct ChatAttachmentSheet: View {
                     TextField("添加说明（可选）", text: $caption, axis: .vertical).lineLimit(1...5)
                         .padding().background(.quaternary, in: RoundedRectangle(cornerRadius: 16)).disabled(submitting)
                     ErrorBanner(text: error)
-                    if submitting { ProgressView("正在上传 \(min(completed + 1, selection.count))/\(selection.count)…", value: Double(completed), total: Double(max(1, selection.count))) }
+                    if submitting {
+                        ProgressView(value: uploadProgress) {
+                            Text("正在上传 \(min(completed + 1, selection.count))/\(selection.count) · \(Int(uploadProgress * 100))%")
+                        }
+                    } else if error != nil && !uploaded.isEmpty {
+                        Text("已上传的附件会保留，重试将继续发送。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Button { submitting = true } label: {
                         Label(error == nil ? "发送 \(selection.count) 个附件" : "重试发送", systemImage: "arrow.up")
                             .frame(maxWidth: .infinity).padding(.vertical, 6)
@@ -248,19 +287,28 @@ struct ChatAttachmentSheet: View {
                     guard submitting, !cancelled else { return }
                     let epoch = api.generation, batch = selection
                     defer { submitting = false }
-                    error = nil; completed = 0
+                    error = nil; completed = 0; uploadProgress = 0
                     do {
+                        let totalBytes = max(1, batch.reduce(0) { $0 + $1.data.count })
+                        var sentBytes = 0
                         var attachments: [(url: String, kind: String)] = []
                         for item in batch {
                             let url: String
                             if let cached = uploaded[item.id] { url = cached }
                             else {
-                                url = try await api.upload(item.data, filename: item.name, mime: item.mime)
+                                let before = sentBytes, bytes = item.data.count
+                                url = try await api.upload(item.data, filename: item.name, mime: item.mime) { value in
+                                    guard submitting, !cancelled, epoch == api.generation else { return }
+                                    let fraction = (Double(before) + Double(bytes) * min(value, 0.98)) / Double(totalBytes)
+                                    if abs(uploadProgress - fraction) >= 0.01 { uploadProgress = fraction }
+                                }
                                 uploaded[item.id] = url
                             }
                             try Task.checkCancellation()
                             guard !cancelled, epoch == api.generation else { return }
+                            if let image = images[item.id] { ImageRepository.shared.rememberUploadedPreview(image, at: url) }
                             attachments.append((url, item.isVideo ? "video" : "image")); completed += 1
+                            sentBytes += item.data.count; uploadProgress = Double(sentBytes) / Double(totalBytes)
                         }
                         guard store.enqueueMedia(attachments, caption: caption, quoteID: quoteID) else {
                             throw APIError(status: 0, message: "无法加入发送队列，请重试")

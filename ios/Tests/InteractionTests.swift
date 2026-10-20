@@ -4,6 +4,23 @@ import SwiftUI
 @testable import Nonto
 
 @MainActor final class InteractionTests: XCTestCase {
+    func testUploadedPhotoPreviewAvoidsRedownloadAndIsClearedForAnotherAccount() async throws {
+        var requests = 0
+        StubProtocol.handler = { _ in requests += 1; return (200, .null) }
+        defer { StubProtocol.handler = nil }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
+        let repository = ImageRepository(session: URLSession(configuration: config))
+        let preview = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 12)).image { context in
+            UIColor.systemBlue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 24, height: 12))
+        }
+        let url = "https://example.test/uploaded.jpg"
+        repository.rememberUploadedPreview(preview, at: url)
+        let loaded = try await repository.image(at: url, maxPixelSize: 960)
+        XCTAssertTrue(loaded === preview); XCTAssertEqual(requests, 0)
+        repository.clear()
+        do { _ = try await repository.image(at: url, maxPixelSize: 960); XCTFail("A cleared account cache must not return its old preview") }
+        catch { XCTAssertEqual(requests, 1) }
+    }
     func testPostDisplayTrimsOnlyOuterWhitespaceWithoutChangingWireContent() {
         let original = " \n\t第一段\n\n第二段  内容\r\n "
         let post = Post(.object(["id": .id(1), "content": .text(original)]))

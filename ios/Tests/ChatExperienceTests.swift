@@ -45,6 +45,56 @@ final class ChatExperienceTests: XCTestCase {
         }
         return try JSON.decode(data)
     }
+    func testHistoryAnchorWaitsForLoadedLayoutAndPreservesOffset() {
+        let memory = ChatViewportMemory()
+        _ = memory.record(ChatViewportMetrics(offset: 420, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 0))
+        memory.beginHistory()
+        XCTAssertNil(memory.finishHistory(addedRows: true), "The response may finish before SwiftUI measures inserted rows")
+        let target = memory.record(ChatViewportMetrics(offset: 420, contentHeight: 2100, visibleHeight: 600, topInset: 0, bottomInset: 0))
+        XCTAssertEqual(target, 1120)
+        XCTAssertFalse(memory.preservingHistory)
+        XCTAssertNil(memory.record(ChatViewportMetrics(offset: 1120, contentHeight: 2100, visibleHeight: 600, topInset: 0, bottomInset: 0)))
+    }
+    func testReadingCanContinueWhileHistoryIsLoading() {
+        let memory = ChatViewportMemory()
+        _ = memory.record(ChatViewportMetrics(offset: 200, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 0))
+        memory.beginHistory(); memory.userScrolling = true
+        XCTAssertNil(memory.record(ChatViewportMetrics(offset: 260, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 0)))
+        XCTAssertEqual(memory.record(ChatViewportMetrics(offset: 260, contentHeight: 2000, visibleHeight: 600, topInset: 0, bottomInset: 0)), 860)
+    }
+    func testReturningFromMediaKeepsReadingOffsetAcrossKeyboardAndIncomingMessages() {
+        let memory = ChatViewportMemory()
+        _ = memory.record(ChatViewportMetrics(offset: 450, contentHeight: 1600, visibleHeight: 350, topInset: 0, bottomInset: 0))
+        memory.beginMedia()
+        XCTAssertNil(memory.record(ChatViewportMetrics(offset: 450, contentHeight: 1900, visibleHeight: 650, topInset: 0, bottomInset: 0)))
+        XCTAssertEqual(memory.endMedia(), 450, "New messages at the end must not change the old reading position")
+        XCTAssertFalse(memory.presentingMedia)
+    }
+    func testRepeatedRetryKeepsOneMediaMessageAndItsOriginalIdempotencyKey() async throws {
+        var sent: [JSON] = []
+        let conversation = Conversation(.object(["id": .id(55), "type": .text("community"), "community_id": .id(33)]))
+        let store = try room(conversation: conversation) { request in
+            if request.url!.path.hasSuffix("/chat/messages"), request.httpMethod == "POST" {
+                let payload = try self.body(request); sent.append(payload)
+                if sent.count == 1 { return (503, .object(["detail": .text("暂时无法发送")])) }
+                Thread.sleep(forTimeInterval: 0.06)
+                return (200, .object(["message": self.message(100, sender: self.userID)]))
+            }
+            if request.httpMethod == "POST" { return (200, .null) }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate()
+        XCTAssertTrue(store.enqueueMedia([(url: "https://example.test/video.mp4", kind: "video")], caption: "视频说明", quoteID: 12))
+        try await waitUntil { !store.sending }
+        let id = try XCTUnwrap(store.pending.first?.id)
+        store.retry(id); store.retry(id)
+        try await waitUntil { !store.sending }
+        XCTAssertEqual(sent.count, 2)
+        XCTAssertEqual(sent.map { $0["client_msg_id"].string }, [id, id])
+        XCTAssertEqual(sent.last?["media_url"].string, "https://example.test/video.mp4")
+        XCTAssertEqual(sent.last?["quote_message_id"].int, 12)
+        XCTAssertTrue(store.pending.isEmpty); XCTAssertEqual(store.messages.count, 1); store.suspend()
+    }
     func testNotificationConversationLookupFindsTheServerIDBeyondFirstPage() async throws {
         var pages: [String] = []
         StubProtocol.handler = { request in

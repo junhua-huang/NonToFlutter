@@ -78,6 +78,21 @@ final class RedirectPolicy: NSObject, URLSessionTaskDelegate, @unchecked Sendabl
     }
 }
 
+/// Progress applies only to an explicit attachment upload, without authorizing redirects.
+final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let progress: @MainActor @Sendable (Double) -> Void
+    init(progress: @escaping @MainActor @Sendable (Double) -> Void) { self.progress = progress }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+                    totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        let value = min(1, max(0, Double(totalBytesSent) / Double(totalBytesExpectedToSend)))
+        Task { @MainActor [progress] in progress(value) }
+    }
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+}
+
 @MainActor
 final class APIClient: ObservableObject {
     let baseURL: URL
@@ -179,7 +194,8 @@ final class APIClient: ObservableObject {
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         return request
     }
-    func upload(_ data: Data, filename: String, mime: String, type: String = "post") async throws -> String {
+    func upload(_ data: Data, filename: String, mime: String, type: String = "post",
+                progress: (@MainActor @Sendable (Double) -> Void)? = nil) async throws -> String {
         guard data.count <= 50 * 1024 * 1024 else { throw APIError(status: 0, message: "文件不能超过 50 MB") }
         let epoch = generation
         let presign = try await request("/upload/presign", method: "POST", body: .object([
@@ -191,9 +207,14 @@ final class APIClient: ObservableObject {
         // A new request contains only COS's signed URL and content type; no Nonto credentials.
         var put = URLRequest(url: url); put.httpMethod = "PUT"; put.httpBody = data
         put.setValue(mime, forHTTPHeaderField: "Content-Type")
-        let (_, response) = try await session.data(for: put)
+        let result: (Data, URLResponse)
+        if let progress {
+            put.httpBody = nil
+            result = try await session.upload(for: put, from: data, delegate: UploadProgressDelegate(progress: progress))
+        } else { result = try await session.data(for: put) }
+        try Task.checkCancellation()
         guard generation == epoch else { throw APIError.sessionChanged }
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        guard let http = result.1 as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError(status: 0, message: "文件上传失败，请重试")
         }
         var publicURL = presign["public_url"].string

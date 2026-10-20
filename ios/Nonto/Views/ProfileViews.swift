@@ -15,20 +15,37 @@ struct ProfileView: View {
     @State private var busy = false
     @State private var liked = false
     @State private var blocked = false
+    @State private var coverVisible = true
     private var isOwn: Bool { session.user?.id == userID }
     var body: some View {
         PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked)
             .contentMargins(.top, 0, for: .scrollContent)
-            .scrollEdgeEffectHidden(true, for: .top).clipped()
+            .ignoresSafeArea(.container, edges: .top)
+            .scrollEdgeEffectHidden(coverVisible, for: .top)
+            .toolbarBackgroundVisibility(coverVisible ? .hidden : .visible, for: .navigationBar)
+            .toolbarColorScheme(coverVisible ? .dark : nil, for: .navigationBar)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top < 160
+            } action: { _, value in
+                // Only change the material, never the navigation bar's visibility or height.
+                if coverVisible != value { coverVisible = value }
+            }
             .navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if isOwn { RouteButton(.settings) { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
-                else {
-                    Menu {
-                        Button("举报用户", systemImage: "flag") { reporting = true }
-                        Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { confirmBlock = true }
-                        if friendship["status"].string == "accepted" { Button("删除好友", role: .destructive) { confirmUnfriend = true } }
-                    } label: { Image(systemName: "ellipsis") }
+                ToolbarItem(placement: .principal) {
+                    Text(person?.name ?? (isOwn ? session.user?.name ?? "我的主页" : "个人主页"))
+                        .font(.headline).lineLimit(1)
+                        .foregroundStyle(coverVisible ? Color.white : Color.primary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if isOwn { RouteButton(.settings) { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
+                    else {
+                        Menu {
+                            Button("举报用户", systemImage: "flag") { reporting = true }
+                            Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { confirmBlock = true }
+                            if friendship["status"].string == "accepted" { Button("删除好友", role: .destructive) { confirmUnfriend = true } }
+                        } label: { Image(systemName: "ellipsis") }
+                    }
                 }
             }
             .task { await load() }
@@ -45,7 +62,11 @@ struct ProfileView: View {
     private var profileHeader: some View {
         VStack(spacing: 0) {
             if let user = person ?? (isOwn ? session.user : nil) {
-                ProfileCover(url: user.cover)
+                ProfileCover(url: user.cover, height: nil).aspectRatio(1.65, contentMode: .fit)
+                    .overlay(alignment: .top) {
+                        LinearGradient(colors: [.black.opacity(0.38), .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 110).allowsHitTesting(false)
+                    }
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .bottom, spacing: 12) {
                         AvatarView(url: user.avatar, name: user.name, size: 82)

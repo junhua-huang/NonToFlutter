@@ -59,6 +59,7 @@ private struct ChatRoomContent: View {
     @State private var attachment: ChatAttachments?
     @FocusState private var composerFocused: Bool
     @State private var position = ScrollPosition(idType: Int.self)
+    @State private var viewport = ChatViewportMemory()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var recall: ChatMessage?
     @State private var confirmRecall = false
@@ -75,7 +76,7 @@ private struct ChatRoomContent: View {
         ScrollView {
             LazyVStack(spacing: 6) {
                 if store.more && !store.messages.isEmpty {
-                    Button { Task { await store.load(older: true) } } label: {
+                    Button { Task { await loadOlder() } } label: {
                         if store.loadingOlder { ProgressView("正在加载历史消息…") }
                         else { Label("更早的消息", systemImage: "clock.arrow.circlepath") }
                     }.font(.subheadline).disabled(store.loadingOlder).padding(.vertical, 12)
@@ -86,14 +87,15 @@ private struct ChatRoomContent: View {
                 ForEach(ChatTimeline.rows(store.messages)) { row in
                     ChatMessageRow(row: row, community: communityID != nil,
                                    showsReceipt: row.id == lastOutgoingID,
-                                   gallery: gallery,
+                                   gallery: gallery, onMediaPresentation: mediaPresentationChanged,
                                    onQuote: { quote = $0; composerFocused = true },
                                    onRecall: { recall = $0; confirmRecall = true }).id(row.id)
                 }
                 ForEach(store.pending) { item in
                     ChatPendingRow(item: item, sending: store.sendingID == item.id,
                                    blocked: store.pending.first?.failure != nil && store.pending.first?.id != item.id,
-                                   retry: { store.retry(item.id) }, remove: { store.remove(item.id) })
+                                   retry: { store.retry(item.id) }, remove: { store.remove(item.id) },
+                                   onMediaPresentation: mediaPresentationChanged)
                 }
                 Color.clear.frame(height: 1).id(Int.min)
             }.scrollTargetLayout().padding(.vertical, 8)
@@ -108,21 +110,38 @@ private struct ChatRoomContent: View {
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom, for: .initialOffset)
         .defaultScrollAnchor(.bottom, for: .alignment)
-        .onScrollGeometryChange(for: Bool.self) { geometry in
-            geometry.contentSize.height - geometry.visibleRect.maxY < 100
-        } action: { _, value in if !store.loadingOlder { store.reachedBottom(value) } }
+        .defaultScrollAnchor(store.nearBottom ? .bottom : .top, for: .sizeChanges)
+        .onScrollGeometryChange(for: ChatViewportMetrics.self) { geometry in
+            ChatViewportMetrics(offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
+                                visibleHeight: geometry.containerSize.height, topInset: geometry.contentInsets.top,
+                                bottomInset: geometry.contentInsets.bottom)
+        } action: { _, value in
+            if let y = viewport.record(value) { position.scrollTo(y: y) }
+            if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
+                if value.nearBottom || viewport.userScrolling { store.reachedBottom(value.nearBottom) }
+            }
+        }
+        .onScrollPhaseChange { _, phase in
+            viewport.userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+            if phase == .idle, let metrics = viewport.metrics, !store.loadingOlder, !viewport.presentingMedia {
+                store.reachedBottom(metrics.nearBottom)
+            }
+        }
         .onChange(of: store.scrollRequest) { _, _ in
+            viewport.clearPreservation()
             if reduceMotion { position.scrollTo(edge: .bottom) }
             else { withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(edge: .bottom) } }
         }
         .overlay(alignment: .bottomTrailing) {
-            if store.unread > 0 {
-                Button { store.jumpToLatest() } label: { Label("\(store.unread) 条新消息", systemImage: "arrow.down") }
+            if !store.nearBottom && !store.messages.isEmpty {
+                Button { store.jumpToLatest() } label: {
+                    Label(store.unread > 0 ? "\(store.unread) 条新消息" : "回到最新", systemImage: "arrow.down")
+                }
                     .buttonStyle(.glassProminent).padding().accessibilityHint("跳到最新消息")
             }
         }
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbarVisibility(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
@@ -137,7 +156,7 @@ private struct ChatRoomContent: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 if let quote {
                     HStack(spacing: 8) {
@@ -161,7 +180,7 @@ private struct ChatRoomContent: View {
                         .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息")
                 }.floatingGlass()
                 if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
-            }.padding(.top, 8)
+            }.padding(.top, 6)
         }
         .task {
             visible = true
@@ -210,6 +229,25 @@ private struct ChatRoomContent: View {
         }
         .confirmationDialog("撤回这条消息？", isPresented: $confirmRecall) {
             Button("撤回", role: .destructive) { if let recall { Task { await store.recall(recall) } } }
+        }
+    }
+    private func loadOlder() async {
+        guard !store.loadingOlder else { return }
+        let first = store.messages.first?.id
+        viewport.beginHistory()
+        await store.load(older: true)
+        guard visible, !Task.isCancelled else { return }
+        if let y = viewport.finishHistory(addedRows: store.messages.first?.id != first) { position.scrollTo(y: y) }
+    }
+    private func mediaPresentationChanged(_ presented: Bool) {
+        if presented {
+            viewport.beginMedia()
+            // Refreshes while a gallery is open must not move the reading position.
+            store.reachedBottom(false)
+            composerFocused = false
+        } else if let y = viewport.endMedia() {
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) { position.scrollTo(y: y) }
         }
     }
     private func sendText() {
