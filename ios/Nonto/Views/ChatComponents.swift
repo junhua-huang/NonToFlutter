@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 enum ImageMessageCaption {
     private static let links = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
@@ -124,7 +125,8 @@ struct ChatMessageRow: View {
                           galleryImages: gallery.isEmpty ? nil : gallery.map(\.url),
                           galleryIndex: gallery.firstIndex { $0.id == message.id }, fitImage: true,
                           onPresentationChange: onMediaPresentation).frame(maxWidth: 250) }
-            else if message.kind == "video" { MediaView(images: [], video: message.media, thumbnailHeight: 190).frame(maxWidth: 250) }
+            else if message.kind == "video" { MediaView(images: [], video: message.media, thumbnailHeight: 190, fitImage: true,
+                          onPresentationChange: onMediaPresentation).frame(maxWidth: 250) }
             else if message.kind == "post", message.raw["related_id"].int > 0 {
                 RouteButton(.post(message.raw["related_id"].int)) {
                     Label(message.content.isEmpty ? "查看动态" : message.content, systemImage: "doc.richtext").lineLimit(4)
@@ -137,6 +139,45 @@ struct ChatMessageRow: View {
             }
         }.modifier(ChatBubbleSurface(media: bareMedia, mine: mine))
             .frame(maxWidth: bareMedia ? 250 : nil, alignment: mine ? .trailing : .leading)
+    }
+}
+
+struct ChatVideoPreview: View {
+    let url: URL
+    let height: CGFloat
+    var onPresentationChange: (Bool) -> Void = { _ in }
+    @State private var poster: UIImage?
+    @State private var presented = false
+    var body: some View {
+        Button {
+            onPresentationChange(true); presented = true
+        } label: {
+            ZStack {
+                Color.black
+                if let poster { Image(uiImage: poster).resizable().scaledToFill() }
+                Image(systemName: "play.circle.fill").font(.system(size: 48)).foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.35), radius: 5)
+            }.frame(height: height).frame(maxWidth: .infinity).clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(.secondary.opacity(0.2), lineWidth: 0.5))
+        }.buttonStyle(.plain).accessibilityLabel("播放视频").accessibilityHint("全屏播放")
+            .task(id: url) {
+                poster = nil
+                let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+                generator.appliesPreferredTrackTransform = true; generator.maximumSize = CGSize(width: 960, height: 960)
+                if let (image, _) = try? await generator.image(at: .zero), !Task.isCancelled { poster = UIImage(cgImage: image) }
+            }
+            .fullScreenCover(isPresented: $presented, onDismiss: { onPresentationChange(false) }) {
+                NavigationStack {
+                    NativeVideo(url: url, autoplay: true).background(.black).ignoresSafeArea(edges: .bottom)
+                        .navigationBarTitleDisplayMode(.inline).toolbarColorScheme(.dark, for: .navigationBar)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button { presented = false } label: { Image(systemName: "xmark") }.accessibilityLabel("关闭视频")
+                            }
+                        }
+                }
+            }
     }
 }
 

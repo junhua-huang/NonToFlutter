@@ -38,9 +38,11 @@ struct ChatViewportMetrics: Equatable {
     let visibleHeight: CGFloat
     let topInset: CGFloat
     let bottomInset: CGFloat
-    var nearBottom: Bool { contentHeight - offset - visibleHeight + bottomInset < 80 }
+    var visibleBottom: CGFloat? = nil
+    private var bottom: CGFloat { visibleBottom ?? (offset + visibleHeight - bottomInset) }
+    var nearBottom: Bool { contentHeight - bottom < 80 }
     func clamped(_ y: CGFloat) -> CGFloat {
-        min(max(-topInset, y), max(-topInset, contentHeight - visibleHeight + bottomInset))
+        min(max(-topInset, y), max(-topInset, offset + contentHeight - bottom))
     }
 }
 @MainActor final class ChatViewportMemory {

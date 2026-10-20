@@ -114,7 +114,7 @@ private struct ChatRoomContent: View {
         .onScrollGeometryChange(for: ChatViewportMetrics.self) { geometry in
             ChatViewportMetrics(offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
                                 visibleHeight: geometry.containerSize.height, topInset: geometry.contentInsets.top,
-                                bottomInset: geometry.contentInsets.bottom)
+                                bottomInset: geometry.contentInsets.bottom, visibleBottom: geometry.visibleRect.maxY)
         } action: { _, value in
             if let y = viewport.record(value) { position.scrollTo(y: y) }
             if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {

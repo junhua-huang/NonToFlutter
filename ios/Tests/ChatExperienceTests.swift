@@ -45,6 +45,12 @@ final class ChatExperienceTests: XCTestCase {
         }
         return try JSON.decode(data)
     }
+    func testBottomDetectionUsesTheActualVisibleRectangleWithoutReapplyingInsets() {
+        let geometry = ChatViewportMetrics(offset: 200, contentHeight: 900, visibleHeight: 700,
+                                           topInset: 0, bottomInset: 100, visibleBottom: 900)
+        XCTAssertTrue(geometry.nearBottom)
+        XCTAssertEqual(geometry.clamped(600), 200)
+    }
     func testHistoryAnchorWaitsForLoadedLayoutAndPreservesOffset() {
         let memory = ChatViewportMemory()
         _ = memory.record(ChatViewportMetrics(offset: 420, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 0))

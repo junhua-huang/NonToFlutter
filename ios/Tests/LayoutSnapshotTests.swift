@@ -34,6 +34,10 @@ final class LayoutSnapshotTests: XCTestCase {
         ]
         StubProtocol.handler = { request in
             if request.url?.path.contains("profile") == true { return (200, .object(["user": user])) }
+            if request.url?.path.contains("/posts/user/") == true {
+                let extra = (1...10).map { posts[0].merging(.object(["id": .id(950000 + $0)])) }
+                return (200, .object(["posts": .array(posts + extra), "has_more": .bool(false)]))
+            }
             return (200, .object(["posts": .array(posts), "has_more": .bool(false)]))
         }
         let configuration = URLSessionConfiguration.ephemeral

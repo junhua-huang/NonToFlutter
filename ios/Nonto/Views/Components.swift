@@ -124,7 +124,10 @@ struct MediaView: View {
                     }.clipShape(RoundedRectangle(cornerRadius: 14))
                 }
             }
-            if let url = URL(string: video), !video.isEmpty { NativeVideo(url: url).frame(height: thumbnailHeight ?? 260).clipShape(RoundedRectangle(cornerRadius: 14)) }
+            if let url = URL(string: video), !video.isEmpty {
+                if fitImage { ChatVideoPreview(url: url, height: thumbnailHeight ?? 190, onPresentationChange: onPresentationChange) }
+                else { NativeVideo(url: url).frame(height: thumbnailHeight ?? 260).clipShape(RoundedRectangle(cornerRadius: 14)) }
+            }
         }.fullScreenCover(item: $selected, onDismiss: { onPresentationChange(false) }) { selection in
             ImageGallery(images: galleryImages ?? images, initial: selection.index)
         }
@@ -183,15 +186,20 @@ private struct MediaThumbnail: View {
         Button {
             if failed { attempt += 1 } else { open() }
         } label: {
+            if fitImage, let image {
+                Image(uiImage: image).resizable().scaledToFit().frame(maxWidth: .infinity, maxHeight: 340)
+                    .clipShape(RoundedRectangle(cornerRadius: 14)).contentShape(Rectangle())
+            } else {
             GeometryReader { geometry in
                 ZStack {
                     Color.secondary.opacity(0.08)
-                    if let image { Image(uiImage: image).resizable().aspectRatio(contentMode: fitImage ? .fit : .fill).frame(width: geometry.size.width, height: height).clipped() }
+                    if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: geometry.size.width, height: height).clipped() }
                     else if failed {
                         VStack(spacing: 6) { Image(systemName: "arrow.clockwise"); Text("点按重试").font(.caption) }.foregroundStyle(.secondary)
                     } else { ProgressView() }
                 }.frame(width: geometry.size.width, height: height).contentShape(Rectangle()).clipped()
             }.frame(height: height).frame(maxWidth: .infinity).contentShape(Rectangle()).clipped()
+            }
         }.buttonStyle(.plain).contentShape(Rectangle()).accessibilityLabel(failed ? "图片加载失败，点按重试" : label)
             .task(id: "\(url)#\(attempt)") {
                 image = nil; failed = false
@@ -205,12 +213,13 @@ private struct MediaThumbnail: View {
 private struct MediaSelection: Identifiable { let id = UUID(); var index: Int }
 struct NativeVideo: View {
     let url: URL
+    var autoplay = false
     @State private var player: AVPlayer?
     @Environment(\.scenePhase) private var phase
     var body: some View {
         VideoPlayer(player: player)
-            .onAppear { player = AVPlayer(url: url) }
-            .onChange(of: url) { _, value in player?.pause(); player = AVPlayer(url: value) }
+            .onAppear { player = AVPlayer(url: url); if autoplay { player?.play() } }
+            .onChange(of: url) { _, value in player?.pause(); player = AVPlayer(url: value); if autoplay { player?.play() } }
             .onChange(of: phase) { _, value in if value != .active { player?.pause() } }
             .onDisappear { player?.pause(); player?.replaceCurrentItem(with: nil); player = nil }
     }
