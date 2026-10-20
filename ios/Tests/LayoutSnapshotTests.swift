@@ -21,14 +21,15 @@ final class LayoutSnapshotTests: XCTestCase {
         let author: JSON = .object(["id": .id(900041), "username": .text("yuchen"), "display_name": .text("雨辰")])
         let posts: [JSON] = [
             .object(["id": .id(910001), "user_id": .id(900041), "author": author,
-                     "content": .text("把周末留给散步和日落。\n\n走慢一点，总能发现一些新的风景。"),
+                     "content": .text(" \n\n把周末留给散步和日落。 #生活 @yuchen\n走慢一点，总能发现一些新的风景。\n "),
                      "like_count": .id(128), "comment_count": .id(12), "is_liked": .bool(true),
                      "created_at": .text("2026-10-18T10:00:00Z")]),
             .object(["id": .id(910002), "user_id": .id(userID), "author": user,
                      "content": .text("你好，南图。\n在这里分享想法，和有趣的人相遇。"),
                      "like_count": .id(24), "comment_count": .id(3),
                      "created_at": .text("2026-10-18T09:00:00Z"),
-                     "quoted_post": .object(["id": .id(910003), "author": author, "content": .text("一条用头像直线连接的引用动态。")])])
+                     "quoted_post": .object(["id": .id(910003), "author": author, "content": .text("引用 #生活 @nonto，头像直线连接。"),
+                                               "quoted_post": .object(["id": .id(910004), "author": user, "content": .text("最初的动态，串联展示。")])])])
         ]
         StubProtocol.handler = { request in
             if request.url?.path.contains("profile") == true { return (200, .object(["user": user])) }
@@ -51,6 +52,19 @@ final class LayoutSnapshotTests: XCTestCase {
         try await capture(MainTabs(), session: session, name: "timeline-large-text", width: 390, largeText: true)
         try await capture(AppNavigationStack { ProfileView(userID: self.userID) }, session: session, name: "profile-light", width: 390)
         try await capture(AppNavigationStack { ProfileView(userID: self.userID) }, session: session, name: "profile-dark", width: 390, dark: true)
+        let longPost = Post(.object(["id": .id(920001), "author": author,
+                                     "content": .text(" \n" + (1...10).map { "第 \($0) 行：#生活 与 @小明 的日常记录。" }.joined(separator: "\n") + "\n ")]))
+        try await capture(AppNavigationStack {
+            List { PostCard(post: longPost).timelinePostRow() }.timelineList().navigationTitle("六行折叠")
+        }, session: session, name: "post-six-line-fold", width: 390)
+        let photos = (1...5).map { JSON.text("https://layout.example.test/photo-\($0).jpg") }
+        for count in [3, 5] {
+            let photoPost = Post(.object(["id": .id(920010 + count), "author": author,
+                                          "content": .text("#多图 @yuchen"), "images": .array(Array(photos.prefix(count)))]))
+            try await capture(AppNavigationStack {
+                List { PostCard(post: photoPost).timelinePostRow() }.timelineList().navigationTitle("多图布局")
+            }, session: session, name: "post-photos-\(count)", width: 390)
+        }
     }
 
     private func capture<V: View>(_ view: V, session: AppSession, name: String, width: CGFloat,

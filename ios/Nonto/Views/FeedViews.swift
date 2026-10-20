@@ -16,11 +16,14 @@ struct FeedView: View {
             ToolbarItem(placement: .topBarLeading) {
                 RouteButton(.profile(session.user?.id ?? 0)) {
                     AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 30)
-                }.accessibilityLabel("我的主页")
-            }
+                }.buttonStyle(.plain).accessibilityLabel("我的主页")
+            }.sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .principal) { Text("南图").font(.headline.weight(.heavy)).foregroundStyle(Color.brand) }
             ToolbarItem(placement: .topBarTrailing) {
-                Button(action: compose) { Image(systemName: "square.and.pencil").frame(width: 44, height: 44) }
+                Button(action: compose) {
+                    Image(systemName: "square.and.pencil").font(.system(size: 18, weight: .medium))
+                        .frame(width: 28, height: 28)
+                }.controlSize(.small)
                     .accessibilityLabel("发布动态")
             }
         }
@@ -70,38 +73,10 @@ struct PostCard: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(spacing: 6) {
-                        RouteButton(.profile(current.userID)) {
-                            AvatarView(url: current.author.avatar, name: current.author.name, size: 42)
-                        }.frame(width: 42, height: 42).accessibilityLabel("查看\(current.author.name)的主页")
-                        if current.quoted != nil {
-                            Rectangle().fill(Color.timelineSeparator).frame(width: 2).frame(maxHeight: .infinity)
-                                .accessibilityHidden(true)
-                        }
-                    }.frame(width: 42)
-                    VStack(alignment: .leading, spacing: 8) {
-                        authorHeader
-                        if !current.content.isEmpty {
-                            if detailed {
-                                Text(current.content).font(.title3).lineSpacing(4).textSelection(.enabled)
-                            } else {
-                                RouteButton(.post(current.id, initial: current)) {
-                                    Text(current.content).font(.body).lineSpacing(3).lineLimit(8)
-                                        .frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.primary)
-                                }.accessibilityLabel("查看动态：\(current.content)")
-                            }
-                        }
-                        if !current.images.isEmpty || !current.video.isEmpty {
-                            MediaView(images: current.images, video: current.video)
-                        }
-                        if detailed, let date = current.date {
-                            Text(date, format: .dateTime.hour().minute().day().month().year())
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, current.quoted == nil ? 0 : 12)
-                }.fixedSize(horizontal: false, vertical: true)
-                quotedContent
+                let thread = PostThread.items(from: current)
+                ForEach(thread) { item in
+                    threadRow(item.post, isRoot: item.id == current.id, continues: item.id != thread.last?.id)
+                }
                 postActions.padding(.leading, 52)
                 if error != nil { ErrorBanner(text: error).padding(.leading, 52) }
             }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12).frame(maxWidth: .infinity)
@@ -124,47 +99,57 @@ struct PostCard: View {
                 }
             }
     }
-    private var authorHeader: some View {
-        HStack(alignment: .top, spacing: 4) {
-            RouteButton(.profile(current.userID)) {
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 4) {
-                                authorName
-                                if !detailed {
-                                    Text("@\(current.author.username)").foregroundStyle(.secondary)
-                                    if let date = current.date { Text("·").foregroundStyle(.secondary); Text(date, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).foregroundStyle(.secondary) }
-                                }
-                            }.font(.subheadline).fixedSize(horizontal: true, vertical: false)
-                            VStack(alignment: .leading, spacing: 2) {
-                                authorName
-                                if !detailed {
-                                    HStack(spacing: 4) {
-                                        Text("@\(current.author.username)")
-                                        if let date = current.date { Text("·"); Text(date, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)) }
-                                    }.font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                            }
-                        }
-                        if detailed { Text("@\(current.author.username)").font(.subheadline).foregroundStyle(.secondary) }
+    private func threadRow(_ item: Post, isRoot: Bool, continues: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(spacing: 0) {
+                RouteButton(.profile(item.userID)) {
+                    AvatarView(url: item.author.avatar, name: item.author.name, size: 42)
+                }.frame(width: 42, height: 42).accessibilityLabel("查看\(item.author.name)的主页")
+                if continues {
+                    Rectangle().fill(Color.timelineSeparator).frame(width: 2)
+                        .frame(maxHeight: .infinity).padding(.top, 4).accessibilityHidden(true)
+                }
+            }.frame(width: 42)
+            VStack(alignment: .leading, spacing: 4) {
+                authorHeader(item, showsMenu: isRoot)
+                PostBodyText(content: item.content, detailed: detailed && isRoot,
+                             route: detailed && isRoot ? nil : .post(item.id, initial: item))
+                if !item.images.isEmpty || !item.video.isEmpty {
+                    MediaView(images: item.images, video: item.video, postLayout: true).padding(.top, 4)
+                }
+                if detailed && isRoot, let date = item.date {
+                    Text(date, format: .dateTime.hour().minute().day().month().year())
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if item.raw["quoted_post_unavailable"].bool || item.raw["quoted_post"]["unavailable"].bool {
+                    Label("原动态已不可见", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, continues ? 12 : 0)
+        }.fixedSize(horizontal: false, vertical: true)
+    }
+    private func authorHeader(_ item: Post, showsMenu: Bool) -> some View {
+        HStack(spacing: 4) {
+            RouteButton(.profile(item.userID)) {
+                HStack(spacing: 4) {
+                    Text(item.author.name).font(.subheadline.bold()).foregroundStyle(.primary)
+                        .lineLimit(1).layoutPriority(1)
+                    if !item.raw["display_role_label"].string.isEmpty {
+                        Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.brand).font(.caption)
+                            .accessibilityLabel(item.raw["display_role_label"].string)
                     }
-                    if current.visibilityForEdit == "friends" {
-                        Image(systemName: "person.2.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("仅好友可见")
-                    }
+                    Text("@\(item.author.username)").font(.subheadline).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.tail)
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(.plain)
-            postMenu
-        }
-    }
-    private var authorName: some View {
-        HStack(spacing: 4) {
-            Text(current.author.name).font(.subheadline.bold()).foregroundStyle(.primary).lineLimit(1)
-            if !current.raw["display_role_label"].string.isEmpty {
-                Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.brand).font(.caption)
-                    .accessibilityLabel(current.raw["display_role_label"].string)
+            if item.visibilityForEdit == "friends" {
+                Image(systemName: "person.2.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("仅好友可见")
             }
-        }
+            if !detailed, let date = item.date {
+                Text(date, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+            }
+            if showsMenu { postMenu }
+        }.frame(minHeight: 24).lineLimit(1)
     }
     private var postMenu: some View {
         Menu {
@@ -179,36 +164,8 @@ struct PostCard: View {
             } else { Button("举报", systemImage: "flag") { reporting = true } }
         } label: {
             Image(systemName: "ellipsis").font(.subheadline).foregroundStyle(.secondary)
-                .frame(width: 44, height: 44).contentShape(Rectangle())
+                .frame(width: 28, height: 24).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel("动态操作")
-    }
-    @ViewBuilder private var quotedContent: some View {
-        if let quote = current.quoted {
-            HStack(alignment: .top, spacing: 10) {
-                RouteButton(.profile(quote.userID)) {
-                    AvatarView(url: quote.author.avatar, name: quote.author.name, size: 42)
-                }.frame(width: 42, height: 42).accessibilityLabel("查看引用作者\(quote.author.name)的主页")
-                VStack(alignment: .leading, spacing: 8) {
-                    RouteButton(.profile(quote.userID)) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(quote.author.name).font(.subheadline.bold()).foregroundStyle(.primary)
-                            Text("@\(quote.author.username)").font(.caption).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    RouteButton(.post(quote.id, initial: quote)) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            if !quote.content.isEmpty { Text(quote.content).font(.body).lineLimit(detailed ? nil : 5).foregroundStyle(.primary) }
-                            Label("查看原动态", systemImage: "arrow.up.forward").font(.caption).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if !quote.images.isEmpty || !quote.video.isEmpty {
-                        MediaView(images: quote.images, video: quote.video)
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }.padding(.bottom, 4)
-        } else if current.raw["quoted_post_unavailable"].bool || current.raw["quoted_post"]["unavailable"].bool {
-            Label("原动态已不可见", systemImage: "lock").font(.caption).foregroundStyle(.secondary).padding(.leading, 52)
-        }
     }
     private var postActions: some View {
         HStack(spacing: 0) {

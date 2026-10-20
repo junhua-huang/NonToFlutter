@@ -1,5 +1,16 @@
 import SwiftUI
 
+enum ImageMessageCaption {
+    static func text(_ content: String, media: String) -> String {
+        var text = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
+           let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") { return "" }
+        let source = media.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !source.isEmpty { text = text.replacingOccurrences(of: source, with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
+        return text
+    }
+}
+
 struct ChatMessageRow: View {
     let row: ChatTimeline.Row
     let community: Bool
@@ -10,6 +21,7 @@ struct ChatMessageRow: View {
     @EnvironmentObject private var session: AppSession
     @State private var reporting = false
     private var message: ChatMessage { row.message }
+    private var caption: String { message.kind == "image" ? ImageMessageCaption.text(message.content, media: message.media) : message.content }
     private var mine: Bool { message.senderID == session.user?.id }
     private var sender: Person { Person(message.raw["sender"].or(message.raw["user"])) }
     var body: some View {
@@ -75,8 +87,8 @@ struct ChatMessageRow: View {
             } else if message.kind == "file", let url = URL(string: message.media), url.scheme == "https" {
                 Link(message.content.isEmpty ? "打开文件" : message.content, destination: url)
             } else { Text(message.content).textSelection(.enabled) }
-            if !message.recalled && ["image", "video"].contains(message.kind) && !message.content.isEmpty {
-                Text(message.content).textSelection(.enabled)
+            if !message.recalled && ["image", "video"].contains(message.kind) && !caption.isEmpty {
+                Text(caption).textSelection(.enabled)
             }
         }.padding(.horizontal, 14).padding(.vertical, 11)
             .background(mine ? Color.brand.opacity(0.16) : Color(uiColor: .secondarySystemBackground),
@@ -91,6 +103,7 @@ struct ChatPendingRow: View {
     let blocked: Bool
     let retry: () -> Void
     let remove: () -> Void
+    private var caption: String { item.kind == "image" ? ImageMessageCaption.text(item.content, media: item.media ?? "") : item.content }
     var body: some View {
         HStack {
             Spacer(minLength: 48)
@@ -98,7 +111,7 @@ struct ChatPendingRow: View {
                 if let media = item.media, item.kind == "image" {
                     MediaView(images: [media], video: "", thumbnailHeight: 190).frame(maxWidth: 230)
                 } else if item.kind == "video" { Label("视频", systemImage: "video").padding(12) }
-                if !item.content.isEmpty { Text(item.content).font(.body).textSelection(.enabled).padding(12) }
+                if !caption.isEmpty { Text(caption).font(.body).textSelection(.enabled).padding(12) }
                 if let failure = item.failure {
                     Label("未发送", systemImage: "exclamationmark.circle.fill").foregroundStyle(.red)
                     Text(failure).foregroundStyle(.secondary)

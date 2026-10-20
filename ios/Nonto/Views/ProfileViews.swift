@@ -17,7 +17,10 @@ struct ProfileView: View {
     @State private var blocked = false
     private var isOwn: Bool { session.user?.id == userID }
     var body: some View {
-        PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked).navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
+        PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .scrollEdgeEffectHidden(true, for: .top).clipped()
+            .navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if isOwn { RouteButton(.settings) { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
                 else {

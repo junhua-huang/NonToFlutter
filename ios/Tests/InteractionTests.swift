@@ -1,8 +1,53 @@
 import XCTest
 import UIKit
+import SwiftUI
 @testable import Nonto
 
 @MainActor final class InteractionTests: XCTestCase {
+    func testPostDisplayTrimsOnlyOuterWhitespaceWithoutChangingWireContent() {
+        let original = " \n\t第一段\n\n第二段  内容\r\n "
+        let post = Post(.object(["id": .id(1), "content": .text(original)]))
+        XCTAssertEqual(PostText.trimmed(post.content), "第一段\n\n第二段  内容")
+        XCTAssertEqual(post.content, original)
+    }
+    func testPostHighlightsUnicodeTopicsAndMentionsWithoutColoringEmailOrURLFragments() {
+        let text = PostText.styled("🌅聊聊#生活，欢迎@小明 和 @user_name #旅行# #生活 mail@example.com https://example.test/#fragment")
+        let highlighted = text.runs.filter { $0.foregroundColor == Color.brand }
+            .map { String(text[$0.range].characters) }
+        XCTAssertEqual(highlighted, ["#生活", "@小明", "@user_name", "#旅行#", "#生活"])
+    }
+    func testQuotedPostsBecomeAnOrderedThreadWithNoRepeatedWireIDs() {
+        let first: JSON = .object(["id": .id(1), "content": .text("原帖")])
+        let second: JSON = .object(["id": .id(2), "quoted_post": first])
+        let third = Post(.object(["id": .id(3), "quoted_post": second]))
+        XCTAssertEqual(PostThread.items(from: third).map(\.id), [3, 2, 1])
+        let repeated = Post(.object(["id": .id(1), "quoted_post": second]))
+        XCTAssertEqual(PostThread.items(from: repeated).map(\.id), [1, 2])
+        let unavailable = Post(.object(["id": .id(4), "quoted_post": .object(["id": .id(1), "unavailable": .bool(true)])]))
+        XCTAssertEqual(PostThread.items(from: unavailable).map(\.id), [4])
+    }
+    func testPostPhotoRowsKeepGalleryOrderAndStableIdentityForRepeatedURLs() {
+        for count in 1...12 {
+            let urls = (0..<count).map { "https://example.test/\($0).jpg" }
+            let ordered = PostMediaLayout.rows(urls).flatMap(\.items)
+            XCTAssertEqual(ordered.map(\.url), urls)
+            XCTAssertEqual(ordered.map(\.index), Array(0..<count))
+        }
+        XCTAssertEqual(PostMediaLayout.rows(Array(repeating: "photo", count: 5)).map { $0.items.count }, [3, 2])
+        XCTAssertEqual(PostMediaLayout.rows(Array(repeating: "photo", count: 7)).map { $0.items.count }, [3, 2, 2])
+        let original = PostMediaLayout.items(["a", "b", "a"]).filter { $0.url == "a" }.map(\.id)
+        let inserted = PostMediaLayout.items(["new", "a", "b", "a"]).filter { $0.url == "a" }.map(\.id)
+        XCTAssertEqual(original, inserted)
+        XCTAssertEqual(Set(original).count, 2)
+    }
+    func testImageCaptionsHideSourceURLsWhileKeepingWrittenDescriptions() {
+        let media = "https://example.test/photo.jpg"
+        XCTAssertEqual(ImageMessageCaption.text(" \n" + media + "\n", media: media), "")
+        XCTAssertEqual(ImageMessageCaption.text("这张很好看\n" + media, media: media), "这张很好看")
+        XCTAssertEqual(ImageMessageCaption.text("保留图片说明", media: media), "保留图片说明")
+        XCTAssertEqual(ImageMessageCaption.text("https://example.test/photo.jpg?size=large", media: media), "")
+        XCTAssertEqual(ImageMessageCaption.text("请看 https://example.test/article", media: media), "请看 https://example.test/article")
+    }
     func testLeavingTimelineRestoresVisibleNavigationBarAndPreviousSwipePolicy() {
         let navigation = UINavigationController(rootViewController: UIViewController())
         let chrome = ScrollChrome()

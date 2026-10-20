@@ -96,20 +96,61 @@ struct MediaView: View {
     var thumbnailHeight: CGFloat? = nil
     var galleryImages: [String]? = nil
     var galleryIndex: Int? = nil
+    var postLayout = false
     @State private var selected: MediaSelection?
     var body: some View {
         VStack(spacing: 8) {
             if !images.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: images.count == 1 ? 1 : (images.count <= 4 ? 2 : 3)), spacing: 3) {
+                if postLayout {
+                    PostImageGrid(images: images) { selected = MediaSelection(index: $0) }
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: images.count == 1 ? 1 : (images.count <= 4 ? 2 : 3)), spacing: 3) {
                     ForEach(Array(images.enumerated()), id: \.offset) { index, link in
                         MediaThumbnail(url: link, height: thumbnailHeight ?? (images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110)), label: "查看图片 \(index + 1)") {
                             selected = MediaSelection(index: galleryIndex ?? index)
                         }
                     }
-                }.clipShape(RoundedRectangle(cornerRadius: 14))
+                    }.clipShape(RoundedRectangle(cornerRadius: 14))
+                }
             }
             if let url = URL(string: video), !video.isEmpty { NativeVideo(url: url).frame(height: 260).clipShape(RoundedRectangle(cornerRadius: 14)) }
         }.fullScreenCover(item: $selected) { selection in ImageGallery(images: galleryImages ?? images, initial: selection.index) }
+    }
+}
+private struct PostImageGrid: View {
+    let images: [String]
+    let open: (Int) -> Void
+    private let spacing: CGFloat = 3
+    var body: some View {
+        GeometryReader { geometry in
+            let items = PostMediaLayout.items(images)
+            let rows = PostMediaLayout.rows(images)
+            if items.count == 3 {
+                HStack(spacing: spacing) {
+                    tile(items[0], height: geometry.size.height)
+                    VStack(spacing: spacing) {
+                        tile(items[1], height: (geometry.size.height - spacing) / 2)
+                        tile(items[2], height: (geometry.size.height - spacing) / 2)
+                    }
+                }
+            } else {
+                VStack(spacing: spacing) {
+                    ForEach(rows) { row in
+                        HStack(spacing: spacing) {
+                            ForEach(row.items) { item in
+                                tile(item, height: (geometry.size.height - CGFloat(rows.count - 1) * spacing) / CGFloat(rows.count))
+                            }
+                        }
+                    }
+                }
+            }
+        }.aspectRatio(PostMediaLayout.aspectRatio(count: images.count), contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+    private func tile(_ item: PostMediaLayout.Item, height: CGFloat) -> some View {
+        MediaThumbnail(url: item.url, height: height, label: "查看图片 \(item.index + 1)，共 \(images.count) 张") {
+            open(item.index)
+        }
     }
 }
 private struct MediaThumbnail: View {
