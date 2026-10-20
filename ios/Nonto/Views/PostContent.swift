@@ -68,18 +68,20 @@ struct PostBodyText: View {
             }
     }
     var body: some View {
-        if !content.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                if let route {
-                    RouteButton(route) { visibleText }.accessibilityLabel("查看动态：\(content)")
-                } else { visibleText.textSelection(.enabled) }
-                if expanded || fullHeight > collapsedHeight + 1 {
-                    Button(expanded ? "收起" : "显示更多") { expanded.toggle() }
-                        .font(.subheadline).foregroundStyle(Color.brand).buttonStyle(.plain)
-                        .frame(minHeight: 28, alignment: .leading)
+        Group {
+            if !content.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let route {
+                        RouteButton(route) { visibleText }.accessibilityLabel("查看动态：\(content)")
+                    } else { visibleText.textSelection(.enabled) }
+                    if expanded || fullHeight > collapsedHeight + 1 {
+                        Button(expanded ? "收起" : "显示更多") { expanded.toggle() }
+                            .font(.subheadline).foregroundStyle(Color.brand).buttonStyle(.plain)
+                            .frame(minHeight: 28, alignment: .leading)
+                    }
                 }
-            }.onChange(of: content) { _, _ in expanded = false; collapsedHeight = 0; fullHeight = 0 }
-        }
+            }
+        }.onChange(of: content) { _, _ in expanded = false }
     }
 }
 

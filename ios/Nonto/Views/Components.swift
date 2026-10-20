@@ -101,7 +101,7 @@ struct MediaView: View {
     var body: some View {
         VStack(spacing: 8) {
             if !images.isEmpty {
-                if postLayout {
+                if postLayout && images.count > 1 {
                     PostImageGrid(images: images) { selected = MediaSelection(index: $0) }
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: images.count == 1 ? 1 : (images.count <= 4 ? 2 : 3)), spacing: 3) {

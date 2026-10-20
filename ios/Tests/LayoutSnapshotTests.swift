@@ -57,6 +57,12 @@ final class LayoutSnapshotTests: XCTestCase {
         try await capture(AppNavigationStack {
             List { PostCard(post: longPost).timelinePostRow() }.timelineList().navigationTitle("六行折叠")
         }, session: session, name: "post-six-line-fold", width: 390)
+        try await capture(AppNavigationStack {
+            List { PostCard(post: longPost).timelinePostRow() }.timelineList().navigationTitle("编辑后折叠")
+        }, session: session, name: "post-six-line-after-edit", width: 390, afterLayout: {
+            let edited = (1...10).map { "第 \($0) 行：#生活 与 @小明 的更新记录。" }.joined(separator: "\n")
+            session.postChange = PostChange(postID: longPost.id, patch: .object(["content": .text(edited)]))
+        })
         let photos = (1...5).map { JSON.text("https://layout.example.test/photo-\($0).jpg") }
         for count in [3, 5] {
             let photoPost = Post(.object(["id": .id(920010 + count), "author": author,
@@ -68,7 +74,7 @@ final class LayoutSnapshotTests: XCTestCase {
     }
 
     private func capture<V: View>(_ view: V, session: AppSession, name: String, width: CGFloat,
-                                  dark: Bool = false, largeText: Bool = false) async throws {
+                                  dark: Bool = false, largeText: Bool = false, afterLayout: (() -> Void)? = nil) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previousKeyWindow = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
@@ -83,6 +89,11 @@ final class LayoutSnapshotTests: XCTestCase {
         // Let navigation, fixture requests and SwiftUI's layout transactions settle.
         try await Task.sleep(for: .milliseconds(700))
         controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
+        if let afterLayout {
+            afterLayout()
+            try await Task.sleep(for: .milliseconds(300))
+            controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
+        }
         let markers = descendants(of: controller.view).compactMap { $0 as? ScrollChrome }
         XCTAssertTrue(markers.contains(where: { $0.window != nil && $0.isAttached }),
                       "A visible SwiftUI timeline must attach its native scroll policy (markers: \(markers.count), responders: \(markers.map { responderTypes(from: $0) }))")
