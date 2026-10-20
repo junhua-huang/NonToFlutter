@@ -1,12 +1,23 @@
 import SwiftUI
 
 enum ImageMessageCaption {
+    private static let links = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
     static func text(_ content: String, media: String) -> String {
         var text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
            let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") { return "" }
         let source = media.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !source.isEmpty { text = text.replacingOccurrences(of: source, with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
+        if !source.isEmpty {
+            let sourceURL = URL(string: source)
+            for match in (links?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? []).reversed() {
+                guard let url = match.url, let sourceURL,
+                      url.path == sourceURL.path,
+                      sourceURL.host == nil || url.host?.lowercased() == sourceURL.host?.lowercased(),
+                      let range = Range(match.range, in: text) else { continue }
+                text.removeSubrange(range)
+            }
+            text = text.replacingOccurrences(of: source, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         return text
     }
 }

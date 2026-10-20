@@ -148,7 +148,7 @@ private struct PostImageGrid: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
     }
     private func tile(_ item: PostMediaLayout.Item, height: CGFloat) -> some View {
-        MediaThumbnail(url: item.url, height: height, label: "查看图片 \(item.index + 1)，共 \(images.count) 张") {
+        MediaThumbnail(url: item.url, height: max(1, height), label: "查看图片 \(item.index + 1)，共 \(images.count) 张") {
             open(item.index)
         }
     }

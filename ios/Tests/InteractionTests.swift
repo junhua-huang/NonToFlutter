@@ -46,6 +46,8 @@ import SwiftUI
         XCTAssertEqual(ImageMessageCaption.text("这张很好看\n" + media, media: media), "这张很好看")
         XCTAssertEqual(ImageMessageCaption.text("保留图片说明", media: media), "保留图片说明")
         XCTAssertEqual(ImageMessageCaption.text("https://example.test/photo.jpg?size=large", media: media), "")
+        XCTAssertEqual(ImageMessageCaption.text("保留说明\n" + media + "?size=large", media: media), "保留说明")
+        XCTAssertEqual(ImageMessageCaption.text("保留说明\n" + media, media: "/photo.jpg"), "保留说明")
         XCTAssertEqual(ImageMessageCaption.text("请看 https://example.test/article", media: media), "请看 https://example.test/article")
     }
     func testLeavingTimelineRestoresVisibleNavigationBarAndPreviousSwipePolicy() {
