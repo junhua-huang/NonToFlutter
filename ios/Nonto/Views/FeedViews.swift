@@ -74,11 +74,15 @@ struct PostCard: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 let thread = PostThread.items(from: current)
-                ForEach(thread) { item in
-                    threadRow(item.post, isRoot: item.id == current.id, continues: item.id != thread.last?.id)
+                if detailed && thread.count == 1 { detailContent }
+                else {
+                    ForEach(thread) { item in
+                        threadRow(item.post, isRoot: item.id == current.id, continues: item.id != thread.last?.id)
+                    }
                 }
-                postActions.padding(.leading, 52)
-                if error != nil { ErrorBanner(text: error).padding(.leading, 52) }
+                let inset: CGFloat = detailed && thread.count == 1 ? 0 : 52
+                postActions.padding(.leading, inset)
+                if error != nil { ErrorBanner(text: error).padding(.leading, inset) }
             }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12).frame(maxWidth: .infinity)
             Color.timelineSeparator.frame(height: 0.5)
         }.background(Color.timelineBackground).navigationLinkIndicatorVisibility(.hidden)
@@ -98,6 +102,27 @@ struct PostCard: View {
                     }
                 }
             }
+    }
+    private var detailContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                RouteButton(.profile(current.userID)) {
+                    AvatarView(url: current.author.avatar, name: current.author.name, size: 42)
+                }.frame(width: 42, height: 42).accessibilityLabel("查看\(current.author.name)的主页")
+                authorHeader(current, showsMenu: true)
+            }
+            PostBodyText(content: current.content, detailed: true)
+            if !current.images.isEmpty || !current.video.isEmpty {
+                MediaView(images: current.images, video: current.video, postLayout: true)
+            }
+            if let date = current.date {
+                Text(date, format: .dateTime.hour().minute().day().month().year())
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if current.raw["quoted_post_unavailable"].bool || current.raw["quoted_post"]["unavailable"].bool {
+                Label("原动态已不可见", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
+            }
+        }.padding(.bottom, 4)
     }
     private func threadRow(_ item: Post, isRoot: Bool, continues: Bool) -> some View {
         HStack(alignment: .top, spacing: 10) {
@@ -219,17 +244,19 @@ struct PostDetailView: View {
             if error != nil { ErrorBanner(text: error) }
             Section("回复") {
                 ForEach(comments.items) { comment in CommentRow(comment: comment, postID: postID, onReply: { reply = $0; commentFocused = true }, onChange: { Task { await comments.load(reset: true) } }) }
-                ResourceFooter(resource: comments)
+                ResourceFooter(resource: comments, emptyTitle: "还没有回复", emptyDescription: "说说你的想法，成为第一个回复的人。", emptyIcon: "bubble.left", compactEmpty: true)
             }
         }.timelineList().navigationTitle("动态").navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
+            .toolbarVisibility(.hidden, for: .tabBar)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
                     if let reply { HStack { Text("回复 @\(reply.author.username)").font(.caption); Spacer(); Button("取消") { self.reply = nil } }.padding(.horizontal) }
                     HStack {
                         TextField("说点什么…", text: $text, axis: .vertical).lineLimit(1...5).textFieldStyle(.plain).padding(.vertical, 10).padding(.leading, 8).focused($commentFocused).accessibilityLabel("评论内容")
-                        Button { Task { await send() } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up.circle.fill").font(.title) } }.disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("发送评论")
+                        Button { Task { await send() } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up.circle.fill").font(.title) } }.frame(width: 44, height: 44).disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("发送评论")
                     }.floatingGlass()
-                }.padding(.top, 8)
+                }.padding(.top, 8).background(Color.timelineBackground)
             }
             .task { await load(); _ = try? await session.api.request("/posts/\(postID)/view", method: "POST") }
             .refreshable { await load() }

@@ -22,6 +22,28 @@ enum ImageMessageCaption {
     }
 }
 
+/// Status occupies the visible chat viewport, independent of the bottom-anchored message stack.
+struct ChatTimelinePlaceholder: View {
+    let loading: Bool
+    let error: String?
+    let retry: () -> Void
+    var body: some View {
+        Group {
+            if loading { ProgressView("正在加载消息…") }
+            else if let error {
+                ContentUnavailableView {
+                    Label("消息加载失败", systemImage: "wifi.exclamationmark")
+                } description: { Text(error) } actions: {
+                    Button("重试", action: retry).buttonStyle(.glass)
+                }
+            } else {
+                ContentUnavailableView("开始聊天", systemImage: "bubble.left.and.bubble.right",
+                                       description: Text("发一条消息，开启对话吧"))
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 struct ChatMessageRow: View {
     let row: ChatTimeline.Row
     let community: Bool

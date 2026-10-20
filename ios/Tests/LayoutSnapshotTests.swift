@@ -73,8 +73,57 @@ final class LayoutSnapshotTests: XCTestCase {
         }
     }
 
+    func testReportedLoginSearchChatAndDetailLayouts() async throws {
+        let author: JSON = .object(["id": .id(900041), "username": .text("涂装老陈"), "display_name": .text("涂装老陈")])
+        let post = Post(.object(["id": .id(930001), "author": author,
+                                 "content": .text("  \nGK 白模修复教程，桩位对不上怎么办 #手办 #教程\n "),
+                                 "images": .array([.text("https://layout.example.test/detail.jpg")]),
+                                 "created_at": .text("2026-09-17T14:02:00Z")]))
+        var failChat = false
+        StubProtocol.handler = { request in
+            let path = request.url!.path
+            if path.hasSuffix("/topics/trending") { return (200, .object(["topics": .array([])])) }
+            if path.hasSuffix("/search/history") {
+                return (200, .object(["history": .array(["hjjd", "一停", "阿飞", "热门话题", "ov", "热门帖子", "哈哈", "254207738"].map { .object(["query": .text($0)]) })]))
+            }
+            if path.hasSuffix("/posts/930001") { return (200, .object(["post": post.raw])) }
+            if path.hasSuffix("/comments") { return (200, .object(["comments": .array([]), "has_more": .bool(false)])) }
+            if path.hasSuffix("/chat") {
+                return failChat ? (503, .object(["detail": .text("暂时无法加载消息，请重试。")]))
+                                : (200, .object(["messages": .array([]), "has_more": .bool(false)]))
+            }
+            return (200, .object([:]))
+        }
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!,
+                            session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        try api.setToken("reported-layout-fixture")
+        let session = AppSession(api: api)
+        session.user = Person(.object(["id": .id(userID), "username": .text("nonto")]))
+        session.restoring = false
+        try await capture(AuthView(), session: session, name: "reported-auth-dark", width: 390, dark: true, expectsScrollChrome: false)
+        try await capture(AuthView(), session: session, name: "reported-auth-small", width: 320, expectsScrollChrome: false)
+        try await capture(AppNavigationStack { ExploreView() }, session: session, name: "reported-search-dark", width: 390, dark: true)
+        let conversation = Conversation(.object(["id": .id(930020), "type": .text("community"),
+                                                "community_id": .id(930020), "community_name": .text("NonTo 官方群")]))
+        try await capture(AppNavigationStack { ChatRoomView(conversation: conversation) }, session: session,
+                          name: "reported-chat-empty-keyboard", width: 390, dark: true,
+                          expectsScrollChrome: false, focusComposer: true)
+        failChat = true
+        try await capture(AppNavigationStack { ChatRoomView(conversation: conversation) }, session: session,
+                          name: "reported-chat-error", width: 390, dark: true, expectsScrollChrome: false)
+        try await capture(TabView {
+            AppNavigationStack { PostDetailView(session: session, postID: post.id, initial: post) }
+                .tabItem { Label("首页", systemImage: "house") }
+            Text("发现").tabItem { Label("发现", systemImage: "magnifyingglass") }
+        }, session: session, name: "reported-detail-dark", width: 390, dark: true)
+        try await capture(AppNavigationStack { PostDetailView(session: session, postID: post.id, initial: post) },
+                          session: session, name: "reported-detail-large-text", width: 390, largeText: true)
+    }
+
     private func capture<V: View>(_ view: V, session: AppSession, name: String, width: CGFloat,
-                                  dark: Bool = false, largeText: Bool = false, afterLayout: (() -> Void)? = nil) async throws {
+                                  dark: Bool = false, largeText: Bool = false, afterLayout: (() -> Void)? = nil,
+                                  expectsScrollChrome: Bool = true, focusComposer: Bool = false) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previousKeyWindow = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
@@ -94,9 +143,17 @@ final class LayoutSnapshotTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(300))
             controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
         }
+        if focusComposer {
+            let field = try XCTUnwrap(descendants(of: controller.view).first { $0 is UITextField || $0 is UITextView })
+            XCTAssertTrue(field.becomeFirstResponder())
+            try await Task.sleep(for: .milliseconds(350))
+            controller.view.layoutIfNeeded()
+        }
         let markers = descendants(of: controller.view).compactMap { $0 as? ScrollChrome }
-        XCTAssertTrue(markers.contains(where: { $0.window != nil && $0.isAttached }),
-                      "A visible SwiftUI timeline must attach its native scroll policy (markers: \(markers.count), responders: \(markers.map { responderTypes(from: $0) }))")
+        if expectsScrollChrome {
+            XCTAssertTrue(markers.contains(where: { $0.window != nil && $0.isAttached }),
+                          "A visible SwiftUI timeline must attach its native scroll policy (markers: \(markers.count), responders: \(markers.map { responderTypes(from: $0) }))")
+        }
         let format = UIGraphicsImageRendererFormat(); format.scale = 2
         let image = UIGraphicsImageRenderer(size: window.bounds.size, format: format).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)

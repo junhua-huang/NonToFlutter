@@ -56,6 +56,7 @@ struct ResourceFooter<T: Record>: View {
     var emptyTitle = "这里还没有内容"
     var emptyDescription = "稍后再来看看，或下拉刷新。"
     var emptyIcon = "tray"
+    var compactEmpty = false
     var body: some View {
         Group {
             if let error = resource.error {
@@ -72,7 +73,14 @@ struct ResourceFooter<T: Record>: View {
                         await resource.load()
                     }
             } else if resource.items.isEmpty {
-                ContentUnavailableView(emptyTitle, systemImage: emptyIcon, description: Text(emptyDescription))
+                if compactEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(emptyTitle).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                        Text(emptyDescription).font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
+                } else {
+                    ContentUnavailableView(emptyTitle, systemImage: emptyIcon, description: Text(emptyDescription))
+                }
             } else { Text("已显示全部内容").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding() }
         }.listRowSeparator(.hidden)
     }

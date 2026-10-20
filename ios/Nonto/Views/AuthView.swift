@@ -14,6 +14,9 @@ struct AuthView: View {
     @State private var sendingCode = false
     @State private var cooldown = 0
     @State private var accepted = false
+    @State private var showsLoginCode = false
+    @FocusState private var focusedField: Field?
+    private enum Field { case username, email, password, code }
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private var purpose: String { mode == .register ? "register" : (mode == .reset ? "reset_password" : "login") }
 
@@ -26,17 +29,40 @@ struct AuthView: View {
                         Text("南图").font(.system(size: 40, weight: .bold, design: .rounded))
                         Text("发现世界的动态，遇见同频的人。").foregroundStyle(.secondary)
                     }.padding(.vertical, 24)
-                    Picker("账号操作", selection: Binding(get: { mode }, set: { mode = $0; error = nil; message = nil; code = "" })) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).disabled(busy || sendingCode)
-                    VStack(spacing: 18) {
-                        if mode == .register { TextField("用户名", text: $username).textContentType(.username) }
-                        TextField("邮箱", text: $email).keyboardType(.emailAddress).textContentType(.emailAddress)
-                        SecureField(mode == .reset ? "新密码（至少 8 位）" : "密码", text: $password).textContentType(mode == .login ? .password : .newPassword)
-                        HStack {
-                            TextField(mode == .login ? "验证码（如服务器要求）" : "6 位邮箱验证码", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode)
-                            Button(cooldown > 0 ? "\(cooldown) 秒" : "发送验证码") { Task { await sendOTP() } }
-                                .disabled(sendingCode || cooldown > 0 || !email.contains("@") || busy)
+                    Picker("账号操作", selection: Binding(get: { mode }, set: {
+                        mode = $0; error = nil; message = nil; code = ""; showsLoginCode = false; focusedField = nil
+                    })) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                        .pickerStyle(.segmented).disabled(busy || sendingCode)
+                    VStack(alignment: .leading, spacing: 16) {
+                        if mode == .register {
+                            field("用户名") {
+                                TextField("设置用户名", text: $username).textContentType(.username)
+                                    .focused($focusedField, equals: .username).submitLabel(.next)
+                                    .onSubmit { focusedField = .email }
+                            }
                         }
-                    }.textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder).disabled(busy || sendingCode)
+                        field("邮箱") {
+                            TextField("name@example.com", text: $email).keyboardType(.emailAddress).textContentType(.emailAddress)
+                                .focused($focusedField, equals: .email).submitLabel(.next)
+                                .onSubmit { focusedField = .password }
+                        }
+                        field(mode == .reset ? "新密码" : "密码") {
+                            SecureField(mode == .login ? "输入密码" : "至少 8 位", text: $password)
+                                .textContentType(mode == .login ? .password : .newPassword)
+                                .focused($focusedField, equals: .password)
+                                .submitLabel(mode == .login && !showsLoginCode ? .go : .next)
+                                .onSubmit {
+                                    if mode == .login && !showsLoginCode {
+                                        if canSubmit { Task { await submit() } }
+                                    } else { focusedField = .code }
+                                }
+                        }
+                        if mode == .login {
+                            DisclosureGroup("需要邮箱验证码？", isExpanded: $showsLoginCode) {
+                                verificationField.padding(.top, 10)
+                            }.font(.subheadline)
+                        } else { verificationField }
+                    }.textInputAutocapitalization(.never).autocorrectionDisabled().disabled(busy || sendingCode)
                     if mode == .register {
                         Toggle("我已阅读并同意用户协议和隐私政策", isOn: $accepted).font(.footnote)
                     }
@@ -47,12 +73,41 @@ struct AuthView: View {
                     ErrorBanner(text: error)
                     if let message { Text(message).font(.subheadline).foregroundStyle(Color.brand) }
                     Button { Task { await submit() } } label: {
-                        HStack { Spacer(); if busy { ProgressView().tint(.white) }; Text(mode == .reset ? "重设密码" : mode.rawValue); Spacer() }.padding(.vertical, 8)
+                        HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(mode == .reset ? "重设密码" : mode.rawValue) }
+                            .frame(maxWidth: .infinity, minHeight: 24)
                     }.buttonStyle(.glassProminent).controlSize(.large)
-                        .disabled(busy || sendingCode || email.isEmpty || password.isEmpty || (mode == .register && (!accepted || username.isEmpty || code.isEmpty)) || (mode == .reset && code.isEmpty))
-                }.padding(28).frame(maxWidth: 520)
+                        .disabled(!canSubmit)
+                }.padding(.horizontal, 24).padding(.vertical, 16).frame(maxWidth: 440)
             }.frame(maxWidth: .infinity).scrollDismissesKeyboard(.interactively)
                 .onReceive(timer) { _ in if cooldown > 0 { cooldown -= 1 } }
+        }
+    }
+    private var canSubmit: Bool {
+        !busy && !sendingCode && !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty
+            && (mode != .register || (accepted && !username.isEmpty && !code.isEmpty))
+            && (mode != .reset || !code.isEmpty)
+    }
+    private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+            content().textFieldStyle(.plain).padding(.horizontal, 14).padding(.vertical, 13)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                .background(Color.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+    private var verificationField: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            field("邮箱验证码") {
+                TextField("6 位验证码", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode)
+                    .focused($focusedField, equals: .code)
+            }
+            Button { Task { await sendOTP() } } label: {
+                HStack(spacing: 4) {
+                    if sendingCode { ProgressView() }
+                    Text(cooldown > 0 ? "\(cooldown) 秒" : "发送验证码")
+                }.font(.subheadline).frame(minHeight: 32)
+            }.buttonStyle(.glass).controlSize(.regular).fixedSize(horizontal: true, vertical: false)
+                .disabled(sendingCode || cooldown > 0 || !email.contains("@") || busy)
         }
     }
     private func sendOTP() async {
@@ -63,6 +118,8 @@ struct AuthView: View {
         } catch { self.error = error.localizedDescription }
     }
     private func submit() async {
+        guard canSubmit else { return }
+        focusedField = nil
         busy = true; error = nil; message = nil; defer { busy = false }
         do {
             if mode != .login && password.count < 8 { throw APIError(status: 0, message: "密码至少需要 8 位") }

@@ -9,6 +9,7 @@ struct ExploreView: View {
     @State private var history: [String] = []
     @State private var error: String?
     @State private var queryError: String?
+    @State private var clearingHistory = false
     var body: some View {
         VStack(spacing: 0) {
             if queryError != nil { ErrorBanner(text: queryError).padding(.horizontal) }
@@ -22,10 +23,9 @@ struct ExploreView: View {
                         RouteButton(.followedTopics) { Label("我的话题", systemImage: "number") }
                     }
                     if !history.isEmpty {
-                        Section {
-                            ForEach(history, id: \.self) { item in Button { query = item; search() } label: { Label(item, systemImage: "clock").foregroundStyle(.primary) } }
-                            Button("清空搜索记录", role: .destructive) { Task { await clearHistory() } }
-                        } header: { Text("最近搜索") }
+                        SearchHistorySection(history: history, clearing: clearingHistory,
+                                             search: { query = $0; search() }, reuse: { query = $0 },
+                                             clear: { Task { await clearHistory() } })
                     }
                     Section {
                         ForEach(Array(topics.enumerated()), id: \.element.id) { index, topic in
@@ -74,8 +74,46 @@ struct ExploreView: View {
         } catch { self.error = error.localizedDescription }
     }
     private func clearHistory() async {
+        guard !clearingHistory else { return }
+        clearingHistory = true; defer { clearingHistory = false }
         do { _ = try await session.api.request("/search/history", method: "DELETE"); history = [] }
         catch { self.error = error.localizedDescription }
+    }
+}
+
+
+struct SearchHistorySection: View {
+    let history: [String]
+    let clearing: Bool
+    let search: (String) -> Void
+    let reuse: (String) -> Void
+    let clear: () -> Void
+    var body: some View {
+        Section {
+            ForEach(history, id: \.self) { item in
+                HStack(spacing: 8) {
+                    Button { search(item) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock").foregroundStyle(.secondary)
+                            Text(item).lineLimit(1).truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(minHeight: 44).contentShape(Rectangle()).foregroundStyle(.primary)
+                    }.buttonStyle(.plain)
+                    Button { reuse(item) } label: {
+                        Image(systemName: "arrow.up.left").foregroundStyle(.secondary).frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).accessibilityLabel("填入搜索词：\(item)")
+                }
+            }
+        } header: {
+            HStack {
+                Text("最近搜索").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Button(action: clear) {
+                    HStack(spacing: 4) { if clearing { ProgressView() }; Text("清空") }
+                        .font(.subheadline).frame(minHeight: 44)
+                }.disabled(clearing).accessibilityLabel("清空搜索记录")
+            }.textCase(nil)
+        }
     }
 }
 

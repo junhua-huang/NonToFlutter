@@ -74,17 +74,15 @@ private struct ChatRoomContent: View {
         let lastOutgoingID = store.messages.last(where: { $0.senderID == session.user?.id })?.id
         ScrollView {
             LazyVStack(spacing: 6) {
-                if store.more {
+                if store.more && !store.messages.isEmpty {
                     Button { Task { await store.load(older: true) } } label: {
                         if store.loadingOlder { ProgressView("正在加载历史消息…") }
                         else { Label("更早的消息", systemImage: "clock.arrow.circlepath") }
                     }.font(.subheadline).disabled(store.loadingOlder).padding(.vertical, 12)
                 }
-                if store.loading && store.messages.isEmpty { ProgressView("正在加载消息…").padding() }
-                if !store.loading && store.messages.isEmpty && store.pending.isEmpty && store.error == nil {
-                    ContentUnavailableView("开始聊天", systemImage: "bubble.left.and.bubble.right", description: Text("发一条消息，开启对话吧"))
+                if !store.messages.isEmpty || !store.pending.isEmpty {
+                    ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
                 }
-                ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
                 ForEach(ChatTimeline.rows(store.messages)) { row in
                     ChatMessageRow(row: row, community: communityID != nil,
                                    showsReceipt: row.id == lastOutgoingID,
@@ -100,6 +98,12 @@ private struct ChatRoomContent: View {
                 Color.clear.frame(height: 1).id(Int.min)
             }.scrollTargetLayout().padding(.vertical, 8)
         }
+        .overlay {
+            if store.messages.isEmpty && store.pending.isEmpty {
+                ChatTimelinePlaceholder(loading: store.loading, error: store.error) { Task { await store.load() } }
+            }
+        }
+        .background(Color.timelineBackground)
         .scrollDismissesKeyboard(.interactively)
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom, for: .initialOffset)
