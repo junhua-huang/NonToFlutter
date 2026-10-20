@@ -102,7 +102,7 @@ struct SearchHistorySection: View {
                     Button { reuse(item) } label: {
                         Image(systemName: "arrow.up.left").foregroundStyle(.secondary).frame(width: 44, height: 44)
                     }.buttonStyle(.plain).accessibilityLabel("填入搜索词：\(item)")
-                }
+                }.listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             }
         } header: {
             HStack {
@@ -111,7 +111,7 @@ struct SearchHistorySection: View {
                 Button(action: clear) {
                     HStack(spacing: 4) { if clearing { ProgressView() }; Text("清空") }
                         .font(.subheadline).frame(minHeight: 44)
-                }.disabled(clearing).accessibilityLabel("清空搜索记录")
+                }.foregroundStyle(Color.brand).disabled(clearing).accessibilityLabel("清空搜索记录")
             }.textCase(nil)
         }
     }

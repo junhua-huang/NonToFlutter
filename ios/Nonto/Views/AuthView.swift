@@ -42,7 +42,7 @@ struct AuthView: View {
                             }
                         }
                         field("邮箱") {
-                            TextField("name@example.com", text: $email).keyboardType(.emailAddress).textContentType(.emailAddress)
+                            TextField("输入邮箱地址", text: $email).keyboardType(.emailAddress).textContentType(.emailAddress)
                                 .focused($focusedField, equals: .email).submitLabel(.next)
                                 .onSubmit { focusedField = .password }
                         }

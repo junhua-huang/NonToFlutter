@@ -79,7 +79,7 @@ final class LayoutSnapshotTests: XCTestCase {
                                  "content": .text("  \nGK 白模修复教程，桩位对不上怎么办 #手办 #教程\n "),
                                  "images": .array([.text("https://layout.example.test/detail.jpg")]),
                                  "created_at": .text("2026-09-17T14:02:00Z")]))
-        var failChat = false
+        var failChat = false, chatRequests = 0, commentRequests = 0
         StubProtocol.handler = { request in
             let path = request.url!.path
             if path.hasSuffix("/topics/trending") { return (200, .object(["topics": .array([])])) }
@@ -87,8 +87,12 @@ final class LayoutSnapshotTests: XCTestCase {
                 return (200, .object(["history": .array(["hjjd", "一停", "阿飞", "热门话题", "ov", "热门帖子", "哈哈", "254207738"].map { .object(["query": .text($0)]) })]))
             }
             if path.hasSuffix("/posts/930001") { return (200, .object(["post": post.raw])) }
-            if path.hasSuffix("/comments") { return (200, .object(["comments": .array([]), "has_more": .bool(false)])) }
+            if path.hasSuffix("/comments") {
+                commentRequests += 1
+                return (200, .object(["comments": .array([]), "has_more": .bool(false)]))
+            }
             if path.hasSuffix("/chat") {
+                chatRequests += 1
                 return failChat ? (503, .object(["detail": .text("暂时无法加载消息，请重试。")]))
                                 : (200, .object(["messages": .array([]), "has_more": .bool(false)]))
             }
@@ -108,34 +112,42 @@ final class LayoutSnapshotTests: XCTestCase {
                                                 "community_id": .id(930020), "community_name": .text("NonTo 官方群")]))
         try await capture(AppNavigationStack { ChatRoomView(conversation: conversation) }, session: session,
                           name: "reported-chat-empty-keyboard", width: 390, dark: true,
-                          expectsScrollChrome: false, focusComposer: true)
-        failChat = true
+                          expectsScrollChrome: false, focusComposer: true, ready: { chatRequests > 0 })
+        failChat = true; chatRequests = 0
         try await capture(AppNavigationStack { ChatRoomView(conversation: conversation) }, session: session,
-                          name: "reported-chat-error", width: 390, dark: true, expectsScrollChrome: false)
+                          name: "reported-chat-error", width: 390, dark: true, expectsScrollChrome: false, ready: { chatRequests > 0 })
         try await capture(TabView {
             AppNavigationStack { PostDetailView(session: session, postID: post.id, initial: post) }
                 .tabItem { Label("首页", systemImage: "house") }
             Text("发现").tabItem { Label("发现", systemImage: "magnifyingglass") }
-        }, session: session, name: "reported-detail-dark", width: 390, dark: true)
+        }, session: session, name: "reported-detail-dark", width: 390, dark: true, ready: { commentRequests > 0 })
+        commentRequests = 0
         try await capture(AppNavigationStack { PostDetailView(session: session, postID: post.id, initial: post) },
-                          session: session, name: "reported-detail-large-text", width: 390, largeText: true)
+                          session: session, name: "reported-detail-large-text", width: 390, largeText: true, ready: { commentRequests > 0 })
     }
 
     private func capture<V: View>(_ view: V, session: AppSession, name: String, width: CGFloat,
                                   dark: Bool = false, largeText: Bool = false, afterLayout: (() -> Void)? = nil,
-                                  expectsScrollChrome: Bool = true, focusComposer: Bool = false) async throws {
+                                  expectsScrollChrome: Bool = true, focusComposer: Bool = false, ready: (() -> Bool)? = nil) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previousKeyWindow = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
         let root = view.environmentObject(session).tint(.brand)
             .environment(\.dynamicTypeSize, largeText ? .accessibility2 : .large)
+            .environment(\.scenePhase, .active)
             .preferredColorScheme(dark ? .dark : .light)
         let controller = UIHostingController(rootView: root)
         window.frame = CGRect(x: 0, y: 0, width: width, height: 844)
         window.overrideUserInterfaceStyle = dark ? .dark : .light
         window.rootViewController = controller; window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
+        controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
         // Let navigation, fixture requests and SwiftUI's layout transactions settle.
+        if let ready {
+            let deadline = Date().addingTimeInterval(5)
+            while !ready(), Date() < deadline { try await Task.sleep(for: .milliseconds(25)) }
+            XCTAssertTrue(ready(), "The screenshot must wait for its fixture response")
+        }
         try await Task.sleep(for: .milliseconds(700))
         controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
         if let afterLayout {
