@@ -161,7 +161,7 @@ private struct ChatRoomContent: View {
                 if let quote {
                     HStack(spacing: 8) {
                         Image(systemName: "quote.bubble").foregroundStyle(Color.brand)
-                        Text(quote.content.isEmpty ? "引用媒体消息" : quote.content).lineLimit(2).font(.caption)
+                        Text(ChatQuoteSummary.text(quote).isEmpty ? "引用消息" : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption)
                         Spacer()
                         Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }
                             .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44)

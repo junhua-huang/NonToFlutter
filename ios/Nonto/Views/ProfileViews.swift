@@ -25,7 +25,7 @@ struct ProfileView: View {
             .toolbarBackgroundVisibility(coverVisible ? .hidden : .visible, for: .navigationBar)
             .toolbarColorScheme(coverVisible ? .dark : nil, for: .navigationBar)
             .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top < 160
+                geometry.contentOffset.y + geometry.contentInsets.top < geometry.containerSize.width / 3.3
             } action: { _, value in
                 // Only change the material, never the navigation bar's visibility or height.
                 if coverVisible != value { coverVisible = value }

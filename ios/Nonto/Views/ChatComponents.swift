@@ -4,8 +4,6 @@ enum ImageMessageCaption {
     private static let links = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
     static func text(_ content: String, media: String) -> String {
         var text = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
-           let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") { return "" }
         let source = media.trimmingCharacters(in: .whitespacesAndNewlines)
         if !source.isEmpty {
             let sourceURL = URL(string: source)
@@ -19,6 +17,15 @@ enum ImageMessageCaption {
             text = text.replacingOccurrences(of: source, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return text
+    }
+}
+
+enum ChatQuoteSummary {
+    static func text(_ message: ChatMessage) -> String {
+        guard ["image", "video"].contains(message.kind) else { return message.content }
+        let kind = message.kind == "image" ? "[图片]" : "[视频]"
+        let caption = ImageMessageCaption.text(message.content, media: message.media)
+        return caption.isEmpty ? kind : kind + " " + caption
     }
 }
 

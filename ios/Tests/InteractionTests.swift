@@ -66,6 +66,9 @@ import SwiftUI
         XCTAssertEqual(ImageMessageCaption.text("保留说明\n" + media + "?size=large", media: media), "保留说明")
         XCTAssertEqual(ImageMessageCaption.text("保留说明\n" + media, media: "/photo.jpg"), "保留说明")
         XCTAssertEqual(ImageMessageCaption.text("请看 https://example.test/article", media: media), "请看 https://example.test/article")
+        XCTAssertEqual(ImageMessageCaption.text("https://example.test/article", media: media), "https://example.test/article")
+        let video = ChatMessage(.object(["id": .id(5), "message_type": .text("video"), "media_url": .text(media), "content": .text(media)]))
+        XCTAssertEqual(ChatQuoteSummary.text(video), "[视频]")
     }
     func testLeavingTimelineRestoresVisibleNavigationBarAndPreviousSwipePolicy() {
         let navigation = UINavigationController(rootViewController: UIViewController())
