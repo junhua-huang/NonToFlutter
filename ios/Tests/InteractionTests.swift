@@ -9,7 +9,7 @@ import UIKit
         chrome.enableSwipe(in: navigation)
         XCTAssertTrue(navigation.hidesBarsOnSwipe)
         navigation.setNavigationBarHidden(true, animated: false)
-        chrome.viewWillDisappear(false)
+        chrome.restoreNavigationBar()
         XCTAssertFalse(navigation.hidesBarsOnSwipe)
         XCTAssertFalse(navigation.isNavigationBarHidden)
 

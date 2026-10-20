@@ -86,12 +86,12 @@ struct TimelineActionSymbol: View {
     }
 }
 
-private struct ScrollingNavigationBar: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> ScrollChrome { ScrollChrome() }
+private struct ScrollingNavigationBar: UIViewRepresentable {
+    func makeUIView(context: Context) -> ScrollChrome { ScrollChrome() }
     // Layout updates must never change toolbar visibility. UIKit owns the swipe
     // gesture and its bar animation, without feeding insets back into SwiftUI.
-    func updateUIViewController(_ controller: ScrollChrome, context: Context) {}
-    static func dismantleUIViewController(_ controller: ScrollChrome, coordinator: ()) {
-        controller.restoreNavigationBar()
+    func updateUIView(_ marker: ScrollChrome, context: Context) {}
+    static func dismantleUIView(_ marker: ScrollChrome, coordinator: ()) {
+        marker.restoreNavigationBar()
     }
 }

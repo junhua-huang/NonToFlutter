@@ -4,28 +4,37 @@ import UIKit
 /// SwiftUI toolbar preference from scroll geometry: bar/inset layout can feed
 /// back into the observer (the navigation update in build 21.1's iOS 27 watchdog).
 @MainActor
-final class ScrollChrome: UIViewController {
+final class ScrollChrome: UIView {
     private static let owners = NSMapTable<UINavigationController, ScrollChrome>.weakToWeakObjects()
     private weak var controlledNavigation: UINavigationController?
     private var previousSwipeBehavior = false
 
-    override func loadView() {
-        let marker = UIView()
-        marker.isUserInteractionEnabled = false
-        marker.backgroundColor = .clear
-        view = marker
+    var isAttached: Bool { controlledNavigation?.hidesBarsOnSwipe == true }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        isUserInteractionEnabled = false
+        if window == nil { restoreNavigationBar(); return }
+        attachIfNeeded()
+        // SwiftUI can attach the marker before the NavigationStack's hosting
+        // controller has its final parent, particularly inside a TabView.
+        DispatchQueue.main.async { [weak self] in self?.attachIfNeeded() }
     }
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        if let navigationController { enableSwipe(in: navigationController) }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        attachIfNeeded()
     }
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        restoreNavigationBar()
-    }
-    override func didMove(toParent parent: UIViewController?) {
-        super.didMove(toParent: parent)
-        if parent == nil { restoreNavigationBar() }
+    private func attachIfNeeded() {
+        guard window != nil, controlledNavigation == nil else { return }
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let controller = current as? UIViewController,
+               let navigation = (controller as? UINavigationController) ?? controller.navigationController {
+                enableSwipe(in: navigation)
+                return
+            }
+            responder = current.next
+        }
     }
 
     func enableSwipe(in navigation: UINavigationController) {
