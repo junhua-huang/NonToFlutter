@@ -104,7 +104,7 @@ struct ContactAndComplaintsView: View {
     var body: some View {
         Form {
             Section("联系南图") {
-                Text(profile.value("contactEmail")).textSelection(.enabled)
+                Text(profile.value("contactEmail")).lineLimit(1).minimumScaleFactor(0.5).textSelection(.enabled)
                 Text("使用反馈、举报投诉、个人信息申请和处置申诉，均可通过此邮箱联系。")
                     .font(.footnote).foregroundStyle(.secondary)
             }
