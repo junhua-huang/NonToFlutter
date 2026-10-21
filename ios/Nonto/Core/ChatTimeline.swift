@@ -1,5 +1,33 @@
 import Foundation
 
+enum ChatDeliveryFailure {
+    /// HTTP gateways can lose the acknowledgement after the server has persisted a message.
+    static func isUncertain(_ error: Error) -> Bool {
+        if let error = error as? APIError { return error.status == 0 || error.status == 408 || error.status >= 500 }
+        if let error = error as? URLError { return [.timedOut, .networkConnectionLost, .badServerResponse, .cannotParseResponse].contains(error.code) }
+        return false
+    }
+}
+
+/// The HTTP and community send routes use different websocket envelopes.
+struct ChatRealtimeEvent {
+    let name: String
+    let data: JSON
+    let message: ChatMessage
+    let conversationID: Int
+    let communityID: Int
+    init(_ payload: JSON) {
+        name = payload["event"].string
+        data = payload["data"].or(payload)
+        message = ChatMessage(data["message"].or(data["data"]).or(data))
+        conversationID = [data["conversation_id"].int, message.raw["conversation_id"].int, payload["conversation_id"].int].first { $0 > 0 } ?? 0
+        communityID = [data["community_id"].int, message.raw["community_id"].int].first { $0 > 0 } ?? 0
+    }
+    var affectsConversationList: Bool {
+        ["new_message", "message_recalled", "conversation_read", "session_list", "resync"].contains(name)
+    }
+}
+
 /// Keeps conversational runs compact while retaining date and time context.
 enum ChatTimeline {
     struct Row: Identifiable, Equatable {

@@ -34,7 +34,8 @@ struct MessagesView: View {
             .toolbar { RouteButton(.friends) { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
-            .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
+            .onReceive(socket.events.filter { ChatRealtimeEvent($0).affectsConversationList }
+                .debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
     }
     private func preview(_ message: ChatMessage) -> String {
         switch message.kind { case "image": return "[图片]"; case "video": return "[视频]"; case "post": return "[动态]"; case "file": return "[文件]"; default: return message.content }
@@ -94,6 +95,7 @@ private struct ChatRoomContent: View {
                     ChatPendingRow(item: item, sending: store.sendingID == item.id,
                                    blocked: store.pending.first?.failure != nil && store.pending.first?.id != item.id,
                                    retry: { store.retry(item.id) }, remove: { store.remove(item.id) },
+                                   checkDelivery: { Task { await store.load() } },
                                    onMediaPresentation: mediaPresentationChanged)
                 }
                 Color.clear.frame(height: 1).id(Int.min)
@@ -177,8 +179,10 @@ private struct ChatRoomContent: View {
                 quote = nil
             }
         }
-        .onReceive(socket.$revision.dropFirst().debounce(for: .milliseconds(350), scheduler: RunLoop.main)) { _ in
-            if visible && phase == .active { Task { if visible && phase == .active { await store.load() } } }
+        .onReceive(socket.events) { payload in
+            if visible && phase == .active, store.receive(payload) {
+                Task { if visible && phase == .active { await store.load() } }
+            }
         }
         .task(id: picks) {
             let selection = picks
@@ -258,9 +262,10 @@ struct SharePostView: View {
         requestIDs[conv.id] = requestID
         do {
             let path = conv.isCommunity ? "/communities/\(conv.communityID ?? 0)/chat/messages" : "/chat/conversations/\(conv.id)/messages"
-            _ = try await session.api.request(path, method: "POST", body: .object([
+            let result = try await session.api.request(path, method: "POST", body: .object([
                 "content": .text(post.content), "message_type": .text("post"), "related_id": .id(post.id),
                 conv.isCommunity ? "client_msg_id" : "request_id": .text(requestID)]))
+            guard ChatMessage.confirmation(result) != nil else { throw APIError(status: 0, message: "未收到分享确认，请先检查会话中的消息") }
             dismiss()
         } catch { self.error = error.localizedDescription }
     }

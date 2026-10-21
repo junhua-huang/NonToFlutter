@@ -58,6 +58,10 @@ struct ChatMessage: Record {
     var media: String { raw["media_url"].or(raw["file_url"]).string }
     var recalled: Bool { raw["is_recalled"].bool || raw["status"].string == "recalled" }
     var date: Date? { ServerDate.parse(raw["created_at"].or(raw["sent_at"]).or(raw["timestamp"])) }
+    /// Private chat returns {message: "Message sent", data: {...}}; community chat returns {message: {...}}.
+    static func confirmation(_ response: JSON) -> ChatMessage? {
+        [response["message"], response["data"], response].map(ChatMessage.init).first { $0.id > 0 }
+    }
 }
 struct Conversation: Record {
     var id: Int { raw["conversation_id"].int > 0 ? raw["conversation_id"].int : raw["id"].int }

@@ -1,4 +1,4 @@
-name: Composer iOS 27 Regression
+name: Native iOS 27 Regression
 on:
   push:
     branches: [ios]
@@ -10,10 +10,20 @@ on:
       - 'ios/Nonto/Views/PrivacyViews.swift'
       - 'ios/Nonto/Views/SettingsViews.swift'
       - 'ios/Nonto/Views/AppNavigation.swift'
+      - 'ios/Nonto/Views/ChatViews.swift'
+      - 'ios/Nonto/Views/ChatComponents.swift'
+      - 'ios/Nonto/Services/ChatStore.swift'
+      - 'ios/Nonto/Services/RealtimeClient.swift'
+      - 'ios/Nonto/Services/NativeNotifications.swift'
+      - 'ios/Nonto/Services/AppSession.swift'
+      - 'ios/Nonto/Core/ChatTimeline.swift'
+      - 'ios/Nonto/Core/Models.swift'
       - 'ios/Nonto/Resources/**'
       - 'ios/Tests/ComplianceTests.swift'
       - 'ios/Tests/InteractionTests.swift'
       - 'ios/Tests/LayoutSnapshotTests.swift'
+      - 'ios/Tests/ChatExperienceTests.swift'
+      - 'ios/Tests/StateTests.swift'
       - '.github/workflows/composer-ios27.yml'
   workflow_dispatch:
 permissions:

@@ -147,10 +147,17 @@ final class StateTests: XCTestCase {
             return (200, .object(["messages": .array((1...newest).map { self.message($0) })]))
         }
         let (store, _) = room(api); await store.activate(); let before = store.scrollRequest
-        await store.load(); XCTAssertEqual(reads, 1)
+        await store.load()
+        let firstReadDeadline = Date().addingTimeInterval(5)
+        while reads < 1 && Date() < firstReadDeadline { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(reads, 1)
         store.reachedBottom(false); newest = 2; await store.load()
-        XCTAssertEqual(store.scrollRequest, before); XCTAssertEqual(store.unread, 1); XCTAssertEqual(reads, 2)
-        store.jumpToLatest(); XCTAssertEqual(store.unread, 0); XCTAssertGreaterThan(store.scrollRequest, before); store.suspend()
+        XCTAssertEqual(store.scrollRequest, before); XCTAssertEqual(store.unread, 1); XCTAssertEqual(reads, 1)
+        store.jumpToLatest(); store.reachedBottom(true)
+        let secondReadDeadline = Date().addingTimeInterval(5)
+        while reads < 2 && Date() < secondReadDeadline { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(reads, 2)
+        XCTAssertEqual(store.unread, 0); XCTAssertGreaterThan(store.scrollRequest, before); store.suspend()
     }
     func testChatDraftRestoresAndOldAccountCannotSend() async throws {
         var sends = 0

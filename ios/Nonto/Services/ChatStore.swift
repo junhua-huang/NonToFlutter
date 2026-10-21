@@ -8,6 +8,7 @@ struct PendingMessage: Codable, Identifiable {
     var media: String? = nil
     var quoteID: Int? = nil
     var failure: String? = nil
+    var deliveryUncertain: Bool? = nil
 }
 
 /// Owns one account's durable outbox and cancels room work when it is no longer visible.
@@ -41,6 +42,8 @@ final class ChatStore {
     private var loadTask: Task<Void, Never>?
     private var sendTask: Task<Void, Never>?
     private var draftTask: Task<Void, Never>?
+    private var readTask: Task<Void, Never>?
+    private var readID = UUID()
     private var loadID = UUID()
     private var sendID = UUID()
     private var lifecycleID = UUID()
@@ -75,6 +78,7 @@ final class ChatStore {
         lifecycleID = UUID()
         loadID = UUID(); loadTask?.cancel(); loadTask = nil; loading = false; loadingOlder = false
         sendID = UUID(); sendTask?.cancel(); sendTask = nil; sending = false; sendingID = nil
+        readID = UUID(); readTask?.cancel(); readTask = nil
         if valid {
             socket?.room(roomID, joined: false)
             if NativeNotifications.shared.activeConversation == roomID { NativeNotifications.shared.activeConversation = nil }
@@ -96,6 +100,7 @@ final class ChatStore {
     func reachedBottom(_ value: Bool) {
         if nearBottom != value { nearBottom = value }
         if value && unread > 0 { unread = 0 }
+        if value { markReadIfNeeded() }
     }
     func load(older: Bool = false) async {
         guard active, valid, !Task.isCancelled else { return }
@@ -142,7 +147,9 @@ final class ChatStore {
                 more = json["has_more"] != .bool(false) && rows.count >= 50 && ids != lastOlderIDs && (communityID == nil || !added.isEmpty)
                 lastOlderIDs = ids
             } else if page == 1 { more = json["has_more"] != .bool(false) && rows.count >= 50 }
-            if communityID != nil, json["conversation"]["id"].int > 0 { roomID = json["conversation"]["id"].int }
+            if communityID != nil, json["conversation"]["id"].int > 0 {
+                updateRoomID(json["conversation"]["id"].int)
+            }
             joinRoom()
             let confirmed = Set(rows.flatMap { [$0.raw["request_id"].string, $0.raw["client_msg_id"].string] }.filter { !$0.isEmpty })
             if pending.contains(where: { confirmed.contains($0.id) }) {
@@ -153,16 +160,70 @@ final class ChatStore {
                 if nearBottom || known.isEmpty { jumpToLatest() }
                 else { unread += added.filter { $0.senderID != accountID }.count }
             }
-            let through = messages.last?.id ?? 0
-            if roomID > 0, markedReadThrough != through {
-                _ = try await api.request("/chat/conversations/\(roomID)/mark-read", method: "POST")
-                guard active, valid, loadID == ticket else { return }
-                markedReadThrough = through
-            }
+            if !older { markReadIfNeeded() }
             error = nil
         } catch {
             guard active, valid, loadID == ticket, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
             self.error = error.localizedDescription
+        }
+    }
+    /// Reading older messages or viewing media must not clear newly arrived messages on the server.
+    private func markReadIfNeeded() {
+        guard active, valid, nearBottom, roomID > 0, readTask == nil,
+              let through = messages.last(where: { $0.senderID != accountID })?.id, through > 0, markedReadThrough != through else { return }
+        let ticket = UUID(); readID = ticket
+        readTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if readID == ticket { readTask = nil } }
+            while active, valid, nearBottom, readID == ticket, !Task.isCancelled,
+                  let through = messages.last(where: { $0.senderID != accountID })?.id, markedReadThrough != through {
+                do {
+                    _ = try await api.request("/chat/conversations/\(roomID)/mark-read", method: "POST")
+                    guard active, valid, readID == ticket, !Task.isCancelled else { return }
+                    markedReadThrough = through
+                } catch {
+                    // A failed receipt must not turn an otherwise successful history fetch into an error.
+                    return
+                }
+            }
+        }
+    }
+    private func updateRoomID(_ value: Int) {
+        guard value > 0, roomID != value else { return }
+        if active, valid { socket?.room(roomID, joined: false) }
+        readID = UUID(); readTask?.cancel(); readTask = nil
+        roomID = value; markedReadThrough = nil
+    }
+    /// Returns true only when a relevant event needs an authoritative HTTP refresh.
+    @discardableResult
+    func receive(_ payload: JSON) -> Bool {
+        guard active, valid else { return false }
+        let event = ChatRealtimeEvent(payload)
+        if event.name == "resync" { return true }
+        guard event.conversationID == roomID || (communityID != nil && event.communityID == communityID) else { return false }
+        switch event.name {
+        case "new_message":
+            let message = event.message
+            guard message.id > 0, message.senderID > 0 else { return true }
+            if communityID != nil, event.conversationID > 0 { updateRoomID(event.conversationID); joinRoom() }
+            let added = !messages.contains { $0.id == message.id }
+            if setMessages(Records.messages(messages, [message])) { persistMessages() }
+            let confirmations = Set([message.raw["request_id"].string, message.raw["client_msg_id"].string].filter { !$0.isEmpty })
+            if message.senderID == accountID, pending.contains(where: { confirmations.contains($0.id) }) {
+                pending.removeAll { confirmations.contains($0.id) }; persistPending(); flush()
+            }
+            if added {
+                if nearBottom { jumpToLatest() }
+                else if message.senderID != accountID { unread += 1 }
+            }
+            markReadIfNeeded()
+            return false
+        case "message_recalled":
+            let id = event.data["message_id"].or(event.data["id"]).int
+            if let message = messages.first(where: { $0.id == id }) { applyRecall(message) }
+            return false
+        case "conversation_read": return true
+        default: return false
         }
     }
     private func joinRoom() {
@@ -198,7 +259,7 @@ final class ChatStore {
     }
     func retry(_ id: String) {
         guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
-        pending[index].failure = nil; persistPending(); flush()
+        pending[index].failure = nil; pending[index].deliveryUncertain = nil; persistPending(); flush()
     }
     func remove(_ id: String) {
         guard id != sendingID else { return }
@@ -222,15 +283,17 @@ final class ChatStore {
                     let json = try await api.request(communityID == nil ? path : path + "/messages", method: "POST", body: .object(body))
                     try Task.checkCancellation()
                     guard active, valid, sendID == ticket else { return }
-                    let message = ChatMessage(json["message"].or(json))
                     // Do not silently discard an outbox entry on an incomplete success response.
-                    guard message.id > 0 else { throw APIError(status: 0, message: "未收到发送确认，请重试") }
+                    guard let message = ChatMessage.confirmation(json) else { throw APIError(status: 0, message: "未收到发送确认，请先检查最新消息") }
                     if setMessages(Records.messages(messages, [message])) { persistMessages() }
                     pending.removeAll { $0.id == item.id }; persistPending()
                     if nearBottom { jumpToLatest() }
                 } catch {
                     guard active, valid, sendID == ticket, !Task.isCancelled else { return }
-                    if let index = pending.firstIndex(where: { $0.id == item.id }) { pending[index].failure = error.localizedDescription; persistPending() }
+                    // A socket acknowledgement may have already confirmed this item while HTTP was in flight.
+                    guard let index = pending.firstIndex(where: { $0.id == item.id }) else { continue }
+                    pending[index].failure = error.localizedDescription
+                    pending[index].deliveryUncertain = ChatDeliveryFailure.isUncertain(error); persistPending()
                     // Keep delivery order when a message fails; retry resumes the queue.
                     break
                 }
@@ -249,18 +312,24 @@ final class ChatStore {
         defaults.set(data, forKey: outboxKey); return true
     }
     func recall(_ message: ChatMessage) async {
-        guard active, valid, let communityID else { return }
+        guard active, valid, message.senderID == accountID, !message.recalled else { return }
         do {
-            _ = try await api.request("/communities/\(communityID)/chat/messages/\(message.id)", method: "DELETE")
+            if let communityID {
+                _ = try await api.request("/communities/\(communityID)/chat/messages/\(message.id)", method: "DELETE")
+            } else {
+                _ = try await api.request("/chat/messages/\(message.id)/recall", method: "POST")
+            }
             guard active, valid, !Task.isCancelled else { return }
-            // The history endpoint excludes recalled messages; merging alone would leave the old bubble visible.
-            let recalled = ChatMessage(message.raw.merging(.object([
-                "is_recalled": .bool(true), "content": .text(""), "media_url": .null, "quote_preview": .text("")
-            ])))
-            if setMessages(Records.messages(messages, [recalled])) { persistMessages() }
+            applyRecall(message)
             await load()
         }
         catch { if active && valid { self.error = error.localizedDescription } }
+    }
+    private func applyRecall(_ message: ChatMessage) {
+        let recalled = ChatMessage(message.raw.merging(.object([
+            "is_recalled": .bool(true), "content": .text(""), "media_url": .null, "quote_preview": .text("")
+        ])))
+        if setMessages(Records.messages(messages, [recalled])) { persistMessages() }
     }
 }
 

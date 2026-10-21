@@ -51,20 +51,21 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
     func receive(_ payload: JSON, seq: Int) {
         guard authorized, pushEnabled, userID > 0 else { return }
         let event = payload["event"].string, envelope = payload["data"].or(payload)
-        let data = event == "new_notification" ? envelope["notification"].or(envelope) : envelope
         guard event == "new_message" || event == "new_notification" else { return }
+        let chat = ChatRealtimeEvent(payload)
+        let data = event == "new_message" ? chat.message.raw : envelope["notification"].or(envelope)
         if event == "new_message", data["sender_id"].int == userID { return }
         // Message notifications and message socket events share the same dedupe key.
         let messageID = event == "new_message" ? data["id"].or(data["message_id"]).int : data["message_id"].int
         let key = messageID > 0 ? "message:\(messageID)" : (data["id"].int > 0 ? "notification:\(data["id"].int)" : "event:\(seq)")
         guard deduplicator.accept(key) else { return }
-        if event == "new_message" && (!messageEnabled || data["conversation_id"].int == activeConversation) { return }
+        let conversationID = event == "new_message" ? chat.conversationID : data["conversation_id"].int
+        if event == "new_message" && (!messageEnabled || conversationID == activeConversation) { return }
         let content = UNMutableNotificationContent()
         content.title = data["title"].string.isEmpty ? "南图" : data["title"].string
         // Avoid exposing private message content in notification previews.
         content.body = event == "new_message" ? "你收到了一条新消息" : "你有一条新通知"
         if soundEnabled { content.sound = .default }
-        let conversationID = data["conversation_id"].int
         content.userInfo = ["recipient_id": userID, "dedupe_key": key, "message_id": messageID,
                             "notification_id": event == "new_notification" ? data["id"].int : 0,
                             "related_type": conversationID > 0 ? "conversation" : data["related_type"].string,

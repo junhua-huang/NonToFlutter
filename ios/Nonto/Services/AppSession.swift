@@ -103,8 +103,8 @@ final class AppSession: ObservableObject {
         async let notice = try? api.request("/notifications/unread-count")
         let (c, n) = await (chat, notice)
         guard epoch == api.generation else { return }
-        if let c { messageUnread = c["unread_count"].or(c["count"]).int }
-        if let n { noticeUnread = n["unread_count"].or(n["count"]).int }
+        if let c { messageUnread = max(0, c["total_unread"].or(c["unread_count"]).or(c["count"]).int) }
+        if let n { noticeUnread = max(0, n["unread_count"].or(n["count"]).int) }
         NativeNotifications.shared.setBadge(messageUnread + noticeUnread)
     }
     func syncPush() {

@@ -271,4 +271,155 @@ final class ChatExperienceTests: XCTestCase {
         XCTAssertTrue(recalled); XCTAssertTrue(try XCTUnwrap(store.messages.first).recalled)
         XCTAssertEqual(store.messages.first?.content, ""); store.suspend()
     }
+    func testPrivateChatAcceptsTheDeployedBackendsDataConfirmation() async throws {
+        var sends = 0
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                sends += 1
+                return (200, .object(["message": .text("Message sent"), "data": self.message(201, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate(); XCTAssertTrue(store.enqueue(content: "这条已经发送成功"))
+        try await waitUntil { !store.sending }
+        XCTAssertEqual(sends, 1); XCTAssertTrue(store.pending.isEmpty)
+        XCTAssertEqual(store.messages.last?.id, 201); store.suspend()
+    }
+    func testSendConfirmationsAcceptBothRoutesAndRejectSuccessTextWithoutAMessage() {
+        let value = message(200)
+        XCTAssertEqual(ChatMessage.confirmation(.object(["message": value]))?.id, 200)
+        XCTAssertEqual(ChatMessage.confirmation(.object(["message": .text("Message sent"), "data": value]))?.id, 200)
+        XCTAssertEqual(ChatMessage.confirmation(value)?.id, 200)
+        XCTAssertNil(ChatMessage.confirmation(.object(["message": .text("success")])) )
+    }
+    func testRealtimeEnvelopeNormalizesHTTPWebsocketAndCommunityMessages() {
+        let value = message(201).merging(.object(["conversation_id": .id(55)]))
+        for data in [value, .object(["conversation_id": .id(55), "data": value]),
+                     .object(["conversation_id": .id(55), "community_id": .id(33), "message": value])] {
+            let event = ChatRealtimeEvent(.object(["event": .text("new_message"), "data": data]))
+            XCTAssertEqual(event.conversationID, 55); XCTAssertEqual(event.message.id, 201)
+            XCTAssertTrue(event.affectsConversationList)
+        }
+        XCTAssertFalse(ChatRealtimeEvent(.object(["event": .text("typing")])).affectsConversationList)
+        XCTAssertFalse(ChatRealtimeEvent(.object(["event": .text("new_notification")])).affectsConversationList)
+    }
+    func testRealtimeMessagesUpdateOnlyTheirRoomWithoutFetchingOrMovingHistory() async throws {
+        var fetches = 0
+        let store = try room { request in
+            if request.httpMethod == "GET" { fetches += 1 }
+            return (200, .object(["messages": .array([self.message(100)])]))
+        }
+        await store.activate(); store.reachedBottom(false)
+        let scrollRequest = store.scrollRequest
+        let unrelated: JSON = .object(["event": .text("new_message"), "data": message(200).merging(.object(["conversation_id": .id(99)]))])
+        XCTAssertFalse(store.receive(unrelated)); XCTAssertEqual(store.messages.map(\.id), [100])
+        for id in 101...110 {
+            let event: JSON = .object(["event": .text("new_message"), "data": .object([
+                "conversation_id": .id(55), "data": message(id)])])
+            XCTAssertFalse(store.receive(event)); XCTAssertFalse(store.receive(event))
+        }
+        XCTAssertEqual(store.messages.map(\.id), Array(100...110))
+        XCTAssertEqual(store.unread, 10); XCTAssertEqual(store.scrollRequest, scrollRequest)
+        XCTAssertEqual(fetches, 1); store.suspend()
+    }
+    func testCommunityRealtimeUsesResolvedConversationIDAndItsNestedMessage() async throws {
+        let conversation = Conversation(.object(["id": .id(33), "type": .text("community"), "community_id": .id(33)]))
+        let store = try room(conversation: conversation) { request in
+            if request.httpMethod == "POST" { return (200, .null) }
+            return (200, .object(["conversation": .object(["id": .id(55)]), "messages": .array([])]))
+        }
+        await store.activate()
+        XCTAssertFalse(store.receive(.object(["event": .text("new_message"), "data": .object([
+            "conversation_id": .id(55), "community_id": .id(33), "message": message(101)])])))
+        XCTAssertEqual(store.messages.map(\.id), [101]); store.suspend()
+    }
+    func testRemoteRecallRemovesMediaEvenOutsideTheLatestHistoryPage() async throws {
+        let image = message(1).merging(.object(["message_type": .text("image"), "media_url": .text("https://example.test/old.jpg")]))
+        let store = try room { request in
+            if request.httpMethod == "POST" { return (200, .null) }
+            return (200, .object(["messages": .array([image] + (2...60).map { self.message($0) })]))
+        }
+        await store.activate()
+        XCTAssertFalse(store.receive(.object(["event": .text("message_recalled"), "data": .object([
+            "conversation_id": .id(55), "message_id": .id(1)])])))
+        XCTAssertTrue(store.messages.first!.recalled); XCTAssertTrue(store.timeline.gallery.isEmpty)
+        XCTAssertEqual(store.messages.first?.content, ""); store.suspend()
+    }
+    func testReadReceiptFailureDoesNotFailMessageLoadingOrClearUnreadHistory() async throws {
+        var reads = 0, latest = 1
+        let store = try room { request in
+            if request.url!.path.hasSuffix("mark-read") { reads += 1; return (503, .object(["detail": .text("try later")])) }
+            return (200, .object(["messages": .array((1...latest).map { self.message($0) })]))
+        }
+        await store.activate(); try await waitUntil { reads == 1 }
+        XCTAssertNil(store.error); XCTAssertFalse(store.loading)
+        store.reachedBottom(false); latest = 2; await store.load()
+        XCTAssertEqual(reads, 1); XCTAssertEqual(store.unread, 1); XCTAssertNil(store.error)
+        store.reachedBottom(true); try await waitUntil { reads == 2 }
+        XCTAssertEqual(store.unread, 0); store.suspend()
+    }
+    func testSocketConfirmationContinuesQueueAfterHTTPAcknowledgementIsLost() async throws {
+        var sent: [JSON] = []
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                let value = try self.body(request); sent.append(value)
+                if sent.count == 1 {
+                    Thread.sleep(forTimeInterval: 0.1)
+                    return (504, .object(["detail": .text("response lost")]))
+                }
+                return (200, .object(["data": self.message(202, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate(); store.enqueue(content: "first"); store.enqueue(content: "second")
+        let id = store.pending[0].id
+        try await waitUntil { sent.count == 1 }
+        XCTAssertFalse(store.receive(.object(["event": .text("new_message"), "data": .object([
+            "conversation_id": .id(55), "data": message(201, sender: userID).merging(.object(["request_id": .text(id)]))])])) )
+        try await waitUntil { !store.sending }
+        XCTAssertTrue(store.pending.isEmpty)
+        XCTAssertEqual(sent.count, 2); XCTAssertEqual(sent.last?["content"].string, "second")
+        store.suspend()
+    }
+    func testPrivateChatUsesSupportedQuoteAndRecallEndpoints() async throws {
+        var quoted: Int?, recalled = false
+        let store = try room { request in
+            if request.url!.path.hasSuffix("/recall") {
+                XCTAssertEqual(request.httpMethod, "POST"); recalled = true
+                return (200, .object(["success": .bool(true)]))
+            }
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                quoted = try self.body(request)["quote_message_id"].int
+                return (200, .object(["data": self.message(202, sender: self.userID)]))
+            }
+            if request.httpMethod == "POST" { return (200, .null) }
+            return (200, .object(["messages": .array(recalled ? [] : [self.message(201, sender: self.userID)])]))
+        }
+        await store.activate(); store.enqueue(content: "引用回复", quoteID: 201)
+        try await waitUntil { !store.sending }; XCTAssertEqual(quoted, 201)
+        await store.recall(store.messages.first!); XCTAssertTrue(recalled)
+        XCTAssertTrue(store.messages.first!.recalled); store.suspend()
+    }
+    func testUncertainDeliveryIsDistinguishedFromExplicitRejectionAndSurvivesRestore() throws {
+        XCTAssertTrue(ChatDeliveryFailure.isUncertain(APIError(status: 504, message: "timeout")))
+        XCTAssertTrue(ChatDeliveryFailure.isUncertain(URLError(.timedOut)))
+        XCTAssertFalse(ChatDeliveryFailure.isUncertain(APIError(status: 422, message: "rejected")))
+        XCTAssertFalse(ChatDeliveryFailure.isUncertain(URLError(.notConnectedToInternet)))
+        let legacy = Data("{\"id\":\"old\",\"content\":\"hello\",\"kind\":\"text\"}".utf8)
+        XCTAssertNil(try JSONDecoder().decode(PendingMessage.self, from: legacy).deliveryUncertain)
+        let uncertain = PendingMessage(content: "hello", failure: "timeout", deliveryUncertain: true)
+        XCTAssertEqual(try JSONDecoder().decode(PendingMessage.self, from: JSONEncoder().encode(uncertain)).deliveryUncertain, true)
+    }
+    func testDeployedUnreadCountFieldIsShownOnTheInboxBadge() async throws {
+        StubProtocol.handler = { request in
+            request.url!.path.hasSuffix("/chat/unread-count")
+                ? (200, .object(["total_unread": .id(7)])) : (200, .object(["unread_count": .id(2)]))
+        }
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://api.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        try api.setToken("counts-fixture")
+        let session = AppSession(api: api); session.user = Person(.object(["id": .id(userID)]))
+        await session.refreshCounts()
+        XCTAssertEqual(session.messageUnread, 7); XCTAssertEqual(session.noticeUnread, 2)
+    }
 }

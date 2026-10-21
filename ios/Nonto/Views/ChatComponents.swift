@@ -89,11 +89,11 @@ struct ChatMessageRow: View {
                     }
                     bubble.contextMenu {
                         if !message.recalled {
-                            if !message.content.isEmpty {
-                                Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
+                            if !caption.isEmpty {
+                                Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = caption }
                             }
-                            if community { Button("引用", systemImage: "quote.bubble") { onQuote(message) } }
-                            if mine && community {
+                            Button("引用", systemImage: "quote.bubble") { onQuote(message) }
+                            if mine, let date = row.date, Date().timeIntervalSince(date) < 120 {
                                 Button("撤回", systemImage: "arrow.uturn.backward", role: .destructive) { onRecall(message) }
                             }
                             if !mine && message.senderID > 0 {
@@ -203,7 +203,9 @@ struct ChatPendingRow: View {
     let blocked: Bool
     let retry: () -> Void
     let remove: () -> Void
+    var checkDelivery: () -> Void = { }
     var onMediaPresentation: (Bool) -> Void = { _ in }
+    @State private var confirmResend = false
     private var bareMedia: Bool { ["image", "video"].contains(item.kind) && item.media != nil }
     private var caption: String { bareMedia ? ImageMessageCaption.text(item.content, media: item.media ?? "") : item.content }
     var body: some View {
@@ -222,15 +224,27 @@ struct ChatPendingRow: View {
                 deliveryStatus
             }
         }.padding(.horizontal).padding(.top, 6)
+            .confirmationDialog("这条消息可能已经送达", isPresented: $confirmResend, titleVisibility: .visible) {
+                Button("检查最新消息", action: checkDelivery)
+                Button("仍然重新发送", action: retry)
+                Button("取消", role: .cancel) { }
+            } message: {
+                Text("服务器未返回确认，重新发送可能产生重复消息。请先检查会话中的最新消息。")
+            }
     }
     private var deliveryStatus: some View {
         VStack(alignment: .trailing, spacing: 4) {
             if let failure = item.failure {
                 HStack(spacing: 12) {
-                    Label("未发送", systemImage: "exclamationmark.circle.fill").foregroundStyle(.red)
-                    Button("重试", action: retry).frame(minHeight: 44)
+                    Label(item.deliveryUncertain == true ? "结果待确认" : "未发送", systemImage: "exclamationmark.circle.fill").foregroundStyle(.red)
+                    Button(item.deliveryUncertain == true ? "重新发送" : "重试") {
+                        if item.deliveryUncertain == true { confirmResend = true } else { retry() }
+                    }.frame(minHeight: 44)
                     Button("移除", role: .destructive, action: remove).frame(minHeight: 44)
                 }.buttonStyle(.plain)
+                if item.deliveryUncertain == true {
+                    Button("检查最新消息", action: checkDelivery).frame(minHeight: 44).buttonStyle(.plain)
+                }
                 Text(failure).foregroundStyle(.secondary).lineLimit(3)
             } else if sending {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("正在发送…") }.foregroundStyle(.secondary)

@@ -7,6 +7,7 @@ import Combine
 final class RealtimeClient: ObservableObject {
     @Published private(set) var connected = false
     @Published private(set) var revision = 0
+    let events = PassthroughSubject<JSON, Never>()
     private let api: APIClient
     private var loop: Task<Void, Never>?
     private var connection: URLSessionWebSocketTask?
@@ -93,6 +94,7 @@ final class RealtimeClient: ObservableObject {
             case "auth_result":
                 guard payload["success"].bool else { throw APIError(status: 401, message: "实时连接认证失败") }
                 connected = true; revision += 1
+                events.send(.object(["event": .text("resync")]))
                 try await send("sync", ["last_received_seq": .id(UserDefaults.standard.integer(forKey: sequenceKey)), "limit": .id(200)], socket: socket, ticket: ticket)
                 for id in rooms { try await send("join", ["conversation_id": .id(id)], socket: socket, ticket: ticket) }
             case "message": try await receive(frame, live: true, socket: socket, ticket: ticket)
@@ -107,6 +109,7 @@ final class RealtimeClient: ObservableObject {
                     try await send("sync", ["last_received_seq": .id(current), "limit": .id(200)], socket: socket, ticket: ticket)
                 } else if maximum > current { UserDefaults.standard.set(maximum, forKey: sequenceKey) }
                 revision += 1
+                if !payload["has_more"].bool { events.send(.object(["event": .text("resync")])) }
             default: break
             }
         }
@@ -115,8 +118,10 @@ final class RealtimeClient: ObservableObject {
         guard ticket == runID else { throw CancellationError() }
         let seq = frame["seq"].int, previous = UserDefaults.standard.integer(forKey: sequenceKey)
         if live && (seq == 0 || seq > previous) { onLiveEvent?(frame["payload"].or(frame), seq) }
-        let event = frame["payload"]["event"].string
-        if (seq == 0 || seq > previous) && !["typing", "stop_typing"].contains(event) { revision += 1 }
+        let payload = frame["payload"].or(frame), event = payload["event"].string
+        if (seq == 0 || seq > previous) && !["typing", "stop_typing"].contains(event) {
+            revision += 1; events.send(payload)
+        }
         if seq > previous { UserDefaults.standard.set(seq, forKey: sequenceKey) }
         if seq > 0 { try await send("ack_receive", ["seq": .id(seq)], socket: socket, ticket: ticket) }
     }
