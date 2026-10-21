@@ -272,6 +272,38 @@ final class LayoutSnapshotTests: XCTestCase {
         }, session: session, name: "chat-uncertain-delivery-large-text", width: 320, largeText: true, expectsScrollChrome: false)
     }
 
+    func testOutgoingBubbleHeightDoesNotChangeOnAcknowledgementOrReceiptHandoff() throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        let session = AppSession(api: api); session.user = Person(.object(["id": .id(userID)])); session.restoring = false
+        let date = Date(timeIntervalSince1970: 1_792_600_000)
+        for width in [CGFloat(320), CGFloat(390)] {
+            for largeText in [false, true] {
+                for text in ["你好", "这是一条多行消息。\n发送确认到达时，聊天记录不应先上跳再下跳。"] {
+                    let item = PendingMessage(id: "measured-send", content: text, createdAt: date)
+                    let pending = try XCTUnwrap(ChatPresentation(userID: userID, pending: [item]).entries.first?.row)
+                    let confirmed = ChatMessage(.object(["id": .id(201), "sender_id": .id(userID), "content": .text(text),
+                                                        "message_type": .text("text"), "created_at": .number(date.timeIntervalSince1970)]))
+                    let row = try XCTUnwrap(ChatTimeline.rows([confirmed]).first)
+                    func height(_ row: ChatTimeline.Row, pending: PendingMessage?, sending: Bool, receipt: Bool) -> CGFloat {
+                        let view = ChatMessageRow(row: row, community: false, showsReceipt: receipt,
+                                                  pending: pending, sending: sending, onQuote: { _ in }, onRecall: { _ in })
+                            .environmentObject(session).environment(\.dynamicTypeSize, largeText ? .accessibility2 : .large)
+                        return UIHostingController(rootView: view).sizeThatFits(in: CGSize(width: width, height: 10_000)).height
+                    }
+                    let queued = height(pending, pending: item, sending: false, receipt: false)
+                    let sending = height(pending, pending: item, sending: true, receipt: false)
+                    let sent = height(row, pending: nil, sending: false, receipt: true)
+                    let previous = height(row, pending: nil, sending: false, receipt: false)
+                    XCTAssertGreaterThan(sent, 0)
+                    XCTAssertEqual(queued, sending, accuracy: 1, "Queue status must not change bubble height")
+                    XCTAssertEqual(sending, sent, accuracy: 1, "Acknowledgement must not resize the bubble")
+                    XCTAssertEqual(sent, previous, accuracy: 1, "Moving the receipt to the next message must preserve height")
+                }
+            }
+        }
+    }
+
     func testReportedLoginSearchChatAndDetailLayouts() async throws {
         let author: JSON = .object(["id": .id(900041), "username": .text("涂装老陈"), "display_name": .text("涂装老陈")])
         let post = Post(.object(["id": .id(930001), "author": author,

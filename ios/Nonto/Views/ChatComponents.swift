@@ -231,6 +231,26 @@ private struct ChatBubbleSurface: ViewModifier {
     }
 }
 
+/// Standalone previews use the same bubble as the unified live timeline.
+struct ChatPendingRow: View {
+    let item: PendingMessage
+    let sending: Bool
+    let blocked: Bool
+    let retry: () -> Void
+    let remove: () -> Void
+    var checkDelivery: () -> Void = { }
+    var onMediaPresentation: (Bool) -> Void = { _ in }
+    @EnvironmentObject private var session: AppSession
+    var body: some View {
+        if let entry = ChatPresentation(userID: session.user?.id ?? 0, pending: [item]).entries.first {
+            ChatMessageRow(row: entry.row, community: false, showsReceipt: false,
+                           onMediaPresentation: onMediaPresentation,
+                           pending: item, sending: sending, blocked: blocked, retry: retry, remove: remove,
+                           checkDelivery: checkDelivery, onQuote: { _ in }, onRecall: { _ in })
+        }
+    }
+}
+
 struct ChatPendingStatus: View {
     let item: PendingMessage
     let sending: Bool
