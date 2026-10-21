@@ -107,8 +107,13 @@ enum Records {
         var items = Dictionary(old.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         for m in new where m.id > 0 { items[m.id] = m }
         // Parse each wire date once; parsing inside the comparator creates formatters O(n log n) times.
-        return items.values.map { (message: $0, date: $0.date ?? .distantPast) }.sorted {
-            $0.date == $1.date ? $0.message.id < $1.message.id : $0.date < $1.date
-        }.map(\.message)
+        var dated: [(message: ChatMessage, date: Date)] = items.values.map { message in
+            (message: message, date: message.date ?? Date.distantPast)
+        }
+        dated.sort { lhs, rhs in
+            if lhs.date == rhs.date { return lhs.message.id < rhs.message.id }
+            return lhs.date < rhs.date
+        }
+        return dated.map { $0.message }
     }
 }
