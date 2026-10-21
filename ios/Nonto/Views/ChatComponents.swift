@@ -56,7 +56,8 @@ struct ChatMessageRow: View {
     let row: ChatTimeline.Row
     let community: Bool
     let showsReceipt: Bool
-    var gallery: [ChatMediaTimeline.Item] = []
+    var galleryImages: [String] = []
+    var galleryIndex: Int? = nil
     var onMediaPresentation: (Bool) -> Void = { _ in }
     let onQuote: (ChatMessage) -> Void
     let onRecall: (ChatMessage) -> Void
@@ -69,7 +70,7 @@ struct ChatMessageRow: View {
     private var sender: Person { Person(message.raw["sender"].or(message.raw["user"])) }
     var body: some View {
         VStack(spacing: 6) {
-            if row.showsTimestamp, let date = message.date {
+            if row.showsTimestamp, let date = row.date {
                 Text(date, format: .dateTime.month().day().hour().minute())
                     .font(.caption2).foregroundStyle(.secondary).padding(.vertical, 10)
             }
@@ -99,7 +100,7 @@ struct ChatMessageRow: View {
                                 Button("举报消息发送者", systemImage: "flag") { reporting = true }
                             }
                         }
-                        if let date = message.date { Text(date, format: .dateTime.year().month().day().hour().minute().second()) }
+                        if let date = row.date { Text(date, format: .dateTime.year().month().day().hour().minute().second()) }
                     }
                     if mine && showsReceipt && !message.recalled {
                         Text(message.raw["is_read"].bool ? "已读" : "已发送").font(.caption2).foregroundStyle(.secondary)
@@ -122,8 +123,8 @@ struct ChatMessageRow: View {
             }
             if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
             else if message.kind == "image" { MediaView(images: [message.media], video: "", thumbnailHeight: 190,
-                          galleryImages: gallery.isEmpty ? nil : gallery.map(\.url),
-                          galleryIndex: gallery.firstIndex { $0.id == message.id }, fitImage: true,
+                          galleryImages: galleryImages.isEmpty ? nil : galleryImages,
+                          galleryIndex: galleryIndex, fitImage: true,
                           onPresentationChange: onMediaPresentation).frame(maxWidth: 250) }
             else if message.kind == "video" { MediaView(images: [], video: message.media, thumbnailHeight: 190, fitImage: true,
                           onPresentationChange: onMediaPresentation).frame(maxWidth: 250) }

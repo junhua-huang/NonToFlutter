@@ -42,18 +42,20 @@ struct SettingsView: View {
             Section {
                 if loggingOut { ProgressView("正在退出登录…") }
                 Button("退出登录", role: .destructive) { confirmLogout = true }.disabled(loggingOut)
+                    .alert("退出当前账号？", isPresented: $confirmLogout) {
+                        Button("取消", role: .cancel) {}
+                        Button("退出登录", role: .destructive) { Task { await logout() } }
+                    } message: { Text("退出后需要重新登录才能继续使用账号功能。") }
                 RouteButton(.deleteAccount) { Text("注销账号") }.foregroundStyle(.red)
             }
             ErrorBanner(text: error)
         }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .alert("本机缓存已清理", isPresented: $cacheCleared) { Button("好", role: .cancel) {} }
-            .confirmationDialog("退出当前账号？", isPresented: $confirmLogout) { Button("退出登录", role: .destructive) {
-                Task {
-                    guard !loggingOut else { return }
-                    loggingOut = true; defer { loggingOut = false }
-                    do { try await session.logout() } catch { self.error = error.localizedDescription }
-                }
-            } }
+    }
+    private func logout() async {
+        guard !loggingOut else { return }
+        loggingOut = true; defer { loggingOut = false }
+        do { try await session.logout() } catch { self.error = error.localizedDescription }
     }
 }
 

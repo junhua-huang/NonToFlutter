@@ -1,4 +1,5 @@
 import XCTest
+import Observation
 @testable import Nonto
 
 @MainActor
@@ -44,6 +45,35 @@ final class ChatExperienceTests: XCTestCase {
             data.append(contentsOf: buffer.prefix(size))
         }
         return try JSON.decode(data)
+    }
+    func testTypingAndUnchangedRefreshDoNotInvalidatePreparedMessages() async throws {
+        var current = message(81, sender: userID)
+        let store = try room { request in
+            if request.httpMethod == "POST" { return (200, .null) }
+            return (200, .object(["messages": .array([current])]))
+        }
+        await store.activate()
+        let unchanged = expectation(description: "Timeline should stay untouched"); unchanged.isInverted = true
+        withObservationTracking { _ = store.timeline.rows; _ = store.messages } onChange: { unchanged.fulfill() }
+        store.draft = "输入草稿不会刷新消息"
+        await store.load()
+        await fulfillment(of: [unchanged], timeout: 0.05)
+        let changed = expectation(description: "Read receipts must still update")
+        withObservationTracking { _ = store.timeline.rows } onChange: { changed.fulfill() }
+        current = current.merging(.object(["is_read": .bool(true)]))
+        await store.load()
+        await fulfillment(of: [changed], timeout: 1)
+        XCTAssertTrue(store.timeline.rows.first!.message.raw["is_read"].bool)
+        XCTAssertEqual(store.timeline.lastOutgoingID, 81); store.suspend()
+    }
+    func testPreparedGalleryKeepsImageOrderAndSkipsRecalledMedia() {
+        let image = message(1).merging(.object(["message_type": .text("image"), "media_url": .text("https://example.test/one.jpg")]))
+        let recalled = message(2).merging(.object(["message_type": .text("image"), "media_url": .text("https://example.test/two.jpg"), "is_recalled": .bool(true)]))
+        let last = message(3, sender: userID)
+        let timeline = ChatPresentation(messages: [image, recalled, last].map(ChatMessage.init), userID: userID)
+        XCTAssertEqual(timeline.gallery, ["https://example.test/one.jpg"])
+        XCTAssertEqual(timeline.galleryIndexes, [1: 0]); XCTAssertEqual(timeline.lastOutgoingID, 3)
+        XCTAssertEqual(timeline.rows.map(\.id), [1, 2, 3])
     }
     func testBottomDetectionUsesTheActualVisibleRectangleWithoutReapplyingInsets() {
         let geometry = ChatViewportMetrics(offset: 200, contentHeight: 900, visibleHeight: 700,

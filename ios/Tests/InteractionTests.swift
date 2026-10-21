@@ -4,6 +4,70 @@ import SwiftUI
 @testable import Nonto
 
 @MainActor final class InteractionTests: XCTestCase {
+    func testComposerReferenceInsertionKeepsEmojiAndTheMiddleCaret() throws {
+        let original = "🌅 今天去看看"
+        let caret = original.range(of: "去")!.lowerBound
+        let result = ComposerReferenceInsertion.insert("yuchen", kind: .mention, into: original,
+            selection: NSRange(caret..<caret, in: original))
+        XCTAssertEqual(result.text, "🌅 今天 @yuchen 去看看")
+        let range = try XCTUnwrap(Range(NSRange(location: result.caretUTF16, length: 0), in: result.text))
+        XCTAssertEqual(String(result.text[range.lowerBound...]), "去看看")
+    }
+    func testComposerReferenceInsertionReplacesSelectionAndAvoidsDoubleMarkers() throws {
+        let original = "聊聊 旧话题 吧"
+        let selected = original.range(of: "旧话题")!
+        let result = ComposerReferenceInsertion.insert("生活", kind: .topic, into: original, selection: NSRange(selected, in: original))
+        XCTAssertEqual(result.text, "聊聊 #生活 吧")
+        XCTAssertEqual(ComposerReferenceInsertion.insert("小明", kind: .mention, into: "你好 @", selection: nil).text, "你好 @小明 ")
+        XCTAssertEqual(ComposerReferenceInsertion.insert("生活", kind: .topic, into: "🌅", selection: NSRange(location: 999, length: 1)).text, "🌅 #生活 ")
+    }
+    private func referenceAPI(_ handler: @escaping (URLRequest) throws -> (Int, JSON)) throws -> APIClient {
+        StubProtocol.handler = handler
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://example.test/api")!, session: URLSession(configuration: config), credentials: MemoryCredentials())
+        try api.setToken("composer-fixture"); return api
+    }
+    func testComposerFriendSearchUsesUsernamesAndFiltersWithoutRefetching() async throws {
+        var requests = 0
+        let api = try referenceAPI { request in
+            requests += 1; XCTAssertEqual(request.url?.path, "/api/friends/")
+            return (200, .object(["friends": .array([
+                .object(["id": .id(1), "username": .text("yuchen"), "display_name": .text("雨辰")]),
+                .object(["id": .id(2), "username": .text("xiaoming"), "display_name": .text("小明")])])]))
+        }
+        defer { StubProtocol.handler = nil }
+        let store = ComposerReferenceStore(api: api, kind: .mention)
+        await store.load(""); XCTAssertEqual(store.items.count, 2)
+        await store.load("雨"); XCTAssertEqual(store.items.map(\.value), ["yuchen"])
+        await store.load("XIAOMING"); XCTAssertEqual(store.items.map(\.value), ["xiaoming"])
+        XCTAssertEqual(requests, 1)
+    }
+    func testComposerTopicSearchDiscardsAnOlderResponse() async throws {
+        let started = expectation(description: "Old query started")
+        let api = try referenceAPI { request in
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "q" }!.value!
+            if query == "旧" { started.fulfill(); Thread.sleep(forTimeInterval: 0.1) }
+            return (200, .object(["topics": .array([.object(["id": .id(query == "旧" ? 1 : 2), "name": .text(query)])])]))
+        }
+        defer { StubProtocol.handler = nil }
+        let store = ComposerReferenceStore(api: api, kind: .topic)
+        let old = Task { await store.load("旧") }
+        await fulfillment(of: [started], timeout: 2)
+        await store.load("新"); await old.value
+        XCTAssertEqual(store.items.map(\.value), ["新"]); XCTAssertNil(store.error)
+    }
+    func testComposerTopicPaginationDeduplicatesAndStopsAtTheEnd() async throws {
+        let api = try referenceAPI { request in
+            let page = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "page" }!.value!
+            let ids = page == "1" ? Array(1...30) : [30, 31]
+            return (200, .object(["topics": .array(ids.map { .object(["id": .id($0), "name": .text("话题\($0)")]) }), "has_more": .bool(page == "1")]))
+        }
+        defer { StubProtocol.handler = nil }
+        let store = ComposerReferenceStore(api: api, kind: .topic)
+        await store.load("话题"); XCTAssertTrue(store.hasMore)
+        await store.load("话题", nextPage: true)
+        XCTAssertEqual(store.items.map(\.id), Array(1...31)); XCTAssertFalse(store.hasMore)
+    }
     func testUploadedPhotoPreviewAvoidsRedownloadAndIsClearedForAnotherAccount() async throws {
         var requests = 0
         StubProtocol.handler = { _ in requests += 1; return (200, .null) }

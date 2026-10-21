@@ -4,9 +4,9 @@ import PhotosUI
 struct MessagesView: View {
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
-    @ObservedObject private var socket: RealtimeClient
+    private let socket: RealtimeClient
     init(session: AppSession) {
-        _socket = ObservedObject(wrappedValue: session.socket)
+        socket = session.socket
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
     }
     var body: some View {
@@ -51,8 +51,8 @@ private struct ChatRoomContent: View {
     let conversation: Conversation
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
-    @StateObject private var store: ChatStore
-    @ObservedObject private var socket: RealtimeClient
+    @State private var store: ChatStore
+    private let socket: RealtimeClient
     @State private var quote: ChatMessage?
     @State private var picks: [PhotosPickerItem] = []
     @State private var preparingMedia = false
@@ -67,12 +67,11 @@ private struct ChatRoomContent: View {
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     init(session: AppSession, conversation: Conversation) {
         self.conversation = conversation
-        _store = StateObject(wrappedValue: ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
-        _socket = ObservedObject(wrappedValue: session.socket)
+        _store = State(initialValue: ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
+        socket = session.socket
     }
     var body: some View {
-        let gallery = ChatMediaTimeline.images(store.messages)
-        let lastOutgoingID = store.messages.last(where: { $0.senderID == session.user?.id })?.id
+        let timeline = store.timeline
         ScrollView {
             LazyVStack(spacing: 6) {
                 if store.more && !store.messages.isEmpty {
@@ -84,10 +83,10 @@ private struct ChatRoomContent: View {
                 if !store.messages.isEmpty || !store.pending.isEmpty {
                     ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
                 }
-                ForEach(ChatTimeline.rows(store.messages)) { row in
+                ForEach(timeline.rows) { row in
                     ChatMessageRow(row: row, community: communityID != nil,
-                                   showsReceipt: row.id == lastOutgoingID,
-                                   gallery: gallery, onMediaPresentation: mediaPresentationChanged,
+                                   showsReceipt: row.id == timeline.lastOutgoingID,
+                                   galleryImages: timeline.gallery, galleryIndex: timeline.galleryIndexes[row.id], onMediaPresentation: mediaPresentationChanged,
                                    onQuote: { quote = $0; composerFocused = true },
                                    onRecall: { recall = $0; confirmRecall = true }).id(row.id)
                 }
@@ -157,30 +156,7 @@ private struct ChatRoomContent: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                if let quote {
-                    HStack(spacing: 8) {
-                        Image(systemName: "quote.bubble").foregroundStyle(Color.brand)
-                        Text(ChatQuoteSummary.text(quote).isEmpty ? "引用消息" : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption)
-                        Spacer()
-                        Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }
-                            .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44)
-                    }.padding(.horizontal)
-                }
-                HStack(alignment: .bottom, spacing: 8) {
-                    PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
-                        Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
-                    }.disabled(preparingMedia).accessibilityLabel("添加照片或视频")
-                    TextField("发送消息…", text: $store.draft, axis: .vertical)
-                        .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11)
-                        .focused($composerFocused).accessibilityLabel("消息内容")
-                    Button(action: sendText) {
-                        Image(systemName: "arrow.up.circle.fill").font(.title).frame(width: 44, height: 44)
-                    }.disabled(store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息")
-                }.floatingGlass()
-                if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
-            }.padding(.top, 6)
+            ChatComposerInput(store: store, quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused)
         }
         .task {
             visible = true
@@ -195,7 +171,6 @@ private struct ChatRoomContent: View {
         .onChange(of: phase) { _, value in
             if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
         }
-        .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
         .onChange(of: composerFocused) { _, focused in if focused && store.nearBottom { store.jumpToLatest() } }
         .sheet(item: $attachment) { media in
             ChatAttachmentSheet(media: media.items, api: session.api, store: store, quoteID: quote?.id) {
@@ -250,11 +225,7 @@ private struct ChatRoomContent: View {
             withTransaction(transaction) { position.scrollTo(y: y) }
         }
     }
-    private func sendText() {
-        if store.enqueue(content: store.draft, quoteID: quote?.id) {
-            store.draft = ""; quote = nil; store.saveDraft()
-        }
-    }
+
 }
 
 struct SharePostView: View {
@@ -292,5 +263,46 @@ struct SharePostView: View {
                 conv.isCommunity ? "client_msg_id" : "request_id": .text(requestID)]))
             dismiss()
         } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// Draft changes invalidate the input bar only, keeping the timeline out of the typing hot path.
+private struct ChatComposerInput: View {
+    @Bindable var store: ChatStore
+    @Binding var quote: ChatMessage?
+    @Binding var picks: [PhotosPickerItem]
+    let preparingMedia: Bool
+    let focus: FocusState<Bool>.Binding
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let quote {
+                HStack(spacing: 8) {
+                    Image(systemName: "quote.bubble").foregroundStyle(Color.brand)
+                    Text(ChatQuoteSummary.text(quote).isEmpty ? "引用消息" : ChatQuoteSummary.text(quote))
+                        .lineLimit(2).font(.caption)
+                    Spacer()
+                    Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }
+                        .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44)
+                }.padding(.horizontal)
+            }
+            HStack(alignment: .bottom, spacing: 8) {
+                PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
+                    Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
+                }.disabled(preparingMedia).accessibilityLabel("添加照片或视频")
+                TextField("发送消息…", text: $store.draft, axis: .vertical)
+                    .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11)
+                    .focused(focus).accessibilityLabel("消息内容")
+                Button {
+                    if store.enqueue(content: store.draft, quoteID: quote?.id) {
+                        store.draft = ""; quote = nil; store.saveDraft()
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill").font(.title).frame(width: 44, height: 44)
+                }.disabled(store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息")
+            }.floatingGlass()
+            if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
+        }.padding(.top, 6)
+            .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
     }
 }

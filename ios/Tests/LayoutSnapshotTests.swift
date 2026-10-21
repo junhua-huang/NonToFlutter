@@ -80,6 +80,30 @@ final class LayoutSnapshotTests: XCTestCase {
         }
     }
 
+    func testComposerReferencePickerLayouts() async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        try api.setToken("composer-layout")
+        let session = AppSession(api: api); session.restoring = false
+        session.user = Person(.object(["id": .id(userID), "username": .text("nonto"), "display_name": .text("南图")]))
+        var friendLoaded = false, topicsLoaded = false
+        StubProtocol.handler = { request in
+            if request.url!.path.hasSuffix("/friends/") {
+                friendLoaded = true
+                return (200, .object(["friends": .array([
+                    .object(["id": .id(41), "username": .text("yuchen"), "display_name": .text("雨辰")]),
+                    .object(["id": .id(42), "username": .text("xiaoming"), "display_name": .text("小明")])])]))
+            }
+            topicsLoaded = true
+            return (200, .object(["topics": .array(["生活", "摄影", "手办"].enumerated().map { .object(["id": .id($0.offset + 1), "name": .text($0.element)]) })]))
+        }
+        try await capture(PostComposer(), session: session, name: "composer-reference-actions-small", width: 320, expectsScrollChrome: false)
+        try await capture(ComposerReferencePicker(api: api, kind: .mention) { _ in }, session: session,
+                          name: "composer-friends-picker", width: 390, expectsScrollChrome: false, ready: { friendLoaded })
+        try await capture(ComposerReferencePicker(api: api, kind: .topic) { _ in }, session: session,
+                          name: "composer-topics-picker-dark", width: 390, dark: true, expectsScrollChrome: false, ready: { topicsLoaded })
+    }
+
     func testApprovedChatMediaAndAttachmentLayouts() async throws {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
         let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!,

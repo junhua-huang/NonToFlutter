@@ -1,5 +1,5 @@
 import Foundation
-import Combine
+import Observation
 
 struct PendingMessage: Codable, Identifiable {
     var id: String = UUID().uuidString
@@ -11,20 +11,21 @@ struct PendingMessage: Codable, Identifiable {
 }
 
 /// Owns one account's durable outbox and cancels room work when it is no longer visible.
-@MainActor
-final class ChatStore: ObservableObject {
-    @Published private(set) var messages: [ChatMessage] = []
-    @Published private(set) var pending: [PendingMessage] = []
-    @Published private(set) var loading = false
-    @Published private(set) var loadingOlder = false
-    @Published private(set) var sending = false
-    @Published private(set) var sendingID: String?
-    @Published private(set) var more = true
-    @Published var error: String?
-    @Published var draft = ""
-    @Published private(set) var scrollRequest = 0
-    @Published private(set) var unread = 0
-    @Published private(set) var nearBottom = true
+@MainActor @Observable
+final class ChatStore {
+    private(set) var messages: [ChatMessage] = []
+    private(set) var timeline = ChatPresentation()
+    private(set) var pending: [PendingMessage] = []
+    private(set) var loading = false
+    private(set) var loadingOlder = false
+    private(set) var sending = false
+    private(set) var sendingID: String?
+    private(set) var more = true
+    var error: String?
+    var draft = ""
+    private(set) var scrollRequest = 0
+    private(set) var unread = 0
+    private(set) var nearBottom = true
     private let api: APIClient
     private let socket: RealtimeClient?
     private let accountID: Int
@@ -60,7 +61,7 @@ final class ChatStore: ObservableObject {
         active = true
         if !restored {
             restored = true
-            if let cache = LocalCache.read(userID: accountID, key: cacheKey) { messages = Records.messages([], cache.array.map(ChatMessage.init)) }
+            if let cache = LocalCache.read(userID: accountID, key: cacheKey) { setMessages(Records.messages([], cache.array.map(ChatMessage.init))) }
             if let data = defaults.data(forKey: outboxKey), let saved = try? JSONDecoder().decode([PendingMessage].self, from: data) { pending = saved }
             draft = defaults.string(forKey: draftKey) ?? ""
             jumpToLatest()
@@ -129,9 +130,11 @@ final class ChatStore: ObservableObject {
             try Task.checkCancellation()
             guard active, valid, loadID == ticket else { return }
             let rows = try PagedResource<ChatMessage>.rows(json, keys: ["messages", "items"]).map(ChatMessage.init)
-            let known = Set(messages.map(\.id)), last = messages.last?.id
+            let knownMessages = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            let known = Set(knownMessages.keys), last = messages.last?.id
             let added = rows.filter { $0.id > 0 && !known.contains($0.id) }
-            messages = Records.messages(messages, rows)
+            let changed = rows.contains { row in row.id > 0 && knownMessages[row.id] != row }
+            if changed { setMessages(Records.messages(messages, rows)); persistMessages() }
             if older {
                 let ids = rows.map(\.id)
                 page += 1
@@ -142,9 +145,10 @@ final class ChatStore: ObservableObject {
             if communityID != nil, json["conversation"]["id"].int > 0 { roomID = json["conversation"]["id"].int }
             joinRoom()
             let confirmed = Set(rows.flatMap { [$0.raw["request_id"].string, $0.raw["client_msg_id"].string] }.filter { !$0.isEmpty })
-            pending.removeAll { confirmed.contains($0.id) }; persistPending()
+            if pending.contains(where: { confirmed.contains($0.id) }) {
+                pending.removeAll { confirmed.contains($0.id) }; persistPending()
+            }
             flush()
-            persistMessages()
             if !older && messages.last?.id != last {
                 if nearBottom || known.isEmpty { jumpToLatest() }
                 else { unread += added.filter { $0.senderID != accountID }.count }
@@ -221,7 +225,7 @@ final class ChatStore: ObservableObject {
                     let message = ChatMessage(json["message"].or(json))
                     // Do not silently discard an outbox entry on an incomplete success response.
                     guard message.id > 0 else { throw APIError(status: 0, message: "未收到发送确认，请重试") }
-                    messages = Records.messages(messages, [message]); persistMessages()
+                    if setMessages(Records.messages(messages, [message])) { persistMessages() }
                     pending.removeAll { $0.id == item.id }; persistPending()
                     if nearBottom { jumpToLatest() }
                 } catch {
@@ -232,6 +236,12 @@ final class ChatStore: ObservableObject {
                 }
             }
         }
+    }
+    @discardableResult private func setMessages(_ value: [ChatMessage]) -> Bool {
+        guard messages != value else { return false }
+        messages = value
+        timeline = ChatPresentation(messages: value, userID: accountID)
+        return true
     }
     private func persistMessages() { LocalCache.write(.array(Array(messages.suffix(500)).map(\.raw)), userID: accountID, key: cacheKey) }
     @discardableResult private func persistPending() -> Bool {
@@ -247,7 +257,7 @@ final class ChatStore: ObservableObject {
             let recalled = ChatMessage(message.raw.merging(.object([
                 "is_recalled": .bool(true), "content": .text(""), "media_url": .null, "quote_preview": .text("")
             ])))
-            messages = Records.messages(messages, [recalled]); persistMessages()
+            if setMessages(Records.messages(messages, [recalled])) { persistMessages() }
             await load()
         }
         catch { if active && valid { self.error = error.localizedDescription } }

@@ -369,6 +369,10 @@ struct PostComposer: View {
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
+    @State private var textSelection: TextSelection?
+    @State private var referencePicker: ComposerReferenceKind?
+    @State private var insertionRange: NSRange?
+    @FocusState private var bodyFocused: Bool
     @State private var visibility = "public"
     @State private var role = ""
     @State private var picks: [PhotosPickerItem] = []
@@ -397,9 +401,9 @@ struct PostComposer: View {
                     HStack(alignment: .top, spacing: 12) {
                         AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 42)
                         VStack(alignment: .leading, spacing: 12) {
-                            TextField("有什么新鲜事？", text: $text, axis: .vertical)
+                            TextField("有什么新鲜事？", text: $text, selection: $textSelection, axis: .vertical)
                                 .font(.title3).lineSpacing(4).lineLimit(6...20)
-                                .textFieldStyle(.plain).accessibilityLabel("动态内容")
+                                .textFieldStyle(.plain).focused($bodyFocused).accessibilityLabel("动态内容")
                             if let quoted {
                                 Label("引用 @\(quoted.author.username)：\(quoted.content)", systemImage: "quote.bubble")
                                     .font(.subheadline).lineLimit(4).padding(12)
@@ -411,10 +415,7 @@ struct PostComposer: View {
                     if editing == nil {
                         ForEach(media) { item in
                             HStack(spacing: 12) {
-                                if !item.isVideo, let image = UIImage(data: item.data) {
-                                    Image(uiImage: image).resizable().scaledToFill().frame(width: 72, height: 72)
-                                        .clipped().clipShape(RoundedRectangle(cornerRadius: 12))
-                                } else { Image(systemName: "video").font(.title).frame(width: 72, height: 72) }
+                                ComposerMediaThumbnail(item: item)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.isVideo ? "视频" : "照片").font(.subheadline.bold())
                                     Text(ByteCountFormatter.string(fromByteCount: Int64(item.data.count), countStyle: .file))
@@ -428,6 +429,10 @@ struct PostComposer: View {
                         }
                         if reading { ProgressView("正在准备媒体…") }
                     }
+                    HStack(spacing: 20) {
+                        Button { openReference(.mention) } label: { Label("艾特好友", systemImage: "at") }
+                        Button { openReference(.topic) } label: { Label("引用话题", systemImage: "number") }
+                    }.font(.subheadline).buttonStyle(.plain).foregroundStyle(Color.brand).frame(minHeight: 44)
                     Divider()
                     ViewThatFits(in: .horizontal) {
                         HStack {
@@ -468,6 +473,15 @@ struct PostComposer: View {
                 } message: {
                     if editing == nil && !media.isEmpty { Text("照片和视频不会保存在文字草稿中。") }
                 }
+                .sheet(item: $referencePicker, onDismiss: { bodyFocused = true }) { kind in
+                    ComposerReferencePicker(api: session.api, kind: kind) { value in
+                        let result = ComposerReferenceInsertion.insert(value, kind: kind, into: text, selection: insertionRange)
+                        text = result.text
+                        if let range = Range(NSRange(location: result.caretUTF16, length: 0), in: text) {
+                            textSelection = TextSelection(range: range)
+                        }
+                    }
+                }
                 .onAppear {
                     guard !draftLoaded else { return }; draftLoaded = true
                     accountID = session.user?.id ?? 0; accountEpoch = session.api.generation
@@ -496,6 +510,11 @@ struct PostComposer: View {
                     } catch is CancellationError {} catch { self.error = error.localizedDescription }
                 }
         }
+    }
+    private func openReference(_ kind: ComposerReferenceKind) {
+        if let textSelection, case .selection(let range) = textSelection.indices { insertionRange = NSRange(range, in: text) }
+        else { insertionRange = nil }
+        bodyFocused = false; referencePicker = kind
     }
     @ViewBuilder private var mediaPicker: some View {
         if editing == nil {

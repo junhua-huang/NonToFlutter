@@ -1,5 +1,32 @@
 import Foundation
 
+enum ComposerReferenceKind: String, Identifiable {
+    case mention, topic
+    var id: String { rawValue }
+    var marker: String { self == .mention ? "@" : "#" }
+    var title: String { self == .mention ? "艾特好友" : "引用话题" }
+}
+
+enum ComposerReferenceInsertion {
+    struct Result { let text: String; let caretUTF16: Int }
+    /// UTF-16 selections are converted before editing, so emoji and CJK text keep valid boundaries.
+    static func insert(_ value: String, kind: ComposerReferenceKind, into text: String, selection: NSRange?) -> Result {
+        let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return Result(text: text, caretUTF16: text.utf16.count) }
+        var range = selection.flatMap { Range($0, in: text) } ?? text.endIndex..<text.endIndex
+        if range.isEmpty, range.lowerBound > text.startIndex {
+            let before = text.index(before: range.lowerBound)
+            if String(text[before]) == kind.marker { range = before..<range.upperBound }
+        }
+        let before = String(text[..<range.lowerBound]), after = String(text[range.upperBound...])
+        let leading = before.last.map { $0.isWhitespace ? "" : " " } ?? ""
+        let trailing = after.first?.isWhitespace == true ? "" : " "
+        let insertion = leading + kind.marker + name + trailing
+        let caret = before.utf16.count + insertion.utf16.count + (after.first == " " && trailing.isEmpty ? 1 : 0)
+        return Result(text: before + insertion + after, caretUTF16: caret)
+    }
+}
+
 struct PostDraft: Codable, Equatable {
     var text: String
     var visibility: String

@@ -2,22 +2,25 @@ import Foundation
 
 /// Keeps conversational runs compact while retaining date and time context.
 enum ChatTimeline {
-    struct Row: Identifiable {
+    struct Row: Identifiable, Equatable {
         let message: ChatMessage
+        let date: Date?
         let showsTimestamp: Bool
         let startsRun: Bool
         var id: Int { message.id }
     }
     static func rows(_ messages: [ChatMessage], calendar: Calendar = .current) -> [Row] {
         var previous: ChatMessage?
+        var previousDate: Date?
         return messages.map { message in
+            let date = message.date
             let separator: Bool
-            if let date = message.date, let earlier = previous?.date {
+            if let date, let earlier = previousDate {
                 separator = !calendar.isDate(date, inSameDayAs: earlier) || date.timeIntervalSince(earlier) >= 300
-            } else { separator = message.date != nil }
+            } else { separator = date != nil }
             let startsRun = previous == nil || separator || previous?.senderID != message.senderID || previous?.recalled == true || message.recalled
-            previous = message
-            return Row(message: message, showsTimestamp: separator, startsRun: startsRun)
+            previous = message; previousDate = date
+            return Row(message: message, date: date, showsTimestamp: separator, startsRun: startsRun)
         }
     }
 }
@@ -86,4 +89,19 @@ struct ChatViewportMetrics: Equatable {
         return metrics.clamped(mediaOffset)
     }
     func clearPreservation() { history = nil; mediaOffset = nil }
+}
+
+/// Prepared only when server messages change, never while typing or measuring the viewport.
+struct ChatPresentation {
+    var rows: [ChatTimeline.Row] = []
+    var gallery: [String] = []
+    var galleryIndexes: [Int: Int] = [:]
+    var lastOutgoingID: Int?
+    init(messages: [ChatMessage] = [], userID: Int = 0) {
+        rows = ChatTimeline.rows(messages)
+        let images = ChatMediaTimeline.images(messages)
+        gallery = images.map(\.url)
+        galleryIndexes = Dictionary(images.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
+        lastOutgoingID = messages.last(where: { $0.senderID == userID })?.id
+    }
 }
