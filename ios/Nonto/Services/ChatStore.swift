@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-struct PendingMessage: Codable, Identifiable {
+struct PendingMessage: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var content: String
     var kind = "text"
@@ -9,6 +9,7 @@ struct PendingMessage: Codable, Identifiable {
     var quoteID: Int? = nil
     var failure: String? = nil
     var deliveryUncertain: Bool? = false
+    var createdAt: Date? = Date()
 }
 
 /// Owns one account's durable outbox and cancels room work when it is no longer visible.
@@ -47,6 +48,7 @@ final class ChatStore {
     private var loadID = UUID()
     private var sendID = UUID()
     private var lifecycleID = UUID()
+    private var localIdentities: [Int: ChatMessageIdentity] = [:]
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     private var cacheKey: String { "chat.\(communityID == nil ? "single" : "community").\(communityID ?? conversation.id)" }
     private var outboxKey: String { "nonto.native.outbox.\(accountID).\(cacheKey)" }
@@ -166,14 +168,13 @@ final class ChatStore {
                 updateRoomID(json["conversation"]["id"].int)
             }
             joinRoom()
-            let confirmed = Set(rows.flatMap { [$0.raw["request_id"].string, $0.raw["client_msg_id"].string] }.filter { !$0.isEmpty })
+            let confirmed = Set(rows.filter { $0.senderID == accountID }.compactMap(\.clientRequestID))
             if pending.contains(where: { confirmed.contains($0.id) }) {
                 pending.removeAll { confirmed.contains($0.id) }; persistPending()
             }
             flush()
-            if !older && messages.last?.id != last {
-                if nearBottom || known.isEmpty { jumpToLatest() }
-                else { unread += added.filter { $0.senderID != accountID }.count }
+            if !older && messages.last?.id != last && !nearBottom && !known.isEmpty {
+                unread += added.filter { $0.senderID != accountID }.count
             }
             if !older { markReadIfNeeded() }
             error = nil
@@ -227,10 +228,7 @@ final class ChatStore {
             if message.senderID == accountID, pending.contains(where: { confirmations.contains($0.id) }) {
                 pending.removeAll { confirmations.contains($0.id) }; persistPending(); flush()
             }
-            if added {
-                if nearBottom { jumpToLatest() }
-                else if message.senderID != accountID { unread += 1 }
-            }
+            if added && !nearBottom && message.senderID != accountID { unread += 1 }
             markReadIfNeeded()
             return false
         case "message_recalled":
@@ -269,8 +267,11 @@ final class ChatStore {
     private func appendToOutbox(_ items: [PendingMessage]) -> Bool {
         let previous = pending
         pending.append(contentsOf: items)
-        guard persistPending() else { pending = previous; return false }
-        jumpToLatest(); flush(); return true
+        guard persistPending() else { pending = previous; updatePresentation(); return false }
+        // Size-change anchoring follows new rows at the bottom. Only jump when
+        // sending from history; acknowledgements must never request another jump.
+        if !nearBottom { jumpToLatest() }
+        flush(); return true
     }
     func retry(_ id: String) {
         guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
@@ -304,9 +305,9 @@ final class ChatStore {
                     guard active, valid, sendID == ticket else { return }
                     // Do not silently discard an outbox entry on an incomplete success response.
                     guard let message = ChatMessage.confirmation(json) else { throw APIError(status: 0, message: "未收到发送确认，请先检查最新消息") }
+                    localIdentities[message.id] = ChatMessageIdentity(requestID: item.id, createdAt: item.createdAt)
                     if setMessages(Records.messages(messages, [message])) { persistMessages() }
                     pending.removeAll { $0.id == item.id }; persistPending()
-                    if nearBottom { jumpToLatest() }
                 } catch {
                     guard active, valid, sendID == ticket, !Task.isCancelled else { return }
                     // A socket acknowledgement may have already confirmed this item while HTTP was in flight.
@@ -320,13 +321,22 @@ final class ChatStore {
         }
     }
     @discardableResult private func setMessages(_ value: [ChatMessage]) -> Bool {
+        for message in value where message.senderID == accountID {
+            if let requestID = message.clientRequestID, let item = pending.first(where: { $0.id == requestID }) {
+                localIdentities[message.id] = ChatMessageIdentity(requestID: item.id, createdAt: item.createdAt)
+            }
+        }
         guard messages != value else { return false }
         messages = value
-        timeline = ChatPresentation(messages: value, userID: accountID)
+        updatePresentation()
         return true
+    }
+    private func updatePresentation() {
+        timeline = ChatPresentation(messages: messages, userID: accountID, pending: pending, localIdentities: localIdentities)
     }
     private func persistMessages() { LocalCache.write(.array(Array(messages.suffix(500)).map(\.raw)), userID: accountID, key: cacheKey) }
     @discardableResult private func persistPending() -> Bool {
+        defer { updatePresentation() }
         guard valid, let data = try? JSONEncoder().encode(pending) else { return false }
         defaults.set(data, forKey: outboxKey); return true
     }

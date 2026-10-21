@@ -119,14 +119,63 @@ struct ChatViewportMetrics: Equatable {
     func clearPreservation() { history = nil; mediaOffset = nil }
 }
 
-/// Prepared only when server messages change, never while typing or measuring the viewport.
+extension ChatMessage {
+    var clientRequestID: String? {
+        [raw["request_id"].string, raw["client_msg_id"].string].first { !$0.isEmpty }
+    }
+}
+
+struct ChatMessageIdentity {
+    let requestID: String
+    let createdAt: Date?
+}
+
+/// One stable row owns the bubble throughout queued -> sending -> acknowledged.
+/// Server messages and the outbox must share a ForEach identity namespace.
+struct ChatTimelineEntry: Identifiable, Equatable {
+    let id: String
+    let row: ChatTimeline.Row
+    let pending: PendingMessage?
+}
+
+/// Prepared when messages or the outbox change, never while typing or measuring the viewport.
 struct ChatPresentation {
     var rows: [ChatTimeline.Row] = []
+    var entries: [ChatTimelineEntry] = []
     var gallery: [String] = []
     var galleryIndexes: [Int: Int] = [:]
     var lastOutgoingID: Int?
-    init(messages: [ChatMessage] = [], userID: Int = 0) {
+    init(messages: [ChatMessage] = [], userID: Int = 0, pending: [PendingMessage] = [], localIdentities: [Int: ChatMessageIdentity] = [:]) {
         rows = ChatTimeline.rows(messages)
+        var visible = messages
+        var identities: [String] = []
+        var used = Set<String>()
+        for (index, message) in messages.enumerated() {
+            let local = message.senderID == userID ? localIdentities[message.id] : nil
+            let requestID = message.senderID == userID ? (local?.requestID ?? message.clientRequestID) : nil
+            let proposed = requestID.map { "local:" + $0 } ?? "server:\(message.id)"
+            let id = used.insert(proposed).inserted ? proposed : "server:\(message.id)"
+            identities.append(id)
+            if let date = local?.createdAt {
+                visible[index] = ChatMessage(message.raw.merging(.object(["created_at": .number(date.timeIntervalSince1970)])))
+            }
+        }
+        var pendingByID: [String: PendingMessage] = [:]
+        for item in pending {
+            let id = "local:" + item.id
+            guard used.insert(id).inserted else { continue }
+            var raw: [String: JSON] = ["id": .id(0), "sender_id": .id(userID), "content": .text(item.content),
+                                      "message_type": .text(item.kind), "request_id": .text(item.id)]
+            if let media = item.media { raw["media_url"] = .text(media) }
+            if let date = item.createdAt { raw["created_at"] = .number(date.timeIntervalSince1970) }
+            if let quoteID = item.quoteID, let quote = messages.first(where: { $0.id == quoteID }) {
+                raw["quote_preview"] = .text(ChatQuoteSummary.preview(quote))
+            }
+            visible.append(ChatMessage(.object(raw))); identities.append(id); pendingByID[id] = item
+        }
+        entries = zip(identities, ChatTimeline.rows(visible)).map { id, row in
+            ChatTimelineEntry(id: id, row: row, pending: pendingByID[id])
+        }
         let images = ChatMediaTimeline.images(messages)
         gallery = images.map(\.url)
         galleryIndexes = Dictionary(images.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })

@@ -46,6 +46,92 @@ final class ChatExperienceTests: XCTestCase {
         }
         return try JSON.decode(data)
     }
+    func testPendingAndConfirmedBubbleShareIdentityAndTimestamp() {
+        let date = Date(timeIntervalSince1970: 1_792_600_000)
+        let item = PendingMessage(id: "stable-send", content: "hello", createdAt: date)
+        let before = ChatPresentation(userID: userID, pending: [item])
+        // The authoritative timestamp can differ from the device clock. Keep the
+        // visible separator stable during acknowledgement, then use server data
+        // normally in future room sessions.
+        let confirmed = ChatMessage(message(201, sender: userID))
+        let after = ChatPresentation(messages: [confirmed], userID: userID, pending: [item],
+            localIdentities: [201: ChatMessageIdentity(requestID: item.id, createdAt: date)])
+        XCTAssertEqual(before.entries.count, 1); XCTAssertEqual(after.entries.count, 1)
+        XCTAssertEqual(before.entries[0].id, after.entries[0].id)
+        XCTAssertEqual(before.entries[0].row.date, after.entries[0].row.date)
+        XCTAssertEqual(before.entries[0].row.showsTimestamp, after.entries[0].row.showsTimestamp)
+        XCTAssertNotNil(before.entries[0].pending); XCTAssertNil(after.entries[0].pending)
+    }
+    func testOtherSendersRequestCannotReplaceLocalPendingBubble() {
+        let item = PendingMessage(id: "same-id", content: "my message")
+        let incoming = ChatMessage(message(201).merging(.object(["request_id": .text(item.id)])))
+        let presentation = ChatPresentation(messages: [incoming], userID: userID, pending: [item])
+        XCTAssertEqual(presentation.entries.map(\.id), ["server:201", "local:same-id"])
+        XCTAssertNotNil(presentation.entries.last?.pending)
+    }
+    func testHTTPConfirmationWithoutRequestIDDoesNotReplaceRowOrScrollAgain() async throws {
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                Thread.sleep(forTimeInterval: 0.05)
+                return (200, .object(["data": self.message(201, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate()
+        let scrolls = store.scrollRequest
+        XCTAssertTrue(store.enqueue(content: "hello"))
+        let entry = try XCTUnwrap(store.timeline.entries.last)
+        try await waitUntil { !store.sending && store.pending.isEmpty }
+        XCTAssertEqual(store.timeline.entries.count, 1)
+        XCTAssertEqual(store.timeline.entries[0].id, entry.id)
+        XCTAssertEqual(store.timeline.entries[0].row.date, entry.row.date)
+        XCTAssertEqual(store.scrollRequest, scrolls)
+        store.suspend()
+    }
+    func testSendingFromHistoryJumpsOnceAndAcknowledgementRespectsReadingPosition() async throws {
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                Thread.sleep(forTimeInterval: 0.05)
+                return (200, .object(["data": self.message(201, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([self.message(100)])]))
+        }
+        await store.activate(); store.reachedBottom(false)
+        let scrolls = store.scrollRequest
+        XCTAssertTrue(store.enqueue(content: "hello"))
+        XCTAssertEqual(store.scrollRequest, scrolls + 1)
+        store.reachedBottom(false)
+        try await waitUntil { !store.sending && store.pending.isEmpty }
+        XCTAssertEqual(store.scrollRequest, scrolls + 1); XCTAssertFalse(store.nearBottom)
+        store.suspend()
+    }
+    func testSocketConfirmationRetainsOneBubbleThroughHTTPAndHistoryRefresh() async throws {
+        var confirmed: JSON?
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                Thread.sleep(forTimeInterval: 0.1)
+                return (200, .object(["data": self.message(201, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array(confirmed.map { [$0] } ?? [])]))
+        }
+        await store.activate(); store.enqueue(content: "hello")
+        let item = try XCTUnwrap(store.pending.first)
+        let identity = try XCTUnwrap(store.timeline.entries.last?.id)
+        confirmed = message(201, sender: userID).merging(.object(["request_id": .text(item.id)]))
+        XCTAssertFalse(store.receive(.object(["event": .text("new_message"), "data": .object([
+            "conversation_id": .id(55), "message": confirmed!])])) )
+        XCTAssertEqual(store.timeline.entries.map(\.id), [identity])
+        try await waitUntil { !store.sending }
+        await store.load()
+        XCTAssertEqual(store.timeline.entries.map(\.id), [identity]); XCTAssertTrue(store.pending.isEmpty)
+        store.suspend()
+    }
+    func testLegacyOutboxWithoutCreatedDateStillDecodes() throws {
+        let data = Data("[{\"id\":\"legacy\",\"content\":\"hello\",\"kind\":\"text\"}]".utf8)
+        let item = try XCTUnwrap(JSONDecoder().decode([PendingMessage].self, from: data).first)
+        XCTAssertNil(item.createdAt)
+        XCTAssertEqual(ChatPresentation(userID: userID, pending: [item]).entries.first?.id, "local:legacy")
+    }
     func testTypingAndUnchangedRefreshDoNotInvalidatePreparedMessages() async throws {
         let current = message(81, sender: userID)
         let store = try room { request in

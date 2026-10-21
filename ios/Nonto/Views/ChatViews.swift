@@ -59,9 +59,8 @@ private struct ChatRoomContent: View {
     @State private var preparingMedia = false
     @State private var attachment: ChatAttachments?
     @FocusState private var composerFocused: Bool
-    @State private var position = ScrollPosition(idType: Int.self)
+    @State private var position = ScrollPosition(idType: String.self)
     @State private var viewport = ChatViewportMemory()
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var recall: ChatMessage?
     @State private var confirmRecall = false
     @State private var visible = false
@@ -84,21 +83,20 @@ private struct ChatRoomContent: View {
                 if !store.messages.isEmpty || !store.pending.isEmpty {
                     ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
                 }
-                ForEach(timeline.rows) { row in
-                    ChatMessageRow(row: row, community: communityID != nil,
-                                   showsReceipt: row.id == timeline.lastOutgoingID,
-                                   galleryImages: timeline.gallery, galleryIndex: timeline.galleryIndexes[row.id], onMediaPresentation: mediaPresentationChanged,
-                                   onQuote: { quote = $0; composerFocused = true },
-                                   onRecall: { recall = $0; confirmRecall = true }).id(row.id)
-                }
-                ForEach(store.pending) { item in
-                    ChatPendingRow(item: item, sending: store.sendingID == item.id,
-                                   blocked: store.pending.first?.failure != nil && store.pending.first?.id != item.id,
-                                   retry: { store.retry(item.id) }, remove: { store.remove(item.id) },
+                ForEach(timeline.entries) { entry in
+                    ChatMessageRow(row: entry.row, community: communityID != nil,
+                                   showsReceipt: entry.row.id == timeline.lastOutgoingID,
+                                   galleryImages: entry.pending == nil ? timeline.gallery : [],
+                                   galleryIndex: timeline.galleryIndexes[entry.row.id], onMediaPresentation: mediaPresentationChanged,
+                                   pending: entry.pending, sending: store.sendingID == entry.pending?.id,
+                                   blocked: store.pending.first?.failure != nil && store.pending.first?.id != entry.pending?.id,
+                                   retry: { if let item = entry.pending { store.retry(item.id) } },
+                                   remove: { if let item = entry.pending { store.remove(item.id) } },
                                    checkDelivery: { Task { await store.load() } },
-                                   onMediaPresentation: mediaPresentationChanged)
+                                   onQuote: { quote = $0; composerFocused = true },
+                                   onRecall: { recall = $0; confirmRecall = true }).id(entry.id)
                 }
-                Color.clear.frame(height: 1).id(Int.min)
+                Color.clear.frame(height: 1).id("chat-bottom")
             }.scrollTargetLayout().padding(.vertical, 8)
         }
         .overlay {
@@ -130,8 +128,10 @@ private struct ChatRoomContent: View {
         }
         .onChange(of: store.scrollRequest) { _, _ in
             viewport.clearPreservation()
-            if reduceMotion { position.scrollTo(edge: .bottom) }
-            else { withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(edge: .bottom) } }
+            // Keyboard/composer resizing is already bottom anchored. A second
+            // animated scroll here fights that layout update while sending.
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) { position.scrollTo(edge: .bottom) }
         }
         .overlay(alignment: .bottomTrailing) {
             if !store.nearBottom && !store.messages.isEmpty {
@@ -173,7 +173,6 @@ private struct ChatRoomContent: View {
         .onChange(of: phase) { _, value in
             if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
         }
-        .onChange(of: composerFocused) { _, focused in if focused && store.nearBottom { store.jumpToLatest() } }
         .sheet(item: $attachment) { media in
             ChatAttachmentSheet(media: media.items, api: session.api, store: store, quoteID: quote?.id) {
                 quote = nil

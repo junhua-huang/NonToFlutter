@@ -28,6 +28,21 @@ enum ChatQuoteSummary {
         let caption = ImageMessageCaption.text(message.content, media: message.media)
         return caption.isEmpty ? kind : kind + " " + caption
     }
+    /// Match the server's compact reply preview so acknowledgement doesn't resize it.
+    static func preview(_ message: ChatMessage) -> String {
+        if message.recalled { return "消息已撤回" }
+        switch message.kind {
+        case "image": return "[图片]"
+        case "video": return "[视频]"
+        case "post":
+            let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let head = content.isEmpty ? "帖子 #\(message.id)" : String(content.prefix(30)) + (content.count > 30 ? "..." : "")
+            return "[帖子] " + head
+        default:
+            let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return String(content.prefix(50)) + (content.count > 50 ? "..." : "")
+        }
+    }
 }
 
 /// Status occupies the visible chat viewport, independent of the bottom-anchored message stack.
@@ -59,6 +74,12 @@ struct ChatMessageRow: View {
     var galleryImages: [String] = []
     var galleryIndex: Int? = nil
     var onMediaPresentation: (Bool) -> Void = { _ in }
+    var pending: PendingMessage? = nil
+    var sending = false
+    var blocked = false
+    var retry: () -> Void = { }
+    var remove: () -> Void = { }
+    var checkDelivery: () -> Void = { }
     let onQuote: (ChatMessage) -> Void
     let onRecall: (ChatMessage) -> Void
     @EnvironmentObject private var session: AppSession
@@ -92,8 +113,9 @@ struct ChatMessageRow: View {
                             if !caption.isEmpty {
                                 Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = caption }
                             }
-                            Button("引用", systemImage: "quote.bubble") { onQuote(message) }
-                            if mine, let date = row.date, Date().timeIntervalSince(date) < 120 {
+                            if pending == nil { Button("引用", systemImage: "quote.bubble") { onQuote(message) } }
+                            if pending != nil && !sending { Button("取消发送", role: .destructive, action: remove) }
+                            if pending == nil, mine, let date = row.date, Date().timeIntervalSince(date) < 120 {
                                 Button("撤回", systemImage: "arrow.uturn.backward", role: .destructive) { onRecall(message) }
                             }
                             if !mine && message.senderID > 0 {
@@ -102,8 +124,20 @@ struct ChatMessageRow: View {
                         }
                         if let date = row.date { Text(date, format: .dateTime.year().month().day().hour().minute().second()) }
                     }
-                    if mine && showsReceipt && !message.recalled {
-                        Text(message.raw["is_read"].bool ? "已读" : "已发送").font(.caption2).foregroundStyle(.secondary)
+                    if mine {
+                        // Keep the same status slot when this bubble is acknowledged
+                        // or another outgoing bubble becomes the latest receipt.
+                        Group {
+                            if let pending {
+                                ChatPendingStatus(item: pending, sending: sending, blocked: blocked,
+                                                  retry: retry, remove: remove, checkDelivery: checkDelivery)
+                            } else {
+                                Text(message.raw["is_read"].bool ? "已读" : "已发送")
+                                    .foregroundStyle(.secondary)
+                                    .opacity(showsReceipt && !message.recalled ? 1 : 0)
+                                    .accessibilityHidden(!showsReceipt || message.recalled)
+                            }
+                        }.font(.caption2).frame(minHeight: 16, alignment: .trailing)
                     }
                 }
                 if !mine { Spacer(minLength: 48) }
@@ -197,33 +231,16 @@ private struct ChatBubbleSurface: ViewModifier {
     }
 }
 
-struct ChatPendingRow: View {
+struct ChatPendingStatus: View {
     let item: PendingMessage
     let sending: Bool
     let blocked: Bool
     let retry: () -> Void
     let remove: () -> Void
     var checkDelivery: () -> Void = { }
-    var onMediaPresentation: (Bool) -> Void = { _ in }
     @State private var confirmResend = false
-    private var bareMedia: Bool { ["image", "video"].contains(item.kind) && item.media != nil }
-    private var caption: String { bareMedia ? ImageMessageCaption.text(item.content, media: item.media ?? "") : item.content }
     var body: some View {
-        HStack {
-            Spacer(minLength: 48)
-            VStack(alignment: .trailing, spacing: 6) {
-                if bareMedia, let media = item.media {
-                    MediaView(images: item.kind == "image" ? [media] : [], video: item.kind == "video" ? media : "",
-                              thumbnailHeight: 190, fitImage: true, onPresentationChange: onMediaPresentation)
-                        .frame(maxWidth: 250)
-                    if !caption.isEmpty { Text(caption).font(.body).textSelection(.enabled).frame(maxWidth: 250, alignment: .trailing) }
-                } else {
-                    Text(caption).font(.body).textSelection(.enabled)
-                        .modifier(ChatBubbleSurface(media: false, mine: true))
-                }
-                deliveryStatus
-            }
-        }.padding(.horizontal).padding(.top, 6)
+        deliveryStatus
             .confirmationDialog("这条消息可能已经送达", isPresented: $confirmResend, titleVisibility: .visible) {
                 Button("检查最新消息", action: checkDelivery)
                 Button("仍然重新发送", action: retry)
@@ -246,15 +263,13 @@ struct ChatPendingRow: View {
                     Button("检查最新消息", action: checkDelivery).frame(minHeight: 44).buttonStyle(.plain)
                 }
                 Text(failure).foregroundStyle(.secondary).lineLimit(3)
-            } else if sending {
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("正在发送…") }.foregroundStyle(.secondary)
             } else {
-                HStack(spacing: 10) {
-                    Label(blocked ? "等待上一条消息重试" : "等待发送", systemImage: "clock").foregroundStyle(.secondary)
-                    Button("取消", role: .destructive, action: remove).frame(minHeight: 44)
-                }.buttonStyle(.plain)
+                Label(sending ? "正在发送…" : (blocked ? "等待上一条消息重试" : "等待发送"),
+                      systemImage: sending ? "arrow.up.circle" : "clock")
+                    .foregroundStyle(.secondary)
+                    .contextMenu { if !sending { Button("取消发送", role: .destructive, action: remove) } }
             }
-        }.font(.caption)
+        }
     }
     private var failureLabel: some View {
         Label(item.deliveryUncertain == true ? "结果待确认" : "未发送", systemImage: "exclamationmark.circle.fill")
