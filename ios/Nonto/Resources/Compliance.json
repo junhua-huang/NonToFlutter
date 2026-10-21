@@ -1,5 +1,5 @@
 {
-  "policyVersion": "2026-10-22.2",
+  "policyVersion": "2026-10-22.3",
   "operatorName": "黄君华",
   "contactEmail": "nonto@foxmail.com",
   "contactAddress": "",
@@ -11,8 +11,8 @@
   "retentionSummary": "",
   "processorSummary": "",
   "minorProtectionSummary": "",
-  "realNameVerificationSummary": "",
-  "rightsResponseSummary": "",
+  "realNameVerificationSummary": "当前账号注册和登录使用邮箱验证码或密码，不收集身份证件进行法定真实身份认证。角色或创作者认证仅审核相应申请，不等同于法定实名认证。邮箱验证不能替代依法需要的真实身份认证。",
+  "rightsResponseSummary": "通过 nonto@foxmail.com 提交请求时，请说明账号标识、请求类型及范围。与账号有关的请求需提供足以核对账号归属的必要信息；请勿发送密码或验证码。受理中如需补充材料，会通过邮件说明；处理结果通过邮件答复。对结果有异议，可在原邮件中补充理由申请复核。举报处理记录可在应用内查看。",
   "releaseReviewed": false,
   "verification": {
     "accountDeletionVerified": false,

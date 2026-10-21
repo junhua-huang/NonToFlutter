@@ -19,6 +19,8 @@ EVIDENCE = (
     'storageAndProcessorsReviewed', 'appStorePrivacyLabelsReviewed',
 )
 PLACEHOLDER = re.compile(r'facebook[-_]?clone|example\.(com|org|net)|\.example\b|待补|待确认|未配置|TODO', re.I)
+# Internal audit notes belong in COMPLIANCE.md, never in published policy text.
+PUBLIC_DRAFT = re.compile(r'未[经]?核[实验]|尚未.{0,24}(?:验证|核验|审核)|待核[实验]|仍[须需].{0,24}核[实验]|开发测试|测试版本|测试服务|TODO', re.I)
 DOCUMENTS = ('privacy', 'terms', 'community')
 APP_FILING = re.compile(r'[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼]ICP备[0-9]{6,}号-[0-9]+A')
 REQUIRED_TYPES = {
@@ -40,6 +42,8 @@ def inspect(resources=RESOURCES):
         text = (resources / (name + '.txt')).read_text()
         if PLACEHOLDER.search(text):
             errors.append(name + ' contains a stale sample contact or placeholder promise')
+        if PUBLIC_DRAFT.search(text):
+            blockers.append('Public policy contains an internal draft or unverified statement: ' + name)
         if '{{contactEmail}}' not in text:
             errors.append(name + ' must include the contact email')
         if '{{policyVersion}}' not in text:
@@ -61,6 +65,8 @@ def inspect(resources=RESOURCES):
         value = config.get(key, '')
         if not isinstance(value, str) or not value.strip() or PLACEHOLDER.search(value):
             blockers.append('Complete and verify ' + key)
+        elif PUBLIC_DRAFT.search(value) or '{{' in value or '}}' in value:
+            blockers.append('Replace unresolved public disclosure: ' + key)
     email = config.get('contactEmail', '')
     if not re.fullmatch(r'[^\s@?]+@[^\s@?]+\.[^\s@?]+', email):
         blockers.append('A working contact email is required')

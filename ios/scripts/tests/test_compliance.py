@@ -75,6 +75,30 @@ class ComplianceChecks(unittest.TestCase):
         data = json.loads(path.read_text()); data['contactEmail'] = 'support@facebook-clone.app'
         path.write_text(json.dumps(data))
         self.assertTrue(any('contactEmail' in item for item in checker.inspect(self.resources)[1]))
+    def test_published_documents_do_not_contain_engineering_audit_notes(self):
+        for name in checker.DOCUMENTS:
+            self.assertIsNone(checker.PUBLIC_DRAFT.search((checker.RESOURCES / (name + '.txt')).read_text()), name)
+
+    def test_flags_cannot_approve_unverified_public_wording(self):
+        path = self.resources / 'Compliance.json'
+        data = json.loads(path.read_text())
+        for key in checker.REQUIRED_FIELDS:
+            data[key] = '明确的信息处理规则'
+        data.update(contactEmail='privacy@operator.cn', privacyPolicyURL='https://operator.cn/privacy', termsURL='https://operator.cn/terms', communityRulesURL='https://operator.cn/community', appFilingNumber='桂ICP备2026012531号-2A', releaseReviewed=True)
+        data['verification'] = {key: True for key in checker.EVIDENCE}
+        path.write_text(json.dumps(data))
+        self.assertEqual(checker.inspect(self.resources), ([], []))
+        for wording in ('实际服务方仍须核验', '完整删除尚未完成验证', '本版本处于开发测试', '服务商未核实'):
+            policy = self.resources / 'privacy.txt'
+            original = policy.read_text()
+            policy.write_text(original + '\n' + wording)
+            self.assertTrue(any('internal draft' in item for item in checker.inspect(self.resources)[1]), wording)
+            policy.write_text(original)
+            data['storageSummary'] = wording
+            path.write_text(json.dumps(data))
+            self.assertTrue(any('unresolved public disclosure' in item for item in checker.inspect(self.resources)[1]), wording)
+            data['storageSummary'] = '明确的信息处理规则'
+            path.write_text(json.dumps(data))
     def run_build_action(self, action, channel="app-store"):
         scripts = self.root / 'scripts'; scripts.mkdir()
         shutil.copy(SCRIPTS / 'check_compliance.py', scripts / 'check_compliance.py')
