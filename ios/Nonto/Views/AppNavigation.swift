@@ -6,7 +6,7 @@ enum AppRoute: Hashable {
     case topic(Topic), notice(Notice), communityManage(Community), comic(Int)
     case settings, personalInformation, privacySettings, notificationSettings, password
     case blockedUsers, identity, followedTopics, communities(mine: Bool = false), comics
-    case policy(String), deleteAccount, reportHistory, friends
+    case policy(String), contact, deleteAccount, reportHistory, friends
 
     var key: String {
         switch self {
@@ -19,6 +19,7 @@ enum AppRoute: Hashable {
         case .communityManage(let item): return "community-manage/\(item.id)"
         case .comic(let id): return "comic/\(id)"
         case .policy(let kind): return "policy/\(kind)"
+        case .contact: return "contact"
         case .communities(let mine): return "communities/\(mine)"
         case .settings: return "settings"
         case .personalInformation: return "personal-information"
@@ -41,6 +42,7 @@ enum AppRoute: Hashable {
         case .topic(let value): return value.id > 0
         case .notice(let value): return value.id > 0
         case .communityManage(let value): return value.id > 0
+        case .policy(let kind): return LegalDocument(rawValue: kind) != nil
         default: return true
         }
     }
@@ -105,6 +107,7 @@ struct AppNavigationStack<Root: View>: View {
         case .communities(let mine): return AnyView(CommunityListView(session: session, mine: mine))
         case .comics: return AnyView(ComicListView())
         case .policy(let kind): return AnyView(PolicyView(kind: kind))
+        case .contact: return AnyView(ContactAndComplaintsView())
         case .deleteAccount: return AnyView(DeleteAccountView())
         case .reportHistory: return AnyView(ReportHistoryView(session: session))
         case .friends: return AnyView(FriendsView(session: session))

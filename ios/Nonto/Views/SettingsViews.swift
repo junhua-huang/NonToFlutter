@@ -30,15 +30,14 @@ struct SettingsView: View {
                 }
             }
             Section("关于南图") {
-                if let contact = ComplianceProfile.current.contactURL { Link("联系与投诉", destination: contact) }
-                if !ComplianceProfile.current.value("appFilingNumber").isEmpty {
-                    Link(ComplianceProfile.current.value("appFilingNumber"), destination: URL(string: "https://beian.miit.gov.cn/")!)
-                }
+                RouteButton(.contact) { Text("联系与投诉") }
                 RouteButton(.policy("privacy")) { Text("隐私政策") }
                 RouteButton(.policy("terms")) { Text("服务条款") }
+                RouteButton(.policy("community")) { Text("社区规范") }
                 Link("源代码", destination: URL(string: "https://github.com/junhua-huang/NonToFlutter/tree/ios")!)
                 LabeledContent("版本", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
             }
+            FilingDisclosureSection()
             Section {
                 if loggingOut { ProgressView("正在退出登录…") }
                 Button("退出登录", role: .destructive) { confirmLogout = true }.disabled(loggingOut)
@@ -243,10 +242,15 @@ struct PolicyView: View {
     let kind: String
     var body: some View {
         let text = ComplianceProfile.current.document(kind)
+        let document = LegalDocument(rawValue: kind)
         let sections = PolicySection.parse(text)
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 28) {
+                    if let document {
+                        Text(document.summary).font(.subheadline).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     ForEach(sections) { section in
                         VStack(alignment: .leading, spacing: 14) {
                             Text(section.title).font(.title3.bold()).accessibilityAddTraits(.isHeader)
@@ -256,6 +260,12 @@ struct PolicyView: View {
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading).id(section.id)
                     }
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(LegalDocument.allCases.filter { $0.rawValue != kind }) { related in
+                            NavigationLink(related.title) { PolicyView(kind: related.rawValue) }
+                        }
+                        NavigationLink("联系与投诉") { ContactAndComplaintsView() }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
                 }.frame(maxWidth: 700, alignment: .leading).padding(24).frame(maxWidth: .infinity)
             }
             .toolbar {
@@ -268,6 +278,6 @@ struct PolicyView: View {
                     ShareLink(item: text) { Label("分享全文", systemImage: "square.and.arrow.up") }
                 }
             }
-        }.navigationTitle(kind == "privacy" ? "隐私政策" : "服务条款").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(LegalDocument(rawValue: kind)?.title ?? "说明").navigationBarTitleDisplayMode(.inline)
     }
 }

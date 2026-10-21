@@ -2,6 +2,40 @@ import Foundation
 import Combine
 import CryptoKit
 
+enum LegalDocument: String, CaseIterable, Identifiable {
+    case privacy, terms, community
+    var id: String { rawValue }
+    var title: String {
+        switch self { case .privacy: return "隐私政策"; case .terms: return "服务条款"; case .community: return "社区规范" }
+    }
+    var summary: String {
+        switch self {
+        case .privacy: return "了解账号、内容和推送信息如何处理，以及如何管理权限和申请删除。"
+        case .terms: return "了解账号使用、内容权利、服务边界，以及举报和申诉方式。"
+        case .community: return "尊重他人的隐私与交往意愿；发现骚扰、侵权或违法内容时，可以举报或屏蔽。"
+        }
+    }
+}
+
+enum SupportRequestKind: String, CaseIterable, Identifiable {
+    case support, report, rights, appeal
+    var id: String { rawValue }
+    var title: String {
+        switch self { case .support: return "使用反馈"; case .report: return "举报与侵权投诉"; case .rights: return "个人信息权利申请"; case .appeal: return "处置申诉" }
+    }
+    var guidance: String {
+        switch self {
+        case .support: return "请描述遇到的问题、出现步骤和期望结果。截图可在邮件中自行添加。"
+        case .report: return "请提供内容链接或编号、涉及账号、发生时间及必要依据。侵权投诉请说明权利归属。"
+        case .rights: return "请说明查阅、复制、更正、删除或撤回等具体请求、账号标识及数据范围。"
+        case .appeal: return "请提供举报或处置编号、收到的处理结果，以及希望复核的事实和理由。"
+        }
+    }
+    func message(detail: String) -> String {
+        "南图 · \(title)\n\n\(detail.trimmingCharacters(in: .whitespacesAndNewlines))\n\n\(guidance)\n\n请勿发送密码、验证码、无关完整证件或他人的敏感信息。"
+    }
+}
+
 struct ComplianceProfile {
     let values: [String: JSON]
     static let current: ComplianceProfile = {
@@ -16,8 +50,14 @@ struct ComplianceProfile {
     }
     var contactURL: URL? {
         let email = value("contactEmail")
-        guard email.contains("@"), !email.contains(where: { $0.isWhitespace }), !email.contains("?") else { return nil }
+        guard email.range(of: #"^[^\s@?:/]+@[^\s@?:/]+\.[^\s@?:/]+$"#, options: .regularExpression) != nil else { return nil }
         var components = URLComponents(); components.scheme = "mailto"; components.path = email
+        return components.url
+    }
+    func requestMailURL(kind: SupportRequestKind, detail: String) -> URL? {
+        guard let url = contactURL, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        components.queryItems = [URLQueryItem(name: "subject", value: "南图 · \(kind.title)"),
+                                 URLQueryItem(name: "body", value: kind.message(detail: detail))]
         return components.url
     }
     func httpsURL(_ key: String) -> URL? {
@@ -25,7 +65,7 @@ struct ComplianceProfile {
         return url
     }
     func document(_ kind: String, bundle: Bundle = .main) -> String {
-        guard ["privacy", "terms"].contains(kind), let url = bundle.url(forResource: kind, withExtension: "txt"),
+        guard LegalDocument(rawValue: kind) != nil, let url = bundle.url(forResource: kind, withExtension: "txt"),
               let template = try? String(contentsOf: url, encoding: .utf8) else { return "暂时无法读取说明，请稍后重试。" }
         return render(template)
     }
@@ -39,7 +79,7 @@ struct ComplianceProfile {
     }
     static var revision: String {
         var data = Data()
-        for (name, ext) in [("Compliance", "json"), ("privacy", "txt"), ("terms", "txt")] {
+        for (name, ext) in [("Compliance", "json")] + LegalDocument.allCases.map({ ($0.rawValue, "txt") }) {
             if let url = Bundle.main.url(forResource: name, withExtension: ext), let contents = try? Data(contentsOf: url) { data.append(contents) }
         }
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()

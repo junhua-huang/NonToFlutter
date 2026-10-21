@@ -50,7 +50,7 @@ def configs(name, settings):
 
 sources = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'Nonto').rglob('*.swift'))
 tests = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'Tests').rglob('*.swift'))
-resources = ['Nonto/Resources/Assets.xcassets', 'Nonto/Resources/PrivacyInfo.xcprivacy', 'Nonto/Resources/privacy.txt', 'Nonto/Resources/terms.txt', 'Nonto/Resources/Compliance.json']
+resources = ['Nonto/Resources/Assets.xcassets', 'Nonto/Resources/PrivacyInfo.xcprivacy', 'Nonto/Resources/privacy.txt', 'Nonto/Resources/terms.txt', 'Nonto/Resources/community.txt', 'Nonto/Resources/Compliance.json']
 source_refs = [ref(p, 'sourcecode.swift') for p in sources]
 test_refs = [ref(p, 'sourcecode.swift') for p in tests]
 resource_refs = [ref(p, 'folder.assetcatalog' if p.endswith('.xcassets') else ('text.plist.xml' if p.endswith('.xcprivacy') else 'text')) for p in resources]
@@ -58,7 +58,7 @@ app_product = add('product:app', '{isa = PBXFileReference; explicitFileType = wr
 test_product = add('product:tests', '{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NontoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; }')
 main_group = group('Nonto', [group('Application', source_refs), group('Resources', resource_refs + [ref('Nonto/Resources/Info.plist', 'text.plist.xml'), ref('Nonto/Resources/Nonto.entitlements', 'text.plist.xml')]), group('Tests', test_refs), group('Products', [app_product, test_product])])
 archive_script = 'if [ "$ACTION" = "install" ]; then\n  if [ "$NONTO_DISTRIBUTION_CHANNEL" = "testflight-internal" ]; then\n    echo "Internal TestFlight only: outstanding release disclosures remain unresolved."\n    /usr/bin/env python3 "$SRCROOT/scripts/check_compliance.py"\n  else\n    /usr/bin/env python3 "$SRCROOT/scripts/check_compliance.py" --release\n  fi\nfi'
-archive_inputs = ['$(SRCROOT)/scripts/check_compliance.py'] + ['$(SRCROOT)/Nonto/Resources/' + name for name in ['Compliance.json', 'PrivacyInfo.xcprivacy', 'privacy.txt', 'terms.txt']]
+archive_inputs = ['$(SRCROOT)/scripts/check_compliance.py'] + ['$(SRCROOT)/Nonto/Resources/' + name for name in ['Compliance.json', 'PrivacyInfo.xcprivacy', 'privacy.txt', 'terms.txt', 'community.txt']]
 archive_check = add('phase:app:compliance', '{isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = ' + array([quote(p) for p in archive_inputs]) + '; outputPaths = (); name = "Check release disclosures"; runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = ' + quote(archive_script) + '; alwaysOutOfDate = 1; }')
 app_phases = [archive_check, phase('app:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(sources, source_refs)]), phase('app:frameworks', 'PBXFrameworksBuildPhase', []), phase('app:resources', 'PBXResourcesBuildPhase', [build(p, r) for p, r in zip(resources, resource_refs)])]
 test_phases = [phase('tests:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(tests, test_refs)]), phase('tests:frameworks', 'PBXFrameworksBuildPhase', []), phase('tests:resources', 'PBXResourcesBuildPhase', [])]

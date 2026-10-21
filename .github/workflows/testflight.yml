@@ -67,6 +67,7 @@ jobs:
       - name: Validate release scripts and generated project
         run: |
           python3 -m unittest discover -s ios/scripts/tests -v
+          python3 ios/scripts/export_legal_site.py --check
           python3 ios/scripts/generate_project.py
           git diff --exit-code -- ios/Nonto.xcodeproj
       - name: Verify unsigned internal archive

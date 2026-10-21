@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 RESOURCES = Path(__file__).resolve().parents[1] / 'Nonto' / 'Resources'
 REQUIRED_FIELDS = (
-    'operatorName', 'contactEmail', 'privacyPolicyURL', 'termsURL', 'appFilingNumber',
+    'operatorName', 'contactEmail', 'privacyPolicyURL', 'termsURL', 'communityRulesURL', 'appFilingNumber',
     'storageSummary', 'retentionSummary', 'processorSummary', 'minorProtectionSummary',
     'realNameVerificationSummary', 'rightsResponseSummary',
 )
@@ -19,6 +19,8 @@ EVIDENCE = (
     'storageAndProcessorsReviewed', 'appStorePrivacyLabelsReviewed',
 )
 PLACEHOLDER = re.compile(r'facebook[-_]?clone|example\.(com|org|net)|\.example\b|待补|待确认|未配置|TODO', re.I)
+DOCUMENTS = ('privacy', 'terms', 'community')
+APP_FILING = re.compile(r'[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼]ICP备[0-9]{6,}号-[0-9]+A')
 REQUIRED_TYPES = {
     'NSPrivacyCollectedDataTypeEmailAddress', 'NSPrivacyCollectedDataTypeName',
     'NSPrivacyCollectedDataTypeUserID', 'NSPrivacyCollectedDataTypePhotosorVideos',
@@ -34,14 +36,15 @@ def inspect(resources=RESOURCES):
     manifest = plistlib.loads((resources / 'PrivacyInfo.xcprivacy').read_bytes())
     if not config.get('policyVersion'):
         errors.append('policyVersion is missing')
-    for name in ('privacy', 'terms'):
+    for name in DOCUMENTS:
         text = (resources / (name + '.txt')).read_text()
         if PLACEHOLDER.search(text):
             errors.append(name + ' contains a stale sample contact or placeholder promise')
         if '{{contactEmail}}' not in text:
             errors.append(name + ' must include the contact email')
-        # Development UI may omit identity at the owner's request. It must not
-        # silently become release-ready just because internal metadata is filled.
+        if '{{policyVersion}}' not in text:
+            errors.append(name + ' must include the policy version')
+        # Filling internal metadata alone must never bypass public disclosure.
         if '{{operatorName}}' not in text:
             blockers.append('Public operator identity disclosure is missing: ' + name)
         for key in re.findall(r'\{\{(\w+)\}\}', text):
@@ -61,7 +64,9 @@ def inspect(resources=RESOURCES):
     email = config.get('contactEmail', '')
     if not re.fullmatch(r'[^\s@?]+@[^\s@?]+\.[^\s@?]+', email):
         blockers.append('A working contact email is required')
-    for key in ('privacyPolicyURL', 'termsURL'):
+    if not APP_FILING.fullmatch(config.get('appFilingNumber', '').strip()):
+        blockers.append('A verified APP filing number ending in -<number>A is required; a website ICP number is not an APP filing')
+    for key in ('privacyPolicyURL', 'termsURL', 'communityRulesURL'):
         url = urlparse(config.get(key, ''))
         if url.scheme != 'https' or not url.hostname or url.username or url.password:
             blockers.append('A public HTTPS URL is required: ' + key)

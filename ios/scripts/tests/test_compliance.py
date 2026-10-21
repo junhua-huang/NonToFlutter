@@ -20,7 +20,7 @@ class ComplianceChecks(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.resources = self.root / 'Nonto' / 'Resources'
         self.resources.mkdir(parents=True)
-        for name in ['Compliance.json', 'privacy.txt', 'terms.txt', 'PrivacyInfo.xcprivacy']:
+        for name in ['Compliance.json', 'privacy.txt', 'terms.txt', 'community.txt', 'PrivacyInfo.xcprivacy']:
             shutil.copy(checker.RESOURCES / name, self.resources / name)
         path = self.resources / 'Compliance.json'
         data = json.loads(path.read_text())
@@ -46,19 +46,30 @@ class ComplianceChecks(unittest.TestCase):
         data = json.loads(path.read_text())
         for key in checker.REQUIRED_FIELDS:
             data[key] = '运营方核实的处理规则'
-        data.update(contactEmail='privacy@operator.cn', privacyPolicyURL='https://operator.cn/privacy', termsURL='https://operator.cn/terms', releaseReviewed=True)
+        data.update(contactEmail='privacy@operator.cn', privacyPolicyURL='https://operator.cn/privacy', termsURL='https://operator.cn/terms', communityRulesURL='https://operator.cn/community', appFilingNumber='桂ICP备2026012531号-1A', releaseReviewed=True)
         path.write_text(json.dumps(data))
         self.assertTrue(checker.inspect(self.resources)[1])
         data['verification'] = {key: True for key in checker.EVIDENCE}
         path.write_text(json.dumps(data))
         errors, blockers = checker.inspect(self.resources)
         self.assertEqual(errors, [])
-        self.assertEqual(len(blockers), 2)
-        self.assertTrue(all('Public operator identity disclosure' in item for item in blockers))
-        for name in ('privacy', 'terms'):
-            policy = self.resources / (name + '.txt')
-            policy.write_text(policy.read_text() + '\n运营者：{{operatorName}}\n')
         self.assertEqual(checker.inspect(self.resources), ([], []))
+        for name in checker.DOCUMENTS:
+            path = self.resources / (name + '.txt')
+            original = path.read_text()
+            path.write_text(original.replace('{{operatorName}}', '南图'))
+            self.assertIn('Public operator identity disclosure is missing: ' + name, checker.inspect(self.resources)[1])
+            path.write_text(original)
+    def test_website_filing_is_not_accepted_as_an_app_filing(self):
+        path = self.resources / 'Compliance.json'
+        data = json.loads(path.read_text())
+        for value in ('桂ICP备2026012531号', '桂ICP备2026012531号-1', 'not-an-app-filing'):
+            data['appFilingNumber'] = value
+            path.write_text(json.dumps(data))
+            self.assertTrue(any('website ICP number' in item for item in checker.inspect(self.resources)[1]))
+        data['appFilingNumber'] = '桂ICP备2026012531号-1A'
+        path.write_text(json.dumps(data))
+        self.assertFalse(any('website ICP number' in item for item in checker.inspect(self.resources)[1]))
     def test_example_contacts_remain_blocked(self):
         path = self.resources / 'Compliance.json'
         data = json.loads(path.read_text()); data['contactEmail'] = 'support@facebook-clone.app'

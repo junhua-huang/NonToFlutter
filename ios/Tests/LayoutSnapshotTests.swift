@@ -23,6 +23,30 @@ final class LayoutSnapshotTests: XCTestCase {
         super.tearDown()
     }
 
+    func testLegalScreensRemainOfflineAndReadableBeforeConsent() async throws {
+        let suite = "nonto-legal-layout-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let consent = PrivacyConsent(defaults: defaults, revision: "legal-layout")
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        var requests = 0
+        StubProtocol.handler = { _ in requests += 1; return (200, .null) }
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        let session = AppSession(api: api, consent: consent); session.restoring = false
+        try await capture(PrivacyWelcomeView().environmentObject(consent), session: session,
+                          name: "legal-welcome", width: 390, expectsScrollChrome: false)
+        try await capture(NavigationStack { PolicyView(kind: "privacy") }, session: session,
+                          name: "legal-privacy", width: 390, expectsScrollChrome: false)
+        try await capture(NavigationStack { PolicyView(kind: "community") }, session: session,
+                          name: "legal-community-dark", width: 390, dark: true, expectsScrollChrome: false)
+        try await capture(NavigationStack { ContactAndComplaintsView() }, session: session,
+                          name: "legal-contact-small-large-text", width: 320, largeText: true, expectsScrollChrome: false)
+        try await capture(AppNavigationStack { SettingsView() }, session: session,
+                          name: "legal-settings", width: 390, expectsScrollChrome: false, scrollOffset: 450)
+        XCTAssertFalse(consent.accepted)
+        XCTAssertEqual(requests, 0, "Reading rules and preparing a request must not start account or reporting requests")
+    }
+
     func testTimelineAndProfileAtPhoneAndAccessibilitySizes() async throws {
         let user: JSON = .object(["id": .id(userID), "username": .text("nonto"),
                                   "display_name": .text("南图"),

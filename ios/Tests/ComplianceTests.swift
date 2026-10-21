@@ -84,6 +84,30 @@ final class ComplianceTests: XCTestCase {
         XCTAssertEqual(ComplianceProfile.revision.count, 64)
         XCTAssertEqual(profile.document("../../private"), "暂时无法读取说明，请稍后重试。")
     }
+    func testCommunityRulesAndContactHaveDistinctValidOfflineRoutes() {
+        let profile = ComplianceProfile.current
+        XCTAssertTrue(profile.document("community").contains("南图社区规范"))
+        XCTAssertTrue(profile.document("community").contains("申诉"))
+        for document in LegalDocument.allCases {
+            XCTAssertTrue(AppRoute.policy(document.rawValue).isValid)
+            XCTAssertFalse(profile.document(document.rawValue).contains("{{"))
+        }
+        XCTAssertFalse(AppRoute.policy("unknown").isValid)
+        XCTAssertFalse(AppRoute.policy("../privacy").isValid)
+        XCTAssertNotEqual(AppRoute.contact, .policy("community"))
+    }
+    func testRequestEmailEncodesOnlySubjectAndBodyWithoutAddingRecipients() throws {
+        let profile = ComplianceProfile(values: ["contactEmail": .text("nonto@foxmail.com")])
+        let detail = "  账号：小明\n正文含 &bcc=other@test.invalid 和 #话题 🌅  "
+        let url = try XCTUnwrap(profile.requestMailURL(kind: .rights, detail: detail))
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.scheme, "mailto")
+        XCTAssertEqual(components.path, "nonto@foxmail.com")
+        XCTAssertEqual(components.queryItems?.map(\.name), ["subject", "body"])
+        XCTAssertEqual(components.queryItems?.last?.value, SupportRequestKind.rights.message(detail: detail))
+        XCTAssertFalse(components.queryItems?.contains { $0.name == "bcc" } ?? true)
+        XCTAssertNil(ComplianceProfile(values: ["contactEmail": .text("a@b.test\r\nBcc:other@test.invalid")]).requestMailURL(kind: .report, detail: "说明"))
+    }
     func testPolicySectionsKeepPreambleAndDoNotSplitInlineReferences() {
         let sections = PolicySection.parse("南图隐私政策\n版本：2\n\n一、范围\n\n内容提及一、但不是标题\n还有下一行\n\n十一、更新\n\n更新内容\n\n")
         XCTAssertEqual(sections.map(\.title), ["阅读提示", "一、范围", "十一、更新"])

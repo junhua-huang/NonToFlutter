@@ -24,6 +24,7 @@ jobs:
       - name: Check generated project
         run: |
           python3 ios/scripts/check_compliance.py
+          python3 ios/scripts/export_legal_site.py --check
           python3 -m unittest discover -s ios/scripts/tests
           python3 ios/scripts/generate_project.py
           git diff --exit-code -- ios/Nonto.xcodeproj

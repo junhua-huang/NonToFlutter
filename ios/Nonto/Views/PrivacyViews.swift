@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PrivacyWelcomeView: View {
     @EnvironmentObject private var consent: PrivacyConsent
@@ -17,7 +18,8 @@ struct PrivacyWelcomeView: View {
                     Text("账号服务会处理邮箱、账号资料、你主动发送的内容和服务安全信息。照片与视频仅在你选择时读取；通知在你开启时申请，不影响文字功能。")
                     NavigationLink("阅读隐私政策") { PolicyView(kind: "privacy") }
                     NavigationLink("阅读服务条款") { PolicyView(kind: "terms") }
-                    if let contact = profile.contactURL { Link("联系与投诉", destination: contact) }
+                    NavigationLink("阅读社区规范") { PolicyView(kind: "community") }
+                    NavigationLink("联系与投诉") { ContactAndComplaintsView() }
                     if declined {
                         Text("当前保留离线说明页面。你可以稍后重新决定是否继续。不会因此注销现有账号。")
                             .font(.subheadline).foregroundStyle(.secondary)
@@ -44,22 +46,34 @@ struct PersonalInformationView: View {
     var body: some View {
         Form {
             Section("个人信息与使用目的") {
-                LabeledContent("账号", value: "邮箱、用户名、资料")
-                LabeledContent("社交", value: "动态、评论、消息、搜索与互动")
-                LabeledContent("可选功能", value: "选中的媒体、认证材料、推送标识")
-                Text("只提供完成当前功能需要的信息。认证材料请勿包含无关的身份证、银行卡或他人敏感信息。")
-                    .font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("账号与资料") {
+                    Text("邮箱、用户名、你填写的昵称、简介和头像，用于登录、安全验证和主页展示。")
+                    Text("可在编辑资料和隐私设置中管理；邮箱是否公开由你选择。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                DisclosureGroup("内容、聊天与互动") {
+                    Text("动态、评论、私信、社群消息、搜索词及互动记录，用于发布、通信、搜索、推荐和未读同步。")
+                    Text("私信由服务器处理，当前不提供端到端加密。请勿发送密码、验证码或无关证件。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                DisclosureGroup("照片、视频与通知") {
+                    Text("仅处理你选中的媒体；系统推送使用 Apple 推送令牌和随机安装标识。保存图片时才申请相册添加权限。")
+                    Text("拒绝媒体或通知权限不影响不相关功能。可在系统设置和消息提醒页管理。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                DisclosureGroup("安全、举报与支持") {
+                    Text("相关账号、内容编号、必要访问记录和你提交的说明，用于账号安全、问题排查、举报与权利请求处理。")
+                    Text("角色认证材料请遮盖无关的身份证、银行卡、住址及他人敏感信息。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
             Section("查看和管理") {
                 RouteButton(.policy("privacy")) { Text("隐私政策与信息处理规则") }
                 RouteButton(.privacySettings) { Text("隐私与资料可见范围") }
                 RouteButton(.notificationSettings) { Text("通知权限与提醒") }
                 RouteButton(.reportHistory) { Text("举报处理记录") }
-                if let contact = profile.contactURL { Link("申请查阅、复制、更正或删除信息", destination: contact) }
-                else { Text("权利申请联系方式尚未配置，当前仅供开发测试。").font(.caption).foregroundStyle(.secondary) }
-                if let filing = profile.values["appFilingNumber"], !filing.string.isEmpty {
-                    Link(filing.string, destination: URL(string: "https://beian.miit.gov.cn/")!)
-                }
+                RouteButton(.contact) { Text("查阅、复制、更正或删除信息申请") }
+                RouteButton(.policy("community")) { Text("社区规范与申诉方式") }
             }
             Section {
                 Button("撤回同意并退出登录", role: .destructive) { confirmWithdrawal = true }.disabled(busy)
@@ -79,6 +93,77 @@ struct PersonalInformationView: View {
                     }
                 }
             }
+    }
+}
+
+struct ContactAndComplaintsView: View {
+    @State private var kind = SupportRequestKind.support
+    @State private var detail = ""
+    @State private var copiedEmail = false
+    private let profile = ComplianceProfile.current
+    var body: some View {
+        Form {
+            Section("联系南图") {
+                Text(profile.value("contactEmail")).textSelection(.enabled)
+                Text("使用反馈、举报投诉、个人信息申请和处置申诉，均可通过此邮箱联系。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("准备请求") {
+                Picker("请求类型", selection: $kind) {
+                    ForEach(SupportRequestKind.allCases) { item in Text(item.title).tag(item) }
+                }
+                Text(kind.guidance).font(.subheadline).foregroundStyle(.secondary)
+                TextEditor(text: $detail).frame(minHeight: 140)
+                    .accessibilityLabel("问题描述或申请内容").accessibilityIdentifier("legal.contact.detail")
+                Text("本页只在本机整理文字，不会自动提交，也不会自动附带账号、聊天记录或设备资料。请勿填写密码、验证码或无关敏感信息。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("发送方式") {
+                if let url = profile.requestMailURL(kind: kind, detail: detail) {
+                    Link(destination: url) { Label("打开邮件并检查后发送", systemImage: "envelope") }
+                }
+                if profile.contactURL != nil {
+                    Button {
+                        UIPasteboard.general.string = profile.value("contactEmail"); copiedEmail = true
+                    } label: { Label("复制联系邮箱", systemImage: "doc.on.doc") }
+                }
+                ShareLink(item: kind.message(detail: detail)) { Label("分享或保存请求文字", systemImage: "square.and.arrow.up") }
+                Text("没有配置系统邮件时，可复制邮箱到自己的邮件应用发送。打开邮件或分享不代表请求已经送达；请核对收件地址并完成发送。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("提交前了解") {
+                Text("处理账号信息请求时，可能需要核验与你请求相称的身份信息。举报不代表投诉成立；如对结果有异议，可说明原编号和复核理由。")
+                NavigationLink("查看个人信息处理规则") { PolicyView(kind: "privacy") }
+                NavigationLink("查看社区规范") { PolicyView(kind: "community") }
+            }
+        }.navigationTitle("联系与投诉").navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
+            .alert("联系邮箱已复制", isPresented: $copiedEmail) { Button("好", role: .cancel) {} }
+    }
+}
+
+/// The website's public disclosure is never presented as an APP filing.
+struct FilingDisclosureSection: View {
+    private let profile = ComplianceProfile.current
+    var body: some View {
+        Section {
+            if !profile.value("appFilingNumber").isEmpty {
+                Link("APP 备案：\(profile.value("appFilingNumber"))", destination: URL(string: "https://beian.miit.gov.cn/")!)
+            } else {
+                LabeledContent("APP 备案", value: "尚未核实")
+            }
+            let website = profile.values["websiteFiling"] ?? .null
+            if !website["number"].string.isEmpty {
+                Link(destination: URL(string: "https://beian.miit.gov.cn/")!) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("官网公示的网站备案")
+                        Text(website["number"].string).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: { Text("备案信息") } footer: {
+            Text("网站公示号码尚未完成官方核验，不代表南图 APP 已完成备案。可前往工信部系统查询。")
+        }
     }
 }
 

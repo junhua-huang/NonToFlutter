@@ -1,10 +1,11 @@
 {
-  "policyVersion": "2026-10-18.2",
+  "policyVersion": "2026-10-22.1",
   "operatorName": "",
   "contactEmail": "nonto@foxmail.com",
   "contactAddress": "",
   "privacyPolicyURL": "",
   "termsURL": "",
+  "communityRulesURL": "",
   "appFilingNumber": "",
   "storageSummary": "",
   "retentionSummary": "",
