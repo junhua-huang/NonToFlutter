@@ -432,4 +432,53 @@ final class ChatExperienceTests: XCTestCase {
         await session.refreshCounts()
         XCTAssertEqual(session.messageUnread, 7); XCTAssertEqual(session.noticeUnread, 2)
     }
+    func testInterruptedSendIsNotAutomaticallyRepeatedWhenReturningToTheRoom() async throws {
+        var sends = 0
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                sends += 1; Thread.sleep(forTimeInterval: 0.1)
+                return (200, .object(["data": self.message(201, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate(); store.enqueue(content: "可能已送达")
+        try await waitUntil { sends == 1 }
+        store.suspend(); await store.activate()
+        XCTAssertEqual(sends, 1); XCTAssertEqual(store.pending.first?.deliveryUncertain, true)
+        XCTAssertNotNil(store.pending.first?.failure); XCTAssertFalse(store.sending); store.suspend()
+    }
+    func testRestoredUncertainAndLegacyMessagesWaitForInspection() async throws {
+        var sends = 0
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") { sends += 1 }
+            return (200, .object(["messages": .array([])]))
+        }
+        let legacy = Data("[{\"id\":\"old\",\"content\":\"hello\",\"kind\":\"text\",\"failure\":\"未收到发送确认，请重试\"}]".utf8)
+        defaults.set(legacy, forKey: "nonto.native.outbox.\(userID).chat.single.55")
+        await store.activate()
+        XCTAssertEqual(sends, 0); XCTAssertEqual(store.pending.first?.deliveryUncertain, true)
+        store.suspend()
+        let interrupted = PendingMessage(content: "interrupted", deliveryUncertain: true)
+        defaults.set(try JSONEncoder().encode([interrupted]), forKey: "nonto.native.outbox.\(userID).chat.single.55")
+        let restored = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") { sends += 1 }
+            return (200, .object(["messages": .array([])]))
+        }
+        await restored.activate()
+        XCTAssertEqual(sends, 0); XCTAssertNotNil(restored.pending.first?.failure)
+        XCTAssertEqual(restored.pending.first?.deliveryUncertain, true); restored.suspend()
+    }
+    func testRestoredNeverAttemptedMessageStillSendsNormally() async throws {
+        var sends = 0
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                sends += 1; return (200, .object(["data": self.message(201, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        let unsent = PendingMessage(content: "尚未发送")
+        defaults.set(try JSONEncoder().encode([unsent]), forKey: "nonto.native.outbox.\(userID).chat.single.55")
+        await store.activate(); try await waitUntil { !store.sending }
+        XCTAssertEqual(sends, 1); XCTAssertTrue(store.pending.isEmpty); store.suspend()
+    }
 }

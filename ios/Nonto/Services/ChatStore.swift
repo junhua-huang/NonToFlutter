@@ -8,7 +8,7 @@ struct PendingMessage: Codable, Identifiable {
     var media: String? = nil
     var quoteID: Int? = nil
     var failure: String? = nil
-    var deliveryUncertain: Bool? = nil
+    var deliveryUncertain: Bool? = false
 }
 
 /// Owns one account's durable outbox and cancels room work when it is no longer visible.
@@ -65,7 +65,17 @@ final class ChatStore {
         if !restored {
             restored = true
             if let cache = LocalCache.read(userID: accountID, key: cacheKey) { setMessages(Records.messages([], cache.array.map(ChatMessage.init))) }
-            if let data = defaults.data(forKey: outboxKey), let saved = try? JSONDecoder().decode([PendingMessage].self, from: data) { pending = saved }
+            if let data = defaults.data(forKey: outboxKey), let saved = try? JSONDecoder().decode([PendingMessage].self, from: data) {
+                pending = saved
+                for index in pending.indices {
+                    // Legacy outboxes did not distinguish unsent items from interrupted HTTP writes.
+                    if pending[index].deliveryUncertain == true || (pending[index].deliveryUncertain == nil && (index == 0 || pending[index].failure != nil)) {
+                        pending[index].deliveryUncertain = true
+                        if pending[index].failure == nil { pending[index].failure = "上次发送未收到确认，请先检查最新消息" }
+                    }
+                }
+                persistPending()
+            }
             draft = defaults.string(forKey: draftKey) ?? ""
             jumpToLatest()
         }
@@ -75,6 +85,11 @@ final class ChatStore {
     }
     func suspend() {
         active = false
+        if let id = sendingID, let index = pending.firstIndex(where: { $0.id == id }) {
+            pending[index].deliveryUncertain = true
+            pending[index].failure = "发送已中断，结果待确认，请先检查最新消息"
+            persistPending()
+        }
         lifecycleID = UUID()
         loadID = UUID(); loadTask?.cancel(); loadTask = nil; loading = false; loadingOlder = false
         sendID = UUID(); sendTask?.cancel(); sendTask = nil; sending = false; sendingID = nil
@@ -259,7 +274,7 @@ final class ChatStore {
     }
     func retry(_ id: String) {
         guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
-        pending[index].failure = nil; pending[index].deliveryUncertain = nil; persistPending(); flush()
+        pending[index].failure = nil; pending[index].deliveryUncertain = false; persistPending(); flush()
     }
     func remove(_ id: String) {
         guard id != sendingID else { return }
@@ -275,6 +290,10 @@ final class ChatStore {
                   let item = pending.first {
                 guard item.failure == nil else { break }
                 sendingID = item.id
+                // Persist before the request: termination after the server writes must not cause an automatic resend.
+                if let index = pending.firstIndex(where: { $0.id == item.id }) {
+                    pending[index].deliveryUncertain = true; persistPending()
+                }
                 do {
                     var body: [String: JSON] = ["content": .text(item.content), "message_type": .text(item.kind)]
                     body[communityID == nil ? "request_id" : "client_msg_id"] = .text(item.id)
