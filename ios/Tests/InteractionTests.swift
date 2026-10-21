@@ -32,6 +32,15 @@ import SwiftUI
             XCTAssertEqual(ComposerReferenceInsertion.insert("生活", kind: .topic, into: text, selection: range).text, "🌅a #生活 ")
         }
     }
+    func testComposerSelectionKeepsWholeJoinedEmojiAndCombiningCharacters() {
+        for text in ["👨‍👩‍👧‍👦", "🇨🇳", "e\u{301}", "👍🏽"] {
+            for offset in 1..<text.utf16.count {
+                let middle = NSRange(location: offset, length: 0)
+                XCTAssertEqual(ComposerReferenceInsertion.safeSelection(middle, in: text), NSRange(location: text.utf16.count, length: 0))
+                XCTAssertEqual(ComposerReferenceInsertion.insert("小明", kind: .mention, into: text, selection: middle).text, text + " @小明 ")
+            }
+        }
+    }
     func testComposerCommitsOnlyAfterDismissAndDiscardsAChangedBuffer() {
         let editor = ComposerEditor(); editor.replaceText("原文")
         editor.beginReference(.mention); editor.stageReference("yuchen", kind: .mention)

@@ -9,18 +9,36 @@ enum ComposerReferenceKind: String, Identifiable {
 
 enum ComposerReferenceInsertion {
     struct Result { let text: String; let caretUTF16: Int }
-    static func safeSelection(_ selection: NSRange?, in text: String) -> NSRange {
+    private static func characterRange(_ selection: NSRange?, in text: String) -> Range<String.Index>? {
         let count = text.utf16.count
         guard let selection, selection.location >= 0, selection.length >= 0,
-              selection.location <= count, selection.length <= count - selection.location,
-              Range(selection, in: text) != nil else { return NSRange(location: count, length: 0) }
+              selection.location <= count, selection.length <= count - selection.location else { return nil }
+        let end = selection.location + selection.length
+        var offset = 0, index = text.startIndex
+        var lower: String.Index?, upper: String.Index?
+        // Foundation's Range(NSRange, in:) can accept the middle of a surrogate pair.
+        // Build endpoints from this buffer's actual Character indices instead.
+        while true {
+            if offset == selection.location { lower = index }
+            if offset == end { upper = index }
+            if offset >= end || index == text.endIndex { break }
+            offset += String(text[index]).utf16.count
+            index = text.index(after: index)
+        }
+        guard let lower, let upper else { return nil }
+        return lower..<upper
+    }
+    static func safeSelection(_ selection: NSRange?, in text: String) -> NSRange {
+        guard let selection, characterRange(selection, in: text) != nil else {
+            return NSRange(location: text.utf16.count, length: 0)
+        }
         return selection
     }
     /// Convert bounded offsets against this exact buffer; never keep String.Index across edits.
     static func insert(_ value: String, kind: ComposerReferenceKind, into text: String, selection: NSRange?) -> Result {
         let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return Result(text: text, caretUTF16: text.utf16.count) }
-        var range = Range(safeSelection(selection, in: text), in: text) ?? text.endIndex..<text.endIndex
+        var range = characterRange(selection, in: text) ?? text.endIndex..<text.endIndex
         if range.lowerBound > text.startIndex {
             let before = text.index(before: range.lowerBound)
             if String(text[before]) == kind.marker { range = before..<range.upperBound }
