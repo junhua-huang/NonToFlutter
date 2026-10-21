@@ -133,8 +133,8 @@ struct ContactAndComplaintsView: View {
             }
             Section("提交前了解") {
                 Text("处理账号信息请求时，可能需要核验与你请求相称的身份信息。举报不代表投诉成立；如对结果有异议，可说明原编号和复核理由。")
-                NavigationLink("查看个人信息处理规则") { PolicyView(kind: "privacy") }
-                NavigationLink("查看社区规范") { PolicyView(kind: "community") }
+                NavigationLink("查看个人信息处理规则") { AnyView(PolicyView(kind: "privacy")) }
+                NavigationLink("查看社区规范") { AnyView(PolicyView(kind: "community")) }
             }
         }.navigationTitle("联系与投诉").navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)

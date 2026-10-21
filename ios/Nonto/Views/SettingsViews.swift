@@ -262,9 +262,9 @@ struct PolicyView: View {
                     }
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(LegalDocument.allCases.filter { $0.rawValue != kind }) { related in
-                            NavigationLink(related.title) { PolicyView(kind: related.rawValue) }
+                            NavigationLink(related.title) { AnyView(PolicyView(kind: related.rawValue)) }
                         }
-                        NavigationLink("联系与投诉") { ContactAndComplaintsView() }
+                        NavigationLink("联系与投诉") { AnyView(ContactAndComplaintsView()) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }.frame(maxWidth: 700, alignment: .leading).padding(24).frame(maxWidth: .infinity)
             }

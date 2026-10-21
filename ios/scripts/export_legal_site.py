@@ -73,7 +73,7 @@ def pages(resources=check_compliance.RESOURCES):
     filing_text = ('APP 备案：' + html.escape(filing)) if filing else 'APP 备案尚未核实。网站公示号码不代表 APP 已完成备案。'
     result['index.html'] = page('服务与隐私', '<p>了解南图的信息处理、使用规则、举报和申诉方式。</p>' + cards +
         '<section class="card"><h2>联系与投诉</h2><p>请按使用反馈、举报投诉、个人信息权利申请或处置申诉说明来意，提供相关账号或内容编号及必要依据。请只提供与请求有关的信息。</p>' +
-        '<p>运营者：' + html.escape(str(config.get('operatorName', '')).strip() or MISSING) + '</p><p>' + filing_text +
+        '<p>' + filing_text +
         '</p><a href="https://beian.miit.gov.cn/">前往工信部备案查询系统</a></section>')
     result['manifest.json'] = json.dumps({'policyVersion': config['policyVersion'], 'revision': revision,
         'releaseReady': not blockers, 'documents': list(TITLES)}, ensure_ascii=False, indent=2) + '\n'
