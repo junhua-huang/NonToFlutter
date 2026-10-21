@@ -430,8 +430,14 @@ struct PostComposer: View {
                         if reading { ProgressView("正在准备媒体…") }
                     }
                     HStack(spacing: 20) {
-                        Button { openReference(.mention) } label: { Label("艾特好友", systemImage: "at") }
-                        Button { openReference(.topic) } label: { Label("引用话题", systemImage: "number") }
+                        Button { openReference(.mention) } label: {
+                            Label("好友", systemImage: "at").lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                                .frame(minHeight: 44).contentShape(Rectangle())
+                        }.accessibilityLabel("艾特好友")
+                        Button { openReference(.topic) } label: {
+                            Label("话题", systemImage: "number").lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                                .frame(minHeight: 44).contentShape(Rectangle())
+                        }.accessibilityLabel("引用话题")
                     }.font(.subheadline).buttonStyle(.plain).foregroundStyle(Color.brand).frame(minHeight: 44)
                     Divider()
                     ViewThatFits(in: .horizontal) {

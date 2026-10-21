@@ -88,7 +88,7 @@ struct ComposerReferencePicker: View {
                                 if kind == .mention { AvatarView(url: item.avatar, name: item.title, size: 38) }
                                 else { Image(systemName: "number").font(.title2).foregroundStyle(Color.brand).frame(width: 38) }
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(kind == .topic ? "#\(item.title)" : item.title).foregroundStyle(.primary)
+                                    Text(item.title).foregroundStyle(.primary)
                                     if kind == .mention { Text("@\(item.value)").font(.caption).foregroundStyle(.secondary) }
                                 }
                                 Spacer(minLength: 0)
