@@ -37,11 +37,13 @@ enum ChatTimeline {
         let startsRun: Bool
         var id: Int { message.id }
     }
-    static func rows(_ messages: [ChatMessage], calendar: Calendar = .current) -> [Row] {
+    static func rows(_ messages: [ChatMessage], calendar: Calendar = .current, preparedDates: [Date?]? = nil) -> [Row] {
         var previous: ChatMessage?
         var previousDate: Date?
-        return messages.map { message in
-            let date = message.date
+        return messages.enumerated().map { index, message in
+            let date: Date?
+            if let preparedDates, preparedDates.indices.contains(index) { date = preparedDates[index] }
+            else { date = message.date }
             let separator: Bool
             if let date, let earlier = previousDate {
                 separator = !calendar.isDate(date, inSameDayAs: earlier) || date.timeIntervalSince(earlier) >= 300
@@ -145,9 +147,11 @@ struct ChatPresentation {
     var gallery: [String] = []
     var galleryIndexes: [Int: Int] = [:]
     var lastOutgoingID: Int?
-    init(messages: [ChatMessage] = [], userID: Int = 0, pending: [PendingMessage] = [], localIdentities: [Int: ChatMessageIdentity] = [:]) {
-        rows = ChatTimeline.rows(messages)
+    init(messages: [ChatMessage] = [], userID: Int = 0, pending: [PendingMessage] = [],
+         localIdentities: [Int: ChatMessageIdentity] = [:], preparedRows: [ChatTimeline.Row]? = nil) {
+        rows = preparedRows ?? ChatTimeline.rows(messages)
         var visible = messages
+        var dates = rows.map(\.date)
         var identities: [String] = []
         var used = Set<String>()
         for (index, message) in messages.enumerated() {
@@ -157,7 +161,7 @@ struct ChatPresentation {
             let id = used.insert(proposed).inserted ? proposed : "server:\(message.id)"
             identities.append(id)
             if let date = local?.createdAt {
-                visible[index] = ChatMessage(message.raw.merging(.object(["created_at": .number(date.timeIntervalSince1970)])))
+                dates[index] = date
             }
         }
         var pendingByID: [String: PendingMessage] = [:]
@@ -171,9 +175,12 @@ struct ChatPresentation {
             if let quoteID = item.quoteID, let quote = messages.first(where: { $0.id == quoteID }) {
                 raw["quote_preview"] = .text(ChatQuoteSummary.preview(quote))
             }
-            visible.append(ChatMessage(.object(raw))); identities.append(id); pendingByID[id] = item
+            visible.append(ChatMessage(.object(raw))); dates.append(item.createdAt)
+            identities.append(id); pendingByID[id] = item
         }
-        entries = zip(identities, ChatTimeline.rows(visible)).map { id, row in
+        // Sending-status changes reuse parsed server dates rather than parsing
+        // the entire loaded history again on the main actor.
+        entries = zip(identities, ChatTimeline.rows(visible, preparedDates: dates)).map { id, row in
             ChatTimelineEntry(id: id, row: row, pending: pendingByID[id])
         }
         let images = ChatMediaTimeline.images(messages)

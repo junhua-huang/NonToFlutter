@@ -328,11 +328,12 @@ final class ChatStore {
         }
         guard messages != value else { return false }
         messages = value
-        updatePresentation()
+        updatePresentation(serverMessagesChanged: true)
         return true
     }
-    private func updatePresentation() {
-        timeline = ChatPresentation(messages: messages, userID: accountID, pending: pending, localIdentities: localIdentities)
+    private func updatePresentation(serverMessagesChanged: Bool = false) {
+        timeline = ChatPresentation(messages: messages, userID: accountID, pending: pending,
+                                    localIdentities: localIdentities, preparedRows: serverMessagesChanged ? nil : timeline.rows)
     }
     private func persistMessages() { LocalCache.write(.array(Array(messages.suffix(500)).map(\.raw)), userID: accountID, key: cacheKey) }
     @discardableResult private func persistPending() -> Bool {
