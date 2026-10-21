@@ -1,0 +1,62 @@
+name: Composer iOS 27 Regression
+on:
+  push:
+    branches: [ios]
+    paths:
+      - 'ios/Nonto/Views/FeedViews.swift'
+      - 'ios/Nonto/Views/ComposerReferences.swift'
+      - 'ios/Nonto/Core/PostDraft.swift'
+      - 'ios/Tests/InteractionTests.swift'
+      - 'ios/Tests/LayoutSnapshotTests.swift'
+      - '.github/workflows/composer-ios27.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: composer-ios27-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  optimized-interactions:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Select Xcode 27 and iOS 27 simulator
+        run: |
+          python3 - <<'PY'
+          import glob, json, os, subprocess
+          candidates = sorted(glob.glob('/Applications/Xcode_27*.app'), reverse=True)
+          if candidates:
+              subprocess.run(['sudo', 'xcode-select', '-s', candidates[0] + '/Contents/Developer'], check=True)
+          version = subprocess.check_output(['xcodebuild', '-version'], text=True)
+          print(version)
+          if int(version.split()[1].split('.')[0]) < 27:
+              raise SystemExit('The composer regression requires Xcode 27.')
+          data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], text=True))
+          phones = [d for runtime, group in data['devices'].items() if 'iOS-27' in runtime
+                    for d in group if d['name'].startswith('iPhone') and d['isAvailable']]
+          if not phones:
+              raise SystemExit('No iOS 27 iPhone simulator is available.')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('SIMULATOR_UDID=' + phones[0]['udid'] + '\n')
+          PY
+      - name: Check deterministic project
+        run: |
+          python3 ios/scripts/generate_project.py
+          git diff --exit-code -- ios/Nonto.xcodeproj
+      - name: Run optimized app regression including native composer transitions
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Composer27 -resultBundlePath build/Composer27.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -parallel-testing-enabled NO test | tee composer-ios27.log
+      - name: Upload regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nonto-composer-ios27
+          path: |
+            composer-ios27.log
+            build/Composer27.xcresult
+          retention-days: 7
