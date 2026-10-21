@@ -258,6 +258,20 @@ final class LayoutSnapshotTests: XCTestCase {
                           session: session, name: "chat-attachment-preview", width: 390, expectsScrollChrome: false)
     }
 
+    func testUncertainChatDeliveryOnSmallPhonesAndLargeText() async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        StubProtocol.handler = { _ in (200, .object([:])) }
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        let session = AppSession(api: api); session.restoring = false
+        session.user = Person(.object(["id": .id(userID)]))
+        try await capture(AppNavigationStack {
+            ScrollView {
+                ChatPendingRow(item: PendingMessage(content: "弱网时发送的消息", failure: "未收到发送确认，请先检查最新消息", deliveryUncertain: true),
+                               sending: false, blocked: false, retry: {}, remove: {})
+            }.navigationTitle("发送状态")
+        }, session: session, name: "chat-uncertain-delivery-large-text", width: 320, largeText: true, expectsScrollChrome: false)
+    }
+
     func testReportedLoginSearchChatAndDetailLayouts() async throws {
         let author: JSON = .object(["id": .id(900041), "username": .text("涂装老陈"), "display_name": .text("涂装老陈")])
         let post = Post(.object(["id": .id(930001), "author": author,

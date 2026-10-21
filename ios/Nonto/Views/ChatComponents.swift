@@ -235,12 +235,12 @@ struct ChatPendingRow: View {
     private var deliveryStatus: some View {
         VStack(alignment: .trailing, spacing: 4) {
             if let failure = item.failure {
-                HStack(spacing: 12) {
-                    Label(item.deliveryUncertain == true ? "结果待确认" : "未发送", systemImage: "exclamationmark.circle.fill").foregroundStyle(.red)
-                    Button(item.deliveryUncertain == true ? "重新发送" : "重试") {
-                        if item.deliveryUncertain == true { confirmResend = true } else { retry() }
-                    }.frame(minHeight: 44)
-                    Button("移除", role: .destructive, action: remove).frame(minHeight: 44)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { failureLabel; retryButton; removeButton }.fixedSize()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        failureLabel
+                        HStack(spacing: 12) { retryButton; removeButton }
+                    }
                 }.buttonStyle(.plain)
                 if item.deliveryUncertain == true {
                     Button("检查最新消息", action: checkDelivery).frame(minHeight: 44).buttonStyle(.plain)
@@ -256,6 +256,16 @@ struct ChatPendingRow: View {
             }
         }.font(.caption)
     }
+    private var failureLabel: some View {
+        Label(item.deliveryUncertain == true ? "结果待确认" : "未发送", systemImage: "exclamationmark.circle.fill")
+            .foregroundStyle(item.deliveryUncertain == true ? Color.orange : Color.red)
+    }
+    private var retryButton: some View {
+        Button(item.deliveryUncertain == true ? "重新发送" : "重试") {
+            if item.deliveryUncertain == true { confirmResend = true } else { retry() }
+        }.frame(minHeight: 44)
+    }
+    private var removeButton: some View { Button("移除", role: .destructive, action: remove).frame(minHeight: 44) }
 }
 
 struct ChatAttachments: Identifiable {

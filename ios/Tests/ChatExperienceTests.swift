@@ -345,6 +345,16 @@ final class ChatExperienceTests: XCTestCase {
         XCTAssertTrue(store.messages.first!.recalled); XCTAssertTrue(store.timeline.gallery.isEmpty)
         XCTAssertEqual(store.messages.first?.content, ""); store.suspend()
     }
+    func testAnOlderHTTPRefreshCannotRestoreARecalledImage() {
+        let original = ChatMessage(message(1).merging(.object([
+            "message_type": .text("image"), "media_url": .text("https://example.test/recalled.jpg")
+        ])))
+        let recalled = ChatMessage(original.raw.merging(.object([
+            "is_recalled": .bool(true), "content": .text(""), "media_url": .null
+        ])))
+        let result = Records.messages([recalled], [original, ChatMessage(message(2))])
+        XCTAssertTrue(result.first!.recalled); XCTAssertTrue(ChatMediaTimeline.images(result).isEmpty)
+    }
     func testReadReceiptFailureDoesNotFailMessageLoadingOrClearUnreadHistory() async throws {
         var reads = 0, latest = 1
         let store = try room { request in

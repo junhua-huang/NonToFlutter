@@ -109,7 +109,11 @@ enum Records {
     }
     static func messages(_ old: [ChatMessage], _ new: [ChatMessage]) -> [ChatMessage] {
         var items = Dictionary(old.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
-        for m in new where m.id > 0 { items[m.id] = m }
+        for m in new where m.id > 0 {
+            // Recall is irreversible. An older HTTP response must not resurrect a socket recall.
+            if items[m.id]?.recalled == true && !m.recalled { continue }
+            items[m.id] = m
+        }
         // Parse each wire date once; parsing inside the comparator creates formatters O(n log n) times.
         var dated: [(message: ChatMessage, date: Date)] = items.values.map { message in
             (message: message, date: message.date ?? Date.distantPast)
