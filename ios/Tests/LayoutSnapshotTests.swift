@@ -88,7 +88,7 @@ final class LayoutSnapshotTests: XCTestCase {
         session.user = Person(.object(["id": .id(userID), "username": .text("nonto"), "display_name": .text("南图")]))
         var friendLoaded = false, topicsLoaded = false
         StubProtocol.handler = { request in
-            if request.url!.path.hasSuffix("/friends/") {
+            if request.url!.path.hasSuffix("/friends") {
                 friendLoaded = true
                 return (200, .object(["friends": .array([
                     .object(["id": .id(41), "username": .text("yuchen"), "display_name": .text("雨辰")]),

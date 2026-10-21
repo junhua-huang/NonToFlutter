@@ -33,7 +33,7 @@ import SwiftUI
     func testComposerFriendSearchUsesUsernamesAndFiltersWithoutRefetching() async throws {
         var requests = 0
         let api = try referenceAPI { request in
-            requests += 1; XCTAssertEqual(request.url?.path, "/api/friends/")
+            requests += 1; XCTAssertEqual(request.url?.path, "/api/friends")
             return (200, .object(["friends": .array([
                 .object(["id": .id(1), "username": .text("yuchen"), "display_name": .text("雨辰")]),
                 .object(["id": .id(2), "username": .text("xiaoming"), "display_name": .text("小明")])])]))
