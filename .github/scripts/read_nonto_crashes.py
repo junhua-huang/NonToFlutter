@@ -42,12 +42,13 @@ def main():
     apple = tf.Apple()
     apps = apple.request('GET', 'apps', query={'filter[bundleId]': tf.BUNDLE})['data']
     tf.require(len(apps) == 1, 'NonTo app was not uniquely identified.')
-    builds = apple.request('GET', 'builds', query={'filter[app]': apps[0]['id'], 'filter[version]': '21.1', 'limit': '10'})['data']
-    tf.require(len(builds) == 1, 'NonTo build 21.1 was not uniquely identified.')
+    builds = apple.request('GET', 'builds', query={'filter[app]': apps[0]['id'], 'sort': '-uploadedDate', 'limit': '1'})['data']
+    tf.require(len(builds) == 1, 'Latest NonTo build was not uniquely identified.')
+    version = builds[0]['attributes']['version']
     reports = apple.request('GET', f'apps/{apps[0]["id"]}/betaFeedbackCrashSubmissions', query={
         'filter[build]': builds[0]['id'], 'limit': '20', 'sort': '-createdDate',
         'fields[betaFeedbackCrashSubmissions]': 'createdDate,deviceModel,osVersion,appUptimeInMilliseconds,buildBundleId'})['data']
-    print('NonTo build 21.1 crash submissions:', len(reports), flush=True)
+    print('NonTo build', version, 'crash submissions:', len(reports), flush=True)
     if not reports:
         reports = apple.request('GET', f'apps/{apps[0]["id"]}/betaFeedbackCrashSubmissions', query={
             'limit': '20', 'sort': '-createdDate',
