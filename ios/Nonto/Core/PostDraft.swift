@@ -14,7 +14,7 @@ enum ComposerReferenceInsertion {
         let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return Result(text: text, caretUTF16: text.utf16.count) }
         var range = selection.flatMap { Range($0, in: text) } ?? text.endIndex..<text.endIndex
-        if range.isEmpty, range.lowerBound > text.startIndex {
+        if range.lowerBound > text.startIndex {
             let before = text.index(before: range.lowerBound)
             if String(text[before]) == kind.marker { range = before..<range.upperBound }
         }

@@ -98,7 +98,7 @@ struct ComposerReferencePicker: View {
                 }
                 if store.loading { ProgressView("正在加载…").frame(maxWidth: .infinity) }
                 if let error = store.error {
-                    ErrorBanner(text: error) { Task { await store.load(query) } }
+                    ErrorBanner(text: error) { Task { await store.load(query, nextPage: store.hasMore && !store.items.isEmpty) } }
                 } else if !store.loading && store.items.isEmpty {
                     ContentUnavailableView(query.isEmpty ? (kind == .mention ? "还没有好友" : "暂无热门话题") : "没有找到结果",
                         systemImage: kind == .mention ? "person.2" : "number",

@@ -475,6 +475,7 @@ struct PostComposer: View {
                 }
                 .sheet(item: $referencePicker, onDismiss: { bodyFocused = true }) { kind in
                     ComposerReferencePicker(api: session.api, kind: kind) { value in
+                        guard accountEpoch == session.api.generation, accountID == session.user?.id else { error = APIError.sessionChanged.localizedDescription; return }
                         let result = ComposerReferenceInsertion.insert(value, kind: kind, into: text, selection: insertionRange)
                         text = result.text
                         if let range = Range(NSRange(location: result.caretUTF16, length: 0), in: text) {

@@ -18,6 +18,9 @@ import SwiftUI
         let selected = original.range(of: "旧话题")!
         let result = ComposerReferenceInsertion.insert("生活", kind: .topic, into: original, selection: NSRange(selected, in: original))
         XCTAssertEqual(result.text, "聊聊 #生活 吧")
+        let partial = "你好 @旧名字"
+        XCTAssertEqual(ComposerReferenceInsertion.insert("小明", kind: .mention, into: partial,
+            selection: NSRange(partial.range(of: "旧名字")!, in: partial)).text, "你好 @小明 ")
         XCTAssertEqual(ComposerReferenceInsertion.insert("小明", kind: .mention, into: "你好 @", selection: nil).text, "你好 @小明 ")
         XCTAssertEqual(ComposerReferenceInsertion.insert("生活", kind: .topic, into: "🌅", selection: NSRange(location: 999, length: 1)).text, "🌅 #生活 ")
     }
