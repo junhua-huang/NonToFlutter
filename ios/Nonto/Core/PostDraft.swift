@@ -9,11 +9,18 @@ enum ComposerReferenceKind: String, Identifiable {
 
 enum ComposerReferenceInsertion {
     struct Result { let text: String; let caretUTF16: Int }
-    /// UTF-16 selections are converted before editing, so emoji and CJK text keep valid boundaries.
+    static func safeSelection(_ selection: NSRange?, in text: String) -> NSRange {
+        let count = text.utf16.count
+        guard let selection, selection.location >= 0, selection.length >= 0,
+              selection.location <= count, selection.length <= count - selection.location,
+              Range(selection, in: text) != nil else { return NSRange(location: count, length: 0) }
+        return selection
+    }
+    /// Convert bounded offsets against this exact buffer; never keep String.Index across edits.
     static func insert(_ value: String, kind: ComposerReferenceKind, into text: String, selection: NSRange?) -> Result {
         let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return Result(text: text, caretUTF16: text.utf16.count) }
-        var range = selection.flatMap { Range($0, in: text) } ?? text.endIndex..<text.endIndex
+        var range = Range(safeSelection(selection, in: text), in: text) ?? text.endIndex..<text.endIndex
         if range.lowerBound > text.startIndex {
             let before = text.index(before: range.lowerBound)
             if String(text[before]) == kind.marker { range = before..<range.upperBound }

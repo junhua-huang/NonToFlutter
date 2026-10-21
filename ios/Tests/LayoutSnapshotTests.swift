@@ -3,6 +3,14 @@ import SwiftUI
 import UIKit
 @testable import Nonto
 
+private struct ComposerCrashHarness: View {
+    let editor: ComposerEditor
+    @State private var presented = true
+    var body: some View {
+        Color.clear.sheet(isPresented: $presented) { PostComposer(editor: editor) }
+    }
+}
+
 /// Real SwiftUI screens with isolated fixture responses, for visual review in CI.
 @MainActor
 final class LayoutSnapshotTests: XCTestCase {
@@ -102,6 +110,77 @@ final class LayoutSnapshotTests: XCTestCase {
                           name: "composer-friends-picker", width: 390, expectsScrollChrome: false, ready: { friendLoaded })
         try await capture(ComposerReferencePicker(api: api, kind: .topic) { _ in }, session: session,
                           name: "composer-topics-picker-dark", width: 390, dark: true, expectsScrollChrome: false, ready: { topicsLoaded })
+    }
+
+    func testComposerOpensPicksAndReturnsWithTheKeyboardAcrossBothReferenceActions() async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        try api.setToken("composer-interaction")
+        let session = AppSession(api: api); session.restoring = false
+        session.user = Person(.object(["id": .id(userID), "username": .text("nonto")]))
+        StubProtocol.handler = { request in
+            if request.url!.path.hasSuffix("/friends") {
+                return (200, .object(["friends": .array([.object(["id": .id(41), "username": .text("yuchen")])])]))
+            }
+            return (200, .object(["topics": .array([.object(["id": .id(1), "name": .text("生活")])])]))
+        }
+        PostDraftStore().remove(userID: userID)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow), editor = ComposerEditor()
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = UIHostingController(rootView: ComposerCrashHarness(editor: editor)
+            .environmentObject(session).environment(\.scenePhase, .active).tint(.brand))
+        window.makeKeyAndVisible()
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true; window.rootViewController = nil; previous?.makeKey()
+            PostDraftStore().remove(userID: userID)
+        }
+        try await waitForComposer { editor.textView?.window != nil && self.presentedDepth(window.rootViewController) == 1 && window.rootViewController?.presentedViewController?.isBeingPresented == false }
+        let native = try XCTUnwrap(editor.textView)
+        XCTAssertTrue(native.becomeFirstResponder())
+        native.insertText("🌅 你好，世界")
+        native.selectedRange = NSRange(location: 6, length: 0)
+        let before = native.text ?? ""
+        let expected = ComposerReferenceInsertion.insert("yuchen", kind: .mention, into: before, selection: native.selectedRange)
+        // This is the same action used by the actual @ button, inside an already-presented composer sheet.
+        editor.beginReference(.mention)
+        try await waitForComposer { self.presentedDepth(window.rootViewController) >= 2 }
+        XCTAssertEqual(editor.text, before)
+        editor.stageReference("yuchen", kind: .mention); editor.referenceKind = nil
+        try await waitForComposer { !editor.hasReferenceSession && editor.text == expected.text && native.isFirstResponder }
+        XCTAssertEqual(native.text, expected.text)
+        XCTAssertEqual(native.selectedRange.location, expected.caretUTF16)
+
+        editor.beginReference(.topic)
+        try await waitForComposer { self.presentedDepth(window.rootViewController) >= 2 }
+        editor.referenceKind = nil // Cancel must keep the text and restore the editor.
+        try await waitForComposer { !editor.hasReferenceSession && native.isFirstResponder }
+        XCTAssertEqual(editor.text, expected.text)
+
+        native.selectAll(nil); native.deleteBackward()
+        try await waitForComposer { editor.text.isEmpty }
+        editor.beginReference(.topic)
+        try await waitForComposer { self.presentedDepth(window.rootViewController) >= 2 }
+        editor.stageReference("生活", kind: .topic); editor.referenceKind = nil
+        try await waitForComposer { !editor.hasReferenceSession && editor.text == "#生活 " && native.isFirstResponder }
+        XCTAssertEqual(native.text, "#生活 ")
+        XCTAssertEqual(native.selectedRange, NSRange(location: "#生活 ".utf16.count, length: 0))
+    }
+
+    private func waitForComposer(_ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition(), Date() < deadline { try await Task.sleep(for: .milliseconds(25)) }
+        guard condition() else {
+            XCTFail("The real composer/picker transition must finish")
+            throw NSError(domain: "NontoComposerTransition", code: 1)
+        }
+    }
+    private func presentedDepth(_ root: UIViewController?) -> Int {
+        guard let root else { return 0 }
+        let childDepth = root.children.map { presentedDepth($0) }.max() ?? 0
+        return max(childDepth, root.presentedViewController.map { 1 + presentedDepth($0) } ?? 0)
     }
 
     func testApprovedChatMediaAndAttachmentLayouts() async throws {

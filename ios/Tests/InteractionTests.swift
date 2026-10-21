@@ -24,6 +24,28 @@ import SwiftUI
         XCTAssertEqual(ComposerReferenceInsertion.insert("小明", kind: .mention, into: "你好 @", selection: nil).text, "你好 @小明 ")
         XCTAssertEqual(ComposerReferenceInsertion.insert("生活", kind: .topic, into: "🌅", selection: NSRange(location: 999, length: 1)).text, "🌅 #生活 ")
     }
+    func testComposerSelectionRejectsStaleOverflowAndSplitEmojiOffsets() {
+        let text = "🌅a"
+        for range in [NSRange(location: 99, length: 0), NSRange(location: Int.max - 1, length: 5),
+                      NSRange(location: 1, length: 0), NSRange(location: NSNotFound, length: 0)] {
+            XCTAssertEqual(ComposerReferenceInsertion.safeSelection(range, in: text), NSRange(location: 3, length: 0))
+            XCTAssertEqual(ComposerReferenceInsertion.insert("生活", kind: .topic, into: text, selection: range).text, "🌅a #生活 ")
+        }
+    }
+    func testComposerCommitsOnlyAfterDismissAndDiscardsAChangedBuffer() {
+        let editor = ComposerEditor(); editor.replaceText("原文")
+        editor.beginReference(.mention); editor.stageReference("yuchen", kind: .mention)
+        XCTAssertEqual(editor.text, "原文")
+        editor.referenceKind = nil; editor.finishReference()
+        XCTAssertEqual(editor.text, "原文 @yuchen ")
+        editor.beginReference(.topic); editor.stageReference("生活", kind: .topic)
+        editor.replaceText("新草稿")
+        editor.referenceKind = nil; editor.finishReference()
+        XCTAssertEqual(editor.text, "新草稿")
+        editor.beginReference(.topic); editor.stageReference("摄影", kind: .topic)
+        editor.referenceKind = nil; editor.finishReference(allowed: false)
+        XCTAssertEqual(editor.text, "新草稿")
+    }
     private func referenceAPI(_ handler: @escaping (URLRequest) throws -> (Int, JSON)) throws -> APIClient {
         StubProtocol.handler = handler
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]

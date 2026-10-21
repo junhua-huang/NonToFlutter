@@ -1,5 +1,125 @@
 import SwiftUI
 import Observation
+import UIKit
+
+/// UIKit owns the live text selection. Only bounded UTF-16 offsets cross the picker boundary.
+@MainActor @Observable
+final class ComposerEditor {
+    var text = ""
+    var referenceKind: ComposerReferenceKind?
+    @ObservationIgnored private(set) weak var textView: UITextView?
+    @ObservationIgnored private var selection = NSRange(location: 0, length: 0)
+    @ObservationIgnored private var snapshot: (text: String, selection: NSRange)?
+    @ObservationIgnored private var pending: (value: String, kind: ComposerReferenceKind)?
+    @ObservationIgnored private var wasEditing = false
+    @ObservationIgnored private var focusTicket = UUID()
+    @ObservationIgnored private var updatingNative = false
+    var hasReferenceSession: Bool { snapshot != nil }
+    func replaceText(_ value: String) {
+        text = value; selection = NSRange(location: value.utf16.count, length: 0)
+    }
+
+    func attach(_ view: UITextView) { textView = view }
+    func detach(_ view: UITextView) { if textView === view { textView = nil; focusTicket = UUID() } }
+    func record(_ view: UITextView, changedText: Bool) {
+        guard !updatingNative else { return }
+        if changedText, text != view.text { text = view.text }
+        selection = view.selectedRange
+    }
+    func beginReference(_ kind: ComposerReferenceKind) {
+        guard referenceKind == nil, snapshot == nil else { return }
+        focusTicket = UUID(); pending = nil
+        wasEditing = textView?.isFirstResponder == true
+        // Resigning commits any marked CJK input before the snapshot is captured.
+        textView?.resignFirstResponder()
+        if let view = textView { record(view, changedText: true) }
+        snapshot = (text, ComposerReferenceInsertion.safeSelection(selection, in: text))
+        referenceKind = kind
+    }
+    func stageReference(_ value: String, kind: ComposerReferenceKind) {
+        guard referenceKind == kind, snapshot != nil, pending == nil else { return }
+        pending = (value, kind)
+    }
+    func finishReference(allowed: Bool = true) {
+        let choice = pending, source = snapshot, shouldFocus = wasEditing || choice != nil
+        pending = nil; snapshot = nil; wasEditing = false
+        guard allowed, referenceKind == nil else { focusTicket = UUID(); return }
+        if let choice, let source, source.text == text {
+            let result = ComposerReferenceInsertion.insert(choice.value, kind: choice.kind, into: source.text, selection: source.selection)
+            text = result.text
+            selection = ComposerReferenceInsertion.safeSelection(NSRange(location: result.caretUTF16, length: 0), in: text)
+        }
+        synchronize()
+        guard shouldFocus else { return }
+        let ticket = UUID(); focusTicket = ticket
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.focusTicket == ticket, self.referenceKind == nil,
+                  let view = self.textView, view.window != nil else { return }
+            self.synchronize()
+            let target = ComposerReferenceInsertion.safeSelection(self.selection, in: self.text)
+            self.updatingNative = true
+            view.becomeFirstResponder(); view.selectedRange = target
+            self.selection = target; self.updatingNative = false
+        }
+    }
+    func synchronize() {
+        guard let view = textView, view.markedTextRange == nil else { return }
+        if view.text != text {
+            let target = ComposerReferenceInsertion.safeSelection(selection, in: text)
+            updatingNative = true
+            view.text = text; view.selectedRange = target
+            selection = target; updatingNative = false
+        }
+    }
+}
+
+struct ComposerTextEditor: View {
+    let editor: ComposerEditor
+    var body: some View {
+        ComposerNativeTextView(editor: editor).frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .topLeading) {
+                if editor.text.isEmpty {
+                    Text("有什么新鲜事？").font(.title3).foregroundStyle(.tertiary)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
+    }
+}
+
+private struct ComposerNativeTextView: UIViewRepresentable {
+    let editor: ComposerEditor
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.backgroundColor = .clear; view.textColor = .label
+        let font = UIFont.preferredFont(forTextStyle: .title3); view.font = font
+        view.adjustsFontForContentSizeCategory = true
+        view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
+        let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = 4
+        view.typingAttributes = [.font: font, .paragraphStyle: paragraph]
+        view.accessibilityLabel = "动态内容"; view.accessibilityIdentifier = "post.composer.body"
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.delegate = context.coordinator
+        editor.attach(view); editor.synchronize()
+        return view
+    }
+    func updateUIView(_ view: UITextView, context: Context) { editor.attach(view); editor.synchronize() }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let line = (uiView.font?.lineHeight ?? 24) + 4
+        let fit = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: max(line * 6, min(fit.height, line * 20)))
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
+    static func dismantleUIView(_ view: UITextView, coordinator: Coordinator) {
+        view.delegate = nil; coordinator.editor.detach(view)
+    }
+    final class Coordinator: NSObject, UITextViewDelegate {
+        let editor: ComposerEditor
+        init(editor: ComposerEditor) { self.editor = editor }
+        func textViewDidChange(_ textView: UITextView) { editor.record(textView, changedText: true) }
+        func textViewDidChangeSelection(_ textView: UITextView) { editor.record(textView, changedText: false) }
+    }
+}
 
 struct ComposerReference: Identifiable {
     let id: Int

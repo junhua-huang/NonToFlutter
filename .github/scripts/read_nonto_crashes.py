@@ -57,7 +57,12 @@ def main():
     for report in reports[:5]:
         print(json.dumps({key: report['attributes'].get(key) for key in
                           ('createdDate', 'deviceModel', 'osVersion', 'appUptimeInMilliseconds', 'buildBundleId')}), flush=True)
-        log = apple.request('GET', f'betaFeedbackCrashSubmissions/{report["id"]}/crashLog')['data']['attributes'].get('logText', '')
+        try:
+            log = apple.request('GET', f'betaFeedbackCrashSubmissions/{report["id"]}/crashLog')['data']['attributes'].get('logText', '')
+        except ValueError as error:
+            if 'HTTP 404' not in str(error): raise
+            print('Technical crash log is no longer available for this submission.', flush=True)
+            continue
         print(json.dumps(technical_summary(log), ensure_ascii=True), flush=True)
     print('Read-only technical crash lookup completed. No Apple resources changed.')
 
