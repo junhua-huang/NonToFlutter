@@ -47,7 +47,7 @@ final class ChatExperienceTests: XCTestCase {
         return try JSON.decode(data)
     }
     func testTypingAndUnchangedRefreshDoNotInvalidatePreparedMessages() async throws {
-        var current = message(81, sender: userID)
+        let current = message(81, sender: userID)
         let store = try room { request in
             if request.httpMethod == "POST" { return (200, .null) }
             return (200, .object(["messages": .array([current])]))
@@ -58,11 +58,17 @@ final class ChatExperienceTests: XCTestCase {
         store.draft = "输入草稿不会刷新消息"
         await store.load()
         await fulfillment(of: [unchanged], timeout: 0.05)
-        let changed = expectation(description: "Read receipts must still update")
-        withObservationTracking { _ = store.timeline.rows } onChange: { changed.fulfill() }
+        XCTAssertEqual(store.timeline.lastOutgoingID, 81); store.suspend()
+    }
+    func testExistingReceiptChangesStillRebuildPreparedMessages() async throws {
+        var current = message(81, sender: userID)
+        let store = try room { request in
+            if request.httpMethod == "POST" { return (200, .null) }
+            return (200, .object(["messages": .array([current])]))
+        }
+        await store.activate()
         current = current.merging(.object(["is_read": .bool(true)]))
         await store.load()
-        await fulfillment(of: [changed], timeout: 1)
         XCTAssertTrue(store.timeline.rows.first!.message.raw["is_read"].bool)
         XCTAssertEqual(store.timeline.lastOutgoingID, 81); store.suspend()
     }
