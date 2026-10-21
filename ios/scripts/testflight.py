@@ -340,6 +340,7 @@ def diagnose(apple):
     if os.environ.get('IOS_SIGNING_KEY', '').strip():
         key = load_signing_key()
         matches = []
+        filing_certificates = []
         for row in certificates:
             certificate = x509.load_der_x509_certificate(base64.b64decode(row['attributes']['certificateContent'], validate=True))
             try:
@@ -347,8 +348,16 @@ def diagnose(apple):
             except ValueError:
                 continue
             matches.append(row['id'])
+            filing_certificates.append({
+                'bundleID': BUNDLE, 'certificateID': row['id'],
+                'sha1': certificate.fingerprint(hashes.SHA1()).hex().upper(),
+                'publicKey': certificate.public_key().public_bytes(
+                    serialization.Encoding.DER, serialization.PublicFormat.PKCS1).hex().upper(),
+            })
         print('IOS_SIGNING_KEY: configured and valid RSA key; bits:', key.key_size)
         print('Matching valid distribution certificates:', ', '.join(matches) if matches else 'NONE; explicit initialization is required')
+        for information in filing_certificates:
+            print('App filing certificate:', json.dumps(information))
     else:
         print('IOS_SIGNING_KEY: missing; complete the one-time Windows setup before initialization')
     bundles = apple.request('GET', 'bundleIds', query={'filter[identifier]': BUNDLE})['data']

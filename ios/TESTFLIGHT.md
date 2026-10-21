@@ -83,7 +83,7 @@ git commit --allow-empty -m "[signing-check] Inspect reusable signing resources"
 git push origin ios
 ```
 
-该运行只查询发行证书的 ID、序列号和到期时间、此 App 的描述文件，以及已有构建的处理状态；不会创建或删除资源。Apple API 错误会输出错误码和已识别的原因，不打印原始响应、私钥或 JWT。
+该运行只查询发行证书的 ID、序列号和到期时间、此 App 的描述文件，以及已有构建的处理状态；不会创建或删除资源。配置了 `IOS_SIGNING_KEY` 时，还会为同团队、未过期且匹配该密钥的发行证书输出 `App filing certificate`：包含 Bundle ID、证书 ID、证书 SHA-1 和十六进制 PKCS#1 公钥，可用于准备 iOS 备案特征信息。应与成功构建的 `TF_SIGNING_IDENTITY`（证书 SHA-1）核对，不能把其他证书或公钥的 SHA-256 当作签名 SHA-1。Apple API 错误会输出错误码和已识别的原因，不打印原始响应、私钥或 JWT。
 
 配置好长期私钥后，首次初始化并上传：
 
