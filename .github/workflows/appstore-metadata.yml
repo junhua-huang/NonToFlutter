@@ -1,0 +1,29 @@
+name: App Store Metadata
+on:
+  push:
+    branches: [ios]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nonto-appstore-metadata
+  cancel-in-progress: false
+jobs:
+  metadata:
+    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[appstore-audit]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'cryptography>=45,<47'
+      - name: Read App Store draft and build availability
+        run: python3 .github/scripts/appstore_metadata.py
