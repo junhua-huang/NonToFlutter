@@ -190,7 +190,7 @@ final class StateTests: XCTestCase {
             if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
                 sends += 1
                 let body = try self.body(request)
-                confirmed = self.message(100).merging(.object(["request_id": body["request_id"]]))
+                confirmed = self.message(100, sender: self.userID).merging(.object(["request_id": body["request_id"]]))
                 // The server accepted the write but its gateway lost the acknowledgement.
                 // An HTTP timeout avoids URLSession's transport-level automatic retries.
                 return (504, .object(["detail": .text("response acknowledgement lost")]))

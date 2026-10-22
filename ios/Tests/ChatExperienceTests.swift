@@ -107,8 +107,10 @@ final class ChatExperienceTests: XCTestCase {
     }
     func testSocketConfirmationRetainsOneBubbleThroughHTTPAndHistoryRefresh() async throws {
         var confirmed: JSON?
+        var startedSending = false
         let store = try room { request in
             if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                startedSending = true
                 Thread.sleep(forTimeInterval: 0.1)
                 return (200, .object(["data": self.message(201, sender: self.userID)]))
             }
@@ -117,6 +119,7 @@ final class ChatExperienceTests: XCTestCase {
         await store.activate(); store.enqueue(content: "hello")
         let item = try XCTUnwrap(store.pending.first)
         let identity = try XCTUnwrap(store.timeline.entries.last?.id)
+        try await waitUntil { startedSending }
         confirmed = message(201, sender: userID).merging(.object(["request_id": .text(item.id)]))
         XCTAssertFalse(store.receive(.object(["event": .text("new_message"), "data": .object([
             "conversation_id": .id(55), "message": confirmed!])])) )
