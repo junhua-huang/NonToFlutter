@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   metadata:
-    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[appstore-audit]'))
+    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[appstore-audit]') || contains(github.event.head_commit.message, '[appstore-metadata]'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -26,4 +26,11 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install 'cryptography>=45,<47'
       - name: Read App Store draft and build availability
-        run: python3 .github/scripts/appstore_metadata.py
+        env:
+          APPLY_METADATA: ${{ contains(github.event.head_commit.message, '[appstore-metadata]') }}
+        run: |
+          if [ "$APPLY_METADATA" = "true" ]; then
+            python3 .github/scripts/appstore_metadata.py --apply
+          else
+            python3 .github/scripts/appstore_metadata.py
+          fi

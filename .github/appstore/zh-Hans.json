@@ -1,0 +1,34 @@
+{
+  "appID": "6824266681",
+  "bundleID": "online.nonto.native",
+  "locale": "zh-Hans",
+  "version": "1.0.0",
+  "copyright": "2026 黄君华",
+  "name": "南图",
+  "subtitle": "分享二次元作品，遇见兴趣同好",
+  "description": "南图是一个围绕二次元、摄影与作品分享的兴趣社区。在这里，你可以记录喜欢的瞬间，分享自己的作品，也可以加入社群，和拥有共同兴趣的人交流。\n\n【分享照片与作品】\n发布文字、照片或视频，用多图展示作品与活动记录。浏览动态，为喜欢的内容点赞、评论，与创作者交流。\n\n【加入兴趣社群】\n寻找感兴趣的社群，查看社群动态、成员与公告，在群聊中聊聊共同喜欢的事。\n\n【让主页展示你的风格】\n设置头像、封面与个人简介，集中展示自己发布的动态，让同好了解你的兴趣与创作。\n\n【保持交流】\n通过私信联系好友，查看消息和互动通知，继续每一次因兴趣而开始的对话。\n\n无论你喜欢摄影、Cosplay，还是想记录生活里的二次元瞬间，都可以从一条动态开始。\n\n联系与反馈：nonto@foxmail.com",
+  "keywords": "二次元,摄影,Cosplay,作品,同好,漫展,社群,图片,兴趣,交流",
+  "promotionalText": "把喜欢的照片和作品分享出来，加入兴趣社群，让同好通过你的主页认识你。南图，为每一份热爱留一个位置。",
+  "marketingUrl": "https://nonto.online/",
+  "supportUrl": "https://nonto.online/",
+  "betaFeedbackEmail": "nonto@foxmail.com",
+  "betaBuildVersion": "66.2",
+  "betaWhatsNew": "本次更新修复聊天发送消息时记录列表抖动。\n\n请重点测试：\n1. 连续发送短消息和多行消息，确认气泡与列表位置稳定。\n2. 键盘展开时发送、收起后重新输入，确认列表不会反复跳动。\n3. 上翻历史消息后发送一条消息，再上翻阅读，确认发送回执不会把页面拉回底部。\n4. 网络较慢或短暂断开后恢复，确认消息不重复，失败时可重试。\n\n反馈请描述设备、系统版本和复现步骤，可发送至 nonto@foxmail.com。请勿附上密码、验证码或他人的聊天隐私。",
+  "screenshots": [
+    {
+      "file": ".github/appstore/screenshots/01-share.png",
+      "sha256": "d1e2da9eacafde537344e6c15ef98773c199dce021c3874156eec2c4de525d01",
+      "displayType": "APP_IPHONE_67"
+    },
+    {
+      "file": ".github/appstore/screenshots/02-community.png",
+      "sha256": "b55df66e8c16eaa031db15cf40fecaff2e043179e5b31b94c5453c7b382c9aaf",
+      "displayType": "APP_IPHONE_67"
+    },
+    {
+      "file": ".github/appstore/screenshots/03-profile.png",
+      "sha256": "e48b77aa9280a6b3910179274c924e87b036a3e86d7d7e4676f3f59086676852",
+      "displayType": "APP_IPHONE_67"
+    }
+  ]
+}
