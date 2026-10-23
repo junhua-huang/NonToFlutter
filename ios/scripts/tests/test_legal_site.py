@@ -24,7 +24,7 @@ class LegalWebsiteChecks(unittest.TestCase):
             self.assertIn('Content-Security-Policy', pages[name])
             self.assertNotIn('<script', pages[name])
         self.assertFalse(json.loads(pages['manifest.json'])['releaseReady'])
-        self.assertIn('具体存储地点', pages['privacy.html'])
+        self.assertIn('南图服务端数据存储于中国大陆。', pages['privacy.html'])
 
     def test_operator_text_is_escaped_and_community_changes_revision(self):
         with tempfile.TemporaryDirectory() as temp:

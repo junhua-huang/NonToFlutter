@@ -1,5 +1,5 @@
 {
-  "policyVersion": "2026-10-23.1",
+  "policyVersion": "2026-10-23.2",
   "operatorName": "黄君华",
   "contactEmail": "nonto@foxmail.com",
   "contactAddress": "",
@@ -7,7 +7,7 @@
   "termsURL": "",
   "communityRulesURL": "",
   "appFilingNumber": "桂ICP备2026012531号-2A",
-  "storageSummary": "",
+  "storageSummary": "南图服务端数据存储于中国大陆。系统通知通过 Apple APNs 送达，Apple 会处理送达所需的推送标识及通知路由信息，相关服务说明见本政策第五条。",
   "retentionSummary": "",
   "processorSummary": "",
   "minorProtectionSummary": "",
@@ -32,7 +32,6 @@
     "note": "官网页脚公示，工信部官方查询结果尚未取得；不代表 online.nonto.native 的 APP 备案已确认。"
   },
   "disclosureNotes": {
-    "storageSummary": "具体存储地点、备份位置及跨境处理安排尚未公布。如需了解，请通过 nonto@foxmail.com 联系南图。",
     "retentionSummary": "各类信息的具体保留期限、依法保留范围及备份删除安排尚未公布。如需查询某项信息或提出删除请求，请通过 nonto@foxmail.com 联系南图；请勿将退出登录、卸载应用或清理缓存视为服务器数据已被删除。",
     "processorSummary": "媒体使用腾讯云 COS，系统通知通过 Apple APNs 送达。其他托管、数据库、邮件及审核服务的具体处理安排尚未公布，如需了解，请通过 nonto@foxmail.com 联系南图。",
     "minorProtectionSummary": "具体适用年龄、监护人同意及儿童个人信息处理安排尚未公布。监护人可通过 nonto@foxmail.com 咨询或提出相关信息处理请求；请勿在公开内容或认证材料中提供未成年人的无关敏感信息。"

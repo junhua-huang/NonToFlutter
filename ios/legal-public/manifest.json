@@ -1,6 +1,6 @@
 {
-  "policyVersion": "2026-10-23.1",
-  "revision": "5ce96208c0ebb3124a49f5b10cea521c4333c4e22b026d8cbc886d45a74a9d16",
+  "policyVersion": "2026-10-23.2",
+  "revision": "544361e71ee3a693c0611ceb2c98423920fbb438ff4925e397507f7dee318b9e",
   "releaseReady": false,
   "documents": [
     "privacy",
