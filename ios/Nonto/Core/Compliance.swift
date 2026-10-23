@@ -44,6 +44,7 @@ struct ComplianceProfile {
         return Self(values: json.object)
     }()
     func value(_ key: String) -> String { values[key]?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+    var websiteURL: URL { URL(string: "https://nonto.online/")! }
     var reviewed: Bool {
         values["releaseReviewed"] == .bool(true) &&
         (Bundle.main.object(forInfoDictionaryKey: "NontoDistributionChannel") as? String) != "testflight-internal"
@@ -73,9 +74,11 @@ struct ComplianceProfile {
         var text = template
         for key in ["policyVersion", "operatorName", "contactEmail", "contactAddress", "appFilingNumber", "storageSummary", "retentionSummary", "processorSummary", "minorProtectionSummary", "realNameVerificationSummary", "rightsResponseSummary"] {
             let replacement = value(key)
-            text = text.replacingOccurrences(of: "{{\(key)}}", with: replacement.isEmpty ? "该项尚未完成核验，当前仅供开发测试。" : replacement)
+            let note = values["disclosureNotes"]?[key].string ?? ""
+            text = text.replacingOccurrences(of: "{{\(key)}}", with: replacement.isEmpty ?
+                (note.isEmpty ? "暂未提供。可通过“联系与投诉”了解相关信息。" : note) : replacement)
         }
-        return reviewed ? text : "开发测试版说明：服务规则尚未完成审核，本说明不能作为正式发布政策。请勿提交真实敏感个人信息。\n\n" + text
+        return text
     }
     static var revision: String {
         var data = Data()

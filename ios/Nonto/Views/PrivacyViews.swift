@@ -4,7 +4,6 @@ import UIKit
 struct PrivacyWelcomeView: View {
     @EnvironmentObject private var consent: PrivacyConsent
     @State private var declined = false
-    private let profile = ComplianceProfile.current
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -12,9 +11,6 @@ struct PrivacyWelcomeView: View {
                     Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(Color.brand)
                     Text(declined ? "你可以先了解南图" : "欢迎使用南图").font(.largeTitle.bold())
                     Text("请先阅读服务条款和隐私政策，再决定是否使用账号与社交服务。")
-                    if !profile.reviewed {
-                        Label("开发测试版：服务规则尚未完成审核，当前仅供开发测试。", systemImage: "info.circle").font(.subheadline).foregroundStyle(.secondary)
-                    }
                     Text("账号服务会处理邮箱、账号资料、你主动发送的内容和服务安全信息。照片与视频仅在你选择时读取；通知在你开启时申请，不影响文字功能。")
                     NavigationLink("阅读隐私政策") { PolicyView(kind: "privacy") }
                     NavigationLink("阅读服务条款") { PolicyView(kind: "terms") }
@@ -26,7 +22,7 @@ struct PrivacyWelcomeView: View {
                         Button("重新查看使用说明") { declined = false }.buttonStyle(.glass)
                     } else {
                         Button { consent.accept() } label: {
-                            Text(profile.reviewed ? "同意服务条款与隐私政策并继续" : "同意说明，继续开发测试").frame(maxWidth: .infinity).padding(.vertical, 6)
+                            Text("同意服务条款与隐私政策并继续").frame(maxWidth: .infinity).padding(.vertical, 6)
                         }.buttonStyle(.glassProminent)
                         Button("暂不同意，仅查看说明") { declined = true }.buttonStyle(.glass).frame(maxWidth: .infinity)
                     }
@@ -104,6 +100,7 @@ struct ContactAndComplaintsView: View {
     var body: some View {
         Form {
             Section("联系南图") {
+                Link("官方网站", destination: profile.websiteURL)
                 Text(profile.value("contactEmail")).lineLimit(1).minimumScaleFactor(0.5).textSelection(.enabled)
                 Text("使用反馈、举报投诉、个人信息申请和处置申诉，均可通过此邮箱联系。")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -142,27 +139,30 @@ struct ContactAndComplaintsView: View {
     }
 }
 
-/// The website's public disclosure is never presented as an APP filing.
+/// APP and website registrations have distinct labels and query links.
 struct FilingDisclosureSection: View {
     private let profile = ComplianceProfile.current
     var body: some View {
         Section {
             if !profile.value("appFilingNumber").isEmpty {
-                Link("APP 备案：\(profile.value("appFilingNumber"))", destination: URL(string: "https://beian.miit.gov.cn/")!)
-            } else {
-                LabeledContent("APP 备案", value: "尚未核实")
+                Link(destination: URL(string: "https://beian.miit.gov.cn/")!) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("APP 备案")
+                        Text(profile.value("appFilingNumber")).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
             }
             let website = profile.values["websiteFiling"] ?? .null
             if !website["number"].string.isEmpty {
                 Link(destination: URL(string: "https://beian.miit.gov.cn/")!) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("官网公示的网站备案")
+                        Text("网站 ICP 备案")
                         Text(website["number"].string).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
             }
         } header: { Text("备案信息") } footer: {
-            Text("网站公示号码尚未完成官方核验，不代表南图 APP 已完成备案。可前往工信部系统查询。")
+            Text("点击备案信息，前往工信部备案管理系统查询。")
         }
     }
 }

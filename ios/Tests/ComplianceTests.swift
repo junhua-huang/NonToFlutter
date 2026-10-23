@@ -61,7 +61,7 @@ final class ComplianceTests: XCTestCase {
     func testMissingOperatorInformationIsVisibleInsteadOfFakeContact() {
         let profile = ComplianceProfile(values: [:])
         let text = profile.render("{{operatorName}}\n{{contactEmail}}")
-        XCTAssertTrue(text.contains("开发测试版")); XCTAssertTrue(text.contains("尚未完成核验"))
+        XCTAssertTrue(text.contains("暂未提供")); XCTAssertFalse(text.contains("开发测试"))
         XCTAssertFalse(text.contains("{{")); XCTAssertNil(profile.contactURL)
     }
     func testConfiguredContactsAndSecurePolicyLinks() {
@@ -70,6 +70,13 @@ final class ComplianceTests: XCTestCase {
         XCTAssertEqual(profile.render("{{operatorName}}"), "运营者")
         XCTAssertEqual(profile.contactURL?.scheme, "mailto"); XCTAssertNotNil(profile.httpsURL("privacyPolicyURL"))
         XCTAssertNil(profile.httpsURL("termsURL"))
+    }
+    func testPolicyPresentationDoesNotTreatMissingReviewAsADevelopmentMode() {
+        let profile = ComplianceProfile(values: ["operatorName": .text("黄君华"), "releaseReviewed": .bool(false),
+            "disclosureNotes": .object(["storageSummary": .text("具体存储地点尚未公布，请联系南图咨询。")])])
+        XCTAssertEqual(profile.render("{{operatorName}}\n\n{{storageSummary}}"), "黄君华\n\n具体存储地点尚未公布，请联系南图咨询。")
+        XCTAssertFalse(profile.reviewed)
+        XCTAssertEqual(profile.websiteURL.absoluteString, "https://nonto.online/")
     }
     func testMalformedContactCannotCreateMailHeaders() {
         for value in ["javascript:alert(1)", "a@b.test?bcc=other@b.test", "a@b.test\nBcc: other@b.test"] {

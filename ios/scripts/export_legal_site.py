@@ -12,8 +12,7 @@ import check_compliance
 
 TITLES = {'privacy': '隐私政策', 'terms': '服务条款', 'community': '社区规范'}
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / 'legal-public'
-MISSING = '该项尚未完成核验，当前仅供开发测试。'
-NOTICE = '开发测试版说明：服务规则尚未完成审核，本说明不能作为正式发布政策。请勿提交真实敏感个人信息。'
+MISSING = '暂未提供。可通过“联系与投诉”了解相关信息。'
 STYLE = '''
 :root{color-scheme:light dark;--accent:#159fe5;--background:#f6f7f9;--card:#fff;--text:#17191c;--muted:#606770;--line:#dce1e6}
 @media(prefers-color-scheme:dark){:root{--background:#090b0e;--card:#15191e;--text:#f1f4f6;--muted:#acb5bf;--line:#343b44}}
@@ -27,7 +26,8 @@ summary{cursor:pointer}li{margin-bottom:8px}@media(max-width:420px){header,main,
 '''
 
 def render(template, config):
-    return re.sub(r'\{\{(\w+)\}\}', lambda match: str(config.get(match[1], '')).strip() or MISSING, template)
+    return re.sub(r'\{\{(\w+)\}\}', lambda match: str(config.get(match[1], '')).strip() or
+                  config.get('disclosureNotes', {}).get(match[1], '') or MISSING, template)
 
 def document_body(text):
     # Headings use the same standalone Chinese-number convention as PolicySection.
@@ -56,12 +56,11 @@ def pages(resources=check_compliance.RESOURCES):
     if re.fullmatch(r'[^\s@?:/]+@[^\s@?:/]+\.[^\s@?:/]+', email):
         contact = f'<a href="mailto:{html.escape(quote(email, safe="@."), quote=True)}">{contact}</a>'
     def page(title, content):
-        notice = f'<aside class="notice">{NOTICE}</aside>' if blockers else ''
         return f'''<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer"><title>南图 · {title}</title><style>{STYLE}</style></head>
-<body><header><nav aria-label="服务文档">{nav}</nav></header><main><h1>南图 · {title}</h1>{notice}{content}</main>
+<body><header><nav aria-label="服务文档">{nav}</nav></header><main><h1>南图 · {title}</h1>{content}</main>
 <footer>版本：{version}<br>联系、投诉与权利申请：{contact}<br>请勿通过邮件发送密码、验证码或无关完整证件。</footer></body></html>
 '''
     result = {}
@@ -70,7 +69,7 @@ def pages(resources=check_compliance.RESOURCES):
         result[kind + '.html'] = page(title, '<article>' + document_body(text) + '</article>')
     cards = ''.join(f'<section class="card"><h2><a href="{kind}.html">{title}</a></h2></section>' for kind, title in TITLES.items())
     filing = config.get('appFilingNumber', '')
-    filing_text = ('APP 备案：' + html.escape(filing)) if filing else 'APP 备案尚未核实。网站公示号码不代表 APP 已完成备案。'
+    filing_text = ('APP 备案：' + html.escape(filing)) if filing else '备案信息可通过工信部备案管理系统查询。'
     result['index.html'] = page('服务与隐私', '<p>了解南图的信息处理、使用规则、举报和申诉方式。</p>' + cards +
         '<section class="card"><h2>联系与投诉</h2><p>请按使用反馈、举报投诉、个人信息权利申请或处置申诉说明来意，提供相关账号或内容编号及必要依据。请只提供与请求有关的信息。</p>' +
         '<p>' + filing_text +

@@ -140,6 +140,7 @@ jobs:
       - name: Wait for Apple processing
         run: |
           python3 ios/scripts/testflight.py wait --root "$TF_ROOT"
+          python3 .github/scripts/appstore_metadata.py --testflight-notes "$TF_BUILD_NUMBER"
           python3 - <<'PY'
           import os
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:

@@ -201,8 +201,23 @@ def main():
     parser.add_argument('--output', type=Path, default=Path('appstore-audit.json'))
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--config', type=Path, default=ROOT / '.github' / 'appstore' / 'zh-Hans.json')
+    parser.add_argument('--testflight-notes', metavar='BUILD', help='Update only this processed build’s localized test notes')
     args = parser.parse_args()
     api = Apple()
+    if args.testflight_notes:
+        config = json.loads(args.config.read_text())
+        app = api.request('GET', 'apps/' + APP_ID)['data']
+        require(app['attributes']['bundleId'] == BUNDLE, 'App identity mismatch.')
+        builds = rows(api, 'builds', {'filter[app]': APP_ID, 'sort': '-uploadedDate', 'limit': 10}, first_page=True)
+        matches = [build for build in builds if build['attributes']['version'] == args.testflight_notes and build['attributes']['processingState'] == 'VALID']
+        require(len(matches) == 1, 'Expected one processed build for notes.')
+        build_id = matches[0]['id']
+        existing = rows(api, f'builds/{build_id}/betaBuildLocalizations', {'limit': 200})
+        upsert_localization(api, 'betaBuildLocalizations', existing, config['locale'], {'whatsNew': config['betaWhatsNew']}, 'build', build_id)
+        current = rows(api, f'builds/{build_id}/betaBuildLocalizations', {'limit': 200})
+        require(any(row['attributes']['locale'] == config['locale'] and row['attributes']['whatsNew'] == config['betaWhatsNew'] for row in current), 'Test notes readback mismatch.')
+        print('TestFlight notes saved and verified for build', args.testflight_notes)
+        return
     report = audit(api)
     if args.apply:
         config = json.loads(args.config.read_text())

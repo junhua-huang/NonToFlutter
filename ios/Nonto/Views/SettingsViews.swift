@@ -30,6 +30,7 @@ struct SettingsView: View {
                 }
             }
             Section("关于南图") {
+                Link("官方网站", destination: ComplianceProfile.current.websiteURL)
                 RouteButton(.contact) { Text("联系与投诉") }
                 RouteButton(.policy("privacy")) { Text("隐私政策") }
                 RouteButton(.policy("terms")) { Text("服务条款") }
