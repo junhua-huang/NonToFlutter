@@ -418,6 +418,7 @@ final class ChatExperienceTests: XCTestCase {
             return (200, .object(["conversation": .object(["id": .id(55)]), "messages": .array([])]))
         }
         await store.activate()
+        XCTAssertEqual(store.roomID, 55, "Community identity must follow the resolved server conversation, including quote context events")
         XCTAssertFalse(store.receive(.object(["event": .text("new_message"), "data": .object([
             "conversation_id": .id(55), "community_id": .id(33), "message": message(101)])])))
         XCTAssertEqual(store.messages.map(\.id), [101]); store.suspend()

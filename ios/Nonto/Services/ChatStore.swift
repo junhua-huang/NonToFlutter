@@ -39,7 +39,7 @@ final class ChatStore {
     private var restored = false
     private var page = 1
     private var lastOlderIDs: [Int]?
-    private var roomID = 0
+    private(set) var roomID = 0
     private var markedReadThrough: Int?
     private var loadTask: Task<Void, Never>?
     private var sendTask: Task<Void, Never>?

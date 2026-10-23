@@ -255,7 +255,7 @@ struct ChatQuoteContextView: View {
                 .onReceive(socket.events) { payload in
                     let event = ChatRealtimeEvent(payload)
                     guard event.name == "message_recalled",
-                          event.conversationID == conversation.id || (conversation.communityID != nil && event.communityID == conversation.communityID) else { return }
+                          event.conversationID == store.roomID || (conversation.communityID != nil && event.communityID == conversation.communityID) else { return }
                     let id = event.data["message_id"].or(event.data["id"]).int
                     if id > 0 { messages = ChatMessageReferences.redactingRecalls(messages, known: [id]) }
                 }

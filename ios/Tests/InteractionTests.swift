@@ -135,10 +135,12 @@ import SwiftUI
     }
     func testCoalescedFullScreenRequestsShareOfflinePreview() async throws {
         let started = expectation(description: "Image request started")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
         var requests = 0
         StubProtocol.handler = { _ in
             requests += 1; started.fulfill()
-            Thread.sleep(forTimeInterval: 0.1)
+            _ = release.wait(timeout: .now() + 5)
             throw URLError(.notConnectedToInternet)
         }
         defer { StubProtocol.handler = nil }
@@ -150,14 +152,18 @@ import SwiftUI
         let first = Task { try await repository.image(at: url, maxPixelSize: 3072) }
         await fulfillment(of: [started], timeout: 2)
         let second = Task { try await repository.image(at: url, maxPixelSize: 3072) }
+        await Task.yield()
+        release.signal()
         let one = try await first.value, two = try await second.value
         XCTAssertTrue(one === image); XCTAssertTrue(two === image); XCTAssertEqual(requests, 1)
         repository.clear()
     }
     func testAccountSwitchCancelsEveryCoalescedViewerBeforeOfflineFallback() async throws {
         let started = expectation(description: "Old account image request started")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
         StubProtocol.handler = { _ in
-            started.fulfill(); Thread.sleep(forTimeInterval: 0.1)
+            started.fulfill(); _ = release.wait(timeout: .now() + 5)
             throw URLError(.notConnectedToInternet)
         }
         defer { StubProtocol.handler = nil }
@@ -171,6 +177,7 @@ import SwiftUI
         let second = Task { try await repository.image(at: url, maxPixelSize: 3072) }
         await Task.yield()
         repository.clear()
+        release.signal()
         for task in [first, second] {
             do { _ = try await task.value; XCTFail("An old-account preview must never escape after account switch") }
             catch { XCTAssertTrue(error is CancellationError) }
