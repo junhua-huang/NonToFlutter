@@ -1,5 +1,5 @@
 {
-  "policyVersion": "2026-10-23.2",
+  "policyVersion": "2026-10-23.3",
   "operatorName": "黄君华",
   "contactEmail": "nonto@foxmail.com",
   "contactAddress": "",
@@ -9,7 +9,7 @@
   "appFilingNumber": "桂ICP备2026012531号-2A",
   "storageSummary": "南图服务端数据存储于中国大陆。系统通知通过 Apple APNs 送达，Apple 会处理送达所需的推送标识及通知路由信息，相关服务说明见本政策第五条。",
   "retentionSummary": "",
-  "processorSummary": "",
+  "processorSummary": "服务器托管：南图使用阿里云服务器承载后端服务，涉及账号资料、动态、评论、消息及网络请求等数据，用于提供账号、内容、交流和服务安全功能。南图服务端数据存储于中国大陆。阿里云法律声明及隐私权政策：https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html 。\n\n验证码邮件：使用腾讯邮件服务，通过 SMTP 发送注册、登录及密码操作所需的验证码。涉及收件邮箱、验证码邮件内容和投递所需信息，不用于无关营销。腾讯隐私保护平台：https://privacy.qq.com/ 。\n\n媒体存储与审核：南图媒体上传接口使用腾讯云 COS 保存和提供所选图片、视频，涉及文件内容、对象路径和资源访问请求。图片审核通过服务端设置控制；启用时将所选图片交由腾讯云数据万象审核并取得结果。腾讯云隐私政策：https://cloud.tencent.com/document/product/301/11470 。\n\nApple 系统服务：APNs 用于推送，系统照片选择器用于选择文件，分享和外部应用按你的操作处理内容。Apple 隐私政策：https://www.apple.com/legal/privacy/szh/ 。南图客户端不因此取得你的 Apple 账户密码或整个相册。\n\nCDN：南图未使用 CDN 加速服务。",
   "minorProtectionSummary": "",
   "realNameVerificationSummary": "当前账号注册和登录使用邮箱验证码或密码，不收集身份证件进行法定真实身份认证。角色或创作者认证仅审核相应申请，不等同于法定实名认证。邮箱验证不能替代依法需要的真实身份认证。",
   "rightsResponseSummary": "通过 nonto@foxmail.com 提交请求时，请说明账号标识、请求类型及范围。与账号有关的请求需提供足以核对账号归属的必要信息；请勿发送密码或验证码。受理中如需补充材料，会通过邮件说明；处理结果通过邮件答复。对结果有异议，可在原邮件中补充理由申请复核。举报处理记录可在应用内查看。",
@@ -33,7 +33,6 @@
   },
   "disclosureNotes": {
     "retentionSummary": "各类信息的具体保留期限、依法保留范围及备份删除安排尚未公布。如需查询某项信息或提出删除请求，请通过 nonto@foxmail.com 联系南图；请勿将退出登录、卸载应用或清理缓存视为服务器数据已被删除。",
-    "processorSummary": "媒体使用腾讯云 COS，系统通知通过 Apple APNs 送达。其他托管、数据库、邮件及审核服务的具体处理安排尚未公布，如需了解，请通过 nonto@foxmail.com 联系南图。",
     "minorProtectionSummary": "具体适用年龄、监护人同意及儿童个人信息处理安排尚未公布。监护人可通过 nonto@foxmail.com 咨询或提出相关信息处理请求；请勿在公开内容或认证材料中提供未成年人的无关敏感信息。"
   }
 }
