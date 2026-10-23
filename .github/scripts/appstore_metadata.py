@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 import sys
 import time
+from html.parser import HTMLParser
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener
 from urllib.error import HTTPError, URLError
@@ -56,6 +57,7 @@ def audit(api):
         if review and 'attributes' in review:
             attrs = review['attributes']
             item['reviewDetail'] = {'id': review['id'], 'demoAccountRequired': attrs.get('demoAccountRequired'),
+                                    'notesSHA256': hashlib.sha256((attrs.get('notes') or '').encode()).hexdigest(),
                                     'provided': {key: bool(attrs.get(key)) for key in ('contactFirstName', 'contactLastName', 'contactPhone', 'contactEmail', 'demoAccountName', 'demoAccountPassword', 'notes')}}
         else:
             item['reviewDetail'] = review
@@ -96,6 +98,23 @@ def select_build(api, report, config, number):
     print('App Store draft build selected and verified:', config['version'], number)
 
 
+class PolicyParagraphs(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.paragraphs = []; self.current = None
+    def handle_starttag(self, tag, attrs):
+        if tag == 'p':
+            self.current = []
+    def handle_data(self, data):
+        if self.current is not None:
+            self.current.append(data)
+    def handle_endtag(self, tag):
+        if tag == 'p' and self.current is not None:
+            text = ''.join(''.join(self.current).split())
+            if text:
+                self.paragraphs.append(text)
+            self.current = None
+
+
 def public_policy_status():
     """Read public pages only; no server/admin credentials or deployment claims."""
     report = []
@@ -111,10 +130,17 @@ def public_policy_status():
                     text = content.decode('utf-8', errors='replace')
                     title = re.search(r'<title[^>]*>([^<]*)</title>', text, re.I)
                     version = json.loads((ROOT / 'ios' / 'legal-public' / 'manifest.json').read_text())['policyVersion']
+                    expected = (ROOT / 'ios' / 'legal-public' / (name + '.html')).read_text()
+                    actual_paragraphs, expected_paragraphs = PolicyParagraphs(), PolicyParagraphs()
+                    actual_paragraphs.feed(text); expected_paragraphs.feed(expected)
                     result.update(status=response.status, contentType=response.headers.get('Content-Type', ''),
                                   title=title.group(1).strip() if title else None,
                                   servesFrontendShell='flutter_bootstrap.js' in text or 'flutter.js' in text,
                                   containsPolicyVersion=version in text,
+                                  normalizedHTMLMatches=text.lstrip('\ufeff').replace('\r\n', '\n').strip() == expected.strip(),
+                                  policyParagraphsMatch=actual_paragraphs.paragraphs == expected_paragraphs.paragraphs,
+                                  differingExpectedParagraphs=[p[:100] for p in expected_paragraphs.paragraphs
+                                                               if p not in actual_paragraphs.paragraphs][:3],
                                   matchesBundledDocument=content == (ROOT / 'ios' / 'legal-public' / (name + '.html')).read_bytes())
             except HTTPError as error:
                 result['status'] = error.code
@@ -207,10 +233,13 @@ def apply(api, before, config):
     patch(api, 'appInfoLocalizations', app_loc[0]['id'], {key: config[key] for key in ('name', 'subtitle')})
     declaration = info.get('ageRatingDeclaration')
     if declaration and 'id' in declaration:
-        patch(api, 'ageRatingDeclarations', declaration['id'], {'messagingAndChat': True, 'userGeneratedContent': True})
+        patch(api, 'ageRatingDeclarations', declaration['id'], {'messagingAndChat': True, 'userGeneratedContent': True,
+              'parentalControls': False, 'socialMediaAgeRestricted': False})
     patch(api, 'appStoreVersions', version['id'], {'versionString': config['version'], 'copyright': config['copyright']})
     patch(api, 'appStoreVersionLocalizations', version_loc[0]['id'], {key: config[key] for key in
           ('description', 'keywords', 'promotionalText', 'marketingUrl', 'supportUrl')})
+    if config.get('reviewNotes') and version.get('reviewDetail', {}).get('id'):
+        patch(api, 'appStoreReviewDetails', version['reviewDetail']['id'], {'notes': config['reviewNotes']})
     upsert_localization(api, 'betaAppLocalizations', before['betaAppLocalizations'], locale,
                         {'description': config['description'], 'feedbackEmail': config['betaFeedbackEmail'], 'marketingUrl': config['marketingUrl']}, 'app', APP_ID)
     upsert_localization(api, 'betaBuildLocalizations', builds[0]['localizations'], locale,
@@ -241,8 +270,12 @@ def verify_applied(report, config):
     declarations = [info.get('ageRatingDeclaration') for info in report['appInfos'] if info['attributes']['appStoreState'] in EDITABLE]
     for declaration in declarations:
         if declaration and 'id' in declaration:
-            require(all(declaration['attributes'].get(key) is True for key in ('messagingAndChat', 'userGeneratedContent')),
+            expected = {'messagingAndChat': True, 'userGeneratedContent': True, 'parentalControls': False, 'socialMediaAgeRestricted': False}
+            require(all(declaration['attributes'].get(key) is value for key, value in expected.items()),
                     'Chat and user-generated-content age declaration readback mismatch.')
+    if config.get('reviewNotes'):
+        require(version.get('reviewDetail', {}).get('notesSHA256') == hashlib.sha256(config['reviewNotes'].encode()).hexdigest(),
+                'Review instructions readback mismatch.')
     require(any(group['displayType'] == 'APP_IPHONE_67' and group['count'] == len(config['screenshots']) and
                 all(state.get('state') == 'COMPLETE' for state in group['states']) for group in loc['screenshots']), 'Screenshot readback mismatch.')
     beta = next(row for row in report['betaAppLocalizations'] if row['locale'] == config['locale'])

@@ -3,11 +3,17 @@ import SwiftUI
 import UIKit
 @testable import Nonto
 
+@MainActor private final class ComposerLaunchState: ObservableObject {
+    @Published var presented = false
+    var mounted = false
+}
+
 private struct ComposerCrashHarness: View {
     let editor: ComposerEditor
-    @State private var presented = true
+    @ObservedObject var launch: ComposerLaunchState
     var body: some View {
-        Color.clear.sheet(isPresented: $presented) { PostComposer(editor: editor) }
+        Color.clear.onAppear { launch.mounted = true }
+            .sheet(isPresented: $launch.presented) { PostComposer(editor: editor) }
     }
 }
 
@@ -177,16 +183,24 @@ final class LayoutSnapshotTests: XCTestCase {
         PostDraftStore().remove(userID: userID)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow), editor = ComposerEditor()
+        let launch = ComposerLaunchState()
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
-        window.rootViewController = UIHostingController(rootView: ComposerCrashHarness(editor: editor)
+        let controller = UIHostingController(rootView: ComposerCrashHarness(editor: editor, launch: launch)
             .environmentObject(session).environment(\.scenePhase, .active).tint(.brand))
+        window.rootViewController = controller
         window.makeKeyAndVisible()
         defer {
             window.rootViewController?.dismiss(animated: false)
             window.isHidden = true; window.rootViewController = nil; previous?.makeKey()
             PostDraftStore().remove(userID: userID)
         }
+        controller.loadViewIfNeeded(); controller.view.frame = window.bounds
+        window.setNeedsLayout(); window.layoutIfNeeded()
+        try await waitForComposer("mounted composer launcher") { launch.mounted && controller.view.window === window }
+        // Match the user's open action after the presenting window is mounted.
+        // Starting with a presented sheet can race UIWindow setup in Release.
+        launch.presented = true
         try await waitForComposer("initial composer sheet") { editor.textView?.window != nil && self.presentedDepth(window.rootViewController) == 1 && window.rootViewController?.presentedViewController?.isBeingPresented == false }
         let native = try XCTUnwrap(editor.textView)
         XCTAssertTrue(native.becomeFirstResponder())

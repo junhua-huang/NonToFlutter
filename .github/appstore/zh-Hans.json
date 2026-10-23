@@ -12,7 +12,7 @@
   "marketingUrl": "https://nonto.online/",
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
-  "betaBuildVersion": "80.1",
+  "betaBuildVersion": "81.1",
   "betaWhatsNew": "本次为 App Store 候选构建，包含聊天键盘交互修复。\n\n• 调整键盘开合时的聊天滚动定位，处理消息区域空白、发送时位置跳变以及最近消息被键盘遮挡的问题。\n• 保留引用定位、历史阅读位置、离线消息恢复和附件预览优化。\n\n请重点测试：打开消息较少的私聊或群聊，弹出键盘，连续输入发送，再反复收起和弹出键盘；检查最新消息是否始终在输入栏上方、翻阅历史时是否保持位置。\n\n反馈邮箱：nonto@foxmail.com。请勿发送密码、验证码或他人的聊天隐私。",
   "screenshots": [
     {
@@ -30,5 +30,6 @@
       "sha256": "e48b77aa9280a6b3910179274c924e87b036a3e86d7d7e4676f3f59086676852",
       "displayType": "APP_IPHONE_67"
     }
-  ]
+  ],
+  "reviewNotes": "审核操作说明：首次打开请阅读隐私政策与服务条款，并按实际情况选择年龄范围；账号与社交服务面向14周岁及以上用户。使用已提供的审核账号及密码登录。首页可浏览动态，发现页查看社群，私信页进入聊天。用户资料及内容菜单提供举报与屏蔽入口。注销入口为“我的 → 设置 → 注销账号”。联系邮箱：nonto@foxmail.com。"
 }
