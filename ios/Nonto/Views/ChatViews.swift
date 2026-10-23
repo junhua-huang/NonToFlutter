@@ -120,15 +120,20 @@ struct ChatRoomContent: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .scrollPosition($position, anchor: .bottom)
+            .scrollPosition($position)
             .defaultScrollAnchor(.bottom, for: .initialOffset)
-            .defaultScrollAnchor(store.nearBottom ? .bottom : .top, for: .sizeChanges)
+            .defaultScrollAnchor(.top, for: .sizeChanges)
             .onScrollGeometryChange(for: ChatViewportMetrics.self) { geometry in
                 ChatViewportMetrics(offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
                                     visibleHeight: geometry.containerSize.height, topInset: geometry.contentInsets.top,
                                     bottomInset: geometry.contentInsets.bottom, visibleBottom: geometry.visibleRect.maxY)
-            } action: { _, value in
+            } action: { previous, value in
                 if let y = viewport.record(value) { position.scrollTo(y: y) }
+                else if abs(previous.visibleHeight - value.visibleHeight) > 1,
+                        store.nearBottom, !viewport.userScrolling,
+                        !viewport.preservingHistory, !viewport.presentingMedia {
+                    followLatest()
+                }
                 if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
                     if value.nearBottom || viewport.userScrolling { store.reachedBottom(value.nearBottom) }
                     if value.shouldLoadHistory(userScrolling: viewport.userScrolling), store.more {
@@ -145,10 +150,10 @@ struct ChatRoomContent: View {
             .onChange(of: store.scrollRequest) { _, _ in
                 viewport.clearPreservation()
                 quoteReturnID = nil; highlightedMessage = nil
-                // Keyboard/composer resizing is already bottom anchored. A second
-                // animated scroll here fights that layout update while sending.
-                var transaction = Transaction(); transaction.disablesAnimations = true
-                withTransaction(transaction) { position.scrollTo(edge: .bottom) }
+                followLatest()
+            }
+            .onChange(of: timeline.entries.last?.id) { _, _ in
+                if store.nearBottom, !viewport.preservingHistory, !viewport.presentingMedia { followLatest() }
             }
             .overlay(alignment: .bottomTrailing) {
                 VStack(alignment: .trailing, spacing: 8) {
@@ -237,6 +242,12 @@ struct ChatRoomContent: View {
         .confirmationDialog("撤回这条消息？", isPresented: $confirmRecall) {
             Button("撤回", role: .destructive) { if let recall { Task { await store.recall(recall) } } }
         }
+    }
+    private func followLatest() {
+        // Follow one concrete content target during keyboard layout instead of
+        // combining an edge scroll request with automatic size-change anchoring.
+        var transaction = Transaction(); transaction.disablesAnimations = true
+        withTransaction(transaction) { position.scrollTo(id: "chat-bottom", anchor: .bottom) }
     }
     private func loadOlder() async {
         guard !store.loadingOlder, !viewport.preservingHistory, store.more, visible else { return }

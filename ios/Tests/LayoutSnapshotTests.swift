@@ -240,7 +240,7 @@ final class LayoutSnapshotTests: XCTestCase {
         var messages: [JSON] = (1...7).map { index in
             .object(["id": .id(946010 + index), "sender_id": .id(userID),
                      "content": .text("保留消息 \(index)"),
-                     "created_at": .text(index < 4 ? "2026-06-18T11:56:00Z" : "2026-10-24T03:08:00Z")])
+                     "created_at": index < 4 ? .text("2026-06-18T11:56:00Z") : .number(Date().timeIntervalSince1970 - 180)])
         }
         StubProtocol.handler = { request in
             if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
@@ -288,10 +288,13 @@ final class LayoutSnapshotTests: XCTestCase {
         }
         try await Task.sleep(for: .milliseconds(500))
         let field = try XCTUnwrap(descendants(of: controller.view).first { $0 is UITextView || $0 is UITextField })
+        let unfocusedComposerY = field.convert(field.bounds, to: window).minY
         try await assertChatBubblesStayVisible(window: window, field: field, stage: "before-keyboard")
         for cycle in 1...2 {
             XCTAssertTrue(field.becomeFirstResponder())
             try await Task.sleep(for: .milliseconds(400))
+            XCTAssertLessThan(field.convert(field.bounds, to: window).minY, unfocusedComposerY - 120,
+                              "The keyboard must actually resize the viewport, not just focus the field")
             try await assertChatBubblesStayVisible(window: window, field: field, stage: "keyboard-\(cycle)")
             store.draft = "???"
             try await assertChatBubblesStayVisible(window: window, field: field, stage: "typing-\(cycle)")
@@ -303,6 +306,8 @@ final class LayoutSnapshotTests: XCTestCase {
             }
             window.endEditing(true)
             try await Task.sleep(for: .milliseconds(400))
+            XCTAssertEqual(field.convert(field.bounds, to: window).minY, unfocusedComposerY, accuracy: 5,
+                           "Dismissing the keyboard must restore the viewport")
             try await assertChatBubblesStayVisible(window: window, field: field, stage: "dismiss-\(cycle)")
         }
     }
@@ -348,7 +353,10 @@ final class LayoutSnapshotTests: XCTestCase {
                 let attachment = XCTAttachment(image: image)
                 attachment.name = "chat-continuous-\(stage)-\(sample)"; attachment.lifetime = .keepAlways; add(attachment)
             }
-            XCTAssertGreaterThanOrEqual(bands, 2, "\(stage), sample \(sample): multiple existing bubbles must remain rendered while the keyboard and outbox change")
+            let geometry = descendants(of: window).compactMap { $0 as? UIScrollView }
+                .filter { $0.bounds.width > 250 && $0.bounds.height > 100 }
+                .map { "offset=\($0.contentOffset), size=\($0.contentSize), viewport=\($0.bounds.size), insets=\($0.adjustedContentInset)" }
+            XCTAssertGreaterThanOrEqual(bands, 2, "\(stage), sample \(sample): multiple existing bubbles must remain rendered; \(geometry)")
         }
     }
 
