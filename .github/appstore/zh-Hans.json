@@ -12,7 +12,7 @@
   "marketingUrl": "https://nonto.online/",
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
-  "betaBuildVersion": "81.1",
+  "betaBuildVersion": "82.1",
   "betaWhatsNew": "本次为 App Store 候选构建，包含聊天键盘交互修复。\n\n• 调整键盘开合时的聊天滚动定位，处理消息区域空白、发送时位置跳变以及最近消息被键盘遮挡的问题。\n• 保留引用定位、历史阅读位置、离线消息恢复和附件预览优化。\n\n请重点测试：打开消息较少的私聊或群聊，弹出键盘，连续输入发送，再反复收起和弹出键盘；检查最新消息是否始终在输入栏上方、翻阅历史时是否保持位置。\n\n反馈邮箱：nonto@foxmail.com。请勿发送密码、验证码或他人的聊天隐私。",
   "screenshots": [
     {

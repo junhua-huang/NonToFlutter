@@ -15,6 +15,8 @@ jobs:
   build-and-test:
     runs-on: macos-26
     timeout-minutes: 25
+    env:
+      NATIVE_CONFIGURATION: ${{ (contains(github.event.head_commit.message, '[appstore-upload]') || contains(github.event.head_commit.message, '[appstore-release]')) && 'Release' || 'Debug' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,8 +56,9 @@ jobs:
       - name: Build and test native app
         run: |
           set -o pipefail
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/NontoTests.xcresult CODE_SIGNING_ALLOWED=NO test | tee build-native.log
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/NontoTests.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -parallel-testing-enabled NO test | tee build-native.log
       - name: Verify optimized Release startup, interactions and chat
+        if: env.NATIVE_CONFIGURATION != 'Release'
         run: |
           set -o pipefail
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/ReleaseStartup -resultBundlePath build/ReleaseStartup.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -only-testing:NontoTests/LayoutSnapshotTests -only-testing:NontoTests/InteractionTests -only-testing:NontoTests/ChatExperienceTests -only-testing:NontoTests/StateTests -parallel-testing-enabled NO test | tee build-release-startup.log
@@ -85,7 +88,8 @@ jobs:
               udid = booted[0]['udid'] if booted else os.environ['SIMULATOR_UDID']
               if not booted:
                   subprocess.run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], check=True, timeout=120)
-              subprocess.run(['xcrun', 'simctl', 'install', udid, 'build/Native/Build/Products/Debug-iphonesimulator/Nonto.app'], check=True, timeout=40)
+              app = f"build/Native/Build/Products/{os.environ['NATIVE_CONFIGURATION']}-iphonesimulator/Nonto.app"
+              subprocess.run(['xcrun', 'simctl', 'install', udid, app], check=True, timeout=40)
               subprocess.run(['xcrun', 'simctl', 'terminate', udid, 'online.nonto.native'], capture_output=True, timeout=15)
               subprocess.run(['xcrun', 'simctl', 'launch', udid, 'online.nonto.native'], check=True, timeout=40)
               time.sleep(3)
@@ -106,5 +110,5 @@ jobs:
             build/Nonto-auth.png
             build/Nonto-screenshot-error.txt
             build/NontoTests.xcresult
-            build/Native/Build/Products/Debug-iphonesimulator/Nonto.app
+            build/Native/Build/Products/${{ env.NATIVE_CONFIGURATION }}-iphonesimulator/Nonto.app
           retention-days: 7
