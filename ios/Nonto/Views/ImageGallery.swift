@@ -45,7 +45,7 @@ import ImageIO
         // A local chat thumbnail is immediate, but must not cap full-screen zoom quality.
         if let image = uploadedPreview, pixels <= 960 { return image }
         if let image = cache.object(forKey: key as NSString) { return image }
-        if let task = requests[key] { return try await task.value }
+        if let task = requests[key] { return try await resolve(task, epoch: epoch, preview: uploadedPreview) }
         let task = Task { () throws -> UIImage in
             let (data, response) = try await session.data(from: url)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
@@ -56,17 +56,22 @@ import ImageIO
         }
         requests[key] = task
         defer { if epoch == generation { requests[key] = nil } }
-        let image: UIImage
-        do { image = try await task.value }
-        catch {
-            guard epoch == generation, !Task.isCancelled else { throw CancellationError() }
-            // The just-uploaded image remains viewable when a larger download fails offline.
-            if let uploadedPreview { return uploadedPreview }
-            throw error
-        }
+        let image = try await resolve(task, epoch: epoch, preview: uploadedPreview)
         guard epoch == generation else { throw CancellationError() }
         cache.setObject(image, forKey: key as NSString, cost: Int(image.size.width * image.size.height * 4))
         return image
+    }
+    private func resolve(_ task: Task<UIImage, Error>, epoch: UUID, preview: UIImage?) async throws -> UIImage {
+        do {
+            let image = try await task.value
+            guard epoch == generation, !Task.isCancelled else { throw CancellationError() }
+            return image
+        } catch {
+            guard epoch == generation, !Task.isCancelled else { throw CancellationError() }
+            // All coalesced viewers share the same offline fallback and account boundary.
+            if let preview { return preview }
+            throw error
+        }
     }
 }
 

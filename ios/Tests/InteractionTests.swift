@@ -133,6 +133,49 @@ import SwiftUI
         let thumbnail = try await repository.image(at: url, maxPixelSize: 960)
         XCTAssertTrue(thumbnail === image); XCTAssertEqual(requests, 1)
     }
+    func testCoalescedFullScreenRequestsShareOfflinePreview() async throws {
+        let started = expectation(description: "Image request started")
+        var requests = 0
+        StubProtocol.handler = { _ in
+            requests += 1; started.fulfill()
+            Thread.sleep(forTimeInterval: 0.1)
+            throw URLError(.notConnectedToInternet)
+        }
+        defer { StubProtocol.handler = nil }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
+        let repository = ImageRepository(session: URLSession(configuration: config))
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 16)).image { _ in }
+        let url = "https://example.test/coalesced-full-screen.jpg"
+        repository.rememberUploadedPreview(image, at: url)
+        let first = Task { try await repository.image(at: url, maxPixelSize: 3072) }
+        await fulfillment(of: [started], timeout: 2)
+        let second = Task { try await repository.image(at: url, maxPixelSize: 3072) }
+        let one = try await first.value, two = try await second.value
+        XCTAssertTrue(one === image); XCTAssertTrue(two === image); XCTAssertEqual(requests, 1)
+        repository.clear()
+    }
+    func testAccountSwitchCancelsEveryCoalescedViewerBeforeOfflineFallback() async throws {
+        let started = expectation(description: "Old account image request started")
+        StubProtocol.handler = { _ in
+            started.fulfill(); Thread.sleep(forTimeInterval: 0.1)
+            throw URLError(.notConnectedToInternet)
+        }
+        defer { StubProtocol.handler = nil }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
+        let repository = ImageRepository(session: URLSession(configuration: config))
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 16)).image { _ in }
+        let url = "https://example.test/old-account-full-screen.jpg"
+        repository.rememberUploadedPreview(image, at: url)
+        let first = Task { try await repository.image(at: url, maxPixelSize: 3072) }
+        await fulfillment(of: [started], timeout: 2)
+        let second = Task { try await repository.image(at: url, maxPixelSize: 3072) }
+        await Task.yield()
+        repository.clear()
+        for task in [first, second] {
+            do { _ = try await task.value; XCTFail("An old-account preview must never escape after account switch") }
+            catch { XCTAssertTrue(error is CancellationError) }
+        }
+    }
     func testPostDisplayTrimsOnlyOuterWhitespaceWithoutChangingWireContent() {
         let original = " \n\t第一段\n\n第二段  内容\r\n "
         let post = Post(.object(["id": .id(1), "content": .text(original)]))

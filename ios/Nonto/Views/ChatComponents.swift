@@ -195,18 +195,26 @@ struct ChatSyncNotice: View {
     let error: String
     let retry: () -> Void
     let dismiss: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var showingDetails = false
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "wifi.exclamationmark").foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("消息暂未同步").font(.caption.weight(.semibold))
-                Text(error).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
-            }
-            Spacer(minLength: 0)
-            Button("重试", action: retry).frame(minHeight: 44)
+            Button { showingDetails = true } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("聊天提示").font(.caption.weight(.semibold)).lineLimit(1)
+                    Text(typeSize.isAccessibilitySize ? "点按查看详情" : error)
+                        .font(.caption2).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? 1 : 2)
+                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).multilineTextAlignment(.leading)
+            }.buttonStyle(.plain).accessibilityLabel("聊天提示，查看详情").accessibilityHint(error)
+            Button("刷新", action: retry).font(.caption.weight(.semibold)).fixedSize().frame(minWidth: 44, minHeight: 44)
             Button(action: dismiss) { Image(systemName: "xmark") }.frame(width: 44, height: 44)
                 .accessibilityLabel("收起同步提示")
         }.padding(.leading, 12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .alert("聊天提示", isPresented: $showingDetails) {
+                Button("刷新消息", action: retry)
+                Button("关闭", role: .cancel) { }
+            } message: { Text(error) }
     }
 }
 

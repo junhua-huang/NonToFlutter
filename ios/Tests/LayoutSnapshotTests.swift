@@ -407,12 +407,20 @@ final class LayoutSnapshotTests: XCTestCase {
         window.overrideUserInterfaceStyle = dark ? .dark : .light
         window.rootViewController = controller; window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
+        controller.loadViewIfNeeded(); controller.view.frame = window.bounds
         controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
+        // Mount the new UIWindow before starting the fixture-response deadline.
+        // The first SwiftUI graph in a debug process may be materialized lazily.
+        window.setNeedsLayout(); window.layoutIfNeeded()
+        await Task.yield()
         // Let navigation, fixture requests and SwiftUI's layout transactions settle.
         if let ready {
             let deadline = Date().addingTimeInterval(5)
             while !ready(), Date() < deadline { try await Task.sleep(for: .milliseconds(25)) }
-            XCTAssertTrue(ready(), "The screenshot must wait for its fixture response")
+            guard ready() else {
+                XCTFail("The screenshot must wait for its fixture response")
+                throw NSError(domain: "NontoSnapshotFixture", code: 1)
+            }
         }
         try await Task.sleep(for: .milliseconds(700))
         controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
