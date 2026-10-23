@@ -4,6 +4,8 @@ import UIKit
 struct PrivacyWelcomeView: View {
     @EnvironmentObject private var consent: PrivacyConsent
     @State private var declined = false
+    @State private var ageGroup: ServiceAgeGroup?
+    @State private var guardianConsent = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -16,19 +18,32 @@ struct PrivacyWelcomeView: View {
                     NavigationLink("阅读服务条款") { PolicyView(kind: "terms") }
                     NavigationLink("阅读社区规范") { PolicyView(kind: "community") }
                     NavigationLink("联系与投诉") { ContactAndComplaintsView() }
+                    Picker("年龄范围", selection: $ageGroup) {
+                        Text("请选择").tag(ServiceAgeGroup?.none)
+                        ForEach(ServiceAgeGroup.allCases) { group in Text(group.title).tag(Optional(group)) }
+                    }.pickerStyle(.menu)
+                    if ageGroup == .underFourteen {
+                        Text("南图账号与社交服务面向已满 14 周岁的用户。你仍可阅读这些说明，或通过“联系与投诉”提出信息处理请求。")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    } else if ageGroup == .fourteenToSeventeen {
+                        Toggle("我已与监护人共同阅读这些说明，并获得监护人同意", isOn: $guardianConsent)
+                    }
+                    Text("年龄范围由你自行声明并保存在本机，此处不要求填写出生日期或提交身份证件。")
+                        .font(.footnote).foregroundStyle(.secondary)
                     if declined {
                         Text("当前保留离线说明页面。你可以稍后重新决定是否继续。不会因此注销现有账号。")
                             .font(.subheadline).foregroundStyle(.secondary)
                         Button("重新查看使用说明") { declined = false }.buttonStyle(.glass)
                     } else {
-                        Button { consent.accept() } label: {
+                        Button { if let ageGroup { consent.accept(ageGroup: ageGroup, guardianConsent: guardianConsent) } } label: {
                             Text("同意服务条款与隐私政策并继续").frame(maxWidth: .infinity).padding(.vertical, 6)
                         }.buttonStyle(.glassProminent)
+                            .disabled(!ServiceAgeGroup.permitsAccountService(ageGroup, guardianConsent: guardianConsent))
                         Button("暂不同意，仅查看说明") { declined = true }.buttonStyle(.glass).frame(maxWidth: .infinity)
                     }
                 }.padding(28).frame(maxWidth: 560)
             }.frame(maxWidth: .infinity)
-        }
+        }.onChange(of: ageGroup) { _, _ in guardianConsent = false }
     }
 }
 

@@ -110,7 +110,22 @@ struct PolicySection: Identifiable {
     }
 }
 
-/// Only explicit acceptance opens authenticated screens and starts session restoration.
+enum ServiceAgeGroup: String, CaseIterable, Identifiable {
+    case underFourteen, fourteenToSeventeen, adult
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .underFourteen: return "未满 14 周岁"
+        case .fourteenToSeventeen: return "14 至 17 周岁"
+        case .adult: return "已满 18 周岁"
+        }
+    }
+    static func permitsAccountService(_ group: ServiceAgeGroup?, guardianConsent: Bool) -> Bool {
+        group == .adult || (group == .fourteenToSeventeen && guardianConsent)
+    }
+}
+
+/// Explicit policy and age declarations precede authenticated service access.
 @MainActor
 final class PrivacyConsent: ObservableObject {
     static let shared = PrivacyConsent()
@@ -120,13 +135,20 @@ final class PrivacyConsent: ObservableObject {
     private let key = "nonto.native.privacy-consent"
     init(defaults: UserDefaults = .standard, revision: String = ComplianceProfile.revision) {
         self.defaults = defaults; self.revision = revision
-        accepted = defaults.string(forKey: key) == revision
+        let ageGroup = defaults.string(forKey: key + ".age-group").flatMap(ServiceAgeGroup.init(rawValue:))
+        accepted = defaults.string(forKey: key) == revision &&
+            ServiceAgeGroup.permitsAccountService(ageGroup, guardianConsent: defaults.bool(forKey: key + ".guardian-consent"))
     }
-    func accept() {
+    @discardableResult func accept(ageGroup: ServiceAgeGroup, guardianConsent: Bool = false) -> Bool {
+        guard ServiceAgeGroup.permitsAccountService(ageGroup, guardianConsent: guardianConsent) else { revoke(); return false }
+        defaults.set(ageGroup.rawValue, forKey: key + ".age-group")
+        defaults.set(ageGroup == .fourteenToSeventeen && guardianConsent, forKey: key + ".guardian-consent")
         defaults.set(revision, forKey: key); defaults.set(Date(), forKey: key + ".date"); accepted = true
+        return true
     }
     func revoke() {
         defaults.removeObject(forKey: key); defaults.removeObject(forKey: key + ".date"); accepted = false
+        defaults.removeObject(forKey: key + ".age-group"); defaults.removeObject(forKey: key + ".guardian-consent")
     }
 }
 

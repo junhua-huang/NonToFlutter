@@ -17,14 +17,14 @@ final class ComplianceTests: XCTestCase {
     func testConsentNeedsExplicitAcceptanceAndMatchingVersion() {
         let original = PrivacyConsent(defaults: defaults, revision: "version-A")
         XCTAssertFalse(original.accepted)
-        original.accept()
+        original.accept(ageGroup: .adult)
         XCTAssertTrue(PrivacyConsent(defaults: defaults, revision: "version-A").accepted)
         XCTAssertFalse(PrivacyConsent(defaults: defaults, revision: "version-B").accepted)
         XCTAssertNotNil(defaults.object(forKey: "nonto.native.privacy-consent.date"))
     }
     func testWithdrawalRemovesConsentAndTimestamp() {
         let consent = PrivacyConsent(defaults: defaults, revision: "version-A")
-        consent.accept(); consent.revoke()
+        consent.accept(ageGroup: .adult); consent.revoke()
         XCTAssertFalse(consent.accepted)
         XCTAssertNil(defaults.object(forKey: "nonto.native.privacy-consent.date"))
         XCTAssertFalse(PrivacyConsent(defaults: defaults, revision: "version-A").accepted)
@@ -41,6 +41,22 @@ final class ComplianceTests: XCTestCase {
         do { try await session.authenticate(email: "test@example.test", password: "password", code: ""); XCTFail("Expected consent guard") } catch {}
         XCTAssertEqual(requests, 0); XCTAssertNil(api.token); XCTAssertNil(session.user)
         XCTAssertEqual(credentials.value, "existing-account-token")
+    }
+    func testAgeDeclarationRejectsChildrenAndRequiresGuardianAcknowledgementForTeens() {
+        let consent = PrivacyConsent(defaults: defaults, revision: "age-policy")
+        XCTAssertFalse(ServiceAgeGroup.permitsAccountService(nil, guardianConsent: true))
+        XCTAssertFalse(consent.accept(ageGroup: .underFourteen, guardianConsent: true))
+        XCTAssertFalse(consent.accepted)
+        XCTAssertFalse(consent.accept(ageGroup: .fourteenToSeventeen))
+        XCTAssertTrue(consent.accept(ageGroup: .fourteenToSeventeen, guardianConsent: true))
+        XCTAssertTrue(PrivacyConsent(defaults: defaults, revision: "age-policy").accepted)
+        consent.revoke()
+        XCTAssertNil(defaults.string(forKey: "nonto.native.privacy-consent.age-group"))
+        XCTAssertFalse(PrivacyConsent(defaults: defaults, revision: "age-policy").accepted)
+    }
+    func testLegacyPolicyConsentWithoutAnAgeDeclarationNeedsConfirmationAgain() {
+        defaults.set("age-policy", forKey: "nonto.native.privacy-consent")
+        XCTAssertFalse(PrivacyConsent(defaults: defaults, revision: "age-policy").accepted)
     }
     func testDeletionClearsOnlyTheSpecifiedAccountsLocalData() throws {
         let userID = 900040, otherID = 9000400
