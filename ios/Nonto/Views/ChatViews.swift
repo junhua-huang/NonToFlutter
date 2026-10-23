@@ -5,7 +5,9 @@ struct MessagesView: View {
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
     private let socket: RealtimeClient
-    init(session: AppSession) {
+    private let selectedRouteKey: String?
+    init(session: AppSession, selectedRouteKey: String? = nil) {
+        self.selectedRouteKey = selectedRouteKey
         socket = session.socket
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
     }
@@ -28,6 +30,8 @@ struct MessagesView: View {
                         }
                     }.padding(.vertical, 10)
                 }
+                .listRowBackground(selectedRouteKey == AppRoute.chat(conversation).key ? Color.brand.opacity(0.10) : Color.timelineBackground)
+                .accessibilityAddTraits(selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
         }.timelineList().navigationTitle("私信").navigationBarTitleDisplayMode(.inline)
@@ -54,6 +58,7 @@ struct ChatRoomContent: View {
     private let onViewportMetrics: ((ChatViewportMetrics) -> Void)?
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var store: ChatStore
     private let socket: RealtimeClient
     @State private var quote: ChatMessage?
@@ -182,8 +187,10 @@ struct ChatRoomContent: View {
                 }.padding()
             }
         }
+        .frame(maxWidth: 820).frame(maxWidth: .infinity)
+        .background(Color.timelineBackground)
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .toolbarVisibility(horizontalSizeClass == .compact ? .hidden : .automatic, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
@@ -200,6 +207,7 @@ struct ChatRoomContent: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ChatComposerInput(store: store, quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused)
+                .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
         .task {
             visible = true

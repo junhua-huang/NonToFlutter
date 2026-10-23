@@ -81,9 +81,15 @@ struct AppNavigationStack<Root: View>: View {
     init(@ViewBuilder root: @escaping () -> Root) { self.root = root }
     var body: some View {
         NavigationStack(path: $navigation.path) {
-            root().navigationDestination(for: AppRoute.self) { route in destination(route) }
+            root().navigationDestination(for: AppRoute.self) { route in AppRouteDestination(route: route) }
         }.environment(\.navigate, navigation.open)
     }
+}
+
+struct AppRouteDestination: View {
+    let route: AppRoute
+    @EnvironmentObject private var session: AppSession
+    var body: some View { destination(route) }
     // Bound the registry type instead of nesting every screen into one
     // conditional view type during navigation setup.
     private func destination(_ route: AppRoute) -> AnyView {

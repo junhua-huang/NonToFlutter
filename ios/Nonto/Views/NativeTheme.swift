@@ -23,6 +23,8 @@ extension View {
             .navigationLinkIndicatorVisibility(.hidden)
             .scrollContentBackground(.hidden)
             .background(Color.timelineBackground)
+            .frame(maxWidth: 820).frame(maxWidth: .infinity)
+            .background(Color.timelineBackground)
     }
 
     func timelinePostRow() -> some View {
@@ -54,7 +56,8 @@ struct TimelineTabs<Selection: Hashable>: View {
                 }.buttonStyle(.plain)
                     .accessibilityAddTraits(selection == tab.value ? .isSelected : [])
             }
-        }.background(Color.timelineBackground)
+        }.frame(maxWidth: 820).frame(maxWidth: .infinity)
+            .background(Color.timelineBackground)
             .overlay(alignment: .bottom) { Color.timelineSeparator.frame(height: 0.5) }
             .accessibilityElement(children: .contain).accessibilityLabel(title)
     }

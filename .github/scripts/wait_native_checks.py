@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wait for both native regressions on this exact commit before Store upload."""
+"""Wait for all iPhone and iPad regressions on this exact commit before Store upload."""
 import json
 import os
 import re
@@ -7,7 +7,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-REQUIRED = ('Native iOS', 'Native iOS 27 Regression')
+REQUIRED = ('Native iOS', 'Native iOS 27 Regression', 'Native iPad')
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -54,7 +54,7 @@ def main():
         if states != previous:
             print(json.dumps(states), flush=True); previous = states
         if all(value == 'success' for value in states.values()):
-            print('Both native regressions passed for the exact Store upload commit.', flush=True)
+            print('All iPhone and iPad regressions passed for the exact Store upload commit.', flush=True)
             return
         time.sleep(20)
     raise ValueError('Native regression checks are still pending; no Store upload was attempted.')

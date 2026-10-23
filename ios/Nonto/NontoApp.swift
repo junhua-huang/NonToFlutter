@@ -34,23 +34,36 @@ struct NontoApp: App {
 
 struct MainTabs: View {
     @EnvironmentObject private var session: AppSession
+    // The initial tab is a one-time seed, also used by deterministic previews.
+    @State private var selectedTab: Int
+    private let initialConversation: Conversation?
+    init(initialTab: Int = 0, initialConversation: Conversation? = nil) {
+        _selectedTab = State(initialValue: initialTab)
+        self.initialConversation = initialConversation
+    }
     @State private var compose = false
     @ObservedObject private var notifications = NativeNotifications.shared
     @State private var pushDestination: PushRoute?
     @State private var pendingPush: PushRoute?
     var body: some View {
-        TabView {
-            AppNavigationStack { FeedView(session: session) }
-                .tabItem { Label("首页", systemImage: "house") }
-            AppNavigationStack { ExploreView() }
-                .tabItem { Label("发现", systemImage: "magnifyingglass") }
-            AppNavigationStack { NotificationsView(session: session) }
-                .tabItem { Label("通知", systemImage: "bell") }.badge(session.noticeUnread)
-            AppNavigationStack { MessagesView(session: session) }
-                .tabItem { Label("私信", systemImage: "envelope") }.badge(session.messageUnread)
-            AppNavigationStack { ProfileView(userID: session.user?.id ?? 0) }
-                .tabItem { Label("我的", systemImage: "person.crop.circle") }
+        TabView(selection: $selectedTab) {
+            Tab("首页", systemImage: "house", value: 0) {
+                AppNavigationStack { FeedView(session: session) }
+            }
+            Tab("发现", systemImage: "magnifyingglass", value: 1) {
+                AppNavigationStack { ExploreView() }
+            }
+            Tab("通知", systemImage: "bell", value: 2) {
+                AppNavigationStack { NotificationsView(session: session) }
+            }.badge(session.noticeUnread)
+            Tab("私信", systemImage: "envelope", value: 3) {
+                MessagesNavigationView(session: session, initialConversation: initialConversation)
+            }.badge(session.messageUnread)
+            Tab("我的", systemImage: "person.crop.circle", value: 4) {
+                AppNavigationStack { ProfileView(userID: session.user?.id ?? 0) }
+            }
         }
+        .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $compose, onDismiss: {
             if let pendingPush { pushDestination = pendingPush; self.pendingPush = nil }

@@ -13,11 +13,13 @@ class NativeUploadChecks(unittest.TestCase):
         return {'name': name, 'head_sha': 'own-commit', 'head_branch': 'ios', 'event': 'push',
                 'status': 'completed', 'conclusion': 'success', **changes}
 
-    def test_both_systems_must_pass(self):
+    def test_all_device_checks_must_pass(self):
         one = self.fixture('Native iOS')
         self.assertEqual(checks.check_states([one], 'own-commit')['Native iOS 27 Regression'], 'missing')
         both = [one, self.fixture('Native iOS 27 Regression')]
-        self.assertTrue(all(x == 'success' for x in checks.check_states(both, 'own-commit').values()))
+        self.assertEqual(checks.check_states(both, 'own-commit')['Native iPad'], 'missing')
+        all_devices = both + [self.fixture('Native iPad')]
+        self.assertTrue(all(x == 'success' for x in checks.check_states(all_devices, 'own-commit').values()))
 
     def test_other_commits_branches_and_events_cannot_satisfy_upload_checks(self):
         for changes in ({'head_sha': 'other'}, {'head_branch': 'main'}, {'event': 'pull_request'}):
