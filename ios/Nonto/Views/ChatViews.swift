@@ -64,6 +64,10 @@ private struct ChatRoomContent: View {
     @State private var recall: ChatMessage?
     @State private var confirmRecall = false
     @State private var visible = false
+    @State private var quoteContext: ChatQuoteTarget?
+    @State private var highlightedMessage: Int?
+    @State private var quoteReturnID: String?
+    @State private var highlightTask: Task<Void, Never>?
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     init(session: AppSession, conversation: Conversation) {
         self.conversation = conversation
@@ -80,9 +84,6 @@ private struct ChatRoomContent: View {
                         else { Label("更早的消息", systemImage: "clock.arrow.circlepath") }
                     }.font(.subheadline).disabled(store.loadingOlder).padding(.vertical, 12)
                 }
-                if !store.messages.isEmpty || !store.pending.isEmpty {
-                    ErrorBanner(text: store.error) { Task { await store.load() } }.padding(.horizontal)
-                }
                 ForEach(timeline.entries) { entry in
                     ChatMessageRow(row: entry.row, community: communityID != nil,
                                    showsReceipt: entry.row.id == timeline.lastOutgoingID,
@@ -93,6 +94,8 @@ private struct ChatRoomContent: View {
                                    retry: { if let item = entry.pending { store.retry(item.id) } },
                                    remove: { if let item = entry.pending { store.remove(item.id) } },
                                    checkDelivery: { Task { await store.load() } },
+                                   highlighted: highlightedMessage == entry.row.id,
+                                   onJumpToQuote: { jumpToQuote($0, from: entry.id) },
                                    onQuote: { quote = $0; composerFocused = true },
                                    onRecall: { recall = $0; confirmRecall = true }).id(entry.id)
                 }
@@ -105,6 +108,12 @@ private struct ChatRoomContent: View {
             }
         }
         .background(Color.timelineBackground)
+        .overlay(alignment: .top) {
+            if let error = store.error, !store.messages.isEmpty || !store.pending.isEmpty {
+                ChatSyncNotice(error: error, retry: { Task { await store.load() } }, dismiss: { store.error = nil })
+                    .padding(.horizontal).padding(.top, 8)
+            }
+        }
         .scrollDismissesKeyboard(.interactively)
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom, for: .initialOffset)
@@ -118,6 +127,9 @@ private struct ChatRoomContent: View {
             if let y = viewport.record(value) { position.scrollTo(y: y) }
             if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
                 if value.nearBottom || viewport.userScrolling { store.reachedBottom(value.nearBottom) }
+                if value.shouldLoadHistory(userScrolling: viewport.userScrolling), store.more {
+                    Task { await loadOlder() }
+                }
             }
         }
         .onScrollPhaseChange { _, phase in
@@ -128,18 +140,27 @@ private struct ChatRoomContent: View {
         }
         .onChange(of: store.scrollRequest) { _, _ in
             viewport.clearPreservation()
+            quoteReturnID = nil; highlightedMessage = nil
             // Keyboard/composer resizing is already bottom anchored. A second
             // animated scroll here fights that layout update while sending.
             var transaction = Transaction(); transaction.disablesAnimations = true
             withTransaction(transaction) { position.scrollTo(edge: .bottom) }
         }
         .overlay(alignment: .bottomTrailing) {
-            if !store.nearBottom && !store.messages.isEmpty {
-                Button { store.jumpToLatest() } label: {
-                    Label(store.unread > 0 ? "\(store.unread) 条新消息" : "回到最新", systemImage: "arrow.down")
+            VStack(alignment: .trailing, spacing: 8) {
+                if let returnID = quoteReturnID {
+                    Button {
+                        quoteReturnID = nil; highlightedMessage = nil
+                        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: returnID, anchor: .center) }
+                    } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
+                        .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
                 }
-                    .buttonStyle(.glassProminent).padding().accessibilityHint("跳到最新消息")
-            }
+                if !store.nearBottom && !store.messages.isEmpty {
+                    Button { store.jumpToLatest() } label: {
+                        Label(store.unread > 0 ? "\(store.unread) 条新消息" : "回到最新", systemImage: "arrow.down")
+                    }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
+                }
+            }.padding()
         }
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.hidden, for: .tabBar)
@@ -169,7 +190,7 @@ private struct ChatRoomContent: View {
                 if visible && phase == .active { await store.load() }
             }
         }
-        .onDisappear { visible = false; store.suspend(); Task { await session.refreshCounts() } }
+        .onDisappear { visible = false; highlightTask?.cancel(); store.suspend(); Task { await session.refreshCounts() } }
         .onChange(of: phase) { _, value in
             if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
         }
@@ -177,6 +198,9 @@ private struct ChatRoomContent: View {
             ChatAttachmentSheet(media: media.items, api: session.api, store: store, quoteID: quote?.id) {
                 quote = nil
             }
+        }
+        .sheet(item: $quoteContext, onDismiss: { mediaPresentationChanged(false) }) { target in
+            ChatQuoteContextView(targetID: target.id, store: store, conversation: conversation, socket: socket)
         }
         .onReceive(socket.events) { payload in
             if visible && phase == .active, store.receive(payload) {
@@ -210,12 +234,29 @@ private struct ChatRoomContent: View {
         }
     }
     private func loadOlder() async {
-        guard !store.loadingOlder else { return }
+        guard !store.loadingOlder, !viewport.preservingHistory, store.more, visible else { return }
         let first = store.messages.first?.id
         viewport.beginHistory()
         await store.load(older: true)
         guard visible, !Task.isCancelled else { return }
         if let y = viewport.finishHistory(addedRows: store.messages.first?.id != first) { position.scrollTo(y: y) }
+    }
+    private func jumpToQuote(_ id: Int, from entryID: String) {
+        guard id > 0 else { return }
+        composerFocused = false
+        guard let target = store.timeline.entries.first(where: { $0.row.id == id }) else {
+            mediaPresentationChanged(true)
+            quoteContext = ChatQuoteTarget(id: id)
+            return
+        }
+        viewport.clearPreservation(); store.reachedBottom(false)
+        quoteReturnID = entryID; highlightedMessage = id
+        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: target.id, anchor: .center) }
+        highlightTask?.cancel()
+        highlightTask = Task {
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            highlightedMessage = nil
+        }
     }
     private func mediaPresentationChanged(_ presented: Bool) {
         if presented {

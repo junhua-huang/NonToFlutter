@@ -272,6 +272,40 @@ final class LayoutSnapshotTests: XCTestCase {
         }, session: session, name: "chat-uncertain-delivery-large-text", width: 320, largeText: true, expectsScrollChrome: false)
     }
 
+    func testQuoteContextAndOfflineRecoveryLayouts() async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        try api.setToken("chat-quote-context")
+        let session = AppSession(api: api); session.user = Person(.object(["id": .id(userID)])); session.restoring = false
+        let original: JSON = .object(["id": .id(1), "sender_id": .id(900041), "content": .text("周末一起去看展吗？"), "created_at": .text("2026-10-24T02:00:00Z")])
+        let reply: JSON = .object(["id": .id(2), "sender_id": .id(userID), "content": .text("好呀，下午两点在入口见。"),
+            "quote_message_id": .id(1), "quote_preview": .text("周末一起去看展吗？"), "created_at": .text("2026-10-24T02:01:00Z")])
+        var contextLoaded = false
+        StubProtocol.handler = { request in
+            if request.httpMethod == "POST" { return (200, .null) }
+            if request.url!.path.hasSuffix("/around") {
+                contextLoaded = true
+                return (200, .object(["messages": .array([original, reply])]))
+            }
+            return (200, .object(["messages": .array([reply]), "has_more": .bool(false)]))
+        }
+        let room = Conversation(.object(["id": .id(55), "other_user": .object(["id": .id(900041), "username": .text("雨辰")])]))
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "quote-context-layout"))
+        let store = ChatStore(api: api, conversation: room, userID: userID, defaults: defaults)
+        await store.activate()
+        defer { store.suspend(); defaults.removePersistentDomain(forName: "quote-context-layout") }
+        try await capture(ChatQuoteContextView(targetID: 1, store: store, conversation: room, socket: session.socket), session: session,
+                          name: "chat-quote-context-dark", width: 390, dark: true, expectsScrollChrome: false, ready: { contextLoaded })
+        let item = PendingMessage(content: "网络恢复后继续发送这条消息", failure: "网络暂不可用", retryWhenOnline: true)
+        try await capture(AppNavigationStack {
+            ScrollView { ChatPendingRow(item: item, sending: false, blocked: false, retry: {}, remove: {}) }
+                .navigationTitle("发送状态")
+                .overlay(alignment: .top) {
+                    ChatSyncNotice(error: "正在等待网络恢复", retry: {}, dismiss: {}).padding(.horizontal)
+                }
+        }, session: session, name: "chat-offline-recovery-large-text", width: 320, largeText: true, expectsScrollChrome: false)
+    }
+
     func testOutgoingBubbleHeightDoesNotChangeOnAcknowledgementOrReceiptHandoff() throws {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
         let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())

@@ -10,6 +10,7 @@ struct PendingMessage: Codable, Identifiable, Equatable {
     var failure: String? = nil
     var deliveryUncertain: Bool? = false
     var createdAt: Date? = Date()
+    var retryWhenOnline: Bool? = false
 }
 
 /// Owns one account's durable outbox and cancels room work when it is no longer visible.
@@ -49,6 +50,7 @@ final class ChatStore {
     private var sendID = UUID()
     private var lifecycleID = UUID()
     private var localIdentities: [Int: ChatMessageIdentity] = [:]
+    private var recalledIDs = Set<Int>()
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     private var cacheKey: String { "chat.\(communityID == nil ? "single" : "community").\(communityID ?? conversation.id)" }
     private var outboxKey: String { "nonto.native.outbox.\(accountID).\(cacheKey)" }
@@ -89,6 +91,7 @@ final class ChatStore {
         active = false
         if let id = sendingID, let index = pending.firstIndex(where: { $0.id == id }) {
             pending[index].deliveryUncertain = true
+            pending[index].retryWhenOnline = false
             pending[index].failure = "发送已中断，结果待确认，请先检查最新消息"
             persistPending()
         }
@@ -156,14 +159,15 @@ final class ChatStore {
             let known = Set(knownMessages.keys), last = messages.last?.id
             let added = rows.filter { $0.id > 0 && !known.contains($0.id) }
             let changed = rows.contains { row in row.id > 0 && knownMessages[row.id] != row }
-            if changed { setMessages(Records.messages(messages, rows)); persistMessages() }
+            if changed, setMessages(Records.messages(messages, rows)) { persistMessages() }
+            let hasMore = json["has_more"] == .bool(true) || (json["has_more"] != .bool(false) && rows.count >= 50)
             if older {
                 let ids = rows.map(\.id)
                 page += 1
                 // Cached history can legitimately overlap multiple server pages.
-                more = json["has_more"] != .bool(false) && rows.count >= 50 && ids != lastOlderIDs && (communityID == nil || !added.isEmpty)
+                more = hasMore && ids != lastOlderIDs && (communityID == nil || !added.isEmpty)
                 lastOlderIDs = ids
-            } else if page == 1 { more = json["has_more"] != .bool(false) && rows.count >= 50 }
+            } else if page == 1 { more = hasMore }
             if communityID != nil, json["conversation"]["id"].int > 0 {
                 updateRoomID(json["conversation"]["id"].int)
             }
@@ -172,6 +176,7 @@ final class ChatStore {
             if pending.contains(where: { confirmed.contains($0.id) }) {
                 pending.removeAll { confirmed.contains($0.id) }; persistPending()
             }
+            resumeSafelyUnsentMessages()
             flush()
             if !older && messages.last?.id != last && !nearBottom && !known.isEmpty {
                 unread += added.filter { $0.senderID != accountID }.count
@@ -233,7 +238,7 @@ final class ChatStore {
             return false
         case "message_recalled":
             let id = event.data["message_id"].or(event.data["id"]).int
-            if let message = messages.first(where: { $0.id == id }) { applyRecall(message) }
+            if id > 0 { applyRecall(id: id) }
             return false
         case "conversation_read": return true
         default: return false
@@ -275,7 +280,8 @@ final class ChatStore {
     }
     func retry(_ id: String) {
         guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
-        pending[index].failure = nil; pending[index].deliveryUncertain = false; persistPending(); flush()
+        pending[index].failure = nil; pending[index].deliveryUncertain = false
+        pending[index].retryWhenOnline = false; persistPending(); flush()
     }
     func remove(_ id: String) {
         guard id != sendingID else { return }
@@ -293,7 +299,7 @@ final class ChatStore {
                 sendingID = item.id
                 // Persist before the request: termination after the server writes must not cause an automatic resend.
                 if let index = pending.firstIndex(where: { $0.id == item.id }) {
-                    pending[index].deliveryUncertain = true; persistPending()
+                    pending[index].deliveryUncertain = true; pending[index].retryWhenOnline = false; persistPending()
                 }
                 do {
                     var body: [String: JSON] = ["content": .text(item.content), "message_type": .text(item.kind)]
@@ -313,14 +319,26 @@ final class ChatStore {
                     // A socket acknowledgement may have already confirmed this item while HTTP was in flight.
                     guard let index = pending.firstIndex(where: { $0.id == item.id }) else { continue }
                     pending[index].failure = error.localizedDescription
-                    pending[index].deliveryUncertain = ChatDeliveryFailure.isUncertain(error); persistPending()
+                    pending[index].deliveryUncertain = ChatDeliveryFailure.isUncertain(error)
+                    pending[index].retryWhenOnline = ChatDeliveryFailure.canRetryWhenOnline(error)
+                    persistPending()
                     // Keep delivery order when a message fails; retry resumes the queue.
                     break
                 }
             }
         }
     }
-    @discardableResult private func setMessages(_ value: [ChatMessage]) -> Bool {
+    private func resumeSafelyUnsentMessages() {
+        // Called only after an authenticated history request succeeds. Socket
+        // reconnects alone do not prove the HTTP send route is reachable.
+        var changed = false
+        for index in pending.indices where pending[index].retryWhenOnline == true && pending[index].deliveryUncertain != true {
+            pending[index].failure = nil; pending[index].retryWhenOnline = false; changed = true
+        }
+        if changed { persistPending() }
+    }
+    @discardableResult private func setMessages(_ incoming: [ChatMessage]) -> Bool {
+        let value = ChatMessageReferences.redactingRecalls(incoming, known: recalledIDs)
         for message in value where message.senderID == accountID {
             if let requestID = message.clientRequestID, let item = pending.first(where: { $0.id == requestID }) {
                 localIdentities[message.id] = ChatMessageIdentity(requestID: item.id, createdAt: item.createdAt)
@@ -350,16 +368,26 @@ final class ChatStore {
                 _ = try await api.request("/chat/messages/\(message.id)/recall", method: "POST")
             }
             guard active, valid, !Task.isCancelled else { return }
-            applyRecall(message)
+            applyRecall(id: message.id)
             await load()
         }
         catch { if active && valid { self.error = error.localizedDescription } }
     }
-    private func applyRecall(_ message: ChatMessage) {
-        let recalled = ChatMessage(message.raw.merging(.object([
-            "is_recalled": .bool(true), "content": .text(""), "media_url": .null, "quote_preview": .text("")
-        ])))
-        if setMessages(Records.messages(messages, [recalled])) { persistMessages() }
+    private func applyRecall(id: Int) {
+        recalledIDs.insert(id)
+        if setMessages(messages) { persistMessages() }
+    }
+    func quoteContext(_ targetID: Int) async throws -> [ChatMessage] {
+        guard active, valid, targetID > 0 else { throw APIError(status: 404, message: "原消息已不可用") }
+        let contextPath = communityID == nil ? path + "/around" : path + "/messages/around"
+        let result = try await api.request(contextPath, query: ["target_id": String(targetID), "before": "10", "after": "10"])
+        try Task.checkCancellation()
+        guard active, valid else { throw CancellationError() }
+        let context = Records.messages([], try PagedResource<ChatMessage>.rows(result, keys: ["messages", "items"]).map(ChatMessage.init))
+        guard context.contains(where: { $0.id == targetID }) else { throw APIError(status: 404, message: "原消息已删除或暂时无法查看") }
+        // A context window must not be merged into the main paginated timeline:
+        // doing so would conceal an unloaded gap and move the user's viewport.
+        return ChatMessageReferences.redactingRecalls(context, known: recalledIDs)
     }
 }
 

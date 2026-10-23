@@ -1,6 +1,12 @@
 import Foundation
 
 enum ChatDeliveryFailure {
+    /// Connection establishment failed before a request could reach the server.
+    /// Lost responses/timeouts must never opt into automatic retry.
+    static func canRetryWhenOnline(_ error: Error) -> Bool {
+        guard let error = error as? URLError else { return false }
+        return [.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed].contains(error.code)
+    }
     /// HTTP gateways can lose the acknowledgement after the server has persisted a message.
     static func isUncertain(_ error: Error) -> Bool {
         if let error = error as? APIError { return error.status == 0 || error.status == 408 || error.status >= 500 }
@@ -74,6 +80,9 @@ struct ChatViewportMetrics: Equatable {
     var visibleBottom: CGFloat? = nil
     private var bottom: CGFloat { visibleBottom ?? (offset + visibleHeight - bottomInset) }
     var nearBottom: Bool { contentHeight - bottom < 80 }
+    func shouldLoadHistory(userScrolling: Bool) -> Bool {
+        userScrolling && offset + topInset < 100 && contentHeight > visibleHeight + 120
+    }
     func clamped(_ y: CGFloat) -> CGFloat {
         min(max(-topInset, y), max(-topInset, offset + contentHeight - bottom))
     }
@@ -173,6 +182,7 @@ struct ChatPresentation {
             if let media = item.media { raw["media_url"] = .text(media) }
             if let date = item.createdAt { raw["created_at"] = .number(date.timeIntervalSince1970) }
             if let quoteID = item.quoteID, let quote = messages.first(where: { $0.id == quoteID }) {
+                raw["quote_message_id"] = .id(quoteID)
                 raw["quote_preview"] = .text(ChatQuoteSummary.preview(quote))
             }
             visible.append(ChatMessage(.object(raw))); dates.append(item.createdAt)

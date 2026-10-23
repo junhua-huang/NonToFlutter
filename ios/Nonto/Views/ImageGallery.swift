@@ -41,7 +41,9 @@ import ImageIO
             cache.removeObject(forKey: key as NSString); cache.removeObject(forKey: previewKey)
             session.configuration.urlCache?.removeCachedResponse(for: URLRequest(url: url))
         }
-        if let image = cache.object(forKey: previewKey) { return image }
+        let uploadedPreview = cache.object(forKey: previewKey)
+        // A local chat thumbnail is immediate, but must not cap full-screen zoom quality.
+        if let image = uploadedPreview, pixels <= 960 { return image }
         if let image = cache.object(forKey: key as NSString) { return image }
         if let task = requests[key] { return try await task.value }
         let task = Task { () throws -> UIImage in
@@ -54,7 +56,14 @@ import ImageIO
         }
         requests[key] = task
         defer { if epoch == generation { requests[key] = nil } }
-        let image = try await task.value
+        let image: UIImage
+        do { image = try await task.value }
+        catch {
+            guard epoch == generation, !Task.isCancelled else { throw CancellationError() }
+            // The just-uploaded image remains viewable when a larger download fails offline.
+            if let uploadedPreview { return uploadedPreview }
+            throw error
+        }
         guard epoch == generation else { throw CancellationError() }
         cache.setObject(image, forKey: key as NSString, cost: Int(image.size.width * image.size.height * 4))
         return image

@@ -119,6 +119,20 @@ import SwiftUI
         do { _ = try await repository.image(at: url, maxPixelSize: 960); XCTFail("A cleared account cache must not return its old preview") }
         catch { XCTAssertEqual(requests, 1) }
     }
+    func testFullScreenImageAttemptsHigherResolutionButKeepsLocalPreviewOffline() async throws {
+        var requests = 0
+        StubProtocol.handler = { _ in requests += 1; throw URLError(.notConnectedToInternet) }
+        defer { StubProtocol.handler = nil }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
+        let repository = ImageRepository(session: URLSession(configuration: config))
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 16)).image { _ in }
+        let url = "https://example.test/uploaded-high-resolution.jpg"
+        repository.rememberUploadedPreview(image, at: url)
+        let fullScreen = try await repository.image(at: url, maxPixelSize: 3072)
+        XCTAssertTrue(fullScreen === image); XCTAssertEqual(requests, 1)
+        let thumbnail = try await repository.image(at: url, maxPixelSize: 960)
+        XCTAssertTrue(thumbnail === image); XCTAssertEqual(requests, 1)
+    }
     func testPostDisplayTrimsOnlyOuterWhitespaceWithoutChangingWireContent() {
         let original = " \n\t第一段\n\n第二段  内容\r\n "
         let post = Post(.object(["id": .id(1), "content": .text(original)]))

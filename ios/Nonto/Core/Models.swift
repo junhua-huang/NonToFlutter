@@ -75,6 +75,24 @@ struct Conversation: Record {
     var unread: Int { raw["unread_count"].int }
     var last: ChatMessage { ChatMessage(raw["last_message"]) }
 }
+
+/// Quote previews are copies; recalling the original must redact every loaded copy too.
+enum ChatMessageReferences {
+    static func redactingRecalls(_ messages: [ChatMessage], known: Set<Int> = []) -> [ChatMessage] {
+        let recalled = known.union(messages.filter(\.recalled).map(\.id))
+        guard !recalled.isEmpty else { return messages }
+        return messages.map { message in
+            var patch: [String: JSON] = [:]
+            if recalled.contains(message.id) {
+                patch = ["is_recalled": .bool(true), "content": .text(""), "text": .text(""),
+                         "media_url": .null, "file_url": .null, "quote_preview": .text("")]
+            } else if recalled.contains(message.raw["quote_message_id"].int) {
+                patch["quote_preview"] = .text("消息已撤回")
+            }
+            return patch.isEmpty ? message : ChatMessage(message.raw.merging(.object(patch)))
+        }
+    }
+}
 struct Community: Record {
     var raw: JSON
     init(_ raw: JSON) { self.raw = raw }
@@ -122,6 +140,6 @@ enum Records {
             if lhs.date == rhs.date { return lhs.message.id < rhs.message.id }
             return lhs.date < rhs.date
         }
-        return dated.map { $0.message }
+        return ChatMessageReferences.redactingRecalls(dated.map { $0.message })
     }
 }

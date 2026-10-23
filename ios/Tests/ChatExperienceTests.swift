@@ -570,4 +570,133 @@ final class ChatExperienceTests: XCTestCase {
         await store.activate(); try await waitUntil { !store.sending }
         XCTAssertEqual(sends, 1); XCTAssertTrue(store.pending.isEmpty); store.suspend()
     }
+    func testClearlyUnsentOfflineMessagesResumeInOrderAfterSuccessfulSync() async throws {
+        var attempts: [JSON] = []
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                attempts.append(try self.body(request))
+                if attempts.count == 1 { throw URLError(.notConnectedToInternet) }
+                return (200, .object(["data": self.message(200 + attempts.count, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate()
+        store.enqueue(content: "第一条"); store.enqueue(content: "第二条")
+        try await waitUntil { !store.sending }
+        XCTAssertEqual(attempts.count, 1); XCTAssertEqual(store.pending.first?.retryWhenOnline, true)
+        XCTAssertEqual(store.pending.first?.deliveryUncertain, false)
+        let firstID = store.pending.first?.id
+        await store.load()
+        try await waitUntil { store.pending.isEmpty && !store.sending }
+        XCTAssertEqual(attempts.map { $0["content"].string }, ["第一条", "第一条", "第二条"])
+        XCTAssertEqual(attempts.prefix(2).map { $0["request_id"].string }, [firstID!, firstID!])
+        store.suspend()
+    }
+    func testTimeoutIsNeverAutomaticallyRetriedAfterSuccessfulSync() async throws {
+        var sends = 0
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                sends += 1; throw URLError(.timedOut)
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate(); store.enqueue(content: "可能已送达")
+        try await waitUntil { !store.sending }
+        await store.load(); await store.load()
+        XCTAssertEqual(sends, 1); XCTAssertEqual(store.pending.first?.deliveryUncertain, true)
+        XCTAssertEqual(store.pending.first?.retryWhenOnline, false); store.suspend()
+    }
+    func testOfflineRetryIntentSurvivesRestoreWithoutChangingRequestID() async throws {
+        let item = PendingMessage(id: "offline-stable", content: "离线草稿", failure: "离线", retryWhenOnline: true)
+        defaults.set(try JSONEncoder().encode([item]), forKey: "nonto.native.outbox.\(userID).chat.single.55")
+        var sentID = ""
+        let store = try room { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                sentID = try self.body(request)["request_id"].string
+                return (200, .object(["data": self.message(201, sender: self.userID)]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await store.activate(); try await waitUntil { !store.sending }
+        XCTAssertEqual(sentID, item.id); XCTAssertTrue(store.pending.isEmpty); store.suspend()
+    }
+    func testRecallRedactsReferencesEvenWhenTheOriginalIsOutsideLoadedHistory() async throws {
+        let reply = message(101).merging(.object(["quote_message_id": .id(1), "quote_preview": .text("不应再次出现的原文")]))
+        let store = try room { request in
+            if request.url!.path.hasSuffix("/around") {
+                return (200, .object(["messages": .array([self.message(1), reply])]))
+            }
+            return (200, .object(["messages": .array([reply])]))
+        }
+        await store.activate()
+        store.receive(.object(["event": .text("message_recalled"), "data": .object([
+            "conversation_id": .id(55), "message_id": .id(1)])]))
+        XCTAssertEqual(store.messages.first?.raw["quote_preview"].string, "消息已撤回")
+        await store.load()
+        XCTAssertEqual(store.messages.first?.raw["quote_preview"].string, "消息已撤回")
+        let context = try await store.quoteContext(1)
+        XCTAssertTrue(context.first!.recalled); XCTAssertEqual(context.first?.content, "")
+        XCTAssertEqual(context.last?.raw["quote_preview"].string, "消息已撤回")
+        XCTAssertEqual(store.messages.map(\.id), [101]); store.suspend()
+    }
+    func testQuoteContextUsesBothExistingRoutesWithoutMutatingTimelineOrReadPosition() async throws {
+        for community in [false, true] {
+            let conversation = Conversation(.object(["id": .id(55), "type": .text(community ? "community" : "direct"),
+                                                      "community_id": community ? .id(33) : .null]))
+            var contextRequests = 0
+            let store = try room(conversation: conversation) { request in
+                if request.url!.path.hasSuffix("/around") {
+                    contextRequests += 1
+                    XCTAssertEqual(request.url!.path, community ? "/api/communities/33/chat/messages/around" : "/api/chat/conversations/55/messages/around")
+                    let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems
+                    XCTAssertEqual(query?.first { $0.name == "target_id" }?.value, "1")
+                    return (200, .object(["messages": .array([self.message(1), self.message(2)])]))
+                }
+                return (200, .object(["messages": .array([self.message(100)])]))
+            }
+            await store.activate(); store.reachedBottom(false)
+            let before = store.scrollRequest
+            let context = try await store.quoteContext(1)
+            XCTAssertEqual(context.map(\.id), [1, 2]); XCTAssertEqual(contextRequests, 1)
+            XCTAssertEqual(store.messages.map(\.id), [100]); XCTAssertFalse(store.nearBottom)
+            XCTAssertEqual(store.scrollRequest, before); store.suspend()
+        }
+    }
+    func testUnavailableQuoteDoesNotReplaceTheRoomWithAnUnrelatedContext() async throws {
+        let store = try room { request in
+            (200, .object(["messages": .array([self.message(100)])]))
+        }
+        await store.activate()
+        do { _ = try await store.quoteContext(1); XCTFail("A context must contain its requested target") }
+        catch { XCTAssertEqual((error as? APIError)?.status, 404) }
+        XCTAssertEqual(store.messages.map(\.id), [100]); XCTAssertNil(store.error); store.suspend()
+    }
+    func testHistoryAutoloadRequiresUserScrollingNearTheTopOfLongContent() {
+        let top = ChatViewportMetrics(offset: -40, contentHeight: 2000, visibleHeight: 700, topInset: 40, bottomInset: 0)
+        XCTAssertTrue(top.shouldLoadHistory(userScrolling: true))
+        XCTAssertFalse(top.shouldLoadHistory(userScrolling: false), "Initial bottom layout must not trigger a history fetch")
+        let bottom = ChatViewportMetrics(offset: 1300, contentHeight: 2000, visibleHeight: 700, topInset: 40, bottomInset: 0)
+        XCTAssertFalse(bottom.shouldLoadHistory(userScrolling: true))
+        let short = ChatViewportMetrics(offset: 0, contentHeight: 200, visibleHeight: 700, topInset: 0, bottomInset: 0)
+        XCTAssertFalse(short.shouldLoadHistory(userScrolling: true))
+    }
+    func testExplicitHistoryCursorContinuesEvenWhenAVisiblePageIsShort() async throws {
+        let store = try room { request in
+            if request.httpMethod == "POST" { return (200, .null) }
+            let page = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "page" }?.value
+            return (200, .object(["messages": .array([self.message(page == "2" ? 1 : 100)]), "has_more": .bool(page != "2")]))
+        }
+        await store.activate(); XCTAssertTrue(store.more)
+        store.reachedBottom(false); await store.load(older: true)
+        XCTAssertEqual(store.messages.map(\.id), [1, 100]); XCTAssertFalse(store.more)
+        store.suspend()
+    }
+    func testStaleWirePreviewCannotRestoreRecalledContentOrAlternateMediaFields() {
+        let original = ChatMessage(message(1).merging(.object(["is_recalled": .bool(true), "text": .text("旧正文"),
+            "file_url": .text("https://example.test/private.jpg")])))
+        let reply = ChatMessage(message(2).merging(.object(["quote_message_id": .id(1), "quote_preview": .text("旧正文")])))
+        let merged = Records.messages([original], [reply])
+        XCTAssertEqual(merged[0].content, ""); XCTAssertEqual(merged[0].media, "")
+        XCTAssertEqual(merged[1].raw["quote_preview"].string, "消息已撤回")
+    }
 }

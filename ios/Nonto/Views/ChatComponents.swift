@@ -80,6 +80,9 @@ struct ChatMessageRow: View {
     var retry: () -> Void = { }
     var remove: () -> Void = { }
     var checkDelivery: () -> Void = { }
+    var highlighted = false
+    var onJumpToQuote: ((Int) -> Void)? = nil
+    var allowsActions = true
     let onQuote: (ChatMessage) -> Void
     let onRecall: (ChatMessage) -> Void
     @EnvironmentObject private var session: AppSession
@@ -113,9 +116,9 @@ struct ChatMessageRow: View {
                             if !caption.isEmpty {
                                 Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = caption }
                             }
-                            if pending == nil { Button("引用", systemImage: "quote.bubble") { onQuote(message) } }
+                            if pending == nil && allowsActions { Button("引用", systemImage: "quote.bubble") { onQuote(message) } }
                             if pending != nil && !sending { Button("取消发送", role: .destructive, action: remove) }
-                            if pending == nil, mine, let date = row.date, Date().timeIntervalSince(date) < 120 {
+                            if allowsActions, pending == nil, mine, let date = row.date, Date().timeIntervalSince(date) < 120 {
                                 Button("撤回", systemImage: "arrow.uturn.backward", role: .destructive) { onRecall(message) }
                             }
                             if !mine && message.senderID > 0 {
@@ -143,6 +146,7 @@ struct ChatMessageRow: View {
                 if !mine { Spacer(minLength: 48) }
             }
         }.padding(.horizontal).padding(.top, row.startsRun ? 6 : 0)
+            .background(Color.brand.opacity(highlighted ? 0.10 : 0))
             .sheet(isPresented: $reporting) {
                 ReportView(kind: "user", targetID: message.senderID, context: "聊天消息 #\(message.id)：\n")
             }
@@ -150,10 +154,10 @@ struct ChatMessageRow: View {
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !message.raw["quote_preview"].string.isEmpty {
-                HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2).fill(Color.brand).frame(width: 3)
-                    Text(message.raw["quote_preview"].string).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                }.fixedSize(horizontal: false, vertical: true)
+                if let onJumpToQuote, message.raw["quote_message_id"].int > 0 {
+                    Button { onJumpToQuote(message.raw["quote_message_id"].int) } label: { quotePreview }
+                        .buttonStyle(.plain).frame(minHeight: 44, alignment: .leading).accessibilityLabel("查看引用的原消息")
+                } else { quotePreview }
             }
             if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
             else if message.kind == "image" { MediaView(images: [message.media], video: "", thumbnailHeight: 190,
@@ -174,6 +178,95 @@ struct ChatMessageRow: View {
             }
         }.modifier(ChatBubbleSurface(media: bareMedia, mine: mine))
             .frame(maxWidth: bareMedia ? 250 : nil, alignment: mine ? .trailing : .leading)
+    }
+    private var quotePreview: some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 2).fill(Color.brand).frame(width: 3)
+            Text(message.raw["quote_preview"].string).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+            if onJumpToQuote != nil, message.raw["quote_message_id"].int > 0 {
+                Image(systemName: "arrow.up.left").font(.caption2).foregroundStyle(.secondary)
+            }
+        }.fixedSize(horizontal: false, vertical: true).contentShape(Rectangle())
+    }
+}
+
+/// The banner floats above the timeline, so a polling error cannot insert a row.
+struct ChatSyncNotice: View {
+    let error: String
+    let retry: () -> Void
+    let dismiss: () -> Void
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.exclamationmark").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("消息暂未同步").font(.caption.weight(.semibold))
+                Text(error).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            Button("重试", action: retry).frame(minHeight: 44)
+            Button(action: dismiss) { Image(systemName: "xmark") }.frame(width: 44, height: 44)
+                .accessibilityLabel("收起同步提示")
+        }.padding(.leading, 12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+struct ChatQuoteTarget: Identifiable { let id: Int }
+
+/// A separately fetched quote window never changes the main chat's loaded pages.
+struct ChatQuoteContextView: View {
+    let targetID: Int
+    let store: ChatStore
+    let conversation: Conversation
+    let socket: RealtimeClient
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AppSession
+    @State private var messages: [ChatMessage] = []
+    @State private var loading = true
+    @State private var error: String?
+    @State private var position = ScrollPosition(idType: Int.self)
+    var body: some View {
+        AppNavigationStack {
+            ScrollView {
+                LazyVStack(spacing: 6) {
+                    if !messages.isEmpty {
+                        Text("引用消息及前后上下文").font(.caption).foregroundStyle(.secondary).padding()
+                    }
+                    ForEach(ChatTimeline.rows(messages)) { row in
+                        ChatMessageRow(row: row, community: conversation.isCommunity, showsReceipt: false,
+                                       highlighted: row.id == targetID, allowsActions: false,
+                                       onQuote: { _ in }, onRecall: { _ in }).id(row.id)
+                    }
+                }.scrollTargetLayout().padding(.vertical, 8)
+            }.scrollPosition($position).background(Color.timelineBackground)
+                .overlay {
+                    if messages.isEmpty { ChatTimelinePlaceholder(loading: loading, error: error) { Task { await load() } } }
+                }
+                .navigationTitle("引用的消息").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
+                .task { await load() }
+                .onReceive(socket.events) { payload in
+                    let event = ChatRealtimeEvent(payload)
+                    guard event.name == "message_recalled",
+                          event.conversationID == conversation.id || (conversation.communityID != nil && event.communityID == conversation.communityID) else { return }
+                    let id = event.data["message_id"].or(event.data["id"]).int
+                    if id > 0 { messages = ChatMessageReferences.redactingRecalls(messages, known: [id]) }
+                }
+        }
+    }
+    private func load() async {
+        loading = true; error = nil
+        defer { loading = false }
+        do {
+            messages = try await store.quoteContext(targetID)
+            try Task.checkCancellation()
+            position.scrollTo(id: targetID, anchor: .center)
+        } catch {
+            if !Task.isCancelled {
+                if let error = error as? APIError, [403, 404].contains(error.status) {
+                    self.error = "原消息已删除，或当前账号无权查看"
+                } else { self.error = error.localizedDescription }
+            }
+        }
     }
 }
 
@@ -282,6 +375,7 @@ struct ChatPendingStatus: View {
                 if item.deliveryUncertain == true {
                     Button("检查最新消息", action: checkDelivery).frame(minHeight: 44).buttonStyle(.plain)
                 }
+                if item.retryWhenOnline == true { Text("连接恢复后自动重试").foregroundStyle(.secondary) }
                 Text(failure).foregroundStyle(.secondary).lineLimit(3)
             } else {
                 Label(sending ? "正在发送…" : (blocked ? "等待上一条消息重试" : "等待发送"),
@@ -321,6 +415,7 @@ struct ChatAttachmentSheet: View {
     @State private var cancelled = false
     @State private var error: String?
     @State private var images: [UUID: UIImage] = [:]
+    @State private var selectedPreview: (id: UUID, image: UIImage)?
     @State private var videoURLs: [UUID: URL] = [:]
     @State private var uploaded: [UUID: String] = [:]
     @State private var excluded = Set<UUID>()
@@ -328,6 +423,7 @@ struct ChatAttachmentSheet: View {
     @State private var completed = 0
     @State private var uploadProgress: Double = 0
     private var selection: [SelectedMedia] { media.filter { !excluded.contains($0.id) } }
+    private var selectedMedia: SelectedMedia? { selection.indices.contains(selected) ? selection[selected] : nil }
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -337,7 +433,7 @@ struct ChatAttachmentSheet: View {
                         if item.isVideo {
                             if let url = videoURLs[item.id] { NativeVideo(url: url).frame(height: 320) }
                             else { ProgressView("正在准备视频…").frame(height: 320) }
-                        } else if let image = images[item.id] {
+                        } else if let image = (selectedPreview?.id == item.id ? selectedPreview?.image : nil) ?? images[item.id] {
                             ZoomImageSurface(image: image).frame(height: 360).accessibilityLabel("待发送图片，可缩放预览")
                         } else { ProgressView().frame(height: 200) }
                     }
@@ -386,12 +482,29 @@ struct ChatAttachmentSheet: View {
                 }.interactiveDismissDisabled(submitting)
                 .task {
                     for item in media {
+                        guard !Task.isCancelled else { return }
                         if item.isVideo {
                             let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-preview-" + item.name)
-                            do { try item.data.write(to: url, options: [.atomic, .completeFileProtection]); videoURLs[item.id] = url }
+                            do {
+                                try await Task.detached(priority: .userInitiated) {
+                                    try item.data.write(to: url, options: [.atomic, .completeFileProtection])
+                                }.value
+                                guard !Task.isCancelled else { try? FileManager.default.removeItem(at: url); return }
+                                videoURLs[item.id] = url
+                            }
                             catch { self.error = "无法预览视频" }
-                        } else { images[item.id] = UIImage(data: item.data) }
+                        } else if let image = try? await Task.detached(priority: .userInitiated, operation: {
+                            try ImageRepository.decode(item.data, maxPixelSize: 960)
+                        }).value, !Task.isCancelled { images[item.id] = image }
                     }
+                }
+                .task(id: selectedMedia?.id) {
+                    selectedPreview = nil
+                    guard let item = selectedMedia, !item.isVideo else { return }
+                    let image = try? await Task.detached(priority: .userInitiated) {
+                        try ImageRepository.decode(item.data, maxPixelSize: 1536)
+                    }.value
+                    if !Task.isCancelled, selectedMedia?.id == item.id, let image { selectedPreview = (item.id, image) }
                 }
                 .task(id: submitting) {
                     guard submitting, !cancelled else { return }
@@ -407,7 +520,7 @@ struct ChatAttachmentSheet: View {
                             if let cached = uploaded[item.id] { url = cached }
                             else {
                                 let before = sentBytes, bytes = item.data.count
-                                url = try await api.upload(item.data, filename: item.name, mime: item.mime) { value in
+                                url = try await api.upload(item.data, filename: item.name, mime: item.mime, type: "chat") { value in
                                     guard submitting, !cancelled, epoch == api.generation else { return }
                                     let fraction = (Double(before) + Double(bytes) * min(value, 0.98)) / Double(totalBytes)
                                     if abs(uploadProgress - fraction) >= 0.01 { uploadProgress = fraction }
