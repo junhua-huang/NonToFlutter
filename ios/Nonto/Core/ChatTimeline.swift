@@ -77,6 +77,7 @@ struct ChatViewportMetrics: Equatable {
     let visibleHeight: CGFloat
     let topInset: CGFloat
     let bottomInset: CGFloat
+    var visibleWidth: CGFloat = 0
     // Match the native scroll viewport: keyboard/composer insets are covered
     // space, even when the scroll view's full container bounds stay unchanged.
     private var bottom: CGFloat { offset + visibleHeight - bottomInset }

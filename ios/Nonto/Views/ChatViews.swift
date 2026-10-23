@@ -87,7 +87,7 @@ struct ChatRoomContent: View {
     }
     var body: some View {
         let timeline = store.timeline
-        GeometryReader { container in
+        GeometryReader { _ in
             ScrollView {
                 LazyVStack(spacing: 6) {
                     if store.more && !store.messages.isEmpty {
@@ -114,10 +114,6 @@ struct ChatRoomContent: View {
                     }
                     Color.clear.frame(height: 1).id("chat-bottom")
                 }.scrollTargetLayout().padding(.vertical, 8)
-                    // Give short conversations real layout space. Keep their bottom
-                    // alignment in the content layout, independent of the scroll
-                    // offset that changes while the keyboard resizes the viewport.
-                    .frame(minHeight: container.size.height, alignment: .bottom)
             }
             .overlay {
                 if store.messages.isEmpty && store.pending.isEmpty {
@@ -135,13 +131,22 @@ struct ChatRoomContent: View {
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom, for: .initialOffset)
             .defaultScrollAnchor(.top, for: .sizeChanges)
+            // Align only underflowing content; width/keyboard changes still use
+            // measured offsets rather than a persistent bottom-edge position.
+            .defaultScrollAnchor(.bottom, for: .alignment)
             .onScrollGeometryChange(for: ChatViewportMetrics.self) { geometry in
                 ChatViewportMetrics(offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
                                     visibleHeight: geometry.containerSize.height, topInset: geometry.contentInsets.top,
-                                    bottomInset: geometry.contentInsets.bottom)
+                                    bottomInset: geometry.contentInsets.bottom, visibleWidth: geometry.containerSize.width)
             } action: { previous, value in
                 onViewportMetrics?(value)
                 if let y = viewport.record(value) { position.scrollTo(y: y) }
+                else if abs(previous.visibleWidth - value.visibleWidth) > 1,
+                        store.nearBottom, !viewport.userScrolling,
+                        !viewport.preservingHistory, !viewport.presentingMedia {
+                    // Keep the concrete final row anchored while lazy cells reflow.
+                    followLatest()
+                }
                 else if abs(previous.visibleHeight - value.visibleHeight) > 1
                         || abs(previous.bottomInset - value.bottomInset) > 1
                         || abs(previous.topInset - value.topInset) > 1,

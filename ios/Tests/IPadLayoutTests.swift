@@ -27,18 +27,25 @@ import UIKit
         }
     }
 
-    private func fixture() throws -> (AppSession, Conversation) {
+    private func fixture(longHistory: Bool = false) throws -> (AppSession, Conversation) {
         clearDrafts()
         let me: JSON = .object(["id": .id(account), "username": .text("nonto"), "display_name": .text("南图"),
             "bio": .text("分享创作，记录生活。和同好一起，把热爱变成作品。"),
             "avatar_url": .text("https://ipad.example.test/avatar-me"), "cover_photo_url": .text("https://ipad.example.test/cover")])
         let friend: JSON = .object(["id": .id(account + 1), "username": .text("linyu"), "display_name": .text("林雨"),
             "avatar_url": .text("https://ipad.example.test/avatar-friend")])
-        let messages: [JSON] = [
+        var messages: [JSON] = [
             .object(["id": .id(981001), "sender_id": .id(account + 1), "content": .text("刚看了你分享的作品，色彩很好看。"), "created_at": .text("2026-10-24T01:40:00Z")]),
             .object(["id": .id(981002), "sender_id": .id(account), "content": .text("谢谢！这组是在周末散步时画的。"), "created_at": .text("2026-10-24T01:41:00Z")]),
             .object(["id": .id(981003), "sender_id": .id(account + 1), "content": .text("下次一起去看展吧，也可以约大家一起创作。"), "created_at": .text("2026-10-24T01:42:00Z")]),
             .object(["id": .id(981004), "sender_id": .id(account), "content": .text("好呀，周末见。到时候把新的灵感也带上！"), "created_at": .text("2026-10-24T01:43:00Z")])]
+        if longHistory {
+            messages = (0..<30).map { index in
+                .object(["id": .id(981100 + index), "sender_id": .id(index.isMultiple(of: 2) ? account + 1 : account),
+                    "content": .text("消息 \(index + 1)：这是一段关于创作和风景的交流。我们约好一起看展，记录沿途不同的色彩，也把新的想法分享到社群，和大家一起讨论，再把灵感慢慢变成自己的作品。"),
+                    "created_at": .text("2026-10-24T01:40:00Z")])
+            }
+        }
         let room = Conversation(.object(["id": .id(982001), "other_user": friend, "last_message": messages.last!]))
         let second = Conversation(.object(["id": .id(982002), "other_user": .object(["id": .id(account + 2), "username": .text("xiaoxing"), "display_name": .text("小星")]),
             "unread_count": .id(2), "last_message": .object(["content": .text("新作品已经发到社群里啦"), "created_at": .text("2026-10-24T01:30:00Z")])]))
@@ -92,7 +99,7 @@ import UIKit
         if let input = field as? UITextField { input.text = text; input.sendActions(for: .editingChanged) }
         if let input = field as? UITextView { input.text = text; input.delegate?.textViewDidChange?(input) }
         await Task.yield()
-        for size in [CGSize(width: 600, height: 1024), CGSize(width: 390, height: 844), portrait, landscape] {
+        for size in [CGSize(width: 600, height: 1024), CGSize(width: 900, height: 1024), CGSize(width: 390, height: 844), portrait, landscape] {
             host.resize(size); try await settle()
             let current = try XCTUnwrap(inputs(host.window).first, "Selected conversation must survive column collapse")
             let value = (current as? UITextField)?.text ?? (current as? UITextView)?.text
@@ -107,7 +114,7 @@ import UIKit
 
     func testLatestMessageStaysAboveIPadKeyboard() async throws {
         try requireIPad()
-        let (session, room) = try fixture()
+        let (session, room) = try fixture(longHistory: true)
         let store = ChatStore(api: session.api, conversation: room, userID: account)
         var latest = CGRect.zero
         let view = NavigationStack {
@@ -132,6 +139,13 @@ import UIKit
         attach(host.window, name: "ipad-keyboard-chat")
         host.window.endEditing(true); try await settle()
         XCTAssertEqual(field.convert(field.bounds, to: host.window).minY, initialY, accuracy: 6)
+        let wideRowHeight = latest.height
+        host.resize(CGSize(width: 540, height: portrait.height)); try await settle()
+        XCTAssertGreaterThan(latest.height, wideRowHeight + 5, "The history fixture must really reflow at the narrower width")
+        let resizedComposer = try XCTUnwrap(inputs(host.window).first)
+        XCTAssertLessThan(latest.maxY, resizedComposer.convert(resizedComposer.bounds, to: host.window).minY + 2,
+                          "Width-only resizing must keep the latest wrapped message above the composer")
+        attach(host.window, name: "ipad-window-540x1376-chat-latest")
     }
 
     private func capture<V: View>(_ view: V, session: AppSession, size: CGSize, name: String,
@@ -147,7 +161,8 @@ import UIKit
             }
             XCTAssertGreaterThanOrEqual(panes.count, 2, "Wide iPad layout must show conversation list and chat together")
         }
-        attach(host.window, name: name)
+        let image = attach(host.window, name: name)
+        if requiresSplit { try assertLatestNearComposer(image, window: host.window) }
     }
 
     private func makeHost<V: View>(_ view: V, session: AppSession, size: CGSize, dark: Bool = false) throws -> Host {
@@ -182,13 +197,48 @@ import UIKit
     }
     private func settle() async throws { try await Task.sleep(for: .milliseconds(1400)) }
     private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
-    private func inputs(_ view: UIView) -> [UIView] { descendants(view).filter { $0 is UITextField || $0 is UITextView } }
-    private func attach(_ window: UIWindow, name: String) {
+    private func inputs(_ view: UIView) -> [UIView] {
+        descendants(view).filter { candidate in
+            guard candidate is UITextField || candidate is UITextView, let window = candidate.window,
+                  candidate.convert(candidate.bounds, to: window).intersects(window.bounds) else { return false }
+            var ancestor: UIView? = candidate
+            while let node = ancestor {
+                if node.isHidden || node.alpha < 0.01 { return false }
+                ancestor = node.superview
+            }
+            return candidate.bounds.width > 100
+        }
+    }
+    private func assertLatestNearComposer(_ image: UIImage, window: UIWindow) throws {
+        let input = try XCTUnwrap(inputs(window).first)
+        let composerY = input.convert(input.bounds, to: window).minY
+        let scale = image.scale
+        let region = CGRect(x: window.bounds.width * 0.60 * scale, y: max(0, composerY - 180) * scale,
+                            width: window.bounds.width * 0.38 * scale, height: 160 * scale)
+        let cg = try XCTUnwrap(image.cgImage?.cropping(to: region))
+        let width = cg.width, height = cg.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let blue = try bytes.withUnsafeMutableBytes { buffer -> Int in
+            let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let data = buffer.bindMemory(to: UInt8.self)
+            var count = 0
+            for offset in stride(from: 0, to: data.count, by: 4) {
+                if Int(data[offset + 2]) > Int(data[offset]) + 8 && Int(data[offset + 2]) > Int(data[offset + 1]) + 2 { count += 1 }
+            }
+            return count
+        }
+        XCTAssertGreaterThan(blue, 200, "The latest outgoing bubble must sit close to the composer, including a cached short conversation")
+    }
+    @discardableResult private func attach(_ window: UIWindow, name: String) -> UIImage {
         let format = UIGraphicsImageRendererFormat(); format.scale = 2; format.opaque = true
         let image = UIGraphicsImageRenderer(size: window.bounds.size, format: format).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
         let attachment = XCTAttachment(image: image); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        return image
     }
     private func avatar(_ letter: String, color: UIColor) -> UIImage {
         UIGraphicsImageRenderer(size: CGSize(width: 160, height: 160)).image { c in
