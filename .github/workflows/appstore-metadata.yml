@@ -30,7 +30,7 @@ jobs:
           APPLY_METADATA: ${{ contains(github.event.head_commit.message, '[appstore-metadata]') }}
         run: |
           if [ "$APPLY_METADATA" = "true" ]; then
-            python3 .github/scripts/appstore_metadata.py --apply
+            python3 .github/scripts/appstore_metadata.py --apply --public-policies
           else
-            python3 .github/scripts/appstore_metadata.py
+            python3 .github/scripts/appstore_metadata.py --public-policies
           fi

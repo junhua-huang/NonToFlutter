@@ -1,4 +1,12 @@
-# Windows → GitHub → TestFlight 内部测试
+# Windows → GitHub → Apple 分发
+
+## App Store 正式构建
+
+`[appstore-release]` 提交或手动选择 `distribution_channel=app-store` 使用正式渠道；`[testflight]` 继续使用内部测试渠道。正式渠道沿用同一 Bundle ID、Apple Distribution 证书、描述文件和 production APNs，不自动新建或撤销签名资源。
+
+正式流程先执行 `check_compliance.py --release` 与 `export_legal_site.py --release --check`，再归档、签名、上传。导出使用 `testFlightInternalTestingOnly=false`，Apple 处理成功后还须核对 `APP_STORE_ELIGIBLE`，才能将构建选入匹配版本的可编辑商店草稿。脚本不自动提交审核或公开发布。
+
+截至 2026-10-24，公开政策网址、保留期限和生产运营验收记录仍未补齐。正式归档会报告这些实际阻断项；内部测试构建不能替代正式构建。核验方式见 `LEGAL_PUBLISHING.md` 与 `COMPLIANCE.md`。
 
 原生 App 连接 `https://www.nonto.online/api` 和 `wss://www.nonto.online/ws`；Bundle ID 为 `online.nonto.native`，Team 为 `B2Y3564MKK`。Windows 可完成一次性签名配置，GitHub 的 macOS runner 负责构建和上传。
 

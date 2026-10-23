@@ -82,6 +82,37 @@ class TestFlightChecks(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     tf.verify_archive(temp, unsigned=True)
 
+    def test_store_export_requires_explicit_channel_and_keeps_signing_identity(self):
+        options = tf.export_options('same-profile', 'same-identity', channel='app-store')
+        self.assertIs(options['testFlightInternalTestingOnly'], False)
+        self.assertEqual(options['signingCertificate'], 'same-identity')
+        self.assertEqual(options['provisioningProfiles'], {tf.BUNDLE: 'same-profile'})
+        with self.assertRaises(ValueError):
+            tf.export_options('profile', 'identity', channel='unknown')
+
+    def test_store_archive_cannot_be_confused_with_an_internal_archive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp) / 'Products/Applications/Nonto.app'; app.mkdir(parents=True)
+            info = {'CFBundleIdentifier': tf.BUNDLE, 'NontoDistributionChannel': 'app-store',
+                    'NontoAPNSEnvironment': 'production', 'ITSAppUsesNonExemptEncryption': False}
+            path = app / 'Info.plist'; path.write_bytes(plistlib.dumps(info))
+            tf.verify_archive(temp, unsigned=True, channel='app-store')
+            with self.assertRaises(ValueError):
+                tf.verify_archive(temp, unsigned=True)
+            path.write_bytes(plistlib.dumps(info | {'NontoDistributionChannel': tf.CHANNEL}))
+            with self.assertRaises(ValueError):
+                tf.verify_archive(temp, unsigned=True, channel='app-store')
+
+    def test_processed_internal_build_is_rejected_for_store_distribution(self):
+        apple = Mock()
+        state = {'app': 'own-app', 'build': '80.1', 'channel': 'app-store'}
+        for audience in ('INTERNAL_ONLY', None):
+            apple.request.return_value = {'data': [{'attributes': {'processingState': 'VALID', 'buildAudienceType': audience}}]}
+            with self.assertRaisesRegex(ValueError, 'not eligible'):
+                tf.build_status(apple, state)
+        apple.request.return_value = {'data': [{'attributes': {'processingState': 'VALID', 'buildAudienceType': 'APP_STORE_ELIGIBLE'}}]}
+        self.assertEqual(tf.build_status(apple, state), 'VALID')
+
     def test_api_errors_do_not_expose_tokens_or_response_bodies(self):
         key = ec.generate_private_key(ec.SECP256R1())
         pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()

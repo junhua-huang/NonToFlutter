@@ -11,17 +11,21 @@ private struct ComposerCrashHarness: View {
     }
 }
 
+private final class ChatReplayFrames { var values: [String: CGRect] = [:] }
+
 private struct ChatKeyboardHarness: View {
     let session: AppSession
     let conversation: Conversation
     let store: ChatStore
+    let frames: ChatReplayFrames
     @State private var path: [Int] = []
     var body: some View {
         TabView {
             NavigationStack(path: $path) {
                 Text("私信").navigationTitle("私信")
                     .navigationDestination(for: Int.self) { _ in
-                        ChatRoomContent(session: session, conversation: conversation, store: store)
+                        ChatRoomContent(session: session, conversation: conversation, store: store,
+                                        onMessageFrame: { frames.values[$0] = $1 })
                     }
                     .task { if path.isEmpty { path = [1] } }
             }.tabItem { Label("私信", systemImage: "envelope") }
@@ -179,7 +183,7 @@ final class LayoutSnapshotTests: XCTestCase {
             window.isHidden = true; window.rootViewController = nil; previous?.makeKey()
             PostDraftStore().remove(userID: userID)
         }
-        try await waitForComposer { editor.textView?.window != nil && self.presentedDepth(window.rootViewController) == 1 && window.rootViewController?.presentedViewController?.isBeingPresented == false }
+        try await waitForComposer("initial composer sheet") { editor.textView?.window != nil && self.presentedDepth(window.rootViewController) == 1 && window.rootViewController?.presentedViewController?.isBeingPresented == false }
         let native = try XCTUnwrap(editor.textView)
         XCTAssertTrue(native.becomeFirstResponder())
         native.insertText("🌅 你好，世界")
@@ -191,14 +195,14 @@ final class LayoutSnapshotTests: XCTestCase {
         try await waitForComposer { self.presentedDepth(window.rootViewController) >= 2 }
         XCTAssertEqual(editor.text, before)
         editor.stageReference("yuchen", kind: .mention); editor.referenceKind = nil
-        try await waitForComposer { !editor.hasReferenceSession && editor.text == expected.text && native.isFirstResponder }
+        try await waitForComposer("mention inserted and keyboard restored") { !editor.hasReferenceSession && editor.text == expected.text && native.isFirstResponder }
         XCTAssertEqual(native.text, expected.text)
         XCTAssertEqual(native.selectedRange.location, expected.caretUTF16)
 
         editor.beginReference(.topic)
         try await waitForComposer { self.presentedDepth(window.rootViewController) >= 2 }
         editor.referenceKind = nil // Cancel must keep the text and restore the editor.
-        try await waitForComposer { !editor.hasReferenceSession && native.isFirstResponder }
+        try await waitForComposer("topic cancel and keyboard restored") { !editor.hasReferenceSession && native.isFirstResponder }
         XCTAssertEqual(editor.text, expected.text)
 
         native.selectAll(nil); native.deleteBackward()
@@ -206,16 +210,16 @@ final class LayoutSnapshotTests: XCTestCase {
         editor.beginReference(.topic)
         try await waitForComposer { self.presentedDepth(window.rootViewController) >= 2 }
         editor.stageReference("生活", kind: .topic); editor.referenceKind = nil
-        try await waitForComposer { !editor.hasReferenceSession && editor.text == "#生活 " && native.isFirstResponder }
+        try await waitForComposer("topic inserted and keyboard restored") { !editor.hasReferenceSession && editor.text == "#生活 " && native.isFirstResponder }
         XCTAssertEqual(native.text, "#生活 ")
         XCTAssertEqual(native.selectedRange, NSRange(location: "#生活 ".utf16.count, length: 0))
     }
 
-    private func waitForComposer(_ condition: () -> Bool) async throws {
+    private func waitForComposer(_ stage: String = "composer transition", _ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(5)
         while !condition(), Date() < deadline { try await Task.sleep(for: .milliseconds(25)) }
         guard condition() else {
-            XCTFail("The real composer/picker transition must finish")
+            XCTFail("The real composer/picker transition must finish: \(stage)")
             throw NSError(domain: "NontoComposerTransition", code: 1)
         }
     }
@@ -275,13 +279,14 @@ final class LayoutSnapshotTests: XCTestCase {
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 414, height: 896)
         window.overrideUserInterfaceStyle = .dark
-        let controller = UIHostingController(rootView: ChatKeyboardHarness(session: session, conversation: room, store: store)
-            .environmentObject(session).environment(\.scenePhase, .active).preferredColorScheme(.dark).tint(.brand))
+        let frames = ChatReplayFrames()
+        let controller = UIHostingController(rootView: AnyView(ChatKeyboardHarness(session: session, conversation: room, store: store, frames: frames)
+            .environmentObject(session).environment(\.scenePhase, .active).preferredColorScheme(.dark).tint(.brand)))
         window.rootViewController = controller; window.makeKeyAndVisible()
         controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
         defer {
             window.endEditing(true); store.suspend(); window.isHidden = true
-            window.rootViewController = nil; previous?.makeKey()
+            window.rootViewController = nil; window.windowScene = nil; previous?.makeKey()
         }
         try await waitForComposer {
             store.messages.count == 7 && self.descendants(of: controller.view).contains { $0 is UITextView || $0 is UITextField }
@@ -289,33 +294,41 @@ final class LayoutSnapshotTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(500))
         let field = try XCTUnwrap(descendants(of: controller.view).first { $0 is UITextView || $0 is UITextField })
         let unfocusedComposerY = field.convert(field.bounds, to: window).minY
-        try await assertChatBubblesStayVisible(window: window, field: field, stage: "before-keyboard")
+        try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "before-keyboard")
         for cycle in 1...2 {
             XCTAssertTrue(field.becomeFirstResponder())
             try await Task.sleep(for: .milliseconds(400))
             XCTAssertLessThan(field.convert(field.bounds, to: window).minY, unfocusedComposerY - 120,
                               "The keyboard must actually resize the viewport, not just focus the field")
-            try await assertChatBubblesStayVisible(window: window, field: field, stage: "keyboard-\(cycle)")
+            try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "keyboard-\(cycle)")
             store.draft = "???"
-            try await assertChatBubblesStayVisible(window: window, field: field, stage: "typing-\(cycle)")
+            try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "typing-\(cycle)")
             for send in 1...2 {
                 XCTAssertTrue(store.enqueue(content: store.draft.isEmpty ? "???" : store.draft))
                 store.draft = ""
-                try await assertChatBubblesStayVisible(window: window, field: field, stage: "send-\(cycle)-\(send)")
+                try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "send-\(cycle)-\(send)")
                 XCTAssertTrue(store.pending.isEmpty, "The fixture must acknowledge the real outbox request")
             }
             window.endEditing(true)
             try await Task.sleep(for: .milliseconds(400))
             XCTAssertEqual(field.convert(field.bounds, to: window).minY, unfocusedComposerY, accuracy: 5,
                            "Dismissing the keyboard must restore the viewport")
-            try await assertChatBubblesStayVisible(window: window, field: field, stage: "dismiss-\(cycle)")
+            try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "dismiss-\(cycle)")
         }
+        // Tear down the pushed SwiftUI navigation graph while its window is
+        // still mounted, before the next test presents another keyboard/sheet.
+        controller.rootView = AnyView(EmptyView()); controller.view.layoutIfNeeded()
+        try await waitForComposer {
+            !self.descendants(of: controller.view).contains { $0 is UITextView || $0 is UITextField }
+        }
+        try await Task.sleep(for: .milliseconds(300))
     }
 
     /// Check the rendered message area throughout each transition, not just the
     /// model count or one settled screenshot: the reported failure leaves data
     /// intact while every bubble disappears from the viewport for seconds.
-    private func assertChatBubblesStayVisible(window: UIWindow, field: UIView, stage: String) async throws {
+    private func assertChatBubblesStayVisible(window: UIWindow, field: UIView, store: ChatStore,
+                                            frames: ChatReplayFrames, stage: String) async throws {
         for sample in 0..<6 {
             try await Task.sleep(for: .milliseconds(100))
             window.layoutIfNeeded()
@@ -357,6 +370,11 @@ final class LayoutSnapshotTests: XCTestCase {
                 .filter { $0.bounds.width > 250 && $0.bounds.height > 100 }
                 .map { "offset=\($0.contentOffset), size=\($0.contentSize), viewport=\($0.bounds.size), insets=\($0.adjustedContentInset)" }
             XCTAssertGreaterThanOrEqual(bands, 2, "\(stage), sample \(sample): multiple existing bubbles must remain rendered; \(geometry)")
+            let latestID = try XCTUnwrap(store.timeline.entries.last?.id)
+            let latestFrame = try XCTUnwrap(frames.values[latestID], "The latest bubble must be laid out")
+            XCTAssertLessThanOrEqual(latestFrame.maxY, composerTop + 10,
+                                     "\(stage): the latest message must be above the composer and keyboard; \(geometry)")
+            XCTAssertGreaterThan(latestFrame.maxY, top, "The latest message must not scroll behind the navigation bar")
         }
     }
 

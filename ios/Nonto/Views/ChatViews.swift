@@ -50,6 +50,7 @@ struct ChatRoomView: View {
 
 struct ChatRoomContent: View {
     let conversation: Conversation
+    private let onMessageFrame: ((String, CGRect) -> Void)?
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     @State private var store: ChatStore
@@ -69,8 +70,10 @@ struct ChatRoomContent: View {
     @State private var quoteReturnID: String?
     @State private var highlightTask: Task<Void, Never>?
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
-    init(session: AppSession, conversation: Conversation, store: ChatStore? = nil) {
+    init(session: AppSession, conversation: Conversation, store: ChatStore? = nil,
+         onMessageFrame: ((String, CGRect) -> Void)? = nil) {
         self.conversation = conversation
+        self.onMessageFrame = onMessageFrame
         _store = State(initialValue: store ?? ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
         socket = session.socket
     }
@@ -98,7 +101,8 @@ struct ChatRoomContent: View {
                                        highlighted: highlightedMessage == entry.row.id,
                                        onJumpToQuote: { jumpToQuote($0, from: entry.id) },
                                        onQuote: { quote = $0; composerFocused = true },
-                                       onRecall: { recall = $0; confirmRecall = true }).id(entry.id)
+                                       onRecall: { recall = $0; confirmRecall = true })
+                            .modifier(ChatMessageFrameObservation(id: entry.id, report: onMessageFrame)).id(entry.id)
                     }
                     Color.clear.frame(height: 1).id("chat-bottom")
                 }.scrollTargetLayout().padding(.vertical, 8)
@@ -129,10 +133,12 @@ struct ChatRoomContent: View {
                                     bottomInset: geometry.contentInsets.bottom, visibleBottom: geometry.visibleRect.maxY)
             } action: { previous, value in
                 if let y = viewport.record(value) { position.scrollTo(y: y) }
-                else if abs(previous.visibleHeight - value.visibleHeight) > 1,
+                else if abs(previous.visibleHeight - value.visibleHeight) > 1
+                        || abs(previous.bottomInset - value.bottomInset) > 1
+                        || abs(previous.topInset - value.topInset) > 1,
                         store.nearBottom, !viewport.userScrolling,
                         !viewport.preservingHistory, !viewport.presentingMedia {
-                    followLatest()
+                    followLatest(in: value)
                 }
                 if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
                     if value.nearBottom || viewport.userScrolling { store.reachedBottom(value.nearBottom) }
@@ -243,11 +249,14 @@ struct ChatRoomContent: View {
             Button("撤回", role: .destructive) { if let recall { Task { await store.recall(recall) } } }
         }
     }
-    private func followLatest() {
+    private func followLatest(in geometry: ChatViewportMetrics? = nil) {
         // Follow one concrete content target during keyboard layout instead of
         // combining an edge scroll request with automatic size-change anchoring.
         var transaction = Transaction(); transaction.disablesAnimations = true
-        withTransaction(transaction) { position.scrollTo(id: "chat-bottom", anchor: .bottom) }
+        withTransaction(transaction) {
+            if let geometry { position.scrollTo(y: geometry.clamped(.greatestFiniteMagnitude)) }
+            else { position.scrollTo(id: "chat-bottom", anchor: .bottom) }
+        }
     }
     private func loadOlder() async {
         guard !store.loadingOlder, !viewport.preservingHistory, store.more, visible else { return }
@@ -286,6 +295,18 @@ struct ChatRoomContent: View {
         }
     }
 
+}
+
+/// The production path has no frame observer. Interaction tests can inspect
+/// actual row placement as well as pixels, including rows behind the keyboard.
+private struct ChatMessageFrameObservation: ViewModifier {
+    let id: String
+    let report: ((String, CGRect) -> Void)?
+    @ViewBuilder func body(content: Content) -> some View {
+        if let report {
+            content.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { report(id, $0) }
+        } else { content }
+    }
 }
 
 struct SharePostView: View {

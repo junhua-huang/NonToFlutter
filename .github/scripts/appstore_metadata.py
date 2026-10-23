@@ -77,6 +77,43 @@ def patch(api, kind, identifier, attributes):
     return api.request('PATCH', f'{kind}/{identifier}', data={'data': {'type': kind, 'id': identifier, 'attributes': attributes}})['data']
 
 
+def select_build(api, report, config, number):
+    versions = [row for row in report['versions'] if row['attributes'].get('platform') == 'IOS'
+                and row['attributes'].get('versionString') == config['version']
+                and row['attributes'].get('appStoreState') in EDITABLE]
+    builds = [row for row in report['builds'] if row.get('version') == number
+              and row.get('processingState') == 'VALID' and row.get('buildAudienceType') == 'APP_STORE_ELIGIBLE'
+              and row.get('expired') is not True]
+    require(len(versions) == 1, 'Expected one editable draft for this version.')
+    require(len(builds) == 1, 'Expected one processed App Store eligible build; internal-only builds cannot be selected.')
+    version, build = versions[0], builds[0]
+    api.request('PATCH', f'appStoreVersions/{version["id"]}/relationships/build',
+                data={'data': {'type': 'builds', 'id': build['id']}})
+    selected = api.request('GET', f'appStoreVersions/{version["id"]}/build')['data']
+    require(selected['id'] == build['id'], 'Selected build readback mismatch.')
+    print('App Store draft build selected and verified:', config['version'], number)
+
+
+def public_policy_status():
+    """Read public pages only; no server/admin credentials or deployment claims."""
+    report = []
+    opener = build_opener(NoRedirect())
+    for host in ('www.nonto.online', 'nonto.online'):
+        for name in ('privacy', 'terms', 'community'):
+            url = f'https://{host}/api/legal/{name}.html'
+            result = {'url': url}
+            try:
+                with opener.open(Request(url), timeout=15) as response:
+                    content = response.read(2 * 1024 * 1024)
+                    result.update(status=response.status, matchesBundledDocument=content == (ROOT / 'ios' / 'legal-public' / (name + '.html')).read_bytes())
+            except HTTPError as error:
+                result['status'] = error.code
+            except (URLError, TimeoutError, OSError):
+                result['status'] = 'unreachable'
+            report.append(result)
+    return report
+
+
 def upsert_localization(api, kind, existing, locale, attributes, relation_type, relation_id):
     matches = [row for row in existing if row.get('locale', row.get('attributes', {}).get('locale')) == locale]
     require(len(matches) <= 1, 'Ambiguous localization: ' + kind)
@@ -146,6 +183,8 @@ def upload_screenshot(api, set_id, screenshot):
 
 def apply(api, before, config):
     validate_config(config)
+    builds = [build for build in before['builds'] if build['version'] == config['betaBuildVersion'] and build['processingState'] == 'VALID']
+    require(len(builds) == 1, 'Expected the processed test build before changing metadata.')
     versions = [row for row in before['versions'] if row['attributes']['platform'] == 'IOS' and row['attributes']['appStoreState'] in EDITABLE]
     infos = [row for row in before['appInfos'] if row['attributes']['appStoreState'] in EDITABLE]
     require(len(versions) == len(infos) == 1, 'Expected one editable iOS draft and app info.')
@@ -161,8 +200,6 @@ def apply(api, before, config):
           ('description', 'keywords', 'promotionalText', 'marketingUrl', 'supportUrl')})
     upsert_localization(api, 'betaAppLocalizations', before['betaAppLocalizations'], locale,
                         {'description': config['description'], 'feedbackEmail': config['betaFeedbackEmail'], 'marketingUrl': config['marketingUrl']}, 'app', APP_ID)
-    builds = [build for build in before['builds'] if build['version'] == config['betaBuildVersion'] and build['processingState'] == 'VALID']
-    require(len(builds) == 1, 'Expected the processed test build.')
     upsert_localization(api, 'betaBuildLocalizations', builds[0]['localizations'], locale,
                         {'whatsNew': config['betaWhatsNew']}, 'build', builds[0]['id'])
     sets = rows(api, f'appStoreVersionLocalizations/{version_loc[0]["id"]}/appScreenshotSets', {'limit': 200})
@@ -202,6 +239,8 @@ def main():
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--config', type=Path, default=ROOT / '.github' / 'appstore' / 'zh-Hans.json')
     parser.add_argument('--testflight-notes', metavar='BUILD', help='Update only this processed build’s localized test notes')
+    parser.add_argument('--select-build', metavar='BUILD', help='Select a processed App Store eligible build in an editable draft; never submit')
+    parser.add_argument('--public-policies', action='store_true', help='Read the known public policy URLs and compare the deployed documents')
     args = parser.parse_args()
     api = Apple()
     if args.testflight_notes:
@@ -221,9 +260,17 @@ def main():
     report = audit(api)
     if args.apply:
         config = json.loads(args.config.read_text())
+        if args.select_build:
+            config['betaBuildVersion'] = args.select_build
         apply(api, report, config)
         report = audit(api)
         verify_applied(report, config)
+    if args.select_build:
+        config = json.loads(args.config.read_text())
+        select_build(api, report, config, args.select_build)
+        report = audit(api)
+    if args.public_policies:
+        report['publicPolicies'] = public_policy_status()
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps(report, ensure_ascii=False, indent=2))
 

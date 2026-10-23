@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Internal TestFlight signing. Secrets are read only from the runner environment."""
+"""Apple distribution signing. Secrets are read only from the runner environment."""
 import argparse
 import base64
 from datetime import datetime, timezone
@@ -28,6 +28,7 @@ from cryptography.x509.oid import NameOID
 TEAM = 'B2Y3564MKK'
 BUNDLE = 'online.nonto.native'
 CHANNEL = 'testflight-internal'
+CHANNELS = (CHANNEL, 'app-store')
 API = 'https://api.appstoreconnect.apple.com/v1/'
 PROFILE_PREFIX = 'NonTo-TestFlight-'
 
@@ -139,12 +140,13 @@ def validate_profile(profile, certificate):
     return profile['UUID']
 
 
-def export_options(profile_id, identity):
+def export_options(profile_id, identity, *, channel=CHANNEL):
+    require(channel in CHANNELS, 'Unknown distribution channel.')
     return {'method': 'app-store-connect', 'destination': 'upload', 'teamID': TEAM,
             'signingStyle': 'manual', 'signingCertificate': identity,
             'provisioningProfiles': {BUNDLE: profile_id}, 'uploadSymbols': True,
             'stripSwiftSymbols': True, 'manageAppVersionAndBuildNumber': False,
-            'testFlightInternalTestingOnly': True}
+            'testFlightInternalTestingOnly': channel == CHANNEL}
 
 
 def signing_p12(key, certificate, password):
@@ -156,11 +158,12 @@ def signing_p12(key, certificate, password):
     return pkcs12.serialize_key_and_certificates(b'NonTo TestFlight', key, certificate, None, encryption)
 
 
-def verify_archive(archive, *, unsigned=False):
+def verify_archive(archive, *, unsigned=False, channel=CHANNEL):
+    require(channel in CHANNELS, 'Unknown distribution channel.')
     app = Path(archive) / 'Products/Applications/Nonto.app'
     info = plistlib.loads((app / 'Info.plist').read_bytes())
     require(info.get('CFBundleIdentifier') == BUNDLE, 'Archive contains another app.')
-    require(info.get('NontoDistributionChannel') == CHANNEL, 'This uploader only accepts an internal-test archive.')
+    require(info.get('NontoDistributionChannel') == channel, 'Archive distribution channel does not match the requested upload.')
     require(info.get('NontoAPNSEnvironment') == 'production', 'Archive does not use production APNs.')
     require(info.get('ITSAppUsesNonExemptEncryption') is False, 'Review the encryption declaration before upload.')
     if not unsigned:
@@ -170,7 +173,7 @@ def verify_archive(archive, *, unsigned=False):
         require(entitlements.get('aps-environment') == 'production', 'Signed app is missing production APNs entitlement.')
         require(entitlements.get('application-identifier') == TEAM + '.' + BUNDLE, 'Signed app identity mismatch.')
         require(entitlements.get('get-task-allow') is not True, 'Development signature is not allowed.')
-    print('Archive identity, internal distribution channel, and production APNs verified.')
+    print('Archive identity, distribution channel ' + channel + ', and production APNs verified.')
 
 
 def state_path(root):
@@ -287,14 +290,16 @@ def reusable_profile(root, apple, bundle_id, cert, certificate_der, *, initializ
     return row, profile_uuid
 
 
-def prepare(root, apple, *, initialize=False):
+def prepare(root, apple, *, initialize=False, channel=CHANNEL):
+    require(channel in CHANNELS, 'Unknown distribution channel.')
     # Fail before any Apple request if the one-time signing key is absent/invalid.
     signing_key = load_signing_key()
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
     run = os.environ.get('GITHUB_RUN_NUMBER', '1')
     attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '1')
     require(run.isdigit() and 0 < int(run) < 10000 and attempt.isdigit() and 0 < int(attempt) < 100, 'Invalid build number.')
-    state = {'team': TEAM, 'bundle': BUNDLE, 'run': os.environ.get('GITHUB_RUN_ID', 'local'), 'build': run + '.' + attempt}
+    state = {'team': TEAM, 'bundle': BUNDLE, 'run': os.environ.get('GITHUB_RUN_ID', 'local'),
+             'build': run + '.' + attempt, 'channel': channel}
     save_state(root, state)
     apps = apple.request('GET', 'apps', query={'filter[bundleId]': BUNDLE})['data']
     require(len(apps) == 1, 'Create the online.nonto.native app record in App Store Connect first.')
@@ -320,7 +325,7 @@ def prepare(root, apple, *, initialize=False):
     print('::add-mask::' + password); print('::add-mask::' + keychain_password)
     write_private(root / 'Signing.p12', signing_p12(signing_key, certificate, password))
     identity = hashlib.sha1(cert_der).hexdigest().upper()
-    write_private(root / 'ExportOptions.plist', plistlib.dumps(export_options(profile_uuid, identity)))
+    write_private(root / 'ExportOptions.plist', plistlib.dumps(export_options(profile_uuid, identity, channel=channel)))
     variables = {'TF_PROFILE_UUID': profile_uuid, 'TF_SIGNING_IDENTITY': identity, 'TF_P12_PASSWORD': password,
                  'TF_KEYCHAIN_PASSWORD': keychain_password, 'TF_BUILD_NUMBER': state['build']}
     with open(os.environ['GITHUB_ENV'], 'a') as f:
@@ -377,7 +382,14 @@ def diagnose(apple):
 def build_status(apple, state):
     rows = apple.request('GET', 'builds', query={'filter[app]': state['app'], 'filter[version]': state['build'], 'limit': '10'})['data']
     require(len(rows) <= 1, 'Build number is ambiguous; check App Store Connect manually.')
-    return rows[0]['attributes'].get('processingState', 'UNKNOWN') if rows else 'NOT_VISIBLE'
+    if not rows:
+        return 'NOT_VISIBLE'
+    attributes = rows[0]['attributes']
+    status = attributes.get('processingState', 'UNKNOWN')
+    if status == 'VALID' and state.get('channel', CHANNEL) == 'app-store':
+        require(attributes.get('buildAudienceType') == 'APP_STORE_ELIGIBLE',
+                'The processed build is not eligible for App Store submission.')
+    return status
 
 
 def wait_for_build(root, apple):
@@ -393,7 +405,10 @@ def wait_for_build(root, apple):
         print('Apple build processing:', status, flush=True)
         if status == 'VALID':
             state['processed'] = True; save_state(root, state)
-            print('Build processed successfully. Add it to an internal tester group in App Store Connect.')
+            if state.get('channel', CHANNEL) == 'app-store':
+                print('Build processed successfully. App Store submission eligibility verified.')
+            else:
+                print('Build processed successfully. Add it to an internal tester group in App Store Connect.')
             return
         require(status not in ('FAILED', 'INVALID'), 'Apple rejected the build; inspect TestFlight build details.')
         time.sleep(20)
@@ -423,12 +438,13 @@ def main():
     parser.add_argument('--root', type=Path)
     parser.add_argument('--archive', type=Path)
     parser.add_argument('--unsigned', action='store_true')
+    parser.add_argument('--channel', choices=CHANNELS, default=CHANNEL)
     parser.add_argument('--initialize-signing', action='store_true', help='Explicitly allow one-time signing setup/renewal; never used by ordinary uploads.')
     args = parser.parse_args()
     try:
         if args.command == 'verify':
             require(args.archive is not None, '--archive is required.')
-            verify_archive(args.archive, unsigned=args.unsigned)
+            verify_archive(args.archive, unsigned=args.unsigned, channel=args.channel)
         elif args.command == 'diagnose':
             diagnose(Apple())
         else:
@@ -438,7 +454,7 @@ def main():
             elif args.command == 'cleanup':
                 cleanup(args.root)
             elif args.command == 'prepare':
-                prepare(args.root, Apple(), initialize=args.initialize_signing)
+                prepare(args.root, Apple(), initialize=args.initialize_signing, channel=args.channel)
             else:
                 wait_for_build(args.root, Apple())
         return 0
