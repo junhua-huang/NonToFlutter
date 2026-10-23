@@ -11,6 +11,24 @@ private struct ComposerCrashHarness: View {
     }
 }
 
+private struct ChatKeyboardHarness: View {
+    let session: AppSession
+    let conversation: Conversation
+    let store: ChatStore
+    @State private var path: [Int] = []
+    var body: some View {
+        TabView {
+            NavigationStack(path: $path) {
+                Text("私信").navigationTitle("私信")
+                    .navigationDestination(for: Int.self) { _ in
+                        ChatRoomContent(session: session, conversation: conversation, store: store)
+                    }
+                    .task { if path.isEmpty { path = [1] } }
+            }.tabItem { Label("私信", systemImage: "envelope") }
+        }
+    }
+}
+
 /// Real SwiftUI screens with isolated fixture responses, for visual review in CI.
 @MainActor
 final class LayoutSnapshotTests: XCTestCase {
@@ -205,6 +223,133 @@ final class LayoutSnapshotTests: XCTestCase {
         guard let root else { return 0 }
         let childDepth = root.children.map { presentedDepth($0) }.max() ?? 0
         return max(childDepth, root.presentedViewController.map { 1 + presentedDepth($0) } ?? 0)
+    }
+
+    func testChatKeepsVisibleBubblesAcrossKeyboardTypingAndRepeatedAcknowledgements() async throws {
+        let suite = "nonto-chat-keyboard-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!,
+                            session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        try api.setToken("chat-keyboard-fixture")
+        let session = AppSession(api: api); session.restoring = false
+        session.user = Person(.object(["id": .id(userID), "username": .text("nonto")]))
+        let room = Conversation(.object(["id": .id(946000), "other_user_id": .id(946001),
+                                        "other_user": .object(["id": .id(946001), "username": .text("OvO")])]))
+        var messages: [JSON] = (1...7).map { index in
+            .object(["id": .id(946010 + index), "sender_id": .id(userID),
+                     "content": .text("保留消息 \(index)"),
+                     "created_at": .text(index < 4 ? "2026-06-18T11:56:00Z" : "2026-10-24T03:08:00Z")])
+        }
+        StubProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                Thread.sleep(forTimeInterval: 0.15) // Observe both the pending and acknowledged layout.
+                let json: JSON
+                if let data = request.httpBody { json = try JSON.decode(data) }
+                else {
+                    let stream = try XCTUnwrap(request.httpBodyStream)
+                    stream.open(); defer { stream.close() }
+                    var data = Data(), buffer = [UInt8](repeating: 0, count: 4096)
+                    while stream.hasBytesAvailable {
+                        let size = stream.read(&buffer, maxLength: buffer.count)
+                        if size <= 0 { break }; data.append(contentsOf: buffer.prefix(size))
+                    }
+                    json = try JSON.decode(data)
+                }
+                let message: JSON = .object(["id": .id(946020 + messages.count), "sender_id": .id(self.userID),
+                                             "content": json["content"], "request_id": json["request_id"],
+                                             "created_at": .number(Date().timeIntervalSince1970)])
+                messages.append(message)
+                return (200, .object(["message": message]))
+            }
+            if request.httpMethod == "GET", request.url!.path.hasSuffix("/messages") {
+                return (200, .object(["messages": .array(messages), "has_more": .bool(false)]))
+            }
+            return (200, .object([:]))
+        }
+        try? LocalCache.clear(userID: userID)
+        let store = ChatStore(api: api, conversation: room, userID: userID, defaults: defaults)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 414, height: 896)
+        window.overrideUserInterfaceStyle = .dark
+        let controller = UIHostingController(rootView: ChatKeyboardHarness(session: session, conversation: room, store: store)
+            .environmentObject(session).environment(\.scenePhase, .active).preferredColorScheme(.dark).tint(.brand))
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
+        defer {
+            window.endEditing(true); store.suspend(); window.isHidden = true
+            window.rootViewController = nil; previous?.makeKey()
+        }
+        try await waitForComposer {
+            store.messages.count == 7 && self.descendants(of: controller.view).contains { $0 is UITextView || $0 is UITextField }
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        let field = try XCTUnwrap(descendants(of: controller.view).first { $0 is UITextView || $0 is UITextField })
+        try await assertChatBubblesStayVisible(window: window, field: field, stage: "before-keyboard")
+        for cycle in 1...2 {
+            XCTAssertTrue(field.becomeFirstResponder())
+            try await Task.sleep(for: .milliseconds(400))
+            try await assertChatBubblesStayVisible(window: window, field: field, stage: "keyboard-\(cycle)")
+            store.draft = "???"
+            try await assertChatBubblesStayVisible(window: window, field: field, stage: "typing-\(cycle)")
+            for send in 1...2 {
+                XCTAssertTrue(store.enqueue(content: store.draft.isEmpty ? "???" : store.draft))
+                store.draft = ""
+                try await assertChatBubblesStayVisible(window: window, field: field, stage: "send-\(cycle)-\(send)")
+                XCTAssertTrue(store.pending.isEmpty, "The fixture must acknowledge the real outbox request")
+            }
+            window.endEditing(true)
+            try await Task.sleep(for: .milliseconds(400))
+            try await assertChatBubblesStayVisible(window: window, field: field, stage: "dismiss-\(cycle)")
+        }
+    }
+
+    /// Check the rendered message area throughout each transition, not just the
+    /// model count or one settled screenshot: the reported failure leaves data
+    /// intact while every bubble disappears from the viewport for seconds.
+    private func assertChatBubblesStayVisible(window: UIWindow, field: UIView, stage: String) async throws {
+        for sample in 0..<6 {
+            try await Task.sleep(for: .milliseconds(100))
+            window.layoutIfNeeded()
+            let composerTop = field.convert(field.bounds, to: window).minY - 10
+            let top = window.safeAreaInsets.top + 60
+            XCTAssertGreaterThan(composerTop - top, 100, "The keyboard must leave a real message viewport")
+            let format = UIGraphicsImageRendererFormat(); format.scale = 1
+            let image = UIGraphicsImageRenderer(size: window.bounds.size, format: format).image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+            let crop = try XCTUnwrap(image.cgImage?.cropping(to: CGRect(x: 20, y: top,
+                width: window.bounds.width - 40, height: max(1, composerTop - top))))
+            let width = crop.width, height = crop.height
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            let bands = try pixels.withUnsafeMutableBytes { bytes -> Int in
+                let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: width, height: height,
+                    bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue))
+                context.draw(crop, in: CGRect(x: 0, y: 0, width: width, height: height))
+                let raw = bytes.bindMemory(to: UInt8.self)
+                var bands = 0, inBand = false
+                for y in 0..<height {
+                    var blue = 0
+                    for x in 0..<width {
+                        let i = (y * width + x) * 4
+                        if Int(raw[i + 2]) - Int(raw[i]) > 12 && Int(raw[i + 1]) - Int(raw[i]) > 6 { blue += 1 }
+                    }
+                    let filled = blue >= 20
+                    if filled && !inBand { bands += 1 }
+                    inBand = filled
+                }
+                return bands
+            }
+            if bands < 2 || sample == 5 {
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "chat-continuous-\(stage)-\(sample)"; attachment.lifetime = .keepAlways; add(attachment)
+            }
+            XCTAssertGreaterThanOrEqual(bands, 2, "\(stage), sample \(sample): multiple existing bubbles must remain rendered while the keyboard and outbox change")
+        }
     }
 
     func testApprovedChatMediaAndAttachmentLayouts() async throws {

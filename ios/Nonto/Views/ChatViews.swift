@@ -48,7 +48,7 @@ struct ChatRoomView: View {
     var body: some View { ChatRoomContent(session: session, conversation: conversation) }
 }
 
-private struct ChatRoomContent: View {
+struct ChatRoomContent: View {
     let conversation: Conversation
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
@@ -69,98 +69,103 @@ private struct ChatRoomContent: View {
     @State private var quoteReturnID: String?
     @State private var highlightTask: Task<Void, Never>?
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
-    init(session: AppSession, conversation: Conversation) {
+    init(session: AppSession, conversation: Conversation, store: ChatStore? = nil) {
         self.conversation = conversation
-        _store = State(initialValue: ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
+        _store = State(initialValue: store ?? ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
         socket = session.socket
     }
     var body: some View {
         let timeline = store.timeline
-        ScrollView {
-            LazyVStack(spacing: 6) {
-                if store.more && !store.messages.isEmpty {
-                    Button { Task { await loadOlder() } } label: {
-                        if store.loadingOlder { ProgressView("正在加载历史消息…") }
-                        else { Label("更早的消息", systemImage: "clock.arrow.circlepath") }
-                    }.font(.subheadline).disabled(store.loadingOlder).padding(.vertical, 12)
-                }
-                ForEach(timeline.entries) { entry in
-                    ChatMessageRow(row: entry.row, community: communityID != nil,
-                                   showsReceipt: entry.row.id == timeline.lastOutgoingID,
-                                   galleryImages: entry.pending == nil ? timeline.gallery : [],
-                                   galleryIndex: timeline.galleryIndexes[entry.row.id], onMediaPresentation: mediaPresentationChanged,
-                                   pending: entry.pending, sending: store.sendingID == entry.pending?.id,
-                                   blocked: store.pending.first?.failure != nil && store.pending.first?.id != entry.pending?.id,
-                                   retry: { if let item = entry.pending { store.retry(item.id) } },
-                                   remove: { if let item = entry.pending { store.remove(item.id) } },
-                                   checkDelivery: { Task { await store.load() } },
-                                   highlighted: highlightedMessage == entry.row.id,
-                                   onJumpToQuote: { jumpToQuote($0, from: entry.id) },
-                                   onQuote: { quote = $0; composerFocused = true },
-                                   onRecall: { recall = $0; confirmRecall = true }).id(entry.id)
-                }
-                Color.clear.frame(height: 1).id("chat-bottom")
-            }.scrollTargetLayout().padding(.vertical, 8)
-        }
-        .overlay {
-            if store.messages.isEmpty && store.pending.isEmpty {
-                ChatTimelinePlaceholder(loading: store.loading, error: store.error) { Task { await store.load() } }
+        GeometryReader { container in
+            ScrollView {
+                LazyVStack(spacing: 6) {
+                    if store.more && !store.messages.isEmpty {
+                        Button { Task { await loadOlder() } } label: {
+                            if store.loadingOlder { ProgressView("正在加载历史消息…") }
+                            else { Label("更早的消息", systemImage: "clock.arrow.circlepath") }
+                        }.font(.subheadline).disabled(store.loadingOlder).padding(.vertical, 12)
+                    }
+                    ForEach(timeline.entries) { entry in
+                        ChatMessageRow(row: entry.row, community: communityID != nil,
+                                       showsReceipt: entry.row.id == timeline.lastOutgoingID,
+                                       galleryImages: entry.pending == nil ? timeline.gallery : [],
+                                       galleryIndex: timeline.galleryIndexes[entry.row.id], onMediaPresentation: mediaPresentationChanged,
+                                       pending: entry.pending, sending: store.sendingID == entry.pending?.id,
+                                       blocked: store.pending.first?.failure != nil && store.pending.first?.id != entry.pending?.id,
+                                       retry: { if let item = entry.pending { store.retry(item.id) } },
+                                       remove: { if let item = entry.pending { store.remove(item.id) } },
+                                       checkDelivery: { Task { await store.load() } },
+                                       highlighted: highlightedMessage == entry.row.id,
+                                       onJumpToQuote: { jumpToQuote($0, from: entry.id) },
+                                       onQuote: { quote = $0; composerFocused = true },
+                                       onRecall: { recall = $0; confirmRecall = true }).id(entry.id)
+                    }
+                    Color.clear.frame(height: 1).id("chat-bottom")
+                }.scrollTargetLayout().padding(.vertical, 8)
+                    // Give short conversations real layout space. Keep their bottom
+                    // alignment in the content layout, independent of the scroll
+                    // offset that changes while the keyboard resizes the viewport.
+                    .frame(minHeight: container.size.height, alignment: .bottom)
             }
-        }
-        .background(Color.timelineBackground)
-        .overlay(alignment: .top) {
-            if let error = store.error, !store.messages.isEmpty || !store.pending.isEmpty {
-                ChatSyncNotice(error: error, retry: { Task { await store.load() } }, dismiss: { store.error = nil })
-                    .padding(.horizontal).padding(.top, 8)
-            }
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .scrollPosition($position)
-        .defaultScrollAnchor(.bottom, for: .initialOffset)
-        .defaultScrollAnchor(.bottom, for: .alignment)
-        .defaultScrollAnchor(store.nearBottom ? .bottom : .top, for: .sizeChanges)
-        .onScrollGeometryChange(for: ChatViewportMetrics.self) { geometry in
-            ChatViewportMetrics(offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
-                                visibleHeight: geometry.containerSize.height, topInset: geometry.contentInsets.top,
-                                bottomInset: geometry.contentInsets.bottom, visibleBottom: geometry.visibleRect.maxY)
-        } action: { _, value in
-            if let y = viewport.record(value) { position.scrollTo(y: y) }
-            if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
-                if value.nearBottom || viewport.userScrolling { store.reachedBottom(value.nearBottom) }
-                if value.shouldLoadHistory(userScrolling: viewport.userScrolling), store.more {
-                    Task { await loadOlder() }
+            .overlay {
+                if store.messages.isEmpty && store.pending.isEmpty {
+                    ChatTimelinePlaceholder(loading: store.loading, error: store.error) { Task { await store.load() } }
                 }
             }
-        }
-        .onScrollPhaseChange { _, phase in
-            viewport.userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
-            if phase == .idle, let metrics = viewport.metrics, !store.loadingOlder, !viewport.presentingMedia {
-                store.reachedBottom(metrics.nearBottom)
+            .background(Color.timelineBackground)
+            .overlay(alignment: .top) {
+                if let error = store.error, !store.messages.isEmpty || !store.pending.isEmpty {
+                    ChatSyncNotice(error: error, retry: { Task { await store.load() } }, dismiss: { store.error = nil })
+                        .padding(.horizontal).padding(.top, 8)
+                }
             }
-        }
-        .onChange(of: store.scrollRequest) { _, _ in
-            viewport.clearPreservation()
-            quoteReturnID = nil; highlightedMessage = nil
-            // Keyboard/composer resizing is already bottom anchored. A second
-            // animated scroll here fights that layout update while sending.
-            var transaction = Transaction(); transaction.disablesAnimations = true
-            withTransaction(transaction) { position.scrollTo(edge: .bottom) }
-        }
-        .overlay(alignment: .bottomTrailing) {
-            VStack(alignment: .trailing, spacing: 8) {
-                if let returnID = quoteReturnID {
-                    Button {
-                        quoteReturnID = nil; highlightedMessage = nil
-                        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: returnID, anchor: .center) }
-                    } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
-                        .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
+            .scrollDismissesKeyboard(.interactively)
+            .scrollPosition($position, anchor: .bottom)
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(store.nearBottom ? .bottom : .top, for: .sizeChanges)
+            .onScrollGeometryChange(for: ChatViewportMetrics.self) { geometry in
+                ChatViewportMetrics(offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
+                                    visibleHeight: geometry.containerSize.height, topInset: geometry.contentInsets.top,
+                                    bottomInset: geometry.contentInsets.bottom, visibleBottom: geometry.visibleRect.maxY)
+            } action: { _, value in
+                if let y = viewport.record(value) { position.scrollTo(y: y) }
+                if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
+                    if value.nearBottom || viewport.userScrolling { store.reachedBottom(value.nearBottom) }
+                    if value.shouldLoadHistory(userScrolling: viewport.userScrolling), store.more {
+                        Task { await loadOlder() }
+                    }
                 }
-                if !store.nearBottom && !store.messages.isEmpty {
-                    Button { store.jumpToLatest() } label: {
-                        Label(store.unread > 0 ? "\(store.unread) 条新消息" : "回到最新", systemImage: "arrow.down")
-                    }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
+            }
+            .onScrollPhaseChange { _, phase in
+                viewport.userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+                if phase == .idle, let metrics = viewport.metrics, !store.loadingOlder, !viewport.presentingMedia {
+                    store.reachedBottom(metrics.nearBottom)
                 }
-            }.padding()
+            }
+            .onChange(of: store.scrollRequest) { _, _ in
+                viewport.clearPreservation()
+                quoteReturnID = nil; highlightedMessage = nil
+                // Keyboard/composer resizing is already bottom anchored. A second
+                // animated scroll here fights that layout update while sending.
+                var transaction = Transaction(); transaction.disablesAnimations = true
+                withTransaction(transaction) { position.scrollTo(edge: .bottom) }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                VStack(alignment: .trailing, spacing: 8) {
+                    if let returnID = quoteReturnID {
+                        Button {
+                            quoteReturnID = nil; highlightedMessage = nil
+                            withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: returnID, anchor: .center) }
+                        } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
+                            .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
+                    }
+                    if !store.nearBottom && !store.messages.isEmpty {
+                        Button { store.jumpToLatest() } label: {
+                            Label(store.unread > 0 ? "\(store.unread) 条新消息" : "回到最新", systemImage: "arrow.down")
+                        }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
+                    }
+                }.padding()
+            }
         }
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.hidden, for: .tabBar)
