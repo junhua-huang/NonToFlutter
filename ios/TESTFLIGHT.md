@@ -2,6 +2,10 @@
 
 ## App Store 正式构建
 
+`[appstore-upload]` 或手动选择 `app-store-upload` 先生成可被商店选用的候选构建，并选入版本草稿。这个准备阶段保留未完成的运营核验标记，只校验资源结构；不会提交审核或公开发布。普通正式归档和 `[appstore-release]` 仍执行完整发布检查。
+
+两个商店渠道均在签名上传前等待同一提交的 `Native iOS` 和 `Native iOS 27 Regression` 通过；失败、取消或缺少其中一套结果时不上传。内部测试通道保留原有流程。
+
 `[appstore-release]` 提交或手动选择 `distribution_channel=app-store` 使用正式渠道；`[testflight]` 继续使用内部测试渠道。正式渠道沿用同一 Bundle ID、Apple Distribution 证书、描述文件和 production APNs，不自动新建或撤销签名资源。
 
 正式流程先执行 `check_compliance.py --release` 与 `export_legal_site.py --release --check`，再归档、签名、上传。导出使用 `testFlightInternalTestingOnly=false`，Apple 处理成功后还须核对 `APP_STORE_ELIGIBLE`，才能将构建选入匹配版本的可编辑商店草稿。脚本不自动提交审核或公开发布。

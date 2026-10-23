@@ -83,10 +83,11 @@ class TestFlightChecks(unittest.TestCase):
                     tf.verify_archive(temp, unsigned=True)
 
     def test_store_export_requires_explicit_channel_and_keeps_signing_identity(self):
-        options = tf.export_options('same-profile', 'same-identity', channel='app-store')
-        self.assertIs(options['testFlightInternalTestingOnly'], False)
-        self.assertEqual(options['signingCertificate'], 'same-identity')
-        self.assertEqual(options['provisioningProfiles'], {tf.BUNDLE: 'same-profile'})
+        for channel in ('app-store', 'app-store-upload'):
+            options = tf.export_options('same-profile', 'same-identity', channel=channel)
+            self.assertIs(options['testFlightInternalTestingOnly'], False)
+            self.assertEqual(options['signingCertificate'], 'same-identity')
+            self.assertEqual(options['provisioningProfiles'], {tf.BUNDLE: 'same-profile'})
         with self.assertRaises(ValueError):
             tf.export_options('profile', 'identity', channel='unknown')
 

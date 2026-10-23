@@ -11,7 +11,10 @@ private struct ComposerCrashHarness: View {
     }
 }
 
-private final class ChatReplayFrames { var values: [String: CGRect] = [:] }
+private final class ChatReplayFrames {
+    var values: [String: CGRect] = [:]
+    var viewport: ChatViewportMetrics?
+}
 
 private struct ChatKeyboardHarness: View {
     let session: AppSession
@@ -25,7 +28,8 @@ private struct ChatKeyboardHarness: View {
                 Text("私信").navigationTitle("私信")
                     .navigationDestination(for: Int.self) { _ in
                         ChatRoomContent(session: session, conversation: conversation, store: store,
-                                        onMessageFrame: { frames.values[$0] = $1 })
+                                        onMessageFrame: { frames.values[$0] = $1 },
+                                        onViewportMetrics: { frames.viewport = $0 })
                     }
                     .task { if path.isEmpty { path = [1] } }
             }.tabItem { Label("私信", systemImage: "envelope") }
@@ -373,7 +377,7 @@ final class LayoutSnapshotTests: XCTestCase {
             let latestID = try XCTUnwrap(store.timeline.entries.last?.id)
             let latestFrame = try XCTUnwrap(frames.values[latestID], "The latest bubble must be laid out")
             XCTAssertLessThanOrEqual(latestFrame.maxY, composerTop + 10,
-                                     "\(stage): the latest message must be above the composer and keyboard; \(geometry)")
+                                     "\(stage): the latest message must be above the composer and keyboard; \(geometry); SwiftUI=\(String(describing: frames.viewport)); following=\(store.nearBottom)")
             XCTAssertGreaterThan(latestFrame.maxY, top, "The latest message must not scroll behind the navigation bar")
         }
     }

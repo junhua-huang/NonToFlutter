@@ -77,14 +77,16 @@ struct ChatViewportMetrics: Equatable {
     let visibleHeight: CGFloat
     let topInset: CGFloat
     let bottomInset: CGFloat
-    var visibleBottom: CGFloat? = nil
-    private var bottom: CGFloat { visibleBottom ?? (offset + visibleHeight - bottomInset) }
+    // Match the native scroll viewport: keyboard/composer insets are covered
+    // space, even when the scroll view's full container bounds stay unchanged.
+    private var bottom: CGFloat { offset + visibleHeight - bottomInset }
+    private var usableHeight: CGFloat { max(0, visibleHeight - topInset - bottomInset) }
     var nearBottom: Bool { contentHeight - bottom < 80 }
     func shouldLoadHistory(userScrolling: Bool) -> Bool {
-        userScrolling && offset + topInset < 100 && contentHeight > visibleHeight + 120
+        userScrolling && offset + topInset < 100 && contentHeight > usableHeight + 120
     }
     func clamped(_ y: CGFloat) -> CGFloat {
-        min(max(-topInset, y), max(-topInset, offset + contentHeight - bottom))
+        min(max(-topInset, y), max(-topInset, contentHeight - visibleHeight + bottomInset))
     }
 }
 @MainActor final class ChatViewportMemory {

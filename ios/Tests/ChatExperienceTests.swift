@@ -170,11 +170,18 @@ final class ChatExperienceTests: XCTestCase {
         XCTAssertEqual(timeline.galleryIndexes, [1: 0]); XCTAssertEqual(timeline.lastOutgoingID, 3)
         XCTAssertEqual(timeline.rows.map(\.id), [1, 2, 3])
     }
-    func testBottomDetectionUsesTheActualVisibleRectangleWithoutReapplyingInsets() {
-        let geometry = ChatViewportMetrics(offset: 200, contentHeight: 900, visibleHeight: 700,
-                                           topInset: 0, bottomInset: 100, visibleBottom: 900)
-        XCTAssertTrue(geometry.nearBottom)
-        XCTAssertEqual(geometry.clamped(600), 200)
+    func testKeyboardCoveredAreaIsExcludedFromReadabilityAndScrollBounds() {
+        // Native metrics from the reported keyboard failure: the full bounds
+        // remain 896pt tall, but 399pt at the bottom are covered by controls.
+        let covered = ChatViewportMetrics(offset: -116, contentHeight: 586, visibleHeight: 896,
+                                          topInset: 116, bottomInset: 399)
+        XCTAssertFalse(covered.nearBottom)
+        XCTAssertEqual(covered.clamped(.greatestFiniteMagnitude), 89)
+        XCTAssertEqual(covered.clamped(-1000), -116)
+        XCTAssertTrue(covered.shouldLoadHistory(userScrolling: true))
+        let revealed = ChatViewportMetrics(offset: 89, contentHeight: 586, visibleHeight: 896,
+                                           topInset: 116, bottomInset: 399)
+        XCTAssertTrue(revealed.nearBottom)
     }
     func testHistoryAnchorWaitsForLoadedLayoutAndPreservesOffset() {
         let memory = ChatViewportMemory()

@@ -28,7 +28,7 @@ from cryptography.x509.oid import NameOID
 TEAM = 'B2Y3564MKK'
 BUNDLE = 'online.nonto.native'
 CHANNEL = 'testflight-internal'
-CHANNELS = (CHANNEL, 'app-store')
+CHANNELS = (CHANNEL, 'app-store-upload', 'app-store')
 API = 'https://api.appstoreconnect.apple.com/v1/'
 PROFILE_PREFIX = 'NonTo-TestFlight-'
 
@@ -386,7 +386,7 @@ def build_status(apple, state):
         return 'NOT_VISIBLE'
     attributes = rows[0]['attributes']
     status = attributes.get('processingState', 'UNKNOWN')
-    if status == 'VALID' and state.get('channel', CHANNEL) == 'app-store':
+    if status == 'VALID' and state.get('channel', CHANNEL) in ('app-store', 'app-store-upload'):
         require(attributes.get('buildAudienceType') == 'APP_STORE_ELIGIBLE',
                 'The processed build is not eligible for App Store submission.')
     return status
@@ -405,7 +405,7 @@ def wait_for_build(root, apple):
         print('Apple build processing:', status, flush=True)
         if status == 'VALID':
             state['processed'] = True; save_state(root, state)
-            if state.get('channel', CHANNEL) == 'app-store':
+            if state.get('channel', CHANNEL) in ('app-store', 'app-store-upload'):
                 print('Build processed successfully. App Store submission eligibility verified.')
             else:
                 print('Build processed successfully. Add it to an internal tester group in App Store Connect.')

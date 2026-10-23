@@ -25,6 +25,11 @@ on:
       - 'ios/Tests/ChatExperienceTests.swift'
       - 'ios/Tests/StateTests.swift'
       - '.github/workflows/composer-ios27.yml'
+      - '.github/workflows/testflight.yml'
+      - '.github/scripts/**'
+      - '.github/appstore/**'
+      - 'ios/scripts/**'
+      - 'ios/Nonto.xcodeproj/**'
   workflow_dispatch:
 permissions:
   contents: read

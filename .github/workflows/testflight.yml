@@ -7,22 +7,23 @@ on:
       distribution_channel:
         description: 'Distribution audience'
         type: choice
-        options: [testflight-internal, app-store]
+        options: [testflight-internal, app-store-upload, app-store]
         default: testflight-internal
       initialize_signing:
         description: 'Explicit one-time signing initialization / renewal'
         type: boolean
         default: false
 env:
-  NONTO_RELEASE_CHANNEL: ${{ github.event.inputs.distribution_channel || (contains(github.event.head_commit.message, '[appstore-release]') && 'app-store' || 'testflight-internal') }}
+  NONTO_RELEASE_CHANNEL: ${{ github.event.inputs.distribution_channel || (contains(github.event.head_commit.message, '[appstore-release]') && 'app-store' || contains(github.event.head_commit.message, '[appstore-upload]') && 'app-store-upload' || 'testflight-internal') }}
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: nonto-testflight
   cancel-in-progress: false
 jobs:
   verify:
-    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight]') || contains(github.event.head_commit.message, '[appstore-release]') || contains(github.event.head_commit.message, '[signing-setup]'))
+    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight]') || contains(github.event.head_commit.message, '[appstore-release]') || contains(github.event.head_commit.message, '[appstore-upload]') || contains(github.event.head_commit.message, '[signing-setup]'))
     runs-on: macos-26
     timeout-minutes: 20
     outputs:
@@ -90,7 +91,7 @@ jobs:
     needs: verify
     if: needs.verify.outputs.configured == 'true'
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -105,6 +106,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m pip install 'cryptography>=45,<47'
+      - name: Require passing native checks before any Store upload
+        if: env.NONTO_RELEASE_CHANNEL != 'testflight-internal'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/wait_native_checks.py
       - name: Select Xcode 26
         run: |
           python3 - <<'PY'
@@ -153,7 +159,7 @@ jobs:
         run: |
           python3 ios/scripts/testflight.py wait --root "$TF_ROOT"
           python3 .github/scripts/appstore_metadata.py --testflight-notes "$TF_BUILD_NUMBER"
-          if [ "$NONTO_RELEASE_CHANNEL" = "app-store" ]; then
+          if [ "$NONTO_RELEASE_CHANNEL" != "testflight-internal" ]; then
             python3 .github/scripts/appstore_metadata.py --apply --select-build "$TF_BUILD_NUMBER"
           fi
           python3 - <<'PY'

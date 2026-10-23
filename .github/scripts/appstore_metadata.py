@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 import time
@@ -39,6 +40,7 @@ def audit(api):
     for info in rows(api, f'apps/{APP_ID}/appInfos', {'limit': 200}):
         localizations = rows(api, f'appInfos/{info["id"]}/appInfoLocalizations', {'limit': 200})
         report['appInfos'].append({'id': info['id'], 'attributes': info['attributes'],
+                                   'ageRatingDeclaration': safe_get(api, f'appInfos/{info["id"]}/ageRatingDeclaration'),
                                    'localizations': [{'id': row['id'], **row['attributes']} for row in localizations]})
     for version in rows(api, f'apps/{APP_ID}/appStoreVersions', {'limit': 200}):
         item = {'id': version['id'], 'attributes': version['attributes'], 'localizations': []}
@@ -99,13 +101,21 @@ def public_policy_status():
     report = []
     opener = build_opener(NoRedirect())
     for host in ('www.nonto.online', 'nonto.online'):
-        for name in ('privacy', 'terms', 'community'):
-            url = f'https://{host}/api/legal/{name}.html'
+        for document in ('privacy.html', 'terms.html', 'community.html', 'privacy'):
+            name = document.split('.')[0]
+            url = f'https://{host}/api/legal/{document}'
             result = {'url': url}
             try:
                 with opener.open(Request(url), timeout=15) as response:
                     content = response.read(2 * 1024 * 1024)
-                    result.update(status=response.status, matchesBundledDocument=content == (ROOT / 'ios' / 'legal-public' / (name + '.html')).read_bytes())
+                    text = content.decode('utf-8', errors='replace')
+                    title = re.search(r'<title[^>]*>([^<]*)</title>', text, re.I)
+                    version = json.loads((ROOT / 'ios' / 'legal-public' / 'manifest.json').read_text())['policyVersion']
+                    result.update(status=response.status, contentType=response.headers.get('Content-Type', ''),
+                                  title=title.group(1).strip() if title else None,
+                                  servesFrontendShell='flutter_bootstrap.js' in text or 'flutter.js' in text,
+                                  containsPolicyVersion=version in text,
+                                  matchesBundledDocument=content == (ROOT / 'ios' / 'legal-public' / (name + '.html')).read_bytes())
             except HTTPError as error:
                 result['status'] = error.code
             except (URLError, TimeoutError, OSError):
@@ -195,6 +205,9 @@ def apply(api, before, config):
     version_loc = [row for row in version['localizations'] if row['locale'] == locale]
     require(len(app_loc) == len(version_loc) == 1, 'Expected existing Chinese App Store localizations.')
     patch(api, 'appInfoLocalizations', app_loc[0]['id'], {key: config[key] for key in ('name', 'subtitle')})
+    declaration = info.get('ageRatingDeclaration')
+    if declaration and 'id' in declaration:
+        patch(api, 'ageRatingDeclarations', declaration['id'], {'messagingAndChat': True, 'userGeneratedContent': True})
     patch(api, 'appStoreVersions', version['id'], {'versionString': config['version'], 'copyright': config['copyright']})
     patch(api, 'appStoreVersionLocalizations', version_loc[0]['id'], {key: config[key] for key in
           ('description', 'keywords', 'promotionalText', 'marketingUrl', 'supportUrl')})
@@ -225,6 +238,11 @@ def verify_applied(report, config):
     info_loc = next(loc for info in report['appInfos'] if info['attributes']['appStoreState'] in EDITABLE
                     for loc in info['localizations'] if loc['locale'] == config['locale'])
     require(all(info_loc[key] == config[key] for key in ('name', 'subtitle')), 'App info readback mismatch.')
+    declarations = [info.get('ageRatingDeclaration') for info in report['appInfos'] if info['attributes']['appStoreState'] in EDITABLE]
+    for declaration in declarations:
+        if declaration and 'id' in declaration:
+            require(all(declaration['attributes'].get(key) is True for key in ('messagingAndChat', 'userGeneratedContent')),
+                    'Chat and user-generated-content age declaration readback mismatch.')
     require(any(group['displayType'] == 'APP_IPHONE_67' and group['count'] == len(config['screenshots']) and
                 all(state.get('state') == 'COMPLETE' for state in group['states']) for group in loc['screenshots']), 'Screenshot readback mismatch.')
     beta = next(row for row in report['betaAppLocalizations'] if row['locale'] == config['locale'])

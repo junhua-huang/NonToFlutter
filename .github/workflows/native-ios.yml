@@ -2,9 +2,9 @@ name: Native iOS
 on:
   push:
     branches: [ios]
-    paths: ['ios/**', '.github/workflows/native-ios.yml']
+    paths: ['ios/**', '.github/workflows/native-ios.yml', '.github/workflows/testflight.yml', '.github/scripts/**', '.github/appstore/**']
   pull_request:
-    paths: ['ios/**', '.github/workflows/native-ios.yml']
+    paths: ['ios/**', '.github/workflows/native-ios.yml', '.github/workflows/testflight.yml', '.github/scripts/**', '.github/appstore/**']
   workflow_dispatch:
 permissions:
   contents: read

@@ -123,3 +123,16 @@ class ComplianceChecks(unittest.TestCase):
         data = plistlib.loads(path.read_bytes()); data['NSPrivacyTracking'] = True
         path.write_bytes(plistlib.dumps(data))
         self.assertNotEqual(self.run_build_action('install', 'testflight-internal').returncode, 0)
+
+    def test_store_draft_upload_preserves_unreviewed_operational_evidence(self):
+        path = self.resources / 'Compliance.json'; before = path.read_bytes()
+        result = self.run_build_action('install', 'app-store-upload')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('RELEASE BLOCKER', result.stdout)
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_store_draft_upload_still_rejects_broken_privacy_structure(self):
+        path = self.resources / 'PrivacyInfo.xcprivacy'
+        data = plistlib.loads(path.read_bytes()); data['NSPrivacyTracking'] = True
+        path.write_bytes(plistlib.dumps(data))
+        self.assertNotEqual(self.run_build_action('install', 'app-store-upload').returncode, 0)

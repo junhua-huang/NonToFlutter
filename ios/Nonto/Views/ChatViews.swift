@@ -51,6 +51,7 @@ struct ChatRoomView: View {
 struct ChatRoomContent: View {
     let conversation: Conversation
     private let onMessageFrame: ((String, CGRect) -> Void)?
+    private let onViewportMetrics: ((ChatViewportMetrics) -> Void)?
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     @State private var store: ChatStore
@@ -71,9 +72,11 @@ struct ChatRoomContent: View {
     @State private var highlightTask: Task<Void, Never>?
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     init(session: AppSession, conversation: Conversation, store: ChatStore? = nil,
-         onMessageFrame: ((String, CGRect) -> Void)? = nil) {
+         onMessageFrame: ((String, CGRect) -> Void)? = nil,
+         onViewportMetrics: ((ChatViewportMetrics) -> Void)? = nil) {
         self.conversation = conversation
         self.onMessageFrame = onMessageFrame
+        self.onViewportMetrics = onViewportMetrics
         _store = State(initialValue: store ?? ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
         socket = session.socket
     }
@@ -130,8 +133,9 @@ struct ChatRoomContent: View {
             .onScrollGeometryChange(for: ChatViewportMetrics.self) { geometry in
                 ChatViewportMetrics(offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
                                     visibleHeight: geometry.containerSize.height, topInset: geometry.contentInsets.top,
-                                    bottomInset: geometry.contentInsets.bottom, visibleBottom: geometry.visibleRect.maxY)
+                                    bottomInset: geometry.contentInsets.bottom)
             } action: { previous, value in
+                onViewportMetrics?(value)
                 if let y = viewport.record(value) { position.scrollTo(y: y) }
                 else if abs(previous.visibleHeight - value.visibleHeight) > 1
                         || abs(previous.bottomInset - value.bottomInset) > 1
