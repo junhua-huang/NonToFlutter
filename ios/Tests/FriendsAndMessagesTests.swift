@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import UIKit
+import Observation
 @testable import Nonto
 
 @MainActor final class FriendsAndMessagesTests: XCTestCase {
@@ -96,6 +97,79 @@ import UIKit
         _ = try await capture(NavigationStack { FriendsView(session: session) }, session: session,
                               sizeClass: .compact, name: "friends-incoming-applicant-details")
     }
+    func testReturningFromChatRestoresTheTabBarRepeatedly() async throws {
+        let room = Conversation(.object(["id": .id(55), "other_user": applicant]))
+        var messageReads = 0
+        let api = try makeAPI { request in
+            if request.url?.path == "/api/chat/sessions" {
+                return (200, .object(["sessions": .array([room.raw]), "has_more": .bool(false)]))
+            }
+            if request.url?.path.hasSuffix("/messages") == true {
+                messageReads += 1
+                return (200, .object(["messages": .array([]), "has_more": .bool(false)]))
+            }
+            return (200, .object([:]))
+        }
+        let session = AppSession(api: api)
+        session.user = Person(.object(["id": .id(account), "username": .text("test")]))
+        session.restoring = false
+        let column = ConversationColumnProbe()
+        let control = Binding(get: { column.value }, set: { column.value = $0 })
+        let view = TabView(selection: .constant(3)) {
+            Tab("首页", systemImage: "house", value: 0) { Text("首页") }
+            Tab("发现", systemImage: "magnifyingglass", value: 1) { Text("发现") }
+            Tab("通知", systemImage: "bell", value: 2) { Text("通知") }
+            Tab("私信", systemImage: "envelope", value: 3) {
+                MessagesNavigationView(session: session, initialConversation: room, compactColumn: control)
+            }
+            Tab("我的", systemImage: "person.crop.circle", value: 4) { Text("我的") }
+        }.tabViewStyle(.sidebarAdaptable).tabBarMinimizeBehavior(.onScrollDown)
+            .environmentObject(session).environment(\.horizontalSizeClass, .compact)
+            .environment(\.scenePhase, .active).preferredColorScheme(.light).tint(.brand)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let controller = UIHostingController(rootView: view)
+        controller.traitOverrides.horizontalSizeClass = .compact
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKey() }
+        controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
+        try await waitForUI { messageReads > 0 && !self.hasVisibleTabBar(window) }
+        for _ in 0..<2 {
+            // The split view's Back action writes the same sidebar value.
+            column.value = .sidebar
+            try await waitForUI { self.hasVisibleTabBar(window) }
+            column.value = .detail
+            try await waitForUI { !self.hasVisibleTabBar(window) }
+        }
+        column.value = .sidebar
+        try await waitForUI { self.hasVisibleTabBar(window) }
+        let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "messages-returned-tab-bar-restored"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    private func waitForUI(_ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(6)
+        while !condition(), Date() < deadline { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertTrue(condition())
+    }
+    private func hasVisibleTabBar(_ root: UIView) -> Bool {
+        let children = [root] + root.subviews.flatMap(descendants)
+        return children.contains { view in
+            guard view is UITabBar, let window = view.window,
+                  view.convert(view.bounds, to: window).intersection(window.bounds).height > 20 else { return false }
+            var ancestor: UIView? = view
+            while let node = ancestor {
+                if node.isHidden || node.alpha < 0.01 { return false }
+                ancestor = node.superview
+            }
+            return true
+        }
+    }
+    private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
     private func capture<V: View>(_ view: V, session: AppSession, sizeClass: UserInterfaceSizeClass, name: String) async throws -> UIImage {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
@@ -126,4 +200,8 @@ import UIKit
             Int(bytes[i]) > 210 && Int(bytes[i + 2]) > Int(bytes[i]) + 8 && Int(bytes[i + 1]) > Int(bytes[i]) + 4
         }.count
     }
+}
+
+@MainActor @Observable private final class ConversationColumnProbe {
+    var value: NavigationSplitViewColumn = .detail
 }

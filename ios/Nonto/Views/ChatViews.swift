@@ -39,6 +39,7 @@ struct MessagesView: View {
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
         }.timelineList().navigationTitle("私信").navigationBarTitleDisplayMode(.inline)
+            .toolbarVisibility(.visible, for: .tabBar)
             .toolbar { RouteButton(.friends) { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
