@@ -173,7 +173,7 @@ struct PostComposer: View {
         VStack(alignment: .leading, spacing: 8) {
             if reading || busy {
                 ProgressView(status.isEmpty ? "正在准备媒体…" : status).font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading).accessibilityLiveRegion(.polite)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let error {
                 ErrorBanner(text: error)
@@ -236,7 +236,7 @@ struct PostComposer: View {
             try checkAccount()
             try attachments.append(result, assetIDs: selection.map(\.itemIdentifier))
         } catch is CancellationError { return }
-        catch { error = error.localizedDescription }
+        catch { self.error = error.localizedDescription }
         picks = []
     }
     private func saveDraft() {
@@ -292,6 +292,6 @@ struct PostComposer: View {
             published = true
             if editing == nil { session.postRevision += 1 }
             dismiss()
-        } catch { error = error.localizedDescription }
+        } catch { self.error = error.localizedDescription }
     }
 }
