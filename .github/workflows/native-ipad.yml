@@ -17,8 +17,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - version: '26'
-            runner: macos-26
           - version: '27'
             runner: xcode-27
     runs-on: ${{ matrix.runner }}

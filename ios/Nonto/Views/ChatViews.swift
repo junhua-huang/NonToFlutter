@@ -372,6 +372,8 @@ private struct ChatComposerInput: View {
     @Binding var picks: [PhotosPickerItem]
     let preparingMedia: Bool
     let focus: FocusState<Bool>.Binding
+    @EnvironmentObject private var session: AppSession
+    @State private var showingEmoji = false
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let quote {
@@ -388,6 +390,11 @@ private struct ChatComposerInput: View {
                 PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
                     Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
                 }.disabled(preparingMedia).accessibilityLabel("添加照片或视频")
+                Button {
+                    focus.wrappedValue = false; showingEmoji = true
+                } label: {
+                    Image(systemName: "face.smiling").font(.title2).frame(width: 44, height: 44)
+                }.disabled(preparingMedia).accessibilityLabel("动态表情").accessibilityIdentifier("chat.emoji.open")
                 TextField("发送消息…", text: $store.draft, axis: .vertical)
                     .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11)
                     .focused(focus).accessibilityLabel("消息内容")
@@ -403,5 +410,12 @@ private struct ChatComposerInput: View {
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
         }.padding(.top, 6)
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
+            .sheet(isPresented: $showingEmoji) {
+                NotoEmojiPicker(accountID: session.user?.id ?? 0) { item in
+                    guard store.enqueue(content: item.emoji, quoteID: quote?.id) else { return false }
+                    quote = nil
+                    return true
+                }
+            }
     }
 }

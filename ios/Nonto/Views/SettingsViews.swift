@@ -35,6 +35,7 @@ struct SettingsView: View {
                 RouteButton(.policy("privacy")) { Text("隐私政策") }
                 RouteButton(.policy("terms")) { Text("服务条款") }
                 RouteButton(.policy("community")) { Text("社区规范") }
+                NavigationLink("表情资源与许可") { NotoEmojiCreditsView() }
                 Link("源代码", destination: URL(string: "https://github.com/junhua-huang/NonToFlutter/tree/ios")!)
                 LabeledContent("版本", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
             }

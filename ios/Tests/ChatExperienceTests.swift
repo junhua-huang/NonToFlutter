@@ -46,6 +46,32 @@ final class ChatExperienceTests: XCTestCase {
         }
         return try JSON.decode(data)
     }
+    func testNotoEmojiUsesTextRoutesAndPreservesDraft() async throws {
+        for community in [false, true] {
+            let conversation = Conversation(.object(["id": .id(55), "type": .text(community ? "community" : "single"),
+                "community_id": community ? .id(77) : .null]))
+            var sent: JSON?
+            let store = try room(conversation: conversation) { request in
+                if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                    let value = try self.body(request); sent = value
+                    XCTAssertEqual(request.url?.path, community ? "/api/communities/77/chat/messages" : "/api/chat/conversations/55/messages")
+                    return (200, .object([community ? "message" : "data": self.message(291, sender: self.userID)
+                        .merging(.object(["content": value["content"], "message_type": value["message_type"]]))]))
+                }
+                return (200, .object(["messages": .array([])]))
+            }
+            await store.activate(); store.draft = "还没写完的文字"
+            let emoji = try XCTUnwrap(NotoEmojiCatalog.item(id: "1f600"))
+            XCTAssertTrue(store.enqueue(content: emoji.emoji, quoteID: 25))
+            try await waitUntil { !store.sending && store.pending.isEmpty }
+            XCTAssertEqual(sent?["content"].string, "😀")
+            XCTAssertEqual(sent?["message_type"].string, "text")
+            XCTAssertEqual(sent?["quote_message_id"].int, 25)
+            XCTAssertEqual(store.draft, "还没写完的文字")
+            XCTAssertEqual(store.messages.last?.notoEmoji?.first?.id, emoji.id)
+            store.suspend()
+        }
+    }
     func testPendingAndConfirmedBubbleShareIdentityAndTimestamp() {
         let date = Date(timeIntervalSince1970: 1_792_600_000)
         let item = PendingMessage(id: "stable-send", content: "hello", createdAt: date)

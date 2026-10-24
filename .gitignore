@@ -61,3 +61,7 @@ app.*.map.json
 # Local one-time signing-key repair backups
 *.key.*.backup
 *.key.replacement
+
+# Generated emoji staging tree; deterministic archive parts are committed.
+ios/Nonto/Resources/NotoEmoji/
+ios/Nonto/Resources/NotoEmoji.zip
