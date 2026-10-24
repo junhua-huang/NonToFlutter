@@ -132,14 +132,15 @@ struct ComicEditor: View {
                 PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .images) { Label("活动图片（\(picks.count)）", systemImage: "photo") }
                 ErrorBanner(text: error)
                 if busy { ProgressView("正在保存…") }
-            }.disabled(busy).navigationTitle(event.isNull ? "发布漫展" : "编辑漫展").toolbar {
+            }.environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!)
+            .disabled(busy).navigationTitle(event.isNull ? "发布漫展" : "编辑漫展").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                 ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(busy || name.isEmpty || venue.isEmpty || cityID == 0) }
             }.interactiveDismissDisabled(busy).task {
                 if !event.isNull {
                     name = event["name"].string; venue = event["venue"].string; intro = event["intro"].string; ticket = event["ticketInfo"].string; website = event["website"].string; cityID = event["cityId"].int
-                    start = ServerDate.parse(.text(event["startDate"].string + "T" + (event["startTime"].string.isEmpty ? "00:00:00" : event["startTime"].string))) ?? Date()
-                    end = ServerDate.parse(.text(event["endDate"].string + "T" + (event["endTime"].string.isEmpty ? "23:59:00" : event["endTime"].string))) ?? start
+                    start = ServerDate.parse(.text(event["startDate"].string + "T" + (event["startTime"].string.isEmpty ? "00:00:00" : event["startTime"].string)), timeZone: TimeZone(identifier: "Asia/Shanghai")!) ?? Date()
+                    end = ServerDate.parse(.text(event["endDate"].string + "T" + (event["endTime"].string.isEmpty ? "23:59:00" : event["endTime"].string)), timeZone: TimeZone(identifier: "Asia/Shanghai")!) ?? start
                 }
                 do {
                     let j = try await session.api.request("/comic/cities"); cities = j.list("cities", "items")

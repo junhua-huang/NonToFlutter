@@ -111,7 +111,7 @@ final class LayoutSnapshotTests: XCTestCase {
         try api.setToken("layout-fixture")
         let session = AppSession(api: api); session.user = Person(user); session.restoring = false
         try? LocalCache.clear(userID: userID)
-        let feed = PagedResource<Post>(api: api, path: "/recommendations/feed", keys: ["posts", "items"], userID: userID)
+        let feed = PagedResource<Post>(api: api, path: "/posts/", keys: ["posts", "items"], userID: userID)
         await feed.load(reset: true)
         XCTAssertEqual(feed.items.count, 2, "Visual review requires loaded fixture content")
 

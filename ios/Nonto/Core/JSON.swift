@@ -55,19 +55,23 @@ indirect enum JSON: Codable, Equatable, Sendable {
 }
 
 enum ServerDate {
-    static func parse(_ value: JSON) -> Date? {
-        let text = value.string
+    static func parse(_ value: JSON, timeZone: TimeZone = TimeZone(secondsFromGMT: 0)!) -> Date? {
+        let text = value.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
-        if let n = Double(text) { return Date(timeIntervalSince1970: n > 1_000_000_000_000 ? n / 1000 : n) }
+        if let n = Double(text), n.isFinite {
+            return Date(timeIntervalSince1970: abs(n) >= 100_000_000_000 ? n / 1000 : n)
+        }
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = iso.date(from: text) { return d }
+        if let d = iso.date(from: text.replacingOccurrences(of: " ", with: "T")) { return d }
         iso.formatOptions = [.withInternetDateTime]
-        if let d = iso.date(from: text) { return d }
-        // Legacy backend dates without an offset are Beijing time, not device time.
-        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm"] {
+        if let d = iso.date(from: text.replacingOccurrences(of: " ", with: "T")) { return d }
+        // Database timestamps use datetime.utcnow(); an omitted offset still means UTC.
+        // Event schedules are local wall-clock values and explicitly pass their zone.
+        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSSSSSSSS", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd"] {
             let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
-            f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = format
+            f.calendar = Calendar(identifier: .gregorian); f.isLenient = false
+            f.timeZone = timeZone; f.dateFormat = format
             if let d = f.date(from: text) { return d }
         }
         return nil

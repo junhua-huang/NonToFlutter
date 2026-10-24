@@ -4,12 +4,12 @@ import PhotosUI
 struct FeedView: View {
     @ObservedObject var session: AppSession
     @Environment(\.openComposer) private var compose
-    @State private var filter = 0
-    private var path: String { filter == 0 ? "/recommendations/feed" : (filter == 1 ? "/posts/" : "/posts/related-to-me") }
+    @State private var filter = 1
+    private var path: String { filter == 1 ? "/posts/" : "/posts/related-to-me" }
     var body: some View {
         PostList(session: session, path: path).id(filter)
         .safeAreaInset(edge: .top, spacing: 0) {
-            TimelineTabs(title: "动态范围", tabs: [(0, "推荐"), (1, "最新"), (2, "与你相关")], selection: $filter)
+            TimelineTabs(title: "动态范围", tabs: [(1, "最新"), (2, "与你相关")], selection: $filter)
         }
         .navigationTitle("南图").navigationBarTitleDisplayMode(.inline)
         .toolbar {
