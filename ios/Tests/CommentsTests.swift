@@ -113,16 +113,23 @@ import UIKit
     }
     func testSuccessfulSendDoesNotClearNewReplyWithSameTextOrDoubleSend() async throws {
         let started = expectation(description: "Sending")
+        let respond = DispatchSemaphore(value: 0)
+        defer { respond.signal() }
         var writes = 0
         let (store, _, _) = try setup { _ in
-            writes += 1; started.fulfill(); Thread.sleep(forTimeInterval: 0.1)
+            writes += 1; started.fulfill()
+            // Hold the response until the reply address really changed. A
+            // fixed sleep can expire before a busy simulator resumes this test.
+            guard respond.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
             return (200, .object(["comment": self.comment(30), "comment_count": .id(1)]))
         }
         store.text = "同一段文字"
         let pending = Task { await store.send() }
         await fulfillment(of: [started], timeout: 2)
-        store.reply = Comment(comment(2, parent: 1)); await store.send(); await pending.value
+        store.reply = Comment(comment(2, parent: 1)); await store.send()
+        respond.signal(); await pending.value
         XCTAssertEqual(writes, 1); XCTAssertEqual(store.text, "同一段文字"); XCTAssertEqual(store.reply?.id, 2)
+        XCTAssertNil(store.sendError); XCTAssertEqual(store.commentCount, 1)
     }
     func testDeletingChildKeepsSiblingsAndClearsOnlyItsReplyAddress() async throws {
         let root = comment(1, replies: [comment(2, parent: 1), comment(3, parent: 1)])
