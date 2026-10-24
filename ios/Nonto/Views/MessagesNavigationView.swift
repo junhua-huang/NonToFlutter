@@ -49,6 +49,9 @@ struct MessagesNavigationView: View {
                 .accessibilityIdentifier("conversation-detail")
             }
             .environment(\.navigate, detailNavigation.open)
+            // A collapsed split view keeps its detail alive after Back. Let
+            // chat release its own hidden-tab preference while it is offscreen.
+            .environment(\.chatColumnVisible, horizontalSizeClass != .compact || preferredColumn.wrappedValue == .detail)
         }
         .navigationSplitViewStyle(.balanced)
         // A collapsed detail column can retain the chat's hidden-tab preference
@@ -63,5 +66,13 @@ struct MessagesNavigationView: View {
             detailNavigation.path.removeAll()
         }
         preferredColumn.wrappedValue = .detail
+    }
+}
+
+private struct ChatColumnVisibleKey: EnvironmentKey { static let defaultValue = true }
+extension EnvironmentValues {
+    var chatColumnVisible: Bool {
+        get { self[ChatColumnVisibleKey.self] }
+        set { self[ChatColumnVisibleKey.self] = newValue }
     }
 }

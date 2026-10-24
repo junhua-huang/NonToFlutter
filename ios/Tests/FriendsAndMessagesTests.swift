@@ -84,7 +84,7 @@ import Observation
         let api = try makeAPI { request in
             switch request.url?.path {
             case "/api/friends/requests/received": return (200, .object(["requests": .array(incoming ? [self.request] : []), "total": .id(incoming ? 1 : 0)]))
-            case "/api/friends/": return (200, .object(["friends": .array([self.applicant])]))
+            case "/api/friends", "/api/friends/": return (200, .object(["friends": .array([self.applicant])]))
             default: return (404, .object(["detail": .text("Unexpected fixture route")]))
             }
         }
@@ -135,26 +135,26 @@ import Observation
         window.rootViewController = controller; window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKey() }
         controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
-        try await waitForUI { messageReads > 0 && !self.hasVisibleTabBar(window) }
-        for _ in 0..<2 {
+        try await waitForUI("Opening chat hides the tab bar") { messageReads > 0 && !self.hasVisibleTabBar(window) }
+        for attempt in 1...2 {
             // The split view's Back action writes the same sidebar value.
             column.value = .sidebar
-            try await waitForUI { self.hasVisibleTabBar(window) }
+            try await waitForUI("Return \(attempt) restores the tab bar") { self.hasVisibleTabBar(window) }
             column.value = .detail
-            try await waitForUI { !self.hasVisibleTabBar(window) }
+            try await waitForUI("Reopening \(attempt) hides the tab bar") { !self.hasVisibleTabBar(window) }
         }
         column.value = .sidebar
-        try await waitForUI { self.hasVisibleTabBar(window) }
+        try await waitForUI("Final return restores the tab bar") { self.hasVisibleTabBar(window) }
         let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
         let attachment = XCTAttachment(image: image)
         attachment.name = "messages-returned-tab-bar-restored"; attachment.lifetime = .keepAlways; add(attachment)
     }
-    private func waitForUI(_ condition: () -> Bool) async throws {
+    private func waitForUI(_ message: String, _ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(6)
         while !condition(), Date() < deadline { try await Task.sleep(for: .milliseconds(100)) }
-        XCTAssertTrue(condition())
+        XCTAssertTrue(condition(), message)
     }
     private func hasVisibleTabBar(_ root: UIView) -> Bool {
         let children = [root] + root.subviews.flatMap(descendants)

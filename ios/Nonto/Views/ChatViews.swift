@@ -64,6 +64,7 @@ struct ChatRoomContent: View {
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.chatColumnVisible) private var chatColumnVisible
     @State private var store: ChatStore
     private let socket: RealtimeClient
     @State private var quote: ChatMessage?
@@ -200,7 +201,7 @@ struct ChatRoomContent: View {
         .frame(maxWidth: 820).frame(maxWidth: .infinity)
         .background(Color.timelineBackground)
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(horizontalSizeClass == .compact ? .hidden : .automatic, for: .tabBar)
+        .toolbarVisibility(horizontalSizeClass == .compact ? (chatColumnVisible ? .hidden : .visible) : .automatic, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
