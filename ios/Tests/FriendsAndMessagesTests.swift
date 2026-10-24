@@ -74,8 +74,13 @@ import Observation
         let regular = try await capture(NavigationStack {
             MessagesView(session: session, selectedRouteKey: AppRoute.chat(room).key)
         }, session: session, sizeClass: .regular, name: "messages-sidebar-keeps-selection")
+        let narrowSidebar = try await capture(NavigationStack {
+            MessagesView(session: session, selectedRouteKey: AppRoute.chat(room).key, splitSelectionVisible: true)
+        }, session: session, sizeClass: .compact, name: "messages-narrow-split-sidebar-keeps-selection")
         let selected = try blueTintPixels(regular)
         XCTAssertGreaterThan(selected, 100, "The wide layout must actually render the selected conversation")
+        XCTAssertGreaterThan(try blueTintPixels(narrowSidebar), 100,
+                             "A narrow sidebar in a wide split view must still identify its current conversation")
         XCTAssertLessThan(try blueTintPixels(compact), selected / 2,
                           "Returning to the compact list must remove the retained split-view selection tint")
     }
@@ -133,7 +138,7 @@ import Observation
         let controller = UIHostingController(rootView: view)
         controller.traitOverrides.horizontalSizeClass = .compact
         window.rootViewController = controller; window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKey() }
+        defer { window.endEditing(true); window.isHidden = true; window.rootViewController = nil; window.windowScene = nil; previous?.makeKey() }
         controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
         try await waitForUI("The initial conversation list shows the tab bar") { self.hasVisibleTabBar(window) }
         attachTabBarState(window, column: column.value, name: "messages-initial-tab-bar-state")
@@ -199,7 +204,7 @@ import Observation
             .environment(\.horizontalSizeClass, sizeClass).preferredColorScheme(.light).tint(.brand))
         controller.traitOverrides.horizontalSizeClass = sizeClass == .compact ? .compact : .regular
         window.rootViewController = controller; window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKey() }
+        defer { window.endEditing(true); window.isHidden = true; window.rootViewController = nil; window.windowScene = nil; previous?.makeKey() }
         controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
         try await Task.sleep(for: .milliseconds(1200))
         let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in

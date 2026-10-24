@@ -36,7 +36,10 @@ struct MessagesNavigationView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $visibility, preferredCompactColumn: preferredColumn) {
             NavigationStack {
-                MessagesView(session: session, selectedRouteKey: selection?.key)
+                // A narrow sidebar can itself report compact even while the
+                // surrounding split view is wide. Use the container's size.
+                MessagesView(session: session, selectedRouteKey: selection?.key,
+                             splitSelectionVisible: horizontalSizeClass == .regular)
                     .accessibilityIdentifier("conversation-list")
             }
             .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)

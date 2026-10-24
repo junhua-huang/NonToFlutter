@@ -328,7 +328,9 @@ final class LayoutSnapshotTests: XCTestCase {
                 XCTAssertTrue(store.pending.isEmpty, "The fixture must acknowledge the real outbox request")
             }
             window.endEditing(true)
-            try await Task.sleep(for: .milliseconds(400))
+            try await waitForComposer("keyboard dismissal restores the chat viewport") {
+                !field.isFirstResponder && abs(field.convert(field.bounds, to: window).minY - unfocusedComposerY) <= 5
+            }
             XCTAssertEqual(field.convert(field.bounds, to: window).minY, unfocusedComposerY, accuracy: 5,
                            "Dismissing the keyboard must restore the viewport")
             try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "dismiss-\(cycle)")

@@ -16,8 +16,11 @@ struct MessagesView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private let socket: RealtimeClient
     private let selectedRouteKey: String?
-    init(session: AppSession, selectedRouteKey: String? = nil) {
+    private let splitSelectionVisible: Bool?
+    private var showsSelection: Bool { splitSelectionVisible ?? (horizontalSizeClass == .regular) }
+    init(session: AppSession, selectedRouteKey: String? = nil, splitSelectionVisible: Bool? = nil) {
         self.selectedRouteKey = selectedRouteKey
+        self.splitSelectionVisible = splitSelectionVisible
         socket = session.socket
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
     }
@@ -42,8 +45,8 @@ struct MessagesView: View {
                 }
                 // A retained split-view selection is not a selected row when
                 // the phone has popped back to its single-column list.
-                .listRowBackground(horizontalSizeClass == .regular && selectedRouteKey == AppRoute.chat(conversation).key ? Color.brand.opacity(0.10) : Color.timelineBackground)
-                .accessibilityAddTraits(horizontalSizeClass == .regular && selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
+                .listRowBackground(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? Color.brand.opacity(0.10) : Color.timelineBackground)
+                .accessibilityAddTraits(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
                 .listRowSeparator(.hidden)
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
