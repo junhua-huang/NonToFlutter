@@ -9,8 +9,11 @@ struct MessagesNavigationView: View {
     @State private var selection: AppRoute?
     @State private var visibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var compactColumn: NavigationSplitViewColumn
-    private let compactColumnControl: Binding<NavigationSplitViewColumn>?
-    private var preferredColumn: Binding<NavigationSplitViewColumn> { compactColumnControl ?? $compactColumn }
+    @Binding private var controlledCompactColumn: NavigationSplitViewColumn
+    private let hasControlledColumn: Bool
+    private var preferredColumn: Binding<NavigationSplitViewColumn> {
+        hasControlledColumn ? $controlledCompactColumn : $compactColumn
+    }
     private var compactChatVisible: Bool {
         guard horizontalSizeClass == .compact, preferredColumn.wrappedValue == .detail else { return false }
         return ([selection].compactMap { $0 } + detailNavigation.path).contains { route in
@@ -24,7 +27,8 @@ struct MessagesNavigationView: View {
     init(session: AppSession, initialConversation: Conversation? = nil,
          compactColumn: Binding<NavigationSplitViewColumn>? = nil) {
         self.session = session
-        compactColumnControl = compactColumn
+        hasControlledColumn = compactColumn != nil
+        _controlledCompactColumn = compactColumn ?? .constant(.sidebar)
         _selection = State(initialValue: initialConversation.map(AppRoute.chat))
         _compactColumn = State(initialValue: initialConversation == nil ? .sidebar : .detail)
     }
