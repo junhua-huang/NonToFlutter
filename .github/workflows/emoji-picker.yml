@@ -1,0 +1,73 @@
+name: Emoji Picker
+on:
+  pull_request:
+    paths: ['ios/Nonto/Core/NotoEmoji*.swift', 'ios/Nonto/Views/NotoEmoji*.swift', 'ios/Tests/NotoEmoji*Tests.swift', 'ios/Nonto.xcodeproj/**', '.github/workflows/emoji-picker.yml']
+  push:
+    branches: [ios]
+    paths: ['ios/Nonto/Core/NotoEmoji*.swift', 'ios/Nonto/Views/NotoEmoji*.swift', 'ios/Tests/NotoEmoji*Tests.swift', 'ios/Nonto.xcodeproj/**', '.github/workflows/emoji-picker.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: emoji-picker-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  optimized-picker:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPhone, iPad]
+    env:
+      PICKER_DEVICE: ${{ matrix.device }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Select iOS 27 simulator
+        run: |
+          python3 - <<'PY'
+          import glob, json, os, subprocess
+          candidates = sorted(glob.glob('/Applications/Xcode_27*.app'), reverse=True)
+          if candidates:
+              subprocess.run(['sudo', 'xcode-select', '-s', candidates[0] + '/Contents/Developer'], check=True)
+          version = subprocess.check_output(['xcodebuild', '-version'], text=True)
+          print(version)
+          if int(version.split()[1].split('.')[0]) < 27:
+              raise SystemExit('Picker regression requires Xcode 27 or newer.')
+          data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], text=True))
+          devices = [d for runtime, group in data['devices'].items() if 'iOS-27' in runtime
+                     for d in group if d['isAvailable'] and d['name'].startswith(os.environ['PICKER_DEVICE'])]
+          if not devices:
+              raise SystemExit('No matching iOS 27 simulator.')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('SIMULATOR_UDID=' + devices[0]['udid'] + '\n')
+          subprocess.run(['defaults', 'write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'NO'], check=True)
+          PY
+      - name: Verify generated project
+        run: |
+          python3 ios/scripts/generate_project.py
+          git diff --exit-code -- ios/Nonto.xcodeproj
+      - name: Verify optimized picker and Unicode message compatibility
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Picker -resultBundlePath build/EmojiPicker.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES -only-testing:NontoTests/NotoEmojiTests -only-testing:NontoTests/NotoEmojiPickerTests -only-testing:NontoTests/ChatExperienceTests/testNotoEmojiUsesTextRoutesAndPreservesDraft -parallel-testing-enabled NO test | tee emoji-picker.log
+      - name: Export picker screenshots
+        if: always()
+        run: |
+          if [ -d build/EmojiPicker.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/EmojiPicker.xcresult --output-path build/PickerScreenshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nonto-emoji-picker-${{ matrix.device }}
+          path: |
+            build/PickerScreenshots
+            build/EmojiPicker.xcresult
+            emoji-picker.log
+          retention-days: 7

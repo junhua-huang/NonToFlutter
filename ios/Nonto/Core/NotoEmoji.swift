@@ -1,6 +1,6 @@
 import Foundation
 
-struct NotoEmoji: Decodable, Identifiable, Equatable {
+struct NotoEmoji: Decodable, Identifiable, Equatable, Sendable {
     let id: String
     let emoji: String
     let name: String
@@ -59,6 +59,26 @@ struct NotoEmojiRecents {
     func record(_ item: NotoEmoji) {
         guard accountID > 0, NotoEmojiCatalog.item(id: item.id) != nil else { return }
         defaults.set(Array(([item.id] + items.map(\.id).filter { $0 != item.id }).prefix(24)), forKey: key)
+    }
+}
+
+struct NotoEmojiFavorites {
+    let accountID: Int
+    var defaults: UserDefaults = .standard
+    private var key: String { "nonto.native.noto-favorites.\(accountID)" }
+    var items: [NotoEmoji] {
+        guard accountID > 0 else { return [] }
+        var seen = Set<String>()
+        return (defaults.stringArray(forKey: key) ?? []).compactMap { id in
+            guard seen.insert(id).inserted else { return nil }
+            return NotoEmojiCatalog.item(id: id)
+        }
+    }
+    func toggle(_ item: NotoEmoji) {
+        guard accountID > 0, NotoEmojiCatalog.item(id: item.id) != nil else { return }
+        let existing = items.map(\.id)
+        let ids = existing.contains(item.id) ? existing.filter { $0 != item.id } : [item.id] + existing
+        defaults.set(ids, forKey: key)
     }
 }
 
