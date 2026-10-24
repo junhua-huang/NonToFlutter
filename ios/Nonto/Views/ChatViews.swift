@@ -78,6 +78,9 @@ struct ChatRoomContent: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.messagesOwnsTabBar) private var messagesOwnsTabBar
     @State private var store: ChatStore
+    @State private var stickerSender: ChatStickerSender
+    @State private var availableHeight: CGFloat = 700
+    private let composerEpoch: UUID
     private let socket: RealtimeClient
     @State private var quote: ChatMessage?
     @State private var picks: [PhotosPickerItem] = []
@@ -101,6 +104,8 @@ struct ChatRoomContent: View {
         self.onMessageFrame = onMessageFrame
         self.onViewportMetrics = onViewportMetrics
         _store = State(initialValue: store ?? ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
+        _stickerSender = State(initialValue: ChatStickerSender(accountID: session.user?.id ?? 0))
+        composerEpoch = session.api.generation
         socket = session.socket
     }
     var body: some View {
@@ -229,9 +234,11 @@ struct ChatRoomContent: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            ChatComposerInput(store: store, quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused)
+            ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
+                              quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused)
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
         .task {
             visible = true
             if phase == .active { await store.activate() }
@@ -241,7 +248,7 @@ struct ChatRoomContent: View {
                 if visible && phase == .active { await store.load() }
             }
         }
-        .onDisappear { visible = false; highlightTask?.cancel(); store.suspend(); Task { await session.refreshCounts() } }
+        .onDisappear { visible = false; highlightTask?.cancel(); stickerSender.cancel(); store.suspend(); Task { await session.refreshCounts() } }
         .onChange(of: phase) { _, value in
             if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
         }
@@ -383,74 +390,154 @@ struct SharePostView: View {
     }
 }
 
-/// Draft changes invalidate the input bar only, keeping the timeline out of the typing hot path.
-private struct ChatComposerInput: View {
+/// Only this subtree observes keystrokes and attachment selection.
+struct ChatComposerInput: View {
     @Bindable var store: ChatStore
+    @Bindable var stickerSender: ChatStickerSender
+    let accountEpoch: UUID
+    let availableHeight: CGFloat
+    let pickerDefaults: UserDefaults
     @Binding var quote: ChatMessage?
     @Binding var picks: [PhotosPickerItem]
     let preparingMedia: Bool
     let focus: FocusState<Bool>.Binding
     @EnvironmentObject private var session: AppSession
-    @State private var showingEmoji = false
-    @State private var showingStickers = false
+    @Environment(\.verticalSizeClass) private var verticalSize
+    @Environment(\.dynamicTypeSize) private var dynamicType
+    @State private var pickerMode: ChatExpressionTab?
+    @State private var expanded = false
+    @State private var stagedSticker: StagedChatSticker?
+    @State private var selection: TextSelection?
+    @State private var caret: NSRange?
     @State private var showingPhotos = false
+    @State private var sendTask: Task<Void, Never>?
+
+    // Optional values are one-time preview seeds; live edits stay in this input bar.
+    init(store: ChatStore, stickerSender: ChatStickerSender, accountEpoch: UUID, availableHeight: CGFloat,
+         quote: Binding<ChatMessage?>, picks: Binding<[PhotosPickerItem]>, preparingMedia: Bool,
+         focus: FocusState<Bool>.Binding, initialPicker: ChatExpressionTab? = nil,
+         initialSticker: StagedChatSticker? = nil, pickerDefaults: UserDefaults = .standard) {
+        _store = Bindable(wrappedValue: store); _stickerSender = Bindable(wrappedValue: stickerSender)
+        self.accountEpoch = accountEpoch; self.availableHeight = availableHeight
+        self.pickerDefaults = pickerDefaults
+        _quote = quote; _picks = picks; self.preparingMedia = preparingMedia; self.focus = focus
+        _pickerMode = State(initialValue: initialPicker); _stagedSticker = State(initialValue: initialSticker)
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let quote {
                 HStack(spacing: 8) {
                     Image(systemName: "quote.bubble").foregroundStyle(Color.brand)
-                    Text(ChatQuoteSummary.text(quote).isEmpty ? "引用消息" : ChatQuoteSummary.text(quote))
-                        .lineLimit(2).font(.caption)
+                    Text(ChatQuoteSummary.text(quote).isEmpty ? "引用消息" : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption)
                     Spacer()
                     Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }
-                        .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44)
+                        .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44).disabled(stickerSender.busy)
                 }.padding(.horizontal)
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    Button("照片或视频", systemImage: "photo.on.rectangle") {
-                        focus.wrappedValue = false; showingPhotos = true
+            VStack(spacing: 0) {
+                if let stagedSticker {
+                    ZStack(alignment: .topTrailing) {
+                        ChatStagedStickerImage(sticker: stagedSticker)
+                            .frame(width: verticalSize == .compact ? 48 : 96, height: verticalSize == .compact ? 48 : 96)
+                            .frame(maxWidth: .infinity).padding(.vertical, 8)
+                            .accessibilityLabel("待发送贴纸：\(stagedSticker.name)")
+                        Button(action: cancelSticker) { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }
+                            .buttonStyle(.plain).accessibilityLabel("取消待发送贴纸").accessibilityIdentifier("chat.sticker.cancel")
                     }
-                    Button("贴纸", systemImage: "square.on.circle") {
-                        focus.wrappedValue = false; showingStickers = true
-                    }.accessibilityIdentifier("chat.stickers.open")
-                } label: {
-                    Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
-                }.disabled(preparingMedia).accessibilityLabel("添加照片、视频或贴纸")
-                Button {
-                    focus.wrappedValue = false; showingEmoji = true
-                } label: {
-                    Image(systemName: "face.smiling").font(.title2).frame(width: 44, height: 44)
-                }.disabled(preparingMedia).accessibilityLabel("动态表情").accessibilityIdentifier("chat.emoji.open")
-                TextField("发送消息…", text: $store.draft, axis: .vertical)
-                    .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11)
-                    .focused(focus).accessibilityLabel("消息内容")
-                Button {
-                    if store.enqueue(content: store.draft, quoteID: quote?.id) {
-                        store.draft = ""; quote = nil; store.saveDraft()
-                    }
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title).frame(width: 44, height: 44)
-                }.disabled(store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息")
+                    Divider().padding(.horizontal, 12)
+                }
+                composerRow
             }.floatingGlass()
+            if let error = stickerSender.error { ErrorBanner(text: error).padding(.horizontal, 12) }
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
+            if let mode = pickerMode {
+                ChatExpressionDrawer(accountID: session.user?.id ?? 0, api: session.api, initialTab: mode,
+                                     selection: stagedSticker, expanded: $expanded, disabled: stickerSender.busy, defaults: pickerDefaults,
+                                     onInsertEmoji: insertEmoji, onStageSticker: { stagedSticker = $0; stickerSender.error = nil },
+                                     onClose: { pickerMode = nil })
+                    .id(mode).frame(height: drawerHeight).padding(.horizontal, 8).padding(.bottom, 4)
+            }
         }.padding(.top, 6)
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
+            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil } }
+            .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
             .photosPicker(isPresented: $showingPhotos, selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos]))
-            .sheet(isPresented: $showingEmoji) {
-                NotoEmojiPicker(accountID: session.user?.id ?? 0) { item in
-                    guard store.enqueue(content: item.emoji, quoteID: quote?.id) else { return false }
-                    quote = nil
-                    return true
+            .onDisappear { sendTask?.cancel(); stickerSender.cancel() }
+    }
+    private var drawerHeight: CGFloat {
+        let limit = max(110, availableHeight - (stagedSticker == nil ? 100 : (verticalSize == .compact ? 100 : 210)))
+        return min(expanded ? 500 : 300, limit)
+    }
+    private var composerRow: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            Menu {
+                Button("照片或视频", systemImage: "photo.on.rectangle") {
+                    focus.wrappedValue = false; pickerMode = nil; showingPhotos = true
+                }
+                Button("贴纸", systemImage: "square.on.circle") { open(.stickers) }
+                    .accessibilityIdentifier("chat.stickers.open")
+            } label: { Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44) }
+                .disabled(preparingMedia || stickerSender.busy).accessibilityLabel("添加照片、视频或贴纸")
+            Button {
+                if pickerMode != nil { pickerMode = nil; focus.wrappedValue = true }
+                else { open(.emoji) }
+            } label: { Image(systemName: pickerMode == nil ? "face.smiling" : "keyboard").font(.title2).frame(width: 44, height: 44) }
+                .disabled(preparingMedia || stickerSender.busy).accessibilityLabel(pickerMode == nil ? "表情选择器" : "切换到键盘")
+                .accessibilityIdentifier("chat.emoji.open")
+            TextField(stagedSticker == nil ? "发送消息…" : "添加文字或发送", text: $store.draft, selection: textSelection, axis: .vertical)
+                .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11).focused(focus)
+                .disabled(stickerSender.busy).accessibilityLabel("消息内容")
+            Button(action: send) {
+                if stickerSender.busy { ProgressView().frame(width: 44, height: 44) }
+                else { Image(systemName: "arrow.up.circle.fill").font(.title).frame(width: 44, height: 44) }
+            }.disabled(stickerSender.busy || (stagedSticker == nil && store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")
+        }
+    }
+    private var textSelection: Binding<TextSelection?> {
+        Binding(get: { selection }, set: { value in
+            selection = value
+            if let value, case .selection(let range) = value.indices {
+                let boundaries = Set(store.draft.indices).union([store.draft.endIndex])
+                if boundaries.contains(range.lowerBound), boundaries.contains(range.upperBound) {
+                    caret = NSRange(range, in: store.draft)
                 }
             }
-            .sheet(isPresented: $showingStickers) {
-                ChatStickerPicker(accountID: session.user?.id ?? 0, api: session.api) { sticker in
-                    guard store.enqueueSticker(sticker, quoteID: quote?.id) else { return false }
-                    quote = nil
-                    return true
-                }
+        })
+    }
+    private func open(_ mode: ChatExpressionTab) { focus.wrappedValue = false; pickerMode = mode }
+    private func insertEmoji(_ item: NotoEmoji) -> Bool {
+        guard !stickerSender.busy else { return false }
+        let result = ChatEmojiInsertion.insert(item.emoji, into: store.draft, selection: caret)
+        store.draft = result.text
+        let next = ComposerReferenceInsertion.safeSelection(NSRange(location: result.caretUTF16, length: 0), in: result.text)
+        caret = next
+        if let range = Range(next, in: result.text) { selection = TextSelection(insertionPoint: range.lowerBound) }
+        return true
+    }
+    private func cancelSticker() { sendTask?.cancel(); stickerSender.cancel(); stagedSticker = nil }
+    private func send() {
+        guard !stickerSender.busy, sendTask == nil else { return }
+        let text = store.draft, quoteID = quote?.id
+        guard let staged = stagedSticker else {
+            if store.enqueue(content: text, quoteID: quoteID) { finishSend(text: text, quoteID: quoteID) }
+            return
+        }
+        sendTask = Task {
+            defer { sendTask = nil }
+            let accepted = await stickerSender.send(staged, caption: text, quoteID: quoteID,
+                isValid: { session.api.generation == accountEpoch && session.api.token != nil },
+                upload: { data in
+                    try await session.api.upload(data, filename: "noto-sticker-\(UUID()).png", mime: "image/png", type: "chat")
+                }, enqueue: { sticker, caption, quoteID in store.enqueueSticker(sticker, caption: caption, quoteID: quoteID) })
+            if accepted {
+                if stagedSticker?.id == staged.id { stagedSticker = nil }
+                finishSend(text: text, quoteID: quoteID)
             }
+        }
+    }
+    private func finishSend(text: String, quoteID: Int?) {
+        if store.draft == text { store.draft = ""; selection = nil; caret = nil; store.saveDraft() }
+        if quote?.id == quoteID { quote = nil }
     }
 }

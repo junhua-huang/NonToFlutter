@@ -99,16 +99,17 @@ struct NotoEmojiPickerContent: View {
     private func send() { searchFocused = false; if browser.send(using: onSend) { dismiss() } }
 }
 
-private struct NotoEmojiSearchField: View {
+struct NotoEmojiSearchField: View {
     @Binding var text: String
     let focus: FocusState<Bool>.Binding
+    var prompt = "搜索名称、关键词或 emoji"
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-            TextField("搜索名称、关键词或 emoji", text: $text)
+            TextField(prompt, text: $text)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .submitLabel(.search).focused(focus).onSubmit { focus.wrappedValue = false }
-                .accessibilityLabel("搜索动态表情").accessibilityIdentifier("noto.search")
+                .accessibilityLabel(prompt).accessibilityIdentifier("noto.search")
                 .frame(minHeight: 44)
             if !text.isEmpty {
                 Button { text = "" } label: {
@@ -120,7 +121,7 @@ private struct NotoEmojiSearchField: View {
     }
 }
 
-private struct NotoEmojiScopeStrip: View {
+struct NotoEmojiScopeStrip: View {
     let scopes: [NotoEmojiScope]
     let active: NotoEmojiScope?
     let onSelect: (NotoEmojiScope) -> Void
@@ -152,20 +153,23 @@ private struct NotoEmojiScopeStrip: View {
     }
 }
 
-private struct NotoEmojiGrid: View {
+struct NotoEmojiGrid: View {
     let items: [NotoEmoji]
     let selectedID: String?
     let favorites: Set<String>
     let canFavorite: Bool
     let onSelect: (NotoEmoji) -> Void
     let onFavorite: (NotoEmoji) -> Void
+    var systemGlyphs = false
+    var onUseAsSticker: ((NotoEmoji) -> Void)? = nil
     @ScaledMetric(relativeTo: .body) private var cellSize: CGFloat = 56
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 6)], spacing: 6) {
             ForEach(items) { item in
                 NotoEmojiTile(item: item, selected: selectedID == item.id, favorite: favorites.contains(item.id),
                               canFavorite: canFavorite, cellSize: cellSize,
-                              onSelect: { onSelect(item) }, onFavorite: { onFavorite(item) })
+                              onSelect: { onSelect(item) }, onFavorite: { onFavorite(item) },
+                              systemGlyphs: systemGlyphs, onUseAsSticker: onUseAsSticker.map { action in { action(item) } })
             }
         }.scrollTargetLayout()
     }
@@ -179,9 +183,14 @@ private struct NotoEmojiTile: View {
     let cellSize: CGFloat
     let onSelect: () -> Void
     let onFavorite: () -> Void
+    var systemGlyphs = false
+    var onUseAsSticker: (() -> Void)? = nil
     var body: some View {
         Button(action: onSelect) {
-            NotoEmojiPoster(item: item).frame(width: min(cellSize * 0.78, 64), height: min(cellSize * 0.78, 64))
+            Group {
+                if systemGlyphs { Text(item.emoji).font(.system(size: min(cellSize * 0.72, 60))) }
+                else { NotoEmojiPoster(item: item) }
+            }.frame(width: min(cellSize * 0.78, 64), height: min(cellSize * 0.78, 64))
                 .frame(maxWidth: .infinity, minHeight: cellSize)
                 .background(selected ? Color.brand.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
                 .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(selected ? Color.brand : .clear, lineWidth: 1.5) }
@@ -191,11 +200,17 @@ private struct NotoEmojiTile: View {
         }
         .buttonStyle(.plain).hoverEffect(.highlight)
         .accessibilityLabel(item.name).accessibilityValue(favorite ? "已收藏" : "")
-        .accessibilityHint("轻点预览，确认后发送")
+        .accessibilityHint(systemGlyphs ? "插入文字，长按可用作贴纸" : "添加为待发送的贴纸")
         .accessibilityIdentifier("noto.emoji.\(item.id)")
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityAction(named: Text(favorite ? "取消收藏" : "收藏"), onFavorite)
+        .accessibilityActions {
+            if canFavorite { Button(favorite ? "取消收藏" : "收藏", action: onFavorite) }
+            if let onUseAsSticker { Button("用作贴纸", action: onUseAsSticker) }
+        }
         .contextMenu {
+            if let onUseAsSticker {
+                Button("用作贴纸", systemImage: "square.on.circle", action: onUseAsSticker)
+            }
             if canFavorite {
                 Button(action: onFavorite) { Label(favorite ? "取消收藏" : "收藏", systemImage: favorite ? "star.slash" : "star") }
             }

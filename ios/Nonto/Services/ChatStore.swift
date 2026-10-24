@@ -250,9 +250,12 @@ final class ChatStore {
         NativeNotifications.shared.activeConversation = roomID
     }
     @discardableResult
-    func enqueueSticker(_ sticker: ChatSticker, quoteID: Int? = nil) -> Bool {
-        guard ChatSticker.validURL(sticker.url) else { return false }
-        return enqueue(content: ChatSticker.messageContent, kind: "image", media: sticker.url, quoteID: quoteID)
+    func enqueueSticker(_ sticker: ChatSticker, caption: String = "", quoteID: Int? = nil) -> Bool {
+        guard valid, ChatSticker.validURL(sticker.url) else { return false }
+        var items = [PendingMessage(content: sticker.content, kind: "image", media: sticker.url, quoteID: quoteID)]
+        let text = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty { items.append(PendingMessage(content: text)) }
+        return appendToOutbox(items)
     }
     @discardableResult
     func enqueue(content: String, kind: String = "text", media: String? = nil, quoteID: Int? = nil) -> Bool {
