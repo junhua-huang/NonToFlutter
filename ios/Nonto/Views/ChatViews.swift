@@ -1,13 +1,26 @@
 import SwiftUI
 import PhotosUI
 
+private struct ChatTabBarVisibility: ViewModifier {
+    let managedByMessages: Bool
+    let compact: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if managedByMessages { content }
+        else { content.toolbarVisibility(compact ? .hidden : .automatic, for: .tabBar) }
+    }
+}
+
 struct MessagesView: View {
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private let socket: RealtimeClient
     private let selectedRouteKey: String?
-    init(session: AppSession, selectedRouteKey: String? = nil) {
+    private let splitSelectionVisible: Bool?
+    private var showsSelection: Bool { splitSelectionVisible ?? (horizontalSizeClass == .regular) }
+    init(session: AppSession, selectedRouteKey: String? = nil, splitSelectionVisible: Bool? = nil) {
         self.selectedRouteKey = selectedRouteKey
+        self.splitSelectionVisible = splitSelectionVisible
         socket = session.socket
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
     }
@@ -30,8 +43,11 @@ struct MessagesView: View {
                         }
                     }.padding(.vertical, 10)
                 }
-                .listRowBackground(selectedRouteKey == AppRoute.chat(conversation).key ? Color.brand.opacity(0.10) : Color.timelineBackground)
-                .accessibilityAddTraits(selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
+                // A retained split-view selection is not a selected row when
+                // the phone has popped back to its single-column list.
+                .listRowBackground(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? Color.brand.opacity(0.10) : Color.timelineBackground)
+                .accessibilityAddTraits(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
+                .listRowSeparator(.hidden)
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
         }.timelineList().navigationTitle("私信").navigationBarTitleDisplayMode(.inline)
@@ -59,6 +75,7 @@ struct ChatRoomContent: View {
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.messagesOwnsTabBar) private var messagesOwnsTabBar
     @State private var store: ChatStore
     private let socket: RealtimeClient
     @State private var quote: ChatMessage?
@@ -195,7 +212,7 @@ struct ChatRoomContent: View {
         .frame(maxWidth: 820).frame(maxWidth: .infinity)
         .background(Color.timelineBackground)
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(horizontalSizeClass == .compact ? .hidden : .automatic, for: .tabBar)
+        .modifier(ChatTabBarVisibility(managedByMessages: messagesOwnsTabBar, compact: horizontalSizeClass == .compact))
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
@@ -372,6 +389,8 @@ private struct ChatComposerInput: View {
     @Binding var picks: [PhotosPickerItem]
     let preparingMedia: Bool
     let focus: FocusState<Bool>.Binding
+    @EnvironmentObject private var session: AppSession
+    @State private var showingEmoji = false
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let quote {
@@ -388,6 +407,11 @@ private struct ChatComposerInput: View {
                 PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
                     Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
                 }.disabled(preparingMedia).accessibilityLabel("添加照片或视频")
+                Button {
+                    focus.wrappedValue = false; showingEmoji = true
+                } label: {
+                    Image(systemName: "face.smiling").font(.title2).frame(width: 44, height: 44)
+                }.disabled(preparingMedia).accessibilityLabel("动态表情").accessibilityIdentifier("chat.emoji.open")
                 TextField("发送消息…", text: $store.draft, axis: .vertical)
                     .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11)
                     .focused(focus).accessibilityLabel("消息内容")
@@ -403,5 +427,12 @@ private struct ChatComposerInput: View {
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
         }.padding(.top, 6)
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
+            .sheet(isPresented: $showingEmoji) {
+                NotoEmojiPicker(accountID: session.user?.id ?? 0) { item in
+                    guard store.enqueue(content: item.emoji, quoteID: quote?.id) else { return false }
+                    quote = nil
+                    return true
+                }
+            }
     }
 }

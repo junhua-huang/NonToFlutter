@@ -200,7 +200,16 @@ struct EditProfileView: View {
     }
 }
 
-struct FriendRequestRecord: Record { var raw: JSON; init(_ raw: JSON) { self.raw = raw } }
+struct FriendRequestRecord: Record {
+    var raw: JSON
+    init(_ raw: JSON) { self.raw = raw }
+    // /requests/received includes the applicant under `user`; older responses
+    // used `sender`. The pending summary includes IDs only, so don't use it here.
+    var applicant: Person { Person(raw["user"].or(raw["sender"])) }
+    @MainActor static func received(api: APIClient, userID: Int) -> PagedResource<Self> {
+        PagedResource(api: api, path: "/friends/requests/received", keys: ["requests", "items"], userID: userID, paginated: false)
+    }
+}
 struct FriendsView: View {
     @EnvironmentObject private var session: AppSession
     @StateObject private var friends: PagedResource<Person>
@@ -210,26 +219,28 @@ struct FriendsView: View {
     init(session: AppSession) {
         let uid = session.user?.id ?? 0
         _friends = StateObject(wrappedValue: PagedResource(api: session.api, path: "/friends/", keys: ["friends", "users", "items"], userID: uid, paginated: false))
-        _requests = StateObject(wrappedValue: PagedResource(api: session.api, path: "/friends/requests/pending", keys: ["requests", "items"], userID: uid, paginated: false))
+        _requests = StateObject(wrappedValue: FriendRequestRecord.received(api: session.api, userID: uid))
     }
     var body: some View {
         List {
             ErrorBanner(text: error)
             Section("好友申请") {
                 ForEach(requests.items) { item in
-                    let sender = Person(item.raw["sender"])
+                    let sender = item.applicant
                     VStack(alignment: .leading, spacing: 8) {
                         RouteButton(.profile(sender.id)) { PersonRow(person: sender) }
                         HStack { Button("接受") { Task { await respond(item.id, accept: true) } }.buttonStyle(.glassProminent); Button("拒绝") { Task { await respond(item.id, accept: false) } }.buttonStyle(.glass) }.disabled(busy)
                     }
                 }
                 if requests.loading || requests.error != nil { ResourceFooter(resource: requests) }
+                else if requests.items.isEmpty { Text("暂无新的好友申请").foregroundStyle(.secondary) }
             }
             Section("我的好友") {
                 ForEach(friends.items) { person in RouteButton(.profile(person.id)) { PersonRow(person: person) } }
                 ResourceFooter(resource: friends, emptyTitle: "还没有好友", emptyDescription: "去发现页搜索朋友，发送好友申请。", emptyIcon: "person.2")
             }
-        }.buttonStyle(.plain).navigationTitle("好友").task { await load() }.refreshable { await load() }
+        }.buttonStyle(.plain).navigationTitle("好友")
+            .task { await load() }.refreshable { await load() }
     }
     private func load() async { await friends.load(reset: true); await requests.load(reset: true) }
     private func respond(_ id: Int, accept: Bool) async {

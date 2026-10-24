@@ -135,11 +135,15 @@ import SwiftUI
     }
     func testCoalescedFullScreenRequestsShareOfflinePreview() async throws {
         let started = expectation(description: "Image request started")
+        let secondEntered = expectation(description: "Second viewer entered the same request")
         let release = DispatchSemaphore(value: 0)
         defer { release.signal() }
+        let url = "https://example.test/coalesced-full-screen.jpg"
         var requests = 0
-        StubProtocol.handler = { _ in
-            requests += 1; started.fulfill()
+        StubProtocol.handler = { request in
+            guard request.url?.absoluteString == url else { throw URLError(.cancelled) }
+            requests += 1
+            if requests == 1 { started.fulfill() }
             _ = release.wait(timeout: .now() + 5)
             throw URLError(.notConnectedToInternet)
         }
@@ -147,12 +151,14 @@ import SwiftUI
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
         let repository = ImageRepository(session: URLSession(configuration: config))
         let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 16)).image { _ in }
-        let url = "https://example.test/coalesced-full-screen.jpg"
         repository.rememberUploadedPreview(image, at: url)
         let first = Task { try await repository.image(at: url, maxPixelSize: 3072) }
         await fulfillment(of: [started], timeout: 2)
-        let second = Task { try await repository.image(at: url, maxPixelSize: 3072) }
-        await Task.yield()
+        let second = Task { @MainActor in
+            secondEntered.fulfill()
+            return try await repository.image(at: url, maxPixelSize: 3072)
+        }
+        await fulfillment(of: [secondEntered], timeout: 2)
         release.signal()
         let one = try await first.value, two = try await second.value
         XCTAssertTrue(one === image); XCTAssertTrue(two === image); XCTAssertEqual(requests, 1)
@@ -160,28 +166,37 @@ import SwiftUI
     }
     func testAccountSwitchCancelsEveryCoalescedViewerBeforeOfflineFallback() async throws {
         let started = expectation(description: "Old account image request started")
+        let secondEntered = expectation(description: "Second old-account viewer entered the request")
         let release = DispatchSemaphore(value: 0)
         defer { release.signal() }
-        StubProtocol.handler = { _ in
-            started.fulfill(); _ = release.wait(timeout: .now() + 5)
+        let url = "https://example.test/old-account-full-screen.jpg"
+        var requests = 0
+        StubProtocol.handler = { request in
+            guard request.url?.absoluteString == url else { throw URLError(.cancelled) }
+            requests += 1
+            if requests == 1 { started.fulfill() }
+            _ = release.wait(timeout: .now() + 5)
             throw URLError(.notConnectedToInternet)
         }
         defer { StubProtocol.handler = nil }
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
         let repository = ImageRepository(session: URLSession(configuration: config))
         let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 16)).image { _ in }
-        let url = "https://example.test/old-account-full-screen.jpg"
         repository.rememberUploadedPreview(image, at: url)
         let first = Task { try await repository.image(at: url, maxPixelSize: 3072) }
         await fulfillment(of: [started], timeout: 2)
-        let second = Task { try await repository.image(at: url, maxPixelSize: 3072) }
-        await Task.yield()
+        let second = Task { @MainActor in
+            secondEntered.fulfill()
+            return try await repository.image(at: url, maxPixelSize: 3072)
+        }
+        await fulfillment(of: [secondEntered], timeout: 2)
         repository.clear()
         release.signal()
         for task in [first, second] {
             do { _ = try await task.value; XCTFail("An old-account preview must never escape after account switch") }
             catch { XCTAssertTrue(error is CancellationError) }
         }
+        XCTAssertEqual(requests, 1, "Both viewers must share the same old-account network request")
     }
     func testPostDisplayTrimsOnlyOuterWhitespaceWithoutChangingWireContent() {
         let original = " \n\t第一段\n\n第二段  内容\r\n "

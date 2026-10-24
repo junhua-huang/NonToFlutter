@@ -1,6 +1,6 @@
 # 南图 · 原生 iOS
 
-分支 `ios` 从 `master` 的 `c24b5a3` 创建。`ios/Nonto.xcodeproj` 是独立的 SwiftUI 应用；无需安装 Flutter、CocoaPods 或第三方包。原 Flutter 代码保留用于其他平台及核对接口。
+分支 `ios` 从 `master` 的 `c24b5a3` 创建。`ios/Nonto.xcodeproj` 是独立的 SwiftUI 应用；无需安装 Flutter 或 CocoaPods；Xcode 自动解析固定版本的 Lottie 4.6.1。原 Flutter 代码保留用于其他平台及核对接口。
 
 ## 设计和系统能力
 
@@ -94,3 +94,14 @@ xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto \
 - 修复密码重置提示消失、资料编辑重复初始化、清理缓存成功被显示为错误，以及登录后资料加载失败导致凭据丢失的问题。
 
 `StateTests` 和 `ChatExperienceTests` 使用模拟 HTTP 响应覆盖上述状态与并发场景；仍需使用真实账号在真机验证服务端兼容性和交互细节。
+
+
+## Noto 动态表情
+
+聊天输入栏的笑脸按钮打开 881 个 Google Animated Noto Emoji，支持分类、中文/英文/emoji 搜索、动画预览、单独发送和按账号记录最近使用。发送表情保留正在编辑的文字草稿。
+
+复用私信/社群聊天现有文字接口和持久化发件箱，发送标准 Unicode。支持的 1–3 个纯 emoji 消息展示为无底色动画；文字混排、未收录和超过三个的 emoji 保持文字显示，旧客户端也能正常阅读。
+
+离线原始 Lottie JSON 和缩放的静态 PNG 预览保存为 `Nonto/Resources/NotoEmoji.zip.001`、`.002`，构建时拼接并通过系统 unzip 解压至派生资源目录。运行时不访问 Google。离屏/后台/关闭播放/系统减弱动态效果时显示静态预览。设置中的“表情资源与许可”提供 Google/CC BY 4.0、Unicode CLDR、Lottie/Apache 2.0 的署名及许可全文。
+
+Swift Package 精确固定为 Airbnb 官方 lottie-spm 4.6.1；Package.resolved 包含提交版本。测试仅使用 iOS 27/iPadOS 27。资源脚本检查完整目录、原始哈希、预览、外部依赖和许可证；原生测试检查全部动画解码、Unicode 兼容、搜索、账号隔离，并输出选择器截图。

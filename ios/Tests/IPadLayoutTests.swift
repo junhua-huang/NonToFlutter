@@ -160,6 +160,12 @@ import UIKit
                 return !$0.isHidden && $0.alpha > 0 && frame.height > 400 && frame.width > 220 && frame.intersects(host.window.bounds)
             }
             XCTAssertGreaterThanOrEqual(panes.count, 2, "Wide iPad layout must show conversation list and chat together")
+            // These are settled store screenshots. Wait for the fixture's
+            // outgoing bubble rather than capturing a slow loading spinner.
+            let deadline = Date().addingTimeInterval(5)
+            while try latestBubbleBluePixels(render(host.window), window: host.window) <= 200, Date() < deadline {
+                try await Task.sleep(for: .milliseconds(100))
+            }
         }
         let image = attach(host.window, name: name)
         if requiresSplit { try assertLatestNearComposer(image, window: host.window) }
@@ -210,6 +216,10 @@ import UIKit
         }
     }
     private func assertLatestNearComposer(_ image: UIImage, window: UIWindow) throws {
+        XCTAssertGreaterThan(try latestBubbleBluePixels(image, window: window), 200,
+                             "The latest outgoing bubble must sit close to the composer, including a cached short conversation")
+    }
+    private func latestBubbleBluePixels(_ image: UIImage, window: UIWindow) throws -> Int {
         let input = try XCTUnwrap(inputs(window).first)
         let composerY = input.convert(input.bounds, to: window).minY
         let scale = image.scale
@@ -230,13 +240,16 @@ import UIKit
             }
             return count
         }
-        XCTAssertGreaterThan(blue, 200, "The latest outgoing bubble must sit close to the composer, including a cached short conversation")
+        return blue
     }
-    @discardableResult private func attach(_ window: UIWindow, name: String) -> UIImage {
+    private func render(_ window: UIWindow) -> UIImage {
         let format = UIGraphicsImageRendererFormat(); format.scale = 2; format.opaque = true
-        let image = UIGraphicsImageRenderer(size: window.bounds.size, format: format).image { _ in
+        return UIGraphicsImageRenderer(size: window.bounds.size, format: format).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
+    }
+    @discardableResult private func attach(_ window: UIWindow, name: String) -> UIImage {
+        let image = render(window)
         let attachment = XCTAttachment(image: image); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
         return image
     }

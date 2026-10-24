@@ -89,7 +89,7 @@ struct ChatMessageRow: View {
     @State private var reporting = false
     private var message: ChatMessage { row.message }
     private var caption: String { ["image", "video"].contains(message.kind) ? ImageMessageCaption.text(message.content, media: message.media) : message.content }
-    private var bareMedia: Bool { !message.recalled && ["image", "video"].contains(message.kind) }
+    private var bareMedia: Bool { !message.recalled && (["image", "video"].contains(message.kind) || message.notoEmoji != nil) }
     private var mine: Bool { message.senderID == session.user?.id }
     private var sender: Person { Person(message.raw["sender"].or(message.raw["user"])) }
     var body: some View {
@@ -160,6 +160,15 @@ struct ChatMessageRow: View {
                 } else { quotePreview }
             }
             if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
+            else if let emoji = message.notoEmoji {
+                let size: CGFloat = emoji.count == 1 ? 136 : (emoji.count == 2 ? 104 : 76)
+                HStack(spacing: 4) {
+                    // Slot identity supports deliberate repetitions of the same emoji.
+                    ForEach(Array(zip(["first", "second", "third"], emoji)), id: \.0) { _, item in
+                        NotoEmojiAnimation(item: item).frame(width: size, height: size)
+                    }
+                }.frame(maxWidth: 250, alignment: mine ? .trailing : .leading)
+            }
             else if message.kind == "image" { MediaView(images: [message.media], video: "", thumbnailHeight: 190,
                           galleryImages: galleryImages.isEmpty ? nil : galleryImages,
                           galleryIndex: galleryIndex, fitImage: true,
@@ -173,7 +182,7 @@ struct ChatMessageRow: View {
             } else if message.kind == "file", let url = URL(string: message.media), url.scheme == "https" {
                 Link(message.content.isEmpty ? "打开文件" : message.content, destination: url)
             } else { Text(message.content).textSelection(.enabled) }
-            if !message.recalled && ["image", "video"].contains(message.kind) && !caption.isEmpty {
+            if !message.recalled && (["image", "video"].contains(message.kind) || message.notoEmoji != nil) && !caption.isEmpty {
                 Text(caption).textSelection(.enabled)
             }
         }.modifier(ChatBubbleSurface(media: bareMedia, mine: mine))
