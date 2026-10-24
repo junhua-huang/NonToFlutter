@@ -190,10 +190,9 @@ private struct ExpressionInputHarness: View {
     @State private var availableHeight: CGFloat = 500
     @FocusState private var focus: Bool
     var body: some View {
-        VStack {
-            Text("聊天").font(.headline).padding(.top, 20)
-            Spacer(minLength: 0)
-        }.safeAreaInset(edge: .bottom, spacing: 0) {
+        // A timeline can shrink to zero; a mock title here must not impose a
+        // minimum height and push the real input drawer outside small windows.
+        Color.timelineBackground.safeAreaInset(edge: .bottom, spacing: 0) {
             ChatComposerInput(store: store, stickerSender: sender, accountEpoch: session.api.generation, availableHeight: availableHeight,
                               quote: $quote, picks: $photos, preparingMedia: false, focus: $focus,
                               initialPicker: mode, initialSticker: sticker, pickerDefaults: defaults)
