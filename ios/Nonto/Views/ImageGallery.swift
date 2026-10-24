@@ -21,6 +21,17 @@ import ImageIO
         let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? Int(image.size.width * image.size.height * 4)
         cache.setObject(image, forKey: (url.absoluteString + "#uploaded-preview") as NSString, cost: cost)
     }
+    /// Immediately usable pixels while a full-resolution request is in flight.
+    func cachedImage(at text: String) -> UIImage? {
+        guard let url = URL(string: text) else { return nil }
+        let base = url.absoluteString
+        if let full = cache.object(forKey: (base + "#nonto-decode-3072") as NSString) { return full }
+        if let uploaded = cache.object(forKey: (base + "#uploaded-preview") as NSString) { return uploaded }
+        for pixels in [4096, 2048, 1920, 960, 256] {
+            if let image = cache.object(forKey: (base + "#nonto-decode-" + String(pixels)) as NSString) { return image }
+        }
+        return nil
+    }
     nonisolated static func decode(_ data: Data, maxPixelSize: Int) throws -> UIImage {
         guard data.count <= 80 * 1024 * 1024,
               let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
@@ -45,7 +56,11 @@ import ImageIO
         // A local chat thumbnail is immediate, but must not cap full-screen zoom quality.
         if let image = uploadedPreview, pixels <= 960 { return image }
         if let image = cache.object(forKey: key as NSString) { return image }
-        if let task = requests[key] { return try await resolve(task, epoch: epoch, preview: uploadedPreview) }
+        if let task = requests[key] {
+            let image = try await resolve(task, epoch: epoch, preview: uploadedPreview)
+            cache.setObject(image, forKey: key as NSString, cost: Int(image.size.width * image.size.height * 4))
+            return image
+        }
         let task = Task { () throws -> UIImage in
             let (data, response) = try await session.data(from: url)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
@@ -83,7 +98,8 @@ struct ImageGallery: View {
     @Environment(\.dismiss) private var dismiss
     @State private var index: Int
     @State private var controls = true
-    @State private var zoomed = false
+    @State private var transitioning = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sharing: SharedImage?
     @State private var saving = false
     @State private var feedback: String?
@@ -97,18 +113,9 @@ struct ImageGallery: View {
             Color.black.ignoresSafeArea()
             if images.isEmpty { ContentUnavailableView("图片不可用", systemImage: "photo").foregroundStyle(.white) }
             else {
-                TabView(selection: $index) {
-                    ForEach(images.indices, id: \.self) { i in
-                        Group {
-                            if abs(i - index) <= 1 {
-                                ZoomImage(url: images[i], onTap: { controls.toggle() }, onZoom: { value in if index == i { zoomed = value } }, onLoaded: { image in if index == i { displayImage = image } })
-                            } else { Color.black }
-                        }.tag(i).accessibilityLabel("第 \(i + 1) 张图片，共 \(images.count) 张")
-                    }
-                }.tabViewStyle(.page(indexDisplayMode: .never))
-                    .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { value in
-                        if !zoomed, value.translation.height > 130, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
-                    })
+                GalleryPager(images: images, index: index, animated: !reduceMotion,
+                    onSelect: { index = $0 }, onTransition: { transitioning = $0 },
+                    onTap: { controls.toggle() }, onLoaded: { displayImage = $0 }, onDismiss: { dismiss() })
             }
             if controls {
                 VStack {
@@ -119,20 +126,20 @@ struct ImageGallery: View {
                         Spacer()
                         Button { if let displayImage { sharing = SharedImage(image: displayImage) } } label: {
                             Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44)
-                        }.disabled(displayImage == nil).accessibilityLabel("分享图片")
+                        }.disabled(displayImage == nil || transitioning).accessibilityLabel("分享图片")
                     }.padding(.horizontal, 10).background(.black.opacity(0.55))
                     Spacer()
                     if let feedback { Text(feedback).font(.subheadline).padding(10).background(.black.opacity(0.7), in: Capsule()) }
                     HStack(spacing: 16) {
                         Button { index = max(0, index - 1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                            .disabled(index == 0).accessibilityLabel("上一张图片")
+                            .disabled(index == 0 || transitioning).accessibilityLabel("上一张图片")
                         Spacer()
                         Button { Task { await saveImage() } } label: {
                             if saving { ProgressView().tint(.white) } else { Label("保存图片", systemImage: "square.and.arrow.down") }
-                        }.disabled(displayImage == nil || saving).frame(minHeight: 44)
+                        }.disabled(displayImage == nil || saving || transitioning).frame(minHeight: 44)
                         Spacer()
                         Button { index = min(images.count - 1, index + 1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
-                            .disabled(images.isEmpty || index == images.count - 1).accessibilityLabel("下一张图片")
+                            .disabled(images.isEmpty || index == images.count - 1 || transitioning).accessibilityLabel("下一张图片")
                     }.padding(.horizontal).background(.black.opacity(0.55))
                 }.foregroundStyle(.white).buttonStyle(.plain)
             }
@@ -140,12 +147,26 @@ struct ImageGallery: View {
             .statusBarHidden(!controls).persistentSystemOverlays(.hidden)
             .sheet(item: $sharing) { ImageShareSheet(image: $0.image) }
             .task(id: index) {
-                displayImage = nil; feedback = nil; zoomed = false
-                guard images.indices.contains(index) else { return }
-                let selected = index
-                if let image = try? await ImageRepository.shared.image(at: images[selected]), !Task.isCancelled, selected == index { displayImage = image }
+                feedback = nil
+                guard images.indices.contains(index) else { displayImage = nil; return }
+                let selected = index, repository = ImageRepository.shared
+                displayImage = repository.cachedImage(at: images[selected])
+                // Warm both adjacent pages without blocking the currently visible one.
+                await withTaskGroup(of: (Int, UIImage?).self) { group in
+                    let pages = [selected] + [selected - 1, selected + 1].filter { images.indices.contains($0) }
+                    for page in pages {
+                        let url = images[page]
+                        group.addTask(priority: page == selected ? .userInitiated : .utility) {
+                            (page, try? await repository.image(at: url))
+                        }
+                    }
+                    for await (page, image) in group {
+                        if !Task.isCancelled, page == selected, selected == index, let image { displayImage = image }
+                    }
+                }
             }
     }
+
     private func saveImage() async {
         guard let image = displayImage, !saving else { return }
         saving = true; defer { saving = false }
@@ -176,9 +197,10 @@ struct ZoomImage: View {
     @State private var image: UIImage?
     @State private var failed = false
     @State private var attempt = 0
+    @State private var loadedURL: String?
     var body: some View {
         Group {
-            if let image { ZoomImageSurface(image: image, onTap: onTap, onZoom: onZoom) }
+            if let image { ZoomImageSurface(image: image, onTap: onTap, onZoom: onZoom).id(url) }
             else if failed {
                 VStack(spacing: 16) {
                     Label("图片加载失败", systemImage: "photo.badge.exclamationmark").foregroundStyle(.white)
@@ -188,10 +210,11 @@ struct ZoomImage: View {
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .task(id: "\(url)#\(attempt)") {
                 failed = false
+                if loadedURL != url { image = ImageRepository.shared.cachedImage(at: url); loadedURL = url }
                 do {
                     let result = try await ImageRepository.shared.image(at: url, reload: attempt > 0)
                     try Task.checkCancellation(); image = result; onLoaded(result)
-                } catch { if !Task.isCancelled { failed = true } }
+                } catch { if !Task.isCancelled && image == nil { failed = true } }
             }
     }
 }
@@ -201,13 +224,14 @@ struct ZoomImageSurface: UIViewRepresentable {
     var onZoom: (Bool) -> Void = { _ in }
     func makeUIView(context: Context) -> ImageScrollView { ImageScrollView() }
     func updateUIView(_ view: ImageScrollView, context: Context) {
-        view.onTap = onTap; view.onZoom = onZoom; view.display(image)
+        view.onTap = onTap; view.onZoom = onZoom; view.display(image, preservingViewport: true)
     }
 }
 final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
     private let picture = UIImageView()
     private var fittedSize = CGSize.zero
     private var reportedZoom = false
+    private var updatingImage = false
     var onTap: () -> Void = {}
     var onZoom: (Bool) -> Void = { _ in }
     init() {
@@ -223,10 +247,28 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
         singleTap.require(toFail: doubleTap); addGestureRecognizer(singleTap)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func display(_ image: UIImage) {
+    func display(_ image: UIImage, preservingViewport: Bool = false) {
         guard picture.image !== image else { return }
-        zoomScale = 1; picture.image = image; picture.frame = CGRect(origin: .zero, size: image.size)
-        contentSize = image.size; fittedSize = .zero; setNeedsLayout()
+        let previous = picture.image
+        let relativeZoom = minimumZoomScale > 0 ? zoomScale / minimumZoomScale : 1
+        var center = CGPoint(x: 0.5, y: 0.5)
+        if let previous, previous.size.width > 0, previous.size.height > 0 {
+            let point = picture.convert(CGPoint(x: bounds.midX, y: bounds.midY), from: self)
+            center = CGPoint(x: min(1, max(0, point.x / previous.size.width)), y: min(1, max(0, point.y / previous.size.height)))
+        }
+        updatingImage = true
+        minimumZoomScale = 0.0001; maximumZoomScale = max(maximumZoomScale, 1); zoomScale = 1
+        picture.image = image; picture.frame = CGRect(origin: .zero, size: image.size)
+        contentSize = image.size; fittedSize = .zero; setNeedsLayout(); layoutIfNeeded()
+        if preservingViewport && previous != nil && bounds.width > 0 && bounds.height > 0 {
+            setZoomScale(min(maximumZoomScale, minimumZoomScale * max(1, relativeZoom)), animated: false)
+            centerImage()
+            let x = center.x * image.size.width * zoomScale - bounds.width / 2
+            let y = center.y * image.size.height * zoomScale - bounds.height / 2
+            contentOffset = CGPoint(x: min(max(-contentInset.left, x), max(-contentInset.left, contentSize.width - bounds.width + contentInset.right)),
+                                    y: min(max(-contentInset.top, y), max(-contentInset.top, contentSize.height - bounds.height + contentInset.bottom)))
+        }
+        updatingImage = false; centerImage()
     }
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -241,6 +283,7 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
         let x = max(0, (bounds.width - contentSize.width) / 2), y = max(0, (bounds.height - contentSize.height) / 2)
         let inset = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
         if contentInset != inset { contentInset = inset }
+        guard !updatingImage else { return }
         // At fitted size, horizontal swipes belong to the gallery, not this page.
         let expanded = zoomScale > minimumZoomScale * 1.02
         panGestureRecognizer.isEnabled = expanded
