@@ -168,6 +168,21 @@ final class LayoutSnapshotTests: XCTestCase {
                           name: "composer-topics-picker-dark", width: 390, dark: true, expectsScrollChrome: false, ready: { topicsLoaded })
     }
 
+    func testComposerPhotoSelectionLayouts() async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())
+        let session = AppSession(api: api); session.restoring = false
+        session.user = Person(.object(["id": .id(userID), "username": .text("nonto"), "display_name": .text("南图")]))
+        let data = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 120)).jpegData(withCompressionQuality: 0.9) { context in
+            UIColor.systemBlue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 160, height: 120))
+        }
+        let photos = try (0..<3).map { _ in try SelectedMedia.image(data) }
+        PostDraftStore().save(PostDraft(text: "分享今天拍到的风景 #摄影", visibility: "friends"), userID: userID)
+        defer { PostDraftStore().remove(userID: userID) }
+        try await capture(PostComposer(initialMedia: photos), session: session, name: "composer-photos-small", width: 320, expectsScrollChrome: false)
+        try await capture(PostComposer(initialMedia: photos), session: session, name: "composer-photos-large-text-dark", width: 768, dark: true, largeText: true, expectsScrollChrome: false)
+    }
+
     func testComposerOpensPicksAndReturnsWithTheKeyboardAcrossBothReferenceActions() async throws {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
         let api = APIClient(baseURL: URL(string: "https://layout.example.test/api")!, session: URLSession(configuration: configuration), credentials: MemoryCredentials())

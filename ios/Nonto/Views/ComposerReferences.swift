@@ -6,6 +6,7 @@ import UIKit
 @MainActor @Observable
 final class ComposerEditor {
     var text = ""
+    private(set) var isEditing = false
     var referenceKind: ComposerReferenceKind?
     @ObservationIgnored private(set) weak var textView: UITextView?
     @ObservationIgnored private var selection = NSRange(location: 0, length: 0)
@@ -21,6 +22,13 @@ final class ComposerEditor {
 
     func attach(_ view: UITextView) { textView = view }
     func detach(_ view: UITextView) { if textView === view { textView = nil; focusTicket = UUID() } }
+    func editingChanged(_ value: Bool) { isEditing = value }
+    func endEditing() {
+        focusTicket = UUID()
+        textView?.resignFirstResponder()
+        if let view = textView { record(view, changedText: true) }
+        isEditing = false
+    }
     func record(_ view: UITextView, changedText: Bool) {
         guard !updatingNative else { return }
         if changedText, text != view.text { text = view.text }
@@ -88,9 +96,11 @@ struct ComposerTextEditor: View {
 
 private struct ComposerNativeTextView: UIViewRepresentable {
     let editor: ComposerEditor
+    @Environment(\.isEnabled) private var isEnabled
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
         view.backgroundColor = .clear; view.textColor = .label
+        view.isEditable = isEnabled
         let font = UIFont.preferredFont(forTextStyle: .title3); view.font = font
         view.adjustsFontForContentSizeCategory = true
         view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
@@ -102,12 +112,14 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         editor.attach(view); editor.synchronize()
         return view
     }
-    func updateUIView(_ view: UITextView, context: Context) { editor.attach(view); editor.synchronize() }
+    func updateUIView(_ view: UITextView, context: Context) {
+        view.isEditable = isEnabled; editor.attach(view); editor.synchronize()
+    }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width > 0 else { return nil }
         let line = (uiView.font?.lineHeight ?? 24) + 4
         let fit = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: max(line * 6, min(fit.height, line * 20)))
+        return CGSize(width: width, height: max(line * 4, min(fit.height, line * 20)))
     }
     func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
     static func dismantleUIView(_ view: UITextView, coordinator: Coordinator) {
@@ -116,6 +128,8 @@ private struct ComposerNativeTextView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         let editor: ComposerEditor
         init(editor: ComposerEditor) { self.editor = editor }
+        func textViewDidBeginEditing(_ textView: UITextView) { editor.editingChanged(true) }
+        func textViewDidEndEditing(_ textView: UITextView) { editor.record(textView, changedText: true); editor.editingChanged(false) }
         func textViewDidChange(_ textView: UITextView) { editor.record(textView, changedText: true) }
         func textViewDidChangeSelection(_ textView: UITextView) { editor.record(textView, changedText: false) }
     }
@@ -239,16 +253,18 @@ struct ComposerReferencePicker: View {
 
 struct ComposerMediaThumbnail: View {
     let item: SelectedMedia
+    var side: CGFloat = 72
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
     var body: some View {
         Group {
             if let image { Image(uiImage: image).resizable().scaledToFill() }
             else { Image(systemName: item.isVideo ? "video" : "photo").font(.title) }
-        }.frame(width: 72, height: 72).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
+        }.frame(width: side, height: side).background(Color.secondary.opacity(0.08))
+            .clipped().clipShape(RoundedRectangle(cornerRadius: 12))
             .task(id: item.id) {
                 guard !item.isVideo else { return }
-                let data = item.data, pixels = Int(72 * displayScale)
+                let data = item.data, pixels = Int(side * displayScale)
                 let decoded = try? await Task.detached(priority: .userInitiated) { try ImageRepository.decode(data, maxPixelSize: pixels) }.value
                 if !Task.isCancelled { image = decoded }
             }
