@@ -1,0 +1,52 @@
+name: iPad Store Captures
+on:
+  push:
+    branches: [codex/ipad-store-captures-20261024]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      IPAD_OS: '26'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select iPad and matching Xcode
+        run: |
+          python3 - <<'PY'
+          import glob, json, os, subprocess
+          version = os.environ['IPAD_OS']
+          candidates = sorted(glob.glob('/Applications/Xcode_' + version + '*.app'), reverse=True)
+          if candidates:
+              subprocess.run(['sudo', 'xcode-select', '-s', candidates[0] + '/Contents/Developer'], check=True)
+          print(subprocess.check_output(['xcodebuild', '-version'], text=True))
+          devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], text=True))
+          pads = [d for runtime, group in devices['devices'].items() if 'iOS-' + version in runtime
+                  for d in group if d['name'].startswith('iPad') and d['isAvailable']]
+          if not pads:
+              raise SystemExit('No matching iPad simulator available')
+          large = [d for d in pads if '13-inch' in d['name'] or '12.9-inch' in d['name']]
+          pad = (large or pads)[0]
+          print('iPad test device:', pad['name'])
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('SIMULATOR_UDID=' + pad['udid'] + '\n')
+          subprocess.run(['defaults', 'write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'NO'], check=True)
+          PY
+      - name: Generate screenshot-only test project
+        run: python3 ios/scripts/generate_project.py
+      - name: Capture unchanged production views with public account content
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/IPad -resultBundlePath build/IPad.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES -only-testing:NontoTests/IPadStoreContentTests -parallel-testing-enabled NO test | tee ipad-capture.log
+      - name: Export native iPad screenshots
+        if: always()
+        run: xcrun xcresulttool export attachments --path build/IPad.xcresult --output-path build/IPadScreenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nonto-iPad-RealContent
+          path: |
+            build/IPadScreenshots
+            ipad-capture.log
+          retention-days: 3
