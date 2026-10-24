@@ -12,8 +12,8 @@
   "marketingUrl": "https://nonto.online/",
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
-  "betaBuildVersion": "84.1",
-  "betaWhatsNew": "本次更新新增 iPad 自适应布局，并保留聊天体验修复。\n\n更新内容：\n• iPad 使用系统侧栏与标签导航。\n• 私信支持会话列表与聊天详情双栏显示，窄窗口自动收拢。\n• 动态、资料与聊天内容保持适合阅读的宽度。\n• 保留键盘展开后的聊天记录可见性及发送稳定性修复。\n\n请重点检查 iPad 横竖屏、窄窗口切换后的会话与草稿保留，以及键盘展开和收起后的最新消息位置。\n\n反馈邮箱：nonto@foxmail.com。请勿发送密码、验证码或他人的聊天隐私。",
+  "betaBuildVersion": "85.1",
+  "betaWhatsNew": "本次更新优化评论区，并保留 iPad 自适应布局和聊天体验修复。\n\n更新内容：\n• 点赞即时反馈，失败回退，展开的回复保持不变。\n• 回复对象与上下文提示，评论草稿按账号和动态保留。\n• 发送成功后直接显示新评论，失败保留输入并支持重试。\n• 子回复支持独立删除、举报与查看主页。\n• 评论数量使用服务端结果同步，修复刷新与操作交错时的状态问题。\n\n请重点检查评论发送、回复他人、展开更多回复、点赞取消、删除和网络失败重试，以及 iPhone/iPad 键盘展开后的输入栏位置。\n\n反馈邮箱：nonto@foxmail.com。请勿发送密码、验证码或他人的聊天隐私。",
   "screenshots": [
     {
       "file": ".github/appstore/screenshots/01-share.png",

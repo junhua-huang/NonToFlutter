@@ -48,6 +48,13 @@ struct Comment: Record {
     var author: Person { Person(raw["author"].or(raw["user"])) }
     var content: String { raw["content"].string }
     var replies: [Comment] { raw["replies"].array.map(Comment.init) }
+    var userID: Int { raw["user_id"].int > 0 ? raw["user_id"].int : author.id }
+    var parentID: Int? { raw["parent_id"].int > 0 ? raw["parent_id"].int : nil }
+    var rootID: Int { parentID ?? id }
+    var liked: Bool { raw["is_liked"].bool }
+    var likes: Int { max(0, raw["like_count"].int) }
+    var date: Date? { ServerDate.parse(raw["created_at"]) }
+    var replyTo: Person? { raw["reply_to_user"]["id"].int > 0 ? Person(raw["reply_to_user"]) : nil }
 }
 struct ChatMessage: Record {
     var raw: JSON

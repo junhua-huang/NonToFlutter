@@ -41,6 +41,8 @@ jobs:
         run: |
           python3 ios/scripts/generate_project.py
           git diff --exit-code -- ios/Nonto.xcodeproj
+      - name: Enable software keyboard for interaction checks
+        run: defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
       - name: Run optimized app regression including native composer transitions
         run: |
           set -o pipefail

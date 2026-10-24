@@ -58,7 +58,7 @@ jobs:
       - name: Verify iPad Release layouts, resizing and keyboard
         run: |
           set -o pipefail
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/IPad -resultBundlePath build/IPad.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES -only-testing:NontoTests/IPadLayoutTests -parallel-testing-enabled NO test | tee ipad-tests.log
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/IPad -resultBundlePath build/IPad.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES -only-testing:NontoTests/IPadLayoutTests -only-testing:NontoTests/CommentsTests -parallel-testing-enabled NO test | tee ipad-tests.log
       - name: Export actual iPad screenshots
         if: always()
         run: xcrun xcresulttool export attachments --path build/IPad.xcresult --output-path build/IPadScreenshots
