@@ -113,7 +113,8 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: UITextView, context: Context) {
-        view.isEditable = isEnabled; editor.attach(view); editor.synchronize()
+        if view.isEditable != isEnabled { view.isEditable = isEnabled }
+        editor.attach(view); editor.synchronize()
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width > 0 else { return nil }
