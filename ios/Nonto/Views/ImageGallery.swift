@@ -198,6 +198,11 @@ struct ZoomImage: View {
     @State private var failed = false
     @State private var attempt = 0
     @State private var loadedURL: String?
+    init(url: String, onTap: @escaping () -> Void = {}, onZoom: @escaping (Bool) -> Void = { _ in }, onLoaded: @escaping (UIImage) -> Void = { _ in }) {
+        self.url = url; self.onTap = onTap; self.onZoom = onZoom; self.onLoaded = onLoaded
+        _image = State(initialValue: ImageRepository.shared.cachedImage(at: url))
+        _loadedURL = State(initialValue: url)
+    }
     var body: some View {
         Group {
             if let image { ZoomImageSurface(image: image, onTap: onTap, onZoom: onZoom).id(url) }
@@ -250,6 +255,7 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
     func display(_ image: UIImage, preservingViewport: Bool = false) {
         guard picture.image !== image else { return }
         let previous = picture.image
+        let preserve = preservingViewport && previous != nil && fittedSize != .zero && bounds.width > 0 && bounds.height > 0
         let relativeZoom = minimumZoomScale > 0 ? zoomScale / minimumZoomScale : 1
         var center = CGPoint(x: 0.5, y: 0.5)
         if let previous, previous.size.width > 0, previous.size.height > 0 {
@@ -260,7 +266,7 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
         minimumZoomScale = 0.0001; maximumZoomScale = max(maximumZoomScale, 1); zoomScale = 1
         picture.image = image; picture.frame = CGRect(origin: .zero, size: image.size)
         contentSize = image.size; fittedSize = .zero; setNeedsLayout(); layoutIfNeeded()
-        if preservingViewport && previous != nil && bounds.width > 0 && bounds.height > 0 {
+        if preserve {
             setZoomScale(min(maximumZoomScale, minimumZoomScale * max(1, relativeZoom)), animated: false)
             centerImage()
             let x = center.x * image.size.width * zoomScale - bounds.width / 2
@@ -283,7 +289,7 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
         let x = max(0, (bounds.width - contentSize.width) / 2), y = max(0, (bounds.height - contentSize.height) / 2)
         let inset = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
         if contentInset != inset { contentInset = inset }
-        guard !updatingImage else { return }
+        guard !updatingImage, fittedSize != .zero, bounds.width > 0, bounds.height > 0 else { return }
         // At fitted size, horizontal swipes belong to the gallery, not this page.
         let expanded = zoomScale > minimumZoomScale * 1.02
         panGestureRecognizer.isEnabled = expanded

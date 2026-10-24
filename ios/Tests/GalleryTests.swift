@@ -68,4 +68,17 @@ import UIKit
         repository.clear()
         XCTAssertNil(repository.cachedImage(at: url))
     }
+    func testImageLoadedBeforeLayoutDoesNotClaimThePagingGesture() async {
+        let surface = ImageScrollView()
+        var zoomReports: [Bool] = []
+        surface.onZoom = { zoomReports.append($0) }
+        surface.display(image(CGSize(width: 1200, height: 800)))
+        await Task.yield()
+        XCTAssertTrue(zoomReports.isEmpty)
+        surface.frame = CGRect(x: 0, y: 0, width: 300, height: 500)
+        surface.layoutIfNeeded()
+        await Task.yield()
+        XCTAssertTrue(zoomReports.isEmpty)
+        XCTAssertFalse(surface.panGestureRecognizer.isEnabled)
+    }
 }
