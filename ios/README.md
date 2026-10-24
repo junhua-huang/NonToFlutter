@@ -102,6 +102,6 @@ xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto \
 
 复用私信/社群聊天现有文字接口和持久化发件箱，发送标准 Unicode。支持的 1–3 个纯 emoji 消息展示为无底色动画；文字混排、未收录和超过三个的 emoji 保持文字显示，旧客户端也能正常阅读。
 
-离线原始 Lottie JSON 和缩放的静态 PNG 预览保存为 `Nonto/Resources/NotoEmoji.zip.001`、`.002`，构建时拼接并通过系统 ditto 解压至派生资源目录。运行时不访问 Google。离屏/后台/关闭播放/系统减弱动态效果时显示静态预览。设置中的“表情资源与许可”提供 Google/CC BY 4.0、Unicode CLDR、Lottie/Apache 2.0 的署名及许可全文。
+离线原始 Lottie JSON 和缩放的静态 PNG 预览保存为 `Nonto/Resources/NotoEmoji.zip.001`、`.002`，构建时拼接并通过系统 unzip 解压至派生资源目录。运行时不访问 Google。离屏/后台/关闭播放/系统减弱动态效果时显示静态预览。设置中的“表情资源与许可”提供 Google/CC BY 4.0、Unicode CLDR、Lottie/Apache 2.0 的署名及许可全文。
 
 Swift Package 精确固定为 Airbnb 官方 lottie-spm 4.6.1；Package.resolved 包含提交版本。测试仅使用 iOS 27/iPadOS 27。资源脚本检查完整目录、原始哈希、预览、外部依赖和许可证；原生测试检查全部动画解码、Unicode 兼容、搜索、账号隔离，并输出选择器截图。

@@ -3,6 +3,8 @@
 from pathlib import Path
 import hashlib
 import json
+import io
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / 'Nonto.xcodeproj'
@@ -69,8 +71,16 @@ emoji_parts = sorted((ROOT / 'Nonto/Resources').glob('NotoEmoji.zip.[0-9][0-9][0
 if not emoji_parts:
     raise SystemExit('Missing offline Noto emoji archive parts')
 emoji_inputs = [p.relative_to(ROOT).as_posix() for p in emoji_parts]
-emoji_unpack_script = '/bin/cat ' + ' '.join('"$SRCROOT/' + p + '"' for p in emoji_inputs) + ' > "$DERIVED_FILE_DIR/NotoEmoji.zip"\n/bin/mkdir -p "$DERIVED_FILE_DIR/NotoEmoji"\n/usr/bin/ditto -x -k --noqtn "$DERIVED_FILE_DIR/NotoEmoji.zip" "$DERIVED_FILE_DIR/NotoEmoji"'
-emoji_unpack = add('phase:app:noto-resources', '{isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = ' + array([quote('$(SRCROOT)/' + p) for p in emoji_inputs]) + '; outputPaths = ("$(DERIVED_FILE_DIR)/NotoEmoji.zip", "$(DERIVED_FILE_DIR)/NotoEmoji",); name = "Prepare offline Noto emoji"; runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = ' + quote(emoji_unpack_script) + '; }')
+# Declare every extracted file so the build sandbox need not permit arbitrary
+# writes below a directory that does not exist yet when the sandbox starts.
+with zipfile.ZipFile(io.BytesIO(b''.join(p.read_bytes() for p in emoji_parts))) as emoji_archive:
+    emoji_names = sorted(emoji_archive.namelist())
+if any('/' in name or name in {'.', '..'} for name in emoji_names):
+    raise SystemExit('Unexpected path in emoji archive')
+PROJECT.mkdir(exist_ok=True)
+(PROJECT / 'NotoEmojiOutputs.xcfilelist').write_text(''.join('$(DERIVED_FILE_DIR)/NotoEmoji/' + name + '\n' for name in emoji_names))
+emoji_unpack_script = 'set -e\n/bin/cat ' + ' '.join('"$SRCROOT/' + p + '"' for p in emoji_inputs) + ' > "$DERIVED_FILE_DIR/NotoEmoji.zip"\n/bin/mkdir -p "$DERIVED_FILE_DIR/NotoEmoji"\n/usr/bin/unzip -q -o "$DERIVED_FILE_DIR/NotoEmoji.zip" -d "$DERIVED_FILE_DIR/NotoEmoji"'
+emoji_unpack = add('phase:app:noto-resources', '{isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = ' + array([quote('$(SRCROOT)/' + p) for p in emoji_inputs]) + '; outputFileListPaths = ("$(SRCROOT)/Nonto.xcodeproj/NotoEmojiOutputs.xcfilelist",); outputPaths = ("$(DERIVED_FILE_DIR)/NotoEmoji.zip", "$(DERIVED_FILE_DIR)/NotoEmoji",); name = "Prepare offline Noto emoji"; runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = ' + quote(emoji_unpack_script) + '; }')
 app_phases = [archive_check, emoji_unpack, phase('app:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(sources, source_refs)]), phase('app:frameworks', 'PBXFrameworksBuildPhase', [lottie_framework]), phase('app:resources', 'PBXResourcesBuildPhase', [build(p, r) for p, r in zip(resources, resource_refs)])]
 test_phases = [phase('tests:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(tests, test_refs)]), phase('tests:frameworks', 'PBXFrameworksBuildPhase', [lottie_test_framework]), phase('tests:resources', 'PBXResourcesBuildPhase', [])]
 common = {'IPHONEOS_DEPLOYMENT_TARGET': '26.0', 'SDKROOT': 'iphoneos', 'SWIFT_VERSION': '5.0', 'CLANG_ENABLE_MODULES': 'YES', 'TARGETED_DEVICE_FAMILY': '1,2', 'CODE_SIGN_STYLE': 'Automatic', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO'}
