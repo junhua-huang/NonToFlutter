@@ -63,7 +63,7 @@ jobs:
         if: env.NATIVE_CONFIGURATION != 'Release'
         run: |
           set -o pipefail
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/ReleaseStartup -resultBundlePath build/ReleaseStartup.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -only-testing:NontoTests/LayoutSnapshotTests -only-testing:NontoTests/InteractionTests -only-testing:NontoTests/ChatExperienceTests -only-testing:NontoTests/StateTests -only-testing:NontoTests/CommentsTests -parallel-testing-enabled NO test | tee build-release-startup.log
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/ReleaseStartup -resultBundlePath build/ReleaseStartup.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -only-testing:NontoTests/LayoutSnapshotTests -only-testing:NontoTests/InteractionTests -only-testing:NontoTests/ChatExperienceTests -only-testing:NontoTests/StateTests -only-testing:NontoTests/CommentsTests -only-testing:NontoTests/FriendsAndMessagesTests -parallel-testing-enabled NO test | tee build-release-startup.log
       - name: Build for iPhone
         run: xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/Device CODE_SIGNING_ALLOWED=NO build
       - name: Export layout review screenshots
