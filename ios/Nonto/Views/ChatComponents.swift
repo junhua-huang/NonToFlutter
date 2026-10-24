@@ -23,6 +23,7 @@ enum ImageMessageCaption {
 
 enum ChatQuoteSummary {
     static func text(_ message: ChatMessage) -> String {
+        if message.isSticker { return ChatSticker.messageContent }
         guard ["image", "video"].contains(message.kind) else { return message.content }
         let kind = message.kind == "image" ? "[图片]" : "[视频]"
         let caption = ImageMessageCaption.text(message.content, media: message.media)
@@ -31,6 +32,7 @@ enum ChatQuoteSummary {
     /// Match the server's compact reply preview so acknowledgement doesn't resize it.
     static func preview(_ message: ChatMessage) -> String {
         if message.recalled { return "消息已撤回" }
+        if message.isSticker { return ChatSticker.messageContent }
         switch message.kind {
         case "image": return "[图片]"
         case "video": return "[视频]"
@@ -87,8 +89,9 @@ struct ChatMessageRow: View {
     let onRecall: (ChatMessage) -> Void
     @EnvironmentObject private var session: AppSession
     @State private var reporting = false
+    @State private var stickerFeedback: String?
     private var message: ChatMessage { row.message }
-    private var caption: String { ["image", "video"].contains(message.kind) ? ImageMessageCaption.text(message.content, media: message.media) : message.content }
+    private var caption: String { message.isSticker ? "" : (["image", "video"].contains(message.kind) ? ImageMessageCaption.text(message.content, media: message.media) : message.content) }
     private var bareMedia: Bool { !message.recalled && (["image", "video"].contains(message.kind) || message.notoEmoji != nil) }
     private var mine: Bool { message.senderID == session.user?.id }
     private var sender: Person { Person(message.raw["sender"].or(message.raw["user"])) }
@@ -115,6 +118,9 @@ struct ChatMessageRow: View {
                         if !message.recalled {
                             if !caption.isEmpty {
                                 Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = caption }
+                            }
+                            if pending == nil, message.kind == "image", ChatSticker.validURL(message.media) {
+                                Button("添加到贴纸", systemImage: "square.on.circle") { saveSticker() }
                             }
                             if pending == nil && allowsActions { Button("引用", systemImage: "quote.bubble") { onQuote(message) } }
                             if pending != nil && !sending { Button("取消发送", role: .destructive, action: remove) }
@@ -150,6 +156,9 @@ struct ChatMessageRow: View {
             .sheet(isPresented: $reporting) {
                 ReportView(kind: "user", targetID: message.senderID, context: "聊天消息 #\(message.id)：\n")
             }
+            .alert("贴纸", isPresented: Binding(get: { stickerFeedback != nil }, set: { if !$0 { stickerFeedback = nil } })) {
+                Button("好", role: .cancel) { stickerFeedback = nil }
+            } message: { Text(stickerFeedback ?? "") }
     }
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -160,6 +169,10 @@ struct ChatMessageRow: View {
                 } else { quotePreview }
             }
             if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
+            else if message.isSticker {
+                ChatStickerImage(url: message.media).frame(width: 160, height: 160)
+                    .accessibilityIdentifier("chat.sticker.message.\(message.id)")
+            }
             else if let emoji = message.notoEmoji {
                 let size: CGFloat = emoji.count == 1 ? 136 : (emoji.count == 2 ? 104 : 76)
                 HStack(spacing: 4) {
@@ -187,6 +200,12 @@ struct ChatMessageRow: View {
             }
         }.modifier(ChatBubbleSurface(media: bareMedia, mine: mine))
             .frame(maxWidth: bareMedia ? 250 : nil, alignment: mine ? .trailing : .leading)
+    }
+    private func saveSticker() {
+        do {
+            try ChatStickerLibrary(accountID: session.user?.id ?? 0).add(url: message.media)
+            stickerFeedback = "已添加到贴纸，可在聊天“＋”中找到。"
+        } catch { stickerFeedback = error.localizedDescription }
     }
     private var quotePreview: some View {
         HStack(spacing: 6) {

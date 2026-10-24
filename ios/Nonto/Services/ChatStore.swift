@@ -250,6 +250,11 @@ final class ChatStore {
         NativeNotifications.shared.activeConversation = roomID
     }
     @discardableResult
+    func enqueueSticker(_ sticker: ChatSticker, quoteID: Int? = nil) -> Bool {
+        guard ChatSticker.validURL(sticker.url) else { return false }
+        return enqueue(content: ChatSticker.messageContent, kind: "image", media: sticker.url, quoteID: quoteID)
+    }
+    @discardableResult
     func enqueue(content: String, kind: String = "text", media: String? = nil, quoteID: Int? = nil) -> Bool {
         guard valid else { return false }
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
