@@ -72,6 +72,38 @@ final class ChatExperienceTests: XCTestCase {
             store.suspend()
         }
     }
+    func testStickersUseImageRoutesRestoreTheOutboxAndPreserveDraft() async throws {
+        for community in [false, true] {
+            let conversation = Conversation(.object(["id": .id(551), "type": .text(community ? "community" : "single"),
+                "community_id": community ? .id(771) : .null]))
+            var sent: JSON?
+            let handler: (URLRequest) throws -> (Int, JSON) = { request in
+                if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                    let value = try self.body(request); sent = value
+                    XCTAssertEqual(request.url?.path, community ? "/api/communities/771/chat/messages" : "/api/chat/conversations/551/messages")
+                    return (200, .object([community ? "message" : "data": self.message(292, sender: self.userID)
+                        .merging(value)]))
+                }
+                return (200, .object(["messages": .array([])]))
+            }
+            let sticker = ChatSticker(id: UUID(), url: "https://media.example.test/sticker.png", name: "贴纸")
+            let queued = try room(conversation: conversation, handler)
+            queued.draft = "还没写完的消息"; queued.saveDraft()
+            XCTAssertTrue(queued.enqueueSticker(sticker, quoteID: 25))
+            XCTAssertEqual(queued.pending.count, 1)
+            let restored = try room(conversation: conversation, handler)
+            await restored.activate()
+            try await waitUntil { !restored.sending && restored.pending.isEmpty }
+            XCTAssertEqual(sent?["message_type"].string, "image")
+            XCTAssertEqual(sent?["content"].string, ChatSticker.messageContent)
+            XCTAssertEqual(sent?["media_url"].string, sticker.url)
+            XCTAssertEqual(sent?["quote_message_id"].int, 25)
+            XCTAssertEqual(restored.draft, "还没写完的消息")
+            XCTAssertTrue(restored.messages.last?.isSticker == true)
+            XCTAssertFalse(restored.enqueueSticker(ChatSticker(id: UUID(), url: "file:///a.png", name: "invalid")))
+            restored.suspend()
+        }
+    }
     func testPendingAndConfirmedBubbleShareIdentityAndTimestamp() {
         let date = Date(timeIntervalSince1970: 1_792_600_000)
         let item = PendingMessage(id: "stable-send", content: "hello", createdAt: date)

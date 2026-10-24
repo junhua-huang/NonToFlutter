@@ -14,7 +14,7 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: xcode-27
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       NATIVE_CONFIGURATION: ${{ (contains(github.event.head_commit.message, '[appstore-upload]') || contains(github.event.head_commit.message, '[appstore-release]')) && 'Release' || 'Debug' }}
     steps:

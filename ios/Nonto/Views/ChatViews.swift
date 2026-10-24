@@ -58,6 +58,7 @@ struct MessagesView: View {
                 .debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
     }
     private func preview(_ message: ChatMessage) -> String {
+        if message.isSticker { return ChatSticker.messageContent }
         switch message.kind { case "image": return "[图片]"; case "video": return "[视频]"; case "post": return "[动态]"; case "file": return "[文件]"; default: return message.content }
     }
 }
@@ -391,6 +392,7 @@ private struct ChatComposerInput: View {
     let focus: FocusState<Bool>.Binding
     @EnvironmentObject private var session: AppSession
     @State private var showingEmoji = false
+    @State private var showingStickers = false
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let quote {
@@ -404,9 +406,16 @@ private struct ChatComposerInput: View {
                 }.padding(.horizontal)
             }
             HStack(alignment: .bottom, spacing: 8) {
-                PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
+                Menu {
+                    PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
+                        Label("照片或视频", systemImage: "photo.on.rectangle")
+                    }
+                    Button("贴纸", systemImage: "square.on.circle") {
+                        focus.wrappedValue = false; showingStickers = true
+                    }.accessibilityIdentifier("chat.stickers.open")
+                } label: {
                     Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44)
-                }.disabled(preparingMedia).accessibilityLabel("添加照片或视频")
+                }.disabled(preparingMedia).accessibilityLabel("添加照片、视频或贴纸")
                 Button {
                     focus.wrappedValue = false; showingEmoji = true
                 } label: {
@@ -430,6 +439,13 @@ private struct ChatComposerInput: View {
             .sheet(isPresented: $showingEmoji) {
                 NotoEmojiPicker(accountID: session.user?.id ?? 0) { item in
                     guard store.enqueue(content: item.emoji, quoteID: quote?.id) else { return false }
+                    quote = nil
+                    return true
+                }
+            }
+            .sheet(isPresented: $showingStickers) {
+                ChatStickerPicker(accountID: session.user?.id ?? 0, api: session.api) { sticker in
+                    guard store.enqueueSticker(sticker, quoteID: quote?.id) else { return false }
                     quote = nil
                     return true
                 }

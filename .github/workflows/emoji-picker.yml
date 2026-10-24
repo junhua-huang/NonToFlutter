@@ -1,10 +1,10 @@
-name: Emoji Picker
+name: Chat Expressions
 on:
   pull_request:
-    paths: ['ios/Nonto/Core/NotoEmoji*.swift', 'ios/Nonto/Views/NotoEmoji*.swift', 'ios/Tests/NotoEmoji*Tests.swift', 'ios/Nonto.xcodeproj/**', '.github/workflows/emoji-picker.yml']
+    paths: ['ios/Nonto/Core/NotoEmoji*.swift', 'ios/Nonto/Core/ChatSticker.swift', 'ios/Nonto/Core/ChatTimeline.swift', 'ios/Nonto/Services/ChatStickerBrowser.swift', 'ios/Nonto/Services/ChatStore.swift', 'ios/Nonto/Views/Chat*.swift', 'ios/Tests/ChatStickerTests.swift', 'ios/Tests/ChatExperienceTests.swift', 'ios/Nonto/Views/NotoEmoji*.swift', 'ios/Tests/NotoEmoji*Tests.swift', 'ios/Nonto.xcodeproj/**', '.github/workflows/emoji-picker.yml']
   push:
     branches: [ios]
-    paths: ['ios/Nonto/Core/NotoEmoji*.swift', 'ios/Nonto/Views/NotoEmoji*.swift', 'ios/Tests/NotoEmoji*Tests.swift', 'ios/Nonto.xcodeproj/**', '.github/workflows/emoji-picker.yml']
+    paths: ['ios/Nonto/Core/NotoEmoji*.swift', 'ios/Nonto/Core/ChatSticker.swift', 'ios/Nonto/Core/ChatTimeline.swift', 'ios/Nonto/Services/ChatStickerBrowser.swift', 'ios/Nonto/Services/ChatStore.swift', 'ios/Nonto/Views/Chat*.swift', 'ios/Tests/ChatStickerTests.swift', 'ios/Tests/ChatExperienceTests.swift', 'ios/Nonto/Views/NotoEmoji*.swift', 'ios/Tests/NotoEmoji*Tests.swift', 'ios/Nonto.xcodeproj/**', '.github/workflows/emoji-picker.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   optimized-picker:
     runs-on: xcode-27
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -52,10 +52,10 @@ jobs:
         run: |
           python3 ios/scripts/generate_project.py
           git diff --exit-code -- ios/Nonto.xcodeproj
-      - name: Verify optimized picker and Unicode message compatibility
+      - name: Verify emoji, stickers and message compatibility
         run: |
           set -o pipefail
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Picker -resultBundlePath build/EmojiPicker.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES -only-testing:NontoTests/NotoEmojiTests -only-testing:NontoTests/NotoEmojiPickerTests -only-testing:NontoTests/ChatExperienceTests/testNotoEmojiUsesTextRoutesAndPreservesDraft -parallel-testing-enabled NO test | tee emoji-picker.log
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Picker -resultBundlePath build/EmojiPicker.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES -only-testing:NontoTests/ChatStickerTests -only-testing:NontoTests/ChatExperienceTests/testStickersUseImageRoutesRestoreTheOutboxAndPreserveDraft -only-testing:NontoTests/NotoEmojiTests -only-testing:NontoTests/NotoEmojiPickerTests -only-testing:NontoTests/ChatExperienceTests/testNotoEmojiUsesTextRoutesAndPreservesDraft -parallel-testing-enabled NO test | tee emoji-picker.log
       - name: Export picker screenshots
         if: always()
         run: |
