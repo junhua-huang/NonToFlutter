@@ -77,8 +77,8 @@ struct PostDetailView: View {
             .confirmationDialog("删除这条评论？", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), presenting: deleteTarget) { target in
                 Button("删除", role: .destructive) { Task { await comments.delete(target) } }
                 Button("取消", role: .cancel) {}
-            } message: { target in
-                Text(target.parentID == nil ? "这条评论及其回复将被删除。" : "删除后无法恢复。")
+            } message: { _ in
+                Text("删除后无法恢复。")
             }
         }
     }

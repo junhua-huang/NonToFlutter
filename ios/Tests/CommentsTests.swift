@@ -170,6 +170,17 @@ import UIKit
         XCTAssertEqual(writes, 1); XCTAssertNil(store.sendError); XCTAssertTrue(store.text.isEmpty)
         XCTAssertEqual(store.threads.map(\.id), [30])
     }
+    func testDeletingParentReconcilesRepliesRetainedByServer() async throws {
+        var deleted = false
+        let child = comment(2)
+        let root = comment(1, replies: [comment(2, parent: 1)])
+        let (store, _, _) = try setup { request in
+            if request.httpMethod == "DELETE" { deleted = true; return (200, .object(["comment_count": .id(1)])) }
+            return (200, .object(["comments": .array(deleted ? [child] : [root]), "total": .id(1)]))
+        }
+        await store.load(); await store.delete(store.threads[0].root)
+        XCTAssertEqual(store.threads.map(\.id), [2]); XCTAssertEqual(store.commentCount, 1)
+    }
     func testZeroParentIsRootAndSentReplyIsNotLostByPreviewRefresh() async throws {
         var root = comment(1, replies: (2...11).map { comment($0, parent: 1) })
         root["parent_id"] = .id(0); root["replies_has_more"] = .bool(true)

@@ -246,6 +246,9 @@ struct CommentThread: Identifiable {
             }
             if reply?.id == item.id || reply?.rootID == item.id { reply = nil; flushDraft() }
             if !result["comment_count"].isNull { commentCount = max(0, result["comment_count"].int) }
+            // The server may retain a removed parent's replies as top-level comments.
+            // Refresh this structural deletion instead of claiming those replies were deleted.
+            if item.parentID == nil { await load(reset: true) }
         } catch { if current { actionError = error.localizedDescription; actionErrors[item.id] = error.localizedDescription } }
     }
 
