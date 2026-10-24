@@ -120,10 +120,12 @@ import ImageIO
         }
         let populated = browser(); populated.select(try XCTUnwrap(populated.items.first))
         try await capture(populated, size: CGSize(width: 390, height: 844), name: "stickers-library-preview")
-        await populated.prepare(try png())
-        try await capture(populated, size: CGSize(width: 320, height: 740), name: "stickers-import-large-text", large: true)
-        populated.clearSelection()
-        try await capture(populated, size: CGSize(width: 820, height: 1100), name: "stickers-wide-dark", dark: true)
+        // Each presentation owns its browser. A previous host's delayed disappearance
+        // must not cancel the next presentation's import while the actor is decoding.
+        let imported = browser(); await imported.prepare(try png())
+        XCTAssertNotNil(imported.prepared); XCTAssertNil(imported.selection)
+        try await capture(imported, size: CGSize(width: 320, height: 740), name: "stickers-import-large-text", large: true)
+        try await capture(browser(), size: CGSize(width: 820, height: 1100), name: "stickers-wide-dark", dark: true)
     }
     private func capture(_ model: ChatStickerBrowser, size: CGSize, name: String, large: Bool = false, dark: Bool = false) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

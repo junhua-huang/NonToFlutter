@@ -64,7 +64,7 @@ struct ChatStickerPickerContent: View {
                                 ForEach(browser.results) { sticker in tile(sticker) }
                             }.padding(.vertical, 8)
                         }
-                        Text("已保存 \(browser.items.count)/120 · 长按可删除\n贴纸仅保存在当前账号的这台设备上")
+                        Text("已保存 \(browser.items.count)/120 · 长按可删除\n贴纸收藏按账号保存在本机")
                             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.vertical, 12)
                     }.contentMargins(.horizontal, 16, for: .scrollContent).scrollDismissesKeyboard(.interactively)
                 }
