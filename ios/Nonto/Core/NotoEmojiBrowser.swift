@@ -142,6 +142,10 @@ struct NotoEmojiSearchIndex: Sendable {
         favoriteIDs = Set(favorites.items.map(\.id))
         if scope == .favorites && !isSearching { refresh() }
     }
+    func recordInsertion(_ item: NotoEmoji) {
+        recents.record(item)
+        if scope == .recent && !isSearching { refresh() }
+    }
     @discardableResult func send(using accept: (NotoEmoji) -> Bool) -> Bool {
         guard let selection, !hasSent else { return false }
         hasSent = true

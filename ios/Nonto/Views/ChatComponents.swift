@@ -21,6 +21,13 @@ enum ImageMessageCaption {
     }
 }
 
+extension ChatMessage {
+    var attachmentCaption: String {
+        guard !recalled, !isSticker, ["image", "video"].contains(kind) else { return "" }
+        return ImageMessageCaption.text(content, media: media)
+    }
+}
+
 enum ChatQuoteSummary {
     static func text(_ message: ChatMessage) -> String {
         if message.isSticker { return ChatSticker.messageContent }
@@ -170,7 +177,10 @@ struct ChatMessageRow: View {
             }
             if message.recalled { Text("消息已撤回").font(.caption).foregroundStyle(.secondary) }
             else if message.isSticker {
-                ChatStickerImage(url: message.media).frame(width: 160, height: 160)
+                Group {
+                    if let item = message.notoSticker { NotoEmojiAnimation(item: item) }
+                    else { ChatStickerImage(url: message.media) }
+                }.frame(width: 160, height: 160)
                     .accessibilityIdentifier("chat.sticker.message.\(message.id)")
             }
             else if let emoji = message.notoEmoji {
@@ -195,15 +205,15 @@ struct ChatMessageRow: View {
             } else if message.kind == "file", let url = URL(string: message.media), url.scheme == "https" {
                 Link(message.content.isEmpty ? "打开文件" : message.content, destination: url)
             } else { Text(message.content).textSelection(.enabled) }
-            if !message.recalled && (["image", "video"].contains(message.kind) || message.notoEmoji != nil) && !caption.isEmpty {
-                Text(caption).textSelection(.enabled)
+            if !message.attachmentCaption.isEmpty {
+                Text(message.attachmentCaption).textSelection(.enabled)
             }
         }.modifier(ChatBubbleSurface(media: bareMedia, mine: mine))
             .frame(maxWidth: bareMedia ? 250 : nil, alignment: mine ? .trailing : .leading)
     }
     private func saveSticker() {
         do {
-            try ChatStickerLibrary(accountID: session.user?.id ?? 0).add(url: message.media)
+            try ChatStickerLibrary(accountID: session.user?.id ?? 0).add(url: message.media, notoID: message.notoSticker?.id)
             stickerFeedback = "已添加到贴纸，可在聊天“＋”中找到。"
         } catch { stickerFeedback = error.localizedDescription }
     }

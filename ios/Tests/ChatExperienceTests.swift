@@ -120,6 +120,35 @@ final class ChatExperienceTests: XCTestCase {
         XCTAssertEqual(before.entries[0].row.showsTimestamp, after.entries[0].row.showsTimestamp)
         XCTAssertNotNil(before.entries[0].pending); XCTAssertNil(after.entries[0].pending)
     }
+    func testStickerAndCaptionStaySeparateAndRestoreAtomically() async throws {
+        for community in [false, true] {
+            var sent: [JSON] = []
+            let conversation = Conversation(.object(["id": .id(552), "type": .text(community ? "community" : "single"),
+                "community_id": community ? .id(772) : .null]))
+            let handler: (URLRequest) throws -> (Int, JSON) = { request in
+                if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") {
+                    let value = try self.body(request); sent.append(value)
+                    return (200, .object([community ? "message" : "data": self.message(293 + sent.count, sender: self.userID).merging(value)]))
+                }
+                return (200, .object(["messages": .array([])]))
+            }
+            let item = try XCTUnwrap(NotoEmojiCatalog.item(id: "1f409"))
+            let sticker = ChatSticker(id: UUID(), url: "https://media.example.test/dragon.png", name: item.name, notoID: item.id)
+            let queued = try room(conversation: conversation, handler)
+            XCTAssertTrue(queued.enqueueSticker(sticker, caption: "配文😀", quoteID: 26))
+            XCTAssertEqual(queued.pending.map(\.kind), ["image", "text"])
+            XCTAssertEqual(queued.pending.map(\.content), ["[贴纸] 🐉", "配文😀"])
+            let restored = try room(conversation: conversation, handler)
+            await restored.activate(); try await waitUntil { !restored.sending && restored.pending.isEmpty }
+            XCTAssertEqual(sent.count, 2)
+            XCTAssertEqual(sent.map { $0["message_type"].string }, ["image", "text"])
+            XCTAssertEqual(sent.first?["quote_message_id"].int, 26)
+            XCTAssertTrue(sent.last?["quote_message_id"].isNull == true)
+            XCTAssertEqual(restored.messages.first?.notoSticker, item)
+            XCTAssertEqual(restored.messages.last?.content, "配文😀")
+            restored.suspend()
+        }
+    }
     func testOtherSendersRequestCannotReplaceLocalPendingBubble() {
         let item = PendingMessage(id: "same-id", content: "my message")
         let incoming = ChatMessage(message(201).merging(.object(["request_id": .text(item.id)])))
