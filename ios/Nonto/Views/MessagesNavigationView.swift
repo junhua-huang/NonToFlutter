@@ -12,9 +12,11 @@ struct MessagesNavigationView: View {
     private let compactColumnControl: Binding<NavigationSplitViewColumn>?
     private var preferredColumn: Binding<NavigationSplitViewColumn> { compactColumnControl ?? $compactColumn }
     private var compactChatVisible: Bool {
-        guard horizontalSizeClass == .compact, preferredColumn.wrappedValue == .detail, let selection else { return false }
-        if case .chat = selection { return true }
-        return false
+        guard horizontalSizeClass == .compact, preferredColumn.wrappedValue == .detail else { return false }
+        return ([selection].compactMap { $0 } + detailNavigation.path).contains { route in
+            if case .chat = route { return true }
+            return false
+        }
     }
 
     // The optional conversation is a one-time preview/screenshot seed. Runtime
@@ -49,9 +51,9 @@ struct MessagesNavigationView: View {
                 .accessibilityIdentifier("conversation-detail")
             }
             .environment(\.navigate, detailNavigation.open)
-            // A collapsed split view keeps its detail alive after Back. Let
-            // chat release its own hidden-tab preference while it is offscreen.
-            .environment(\.chatColumnVisible, horizontalSizeClass != .compact || preferredColumn.wrappedValue == .detail)
+            // This column stays alive while collapsed. Its descendants must
+            // leave tab-bar visibility to the split container below.
+            .environment(\.messagesOwnsTabBar, true)
         }
         .navigationSplitViewStyle(.balanced)
         // A collapsed detail column can retain the chat's hidden-tab preference
@@ -69,10 +71,10 @@ struct MessagesNavigationView: View {
     }
 }
 
-private struct ChatColumnVisibleKey: EnvironmentKey { static let defaultValue = true }
+private struct MessagesOwnsTabBarKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues {
-    var chatColumnVisible: Bool {
-        get { self[ChatColumnVisibleKey.self] }
-        set { self[ChatColumnVisibleKey.self] = newValue }
+    var messagesOwnsTabBar: Bool {
+        get { self[MessagesOwnsTabBarKey.self] }
+        set { self[MessagesOwnsTabBarKey.self] = newValue }
     }
 }

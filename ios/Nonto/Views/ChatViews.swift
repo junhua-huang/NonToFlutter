@@ -1,6 +1,15 @@
 import SwiftUI
 import PhotosUI
 
+private struct ChatTabBarVisibility: ViewModifier {
+    let managedByMessages: Bool
+    let compact: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if managedByMessages { content }
+        else { content.toolbarVisibility(compact ? .hidden : .automatic, for: .tabBar) }
+    }
+}
+
 struct MessagesView: View {
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
@@ -39,7 +48,6 @@ struct MessagesView: View {
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
         }.timelineList().navigationTitle("私信").navigationBarTitleDisplayMode(.inline)
-            .toolbarVisibility(.visible, for: .tabBar)
             .toolbar { RouteButton(.friends) { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
@@ -64,7 +72,7 @@ struct ChatRoomContent: View {
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.chatColumnVisible) private var chatColumnVisible
+    @Environment(\.messagesOwnsTabBar) private var messagesOwnsTabBar
     @State private var store: ChatStore
     private let socket: RealtimeClient
     @State private var quote: ChatMessage?
@@ -201,7 +209,7 @@ struct ChatRoomContent: View {
         .frame(maxWidth: 820).frame(maxWidth: .infinity)
         .background(Color.timelineBackground)
         .navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(horizontalSizeClass == .compact ? (chatColumnVisible ? .hidden : .visible) : .automatic, for: .tabBar)
+        .modifier(ChatTabBarVisibility(managedByMessages: messagesOwnsTabBar, compact: horizontalSizeClass == .compact))
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {

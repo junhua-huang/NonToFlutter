@@ -140,11 +140,13 @@ import Observation
             // The split view's Back action writes the same sidebar value.
             column.value = .sidebar
             try await waitForUI("Return \(attempt) restores the tab bar") { self.hasVisibleTabBar(window) }
+            XCTAssertEqual(column.value, .sidebar)
             column.value = .detail
             try await waitForUI("Reopening \(attempt) hides the tab bar") { !self.hasVisibleTabBar(window) }
         }
         column.value = .sidebar
         try await waitForUI("Final return restores the tab bar") { self.hasVisibleTabBar(window) }
+        XCTAssertEqual(column.value, .sidebar)
         let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }

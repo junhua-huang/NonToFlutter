@@ -239,7 +239,7 @@ struct FriendsView: View {
                 ForEach(friends.items) { person in RouteButton(.profile(person.id)) { PersonRow(person: person) } }
                 ResourceFooter(resource: friends, emptyTitle: "还没有好友", emptyDescription: "去发现页搜索朋友，发送好友申请。", emptyIcon: "person.2")
             }
-        }.buttonStyle(.plain).navigationTitle("好友").toolbarVisibility(.visible, for: .tabBar)
+        }.buttonStyle(.plain).navigationTitle("好友")
             .task { await load() }.refreshable { await load() }
     }
     private func load() async { await friends.load(reset: true); await requests.load(reset: true) }
