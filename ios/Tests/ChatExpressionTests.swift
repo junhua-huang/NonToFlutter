@@ -187,14 +187,17 @@ private struct ExpressionInputHarness: View {
     let defaults: UserDefaults
     @State private var quote: ChatMessage?
     @State private var photos: [PhotosPickerItem] = []
+    @State private var availableHeight: CGFloat = 500
     @FocusState private var focus: Bool
     var body: some View {
         VStack {
             Text("聊天").font(.headline).padding(.top, 20)
             Spacer(minLength: 0)
-            ChatComposerInput(store: store, stickerSender: sender, accountEpoch: session.api.generation, availableHeight: 700,
+        }.safeAreaInset(edge: .bottom, spacing: 0) {
+            ChatComposerInput(store: store, stickerSender: sender, accountEpoch: session.api.generation, availableHeight: availableHeight,
                               quote: $quote, picks: $photos, preparingMedia: false, focus: $focus,
                               initialPicker: mode, initialSticker: sticker, pickerDefaults: defaults)
-        }.background(Color.timelineBackground).environmentObject(session)
+        }.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
+            .background(Color.timelineBackground).environmentObject(session)
     }
 }

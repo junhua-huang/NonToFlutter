@@ -411,6 +411,7 @@ struct ChatComposerInput: View {
     @State private var caret: NSRange?
     @State private var showingPhotos = false
     @State private var sendTask: Task<Void, Never>?
+    @State private var composerHeight: CGFloat = 56
 
     // Optional values are one-time preview seeds; live edits stay in this input bar.
     init(store: ChatStore, stickerSender: ChatStickerSender, accountEpoch: UUID, availableHeight: CGFloat,
@@ -424,6 +425,24 @@ struct ChatComposerInput: View {
         _pickerMode = State(initialValue: initialPicker); _stagedSticker = State(initialValue: initialSticker)
     }
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            composerContent
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
+            if let mode = pickerMode {
+                ChatExpressionDrawer(accountID: session.user?.id ?? 0, api: session.api, initialTab: mode,
+                                     selection: stagedSticker, expanded: $expanded, disabled: stickerSender.busy, defaults: pickerDefaults,
+                                     onInsertEmoji: insertEmoji, onStageSticker: { stagedSticker = $0; stickerSender.error = nil },
+                                     onClose: { pickerMode = nil })
+                    .id(mode).frame(height: drawerHeight).padding(.horizontal, 8).padding(.bottom, 4)
+            }
+        }.padding(.top, 6)
+            .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
+            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil } }
+            .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
+            .photosPicker(isPresented: $showingPhotos, selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos]))
+            .onDisappear { sendTask?.cancel(); stickerSender.cancel() }
+    }
+    private var composerContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let quote {
                 HStack(spacing: 8) {
@@ -450,22 +469,10 @@ struct ChatComposerInput: View {
             }.floatingGlass()
             if let error = stickerSender.error { ErrorBanner(text: error).padding(.horizontal, 12) }
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
-            if let mode = pickerMode {
-                ChatExpressionDrawer(accountID: session.user?.id ?? 0, api: session.api, initialTab: mode,
-                                     selection: stagedSticker, expanded: $expanded, disabled: stickerSender.busy, defaults: pickerDefaults,
-                                     onInsertEmoji: insertEmoji, onStageSticker: { stagedSticker = $0; stickerSender.error = nil },
-                                     onClose: { pickerMode = nil })
-                    .id(mode).frame(height: drawerHeight).padding(.horizontal, 8).padding(.bottom, 4)
-            }
-        }.padding(.top, 6)
-            .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
-            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil } }
-            .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
-            .photosPicker(isPresented: $showingPhotos, selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos]))
-            .onDisappear { sendTask?.cancel(); stickerSender.cancel() }
+        }
     }
     private var drawerHeight: CGFloat {
-        let limit = max(110, availableHeight - (stagedSticker == nil ? 100 : (verticalSize == .compact ? 100 : 210)))
+        let limit = max(110, availableHeight - composerHeight - 30)
         return min(expanded ? 500 : 300, limit)
     }
     private var composerRow: some View {
