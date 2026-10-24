@@ -146,7 +146,7 @@ struct ImageGallery: View {
         }.accessibilityAction(.escape) { dismiss() }
             .statusBarHidden(!controls).persistentSystemOverlays(.hidden)
             .sheet(item: $sharing) { ImageShareSheet(image: $0.image) }
-            .task(id: index) {
+            .task(id: GalleryLoadKey(images: images, index: index)) {
                 feedback = nil
                 guard images.indices.contains(index) else { displayImage = nil; return }
                 let selected = index, repository = ImageRepository.shared
@@ -178,6 +178,7 @@ struct ImageGallery: View {
         } catch { feedback = "保存失败，请稍后重试" }
     }
 }
+private struct GalleryLoadKey: Hashable { let images: [String]; let index: Int }
 private struct SharedImage: Identifiable { let id = UUID(); let image: UIImage }
 private struct ImageShareSheet: UIViewControllerRepresentable {
     let image: UIImage

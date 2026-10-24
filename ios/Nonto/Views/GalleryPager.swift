@@ -49,12 +49,13 @@ struct GalleryPager: UIViewControllerRepresentable {
     private func page(at index: Int) -> GalleryImagePage? {
         guard images.indices.contains(index) else { return nil }
         if let page = pages[index] { return page }
-        let page = GalleryImagePage(index: index, url: images[index], onTap: { [weak self] in self?.onTap() },
+        let url = images[index]
+        let page = GalleryImagePage(index: index, url: url, onTap: { [weak self] in self?.onTap() },
             onZoom: { [weak self] expanded in
-                guard let self, self.visibleIndex == index else { return }
+                guard let self, self.visibleIndex == index, self.images.indices.contains(index), self.images[index] == url else { return }
                 self.zoomed = expanded; self.pagingScrollView?.isScrollEnabled = !expanded
             }, onLoaded: { [weak self] image in
-                guard let self, self.visibleIndex == index else { return }
+                guard let self, self.visibleIndex == index, self.images.indices.contains(index), self.images[index] == url else { return }
                 self.onLoaded(image)
             })
         pages[index] = page; return page
