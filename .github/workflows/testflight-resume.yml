@@ -1,0 +1,126 @@
+name: Resume Existing TestFlight Build
+on:
+  push:
+    branches: [ios]
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Existing uploaded build number; never uploads a binary'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: nonto-testflight
+  cancel-in-progress: false
+jobs:
+  finalize:
+    if: github.ref == 'refs/heads/ios' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight-resume:'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'cryptography>=45,<47'
+      - name: Select an existing uploaded build
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          event = json.load(open(os.environ['GITHUB_EVENT_PATH']))
+          if os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch':
+              number = event.get('inputs', {}).get('build_number', '')
+          else:
+              matches = re.findall(r'\[testflight-resume:(\d{1,4}\.\d{1,2})\]', event.get('head_commit', {}).get('message', ''))
+              if len(matches) != 1:
+                  raise SystemExit('Expected exactly one existing-build marker.')
+              number = matches[0]
+          if not re.fullmatch(r'[1-9]\d{0,3}\.[1-9]\d?', number):
+              raise SystemExit('Invalid existing build number.')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('TF_BUILD_NUMBER=' + number + '\n')
+          print('Continuing status and metadata checks for existing build', number)
+          PY
+      - name: Wait for the existing upload without signing or uploading
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, time
+          sys.path.insert(0, '.github/scripts')
+          from appstore_metadata import Apple, APP_ID, BUNDLE, rows, require
+          from testflight import AppleUnavailable
+          api = Apple()
+          require(api.request('GET', 'apps/' + APP_ID)['data']['attributes']['bundleId'] == BUNDLE, 'App identity mismatch.')
+          number = os.environ['TF_BUILD_NUMBER']
+          deadline, diagnostic_at = time.monotonic() + 1200, 0
+          def safe(value):
+              if isinstance(value, dict):
+                  return {k: safe(v) for k, v in value.items()}
+              if isinstance(value, list):
+                  return [safe(v) for v in value[:10]]
+              if isinstance(value, str):
+                  return re.sub(r'https?://\S+', '[URL]', value)[:1000]
+              return value
+          while time.monotonic() < deadline:
+              try:
+                  builds = rows(api, 'builds', {'filter[app]': APP_ID, 'filter[version]': number, 'limit': 10})
+                  require(len(builds) <= 1, 'Ambiguous existing build number.')
+                  state = builds[0]['attributes']['processingState'] if builds else 'NOT_VISIBLE'
+                  print('Existing build', number, 'processing:', state, flush=True)
+                  require(state not in ('FAILED', 'INVALID'), 'Apple rejected this existing build. Inspect its upload details before changing or uploading a binary.')
+                  if state == 'VALID':
+                      require(not builds[0]['attributes'].get('expired'), 'Existing build has expired.')
+                      print('Existing build processed successfully:', number, flush=True)
+                      break
+                  if time.monotonic() >= diagnostic_at:
+                      uploads = []
+                      try:
+                          uploads = rows(api, f'apps/{APP_ID}/buildUploads', {'filter[cfBundleVersion]': number, 'limit': 10})
+                      except AppleUnavailable:
+                          print('Upload detail query temporarily unavailable.', flush=True)
+                      except ValueError:
+                          print('Upload detail endpoint is unavailable for this key; continuing build status checks.', flush=True)
+                      for upload in uploads:
+                          attributes = upload['attributes']
+                          print('Upload record:', json.dumps(safe({k: attributes.get(k) for k in ('cfBundleVersion', 'cfBundleShortVersionString', 'state', 'uploadedDate')})), flush=True)
+                          status = attributes.get('state', {})
+                          status = status.get('processingState', status.get('state', '')) if isinstance(status, dict) else status
+                          require(status not in ('FAILED', 'INVALID'), 'Apple reports a failed existing upload; no binary was uploaded by this workflow.')
+                      diagnostic_at = time.monotonic() + 60
+              except AppleUnavailable:
+                  print('Apple status query temporarily unavailable; retrying.', flush=True)
+              time.sleep(20)
+          else:
+              raise ValueError('Existing upload is still pending. No new binary was uploaded; continue checking this same build.')
+          PY
+      - name: Save and verify TestFlight notes for the existing build
+        run: python3 .github/scripts/appstore_metadata.py --testflight-notes "$TF_BUILD_NUMBER"
+      - name: Verify existing internal tester group access
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, '.github/scripts')
+          from appstore_metadata import Apple, APP_ID, BUNDLE, rows, require
+          api = Apple()
+          require(api.request('GET', 'apps/' + APP_ID)['data']['attributes']['bundleId'] == BUNDLE, 'App identity mismatch.')
+          number = os.environ['TF_BUILD_NUMBER']
+          builds = rows(api, 'builds', {'filter[app]': APP_ID, 'filter[version]': number, 'limit': 10})
+          require(len(builds) == 1 and builds[0]['attributes']['processingState'] == 'VALID' and not builds[0]['attributes'].get('expired'), 'Existing build is not available.')
+          available = 0
+          for group in rows(api, f'apps/{APP_ID}/betaGroups', {'limit': 200}):
+              if not group['attributes'].get('isInternalGroup'):
+                  continue
+              assigned = rows(api, f'betaGroups/{group["id"]}/builds', {'limit': 200})
+              if group['attributes'].get('hasAccessToAllBuilds') or any(b['id'] == builds[0]['id'] for b in assigned):
+                  available += 1
+          require(available > 0, 'Existing build is processed but internal group access is not confirmed. Do not upload another binary.')
+          print('TestFlight build', number, 'is available to', available, 'existing internal group(s).')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('Existing TestFlight build ' + number + ' processed; notes verified; internal group availability confirmed. No binary was uploaded by this workflow.\n')
+          PY
