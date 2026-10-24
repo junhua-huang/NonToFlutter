@@ -46,10 +46,15 @@ struct NotoEmojiFilter: Equatable {
 /// Build searchable strings and category buckets once, rather than for every
 /// cell, keystroke token, selection highlight and preview redraw.
 struct NotoEmojiSearchIndex: Sendable {
+    private struct Entry: Sendable {
+        let item: NotoEmoji
+        let text: String
+        let keywords: Set<String>
+    }
     static let catalog = NotoEmojiSearchIndex(items: NotoEmojiCatalog.all)
     let all: [NotoEmoji]
     private let categories: [String: [NotoEmoji]]
-    private let entries: [(item: NotoEmoji, text: String)]
+    private let entries: [Entry]
     private static let aliases = [
         "开心": ["开心", "高兴", "快乐"],
         "难过": ["难过", "伤心", "悲伤"],
@@ -60,7 +65,10 @@ struct NotoEmojiSearchIndex: Sendable {
     init(items: [NotoEmoji]) {
         all = items
         categories = Dictionary(grouping: items, by: \.category)
-        entries = items.map { ($0, Self.normalize("\($0.emoji) \($0.name) \($0.keywords) \($0.category)")) }
+        entries = items.map { item in
+            Entry(item: item, text: Self.normalize("\(item.emoji) \(item.name) \(item.keywords) \(item.category)"),
+                  keywords: Set(Self.normalize("\(item.name) \(item.keywords)").lowercased().split(separator: " ").map(String.init)))
+        }
     }
     static func normalize(_ value: String) -> String {
         value.replacingOccurrences(of: "\u{FE0F}", with: "")
@@ -70,9 +78,14 @@ struct NotoEmojiSearchIndex: Sendable {
     func search(_ query: String) -> [NotoEmoji] {
         let tokens = Self.normalize(query).split(separator: " ").map(String.init)
         guard !tokens.isEmpty else { return all }
-        let alternatives = tokens.map { Self.aliases[$0] ?? [$0] }
+        let requirements = tokens.map { (query: $0, aliases: Self.aliases[$0]) }
         return entries.compactMap { entry in
-            alternatives.allSatisfy { words in words.contains { entry.text.localizedStandardContains($0) } } ? entry.item : nil
+            let matches = requirements.allSatisfy { requirement in
+                // Expanding 开心 to 高兴 must not also match 不高兴.
+                if let aliases = requirement.aliases { return aliases.contains { entry.keywords.contains($0) } }
+                return entry.text.localizedStandardContains(requirement.query)
+            }
+            return matches ? entry.item : nil
         }
     }
 }

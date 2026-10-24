@@ -32,9 +32,10 @@ struct NotoEmojiPickerContent: View {
                         NotoEmojiGrid(items: browser.items, selectedID: browser.selection?.id,
                                       favorites: browser.favoriteIDs, canFavorite: browser.canFavorite,
                                       onSelect: select, onFavorite: browser.toggleFavorite)
-                            .scrollTargetLayout().padding(.horizontal, 16).padding(.bottom, 16)
+                            .padding(.bottom, 16)
                     }
                 }
+                .contentMargins(.horizontal, 16, for: .scrollContent)
                 .scrollPosition($position).scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("noto.results")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -166,7 +167,7 @@ private struct NotoEmojiGrid: View {
                               canFavorite: canFavorite, cellSize: cellSize,
                               onSelect: { onSelect(item) }, onFavorite: { onFavorite(item) })
             }
-        }
+        }.scrollTargetLayout()
     }
 }
 

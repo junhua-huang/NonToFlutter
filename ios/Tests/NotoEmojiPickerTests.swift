@@ -26,15 +26,17 @@ import UIKit
         XCTAssertTrue(model.items.allSatisfy { $0.category == "动物与自然" })
         model.query = "  开心  "
         XCTAssertTrue(model.items.contains(try smile()))
+        for id in ["1f620", "1f641", "1f61e"] { XCTAssertFalse(model.items.contains { $0.id == id }, "开心 must not expand to 不高兴") }
         XCTAssertEqual(model.title, "搜索结果")
         model.query = "SMILE"
         XCTAssertTrue(model.items.contains(try smile()))
         model.query = "❤"
         let heart = try XCTUnwrap(NotoEmojiCatalog.standalone(in: "❤️")?.first)
         XCTAssertTrue(model.items.contains(heart))
-        model.query = "cat 动物"
-        XCTAssertFalse(model.items.isEmpty)
-        XCTAssertTrue(model.items.allSatisfy { $0.category == "动物与自然" })
+        model.query = "smile cat"
+        XCTAssertTrue(model.items.contains { $0.id == "1f638" })
+        XCTAssertFalse(model.items.contains(try smile()))
+        XCTAssertTrue(model.items.allSatisfy { $0.category == "笑脸与情感" })
         model.query = "a-query-that-does-not-exist-990150"
         XCTAssertTrue(model.items.isEmpty)
         model.show(.all)
