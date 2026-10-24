@@ -140,8 +140,22 @@ import ImageIO
             window.endEditing(true); host.rootView = AnyView(EmptyView())
             window.isHidden = true; window.rootViewController = nil; window.windowScene = nil; previous?.makeKey()
         }
+        let deadline = Date().addingTimeInterval(8)
+        var ready = false
+        while Date() < deadline {
+            window.layoutIfNeeded(); host.view.layoutIfNeeded()
+            ready = descendants(host.view).compactMap { $0 as? UINavigationBar }.contains { bar in
+                let frame = bar.convert(bar.bounds, to: window)
+                return bar.topItem?.title == "贴纸" && !bar.isHidden && bar.alpha > 0.9
+                    && frame.height >= 40 && frame.minY >= 0 && frame.maxY <= size.height
+            }
+            if ready { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(ready, "Capture the complete picker after its native navigation has mounted")
         try await Task.sleep(for: .milliseconds(700))
         let image = UIGraphicsImageRenderer(size: size).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
         let attachment = XCTAttachment(image: image); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
+    private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
 }
