@@ -135,6 +135,9 @@ import Observation
         window.rootViewController = controller; window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKey() }
         controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
+        try await waitForUI("The initial conversation list shows the tab bar") { self.hasVisibleTabBar(window) }
+        attachTabBarState(window, column: column.value, name: "messages-initial-tab-bar-state")
+        column.value = .detail
         try await waitForUI("Opening chat hides the tab bar") { messageReads > 0 && !self.hasVisibleTabBar(window) }
         for attempt in 1...2 {
             // The split view's Back action writes the same sidebar value.
@@ -147,6 +150,7 @@ import Observation
         column.value = .sidebar
         try await waitForUI("Final return restores the tab bar") { self.hasVisibleTabBar(window) }
         XCTAssertEqual(column.value, .sidebar)
+        attachTabBarState(window, column: column.value, name: "messages-returned-tab-bar-state")
         let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
@@ -172,6 +176,20 @@ import Observation
         }
     }
     private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
+    private func attachTabBarState(_ window: UIWindow, column: NavigationSplitViewColumn, name: String) {
+        let bars = descendants(window).filter { $0 is UITabBar }
+        let details = bars.map { bar in
+            var nodes: [String] = []
+            var current: UIView? = bar
+            while let view = current {
+                nodes.append("\(type(of: view)): hidden=\(view.isHidden), alpha=\(view.alpha), frame=\(view.convert(view.bounds, to: window))")
+                current = view.superview
+            }
+            return nodes.joined(separator: "\n")
+        }.joined(separator: "\n\n")
+        let attachment = XCTAttachment(string: "column=\(column), window=\(window.bounds), tab bars=\(bars.count)\n" + details)
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
     private func capture<V: View>(_ view: V, session: AppSession, sizeClass: UserInterfaceSizeClass, name: String) async throws -> UIImage {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
@@ -205,5 +223,5 @@ import Observation
 }
 
 @MainActor @Observable private final class ConversationColumnProbe {
-    var value: NavigationSplitViewColumn = .detail
+    var value: NavigationSplitViewColumn = .sidebar
 }
