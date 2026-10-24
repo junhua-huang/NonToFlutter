@@ -393,6 +393,7 @@ private struct ChatComposerInput: View {
     @EnvironmentObject private var session: AppSession
     @State private var showingEmoji = false
     @State private var showingStickers = false
+    @State private var showingPhotos = false
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let quote {
@@ -407,8 +408,8 @@ private struct ChatComposerInput: View {
             }
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
-                    PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
-                        Label("照片或视频", systemImage: "photo.on.rectangle")
+                    Button("照片或视频", systemImage: "photo.on.rectangle") {
+                        focus.wrappedValue = false; showingPhotos = true
                     }
                     Button("贴纸", systemImage: "square.on.circle") {
                         focus.wrappedValue = false; showingStickers = true
@@ -436,6 +437,7 @@ private struct ChatComposerInput: View {
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
         }.padding(.top, 6)
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
+            .photosPicker(isPresented: $showingPhotos, selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos]))
             .sheet(isPresented: $showingEmoji) {
                 NotoEmojiPicker(accountID: session.user?.id ?? 0) { item in
                     guard store.enqueue(content: item.emoji, quoteID: quote?.id) else { return false }

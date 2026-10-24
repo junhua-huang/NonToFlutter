@@ -64,7 +64,8 @@ struct ChatStickerPickerContent: View {
                                 ForEach(browser.results) { sticker in tile(sticker) }
                             }.padding(.vertical, 8)
                         }
-                        Text("已保存 \(browser.items.count)/120 · 仅此账号与设备").font(.caption2).foregroundStyle(.secondary).padding(.vertical, 12)
+                        Text("已保存 \(browser.items.count)/120 · 长按可删除\n贴纸仅保存在当前账号的这台设备上")
+                            .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.vertical, 12)
                     }.contentMargins(.horizontal, 16, for: .scrollContent).scrollDismissesKeyboard(.interactively)
                 }
                 if busy { ProgressView(readingPhoto ? "正在读取图片…" : "正在处理贴纸…").font(.caption).padding(8) }
@@ -119,7 +120,7 @@ struct ChatStickerPickerContent: View {
                 .background(browser.selection?.id == sticker.id ? Color.brand.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
                 .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(browser.selection?.id == sticker.id ? Color.brand : .clear, lineWidth: 1.5) }
         }.buttonStyle(.plain).disabled(busy)
-            .accessibilityLabel(sticker.name).accessibilityHint("轻点预览并发送")
+            .accessibilityLabel(sticker.name).accessibilityHint("轻点预览并发送，长按可删除")
             .accessibilityAddTraits(browser.selection?.id == sticker.id ? .isSelected : [])
             .accessibilityIdentifier("chat.sticker.\(sticker.id)")
             .contextMenu {
@@ -142,15 +143,24 @@ struct ChatStickerPickerContent: View {
                 Button { nameFocused = false; browser.clearSelection() } label: { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }
                     .buttonStyle(.plain).foregroundStyle(.secondary).disabled(busy).accessibilityLabel("取消选择贴纸")
             }
-            HStack(spacing: 12) {
-                if browser.prepared != nil {
-                    Button("仅保存") { commit(send: false) }.buttonStyle(.bordered).disabled(!browser.canCommit || readingPhoto)
-                }
-                Button(browser.prepared == nil ? "发送贴纸" : "添加并发送") { commit(send: true) }
-                    .buttonStyle(.borderedProminent).frame(maxWidth: .infinity).disabled(!browser.canCommit || readingPhoto)
-                    .accessibilityIdentifier("chat.stickers.send")
+            Group {
+                if dynamicType.isAccessibilitySize {
+                    VStack(spacing: 8) { saveButton; sendButton }
+                } else { HStack(spacing: 12) { saveButton; sendButton } }
             }.controlSize(.large)
         }.padding(16).background(.bar).accessibilityIdentifier("chat.stickers.preview")
+    }
+    @ViewBuilder private var saveButton: some View {
+        if browser.prepared != nil {
+            Button { commit(send: false) } label: { Text("仅保存").frame(maxWidth: .infinity) }
+                .buttonStyle(.bordered).disabled(!browser.canCommit || readingPhoto)
+        }
+    }
+    private var sendButton: some View {
+        Button { commit(send: true) } label: {
+            Text(browser.prepared == nil ? "发送贴纸" : "添加并发送").frame(maxWidth: .infinity)
+        }.buttonStyle(.borderedProminent).disabled(!browser.canCommit || readingPhoto)
+            .accessibilityIdentifier("chat.stickers.send")
     }
     private func commit(send: Bool) {
         guard !busy, browser.canCommit, operation == nil else { return }
