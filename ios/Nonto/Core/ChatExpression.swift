@@ -7,7 +7,7 @@ enum ChatExpressionTab: String, CaseIterable, Identifiable, Hashable {
         switch self { case .recent: return "最近"; case .stickers: return "贴纸"; case .emoji: return "表情"; case .noto: return "动态贴纸" }
     }
     var symbol: String {
-        switch self { case .recent: return "clock.fill"; case .stickers: return "square.on.circle"; case .emoji: return "face.smiling"; case .noto: return "sparkles" }
+        switch self { case .recent: return "clock"; case .stickers: return "square.on.circle"; case .emoji: return "face.smiling"; case .noto: return "sparkles" }
     }
 }
 

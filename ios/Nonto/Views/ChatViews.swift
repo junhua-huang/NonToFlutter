@@ -96,6 +96,7 @@ struct ChatRoomContent: View {
     @State private var quoteContext: ChatQuoteTarget?
     @State private var highlightedMessage: Int?
     @State private var quoteReturnID: String?
+    @State private var attachmentMenuVisible = false
     @State private var highlightTask: Task<Void, Never>?
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     init(session: AppSession, conversation: Conversation, store: ChatStore? = nil,
@@ -201,14 +202,14 @@ struct ChatRoomContent: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 VStack(alignment: .trailing, spacing: 8) {
-                    if let returnID = quoteReturnID {
+                    if let returnID = quoteReturnID, !attachmentMenuVisible {
                         Button {
                             quoteReturnID = nil; highlightedMessage = nil
                             withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: returnID, anchor: .center) }
                         } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
                             .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
                     }
-                    if !store.nearBottom && !store.messages.isEmpty {
+                    if !store.nearBottom && !store.messages.isEmpty && !attachmentMenuVisible {
                         Button { store.jumpToLatest() } label: {
                             Label(store.unread > 0 ? "\(store.unread) 条新消息" : "回到最新", systemImage: "arrow.down")
                         }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
@@ -236,7 +237,8 @@ struct ChatRoomContent: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
-                              quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused)
+                              quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused,
+                              onAttachmentMenuChange: { attachmentMenuVisible = $0 })
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
@@ -403,6 +405,7 @@ struct ChatComposerInput: View {
     @Binding var picks: [PhotosPickerItem]
     let preparingMedia: Bool
     let focus: FocusState<Bool>.Binding
+    let onAttachmentMenuChange: (Bool) -> Void
     @EnvironmentObject private var session: AppSession
     @Environment(\.verticalSizeClass) private var verticalSize
     @Environment(\.dynamicTypeSize) private var dynamicType
@@ -418,12 +421,14 @@ struct ChatComposerInput: View {
     // Optional values are one-time preview seeds; live edits stay in this input bar.
     init(store: ChatStore, stickerSender: ChatStickerSender, accountEpoch: UUID, availableHeight: CGFloat,
          quote: Binding<ChatMessage?>, picks: Binding<[PhotosPickerItem]>, preparingMedia: Bool,
-         focus: FocusState<Bool>.Binding, initialPicker: ChatExpressionTab? = nil,
+         focus: FocusState<Bool>.Binding, onAttachmentMenuChange: @escaping (Bool) -> Void = { _ in },
+         initialPicker: ChatExpressionTab? = nil,
          initialSticker: StagedChatSticker? = nil, pickerDefaults: UserDefaults = .standard) {
         _store = Bindable(wrappedValue: store); _stickerSender = Bindable(wrappedValue: stickerSender)
         self.accountEpoch = accountEpoch; self.availableHeight = availableHeight
         self.pickerDefaults = pickerDefaults
         _quote = quote; _picks = picks; self.preparingMedia = preparingMedia; self.focus = focus
+        self.onAttachmentMenuChange = onAttachmentMenuChange
         _pickerMode = State(initialValue: initialPicker); _stagedSticker = State(initialValue: initialSticker)
     }
     var body: some View {
@@ -440,9 +445,10 @@ struct ChatComposerInput: View {
         }.padding(.top, 6)
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
             .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil; showingAttachments = false } }
+            .onChange(of: showingAttachments) { _, value in onAttachmentMenuChange(value) }
             .onChange(of: picks) { _, value in if !value.isEmpty { showingAttachments = false } }
             .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
-            .onDisappear { sendTask?.cancel(); stickerSender.cancel() }
+            .onDisappear { onAttachmentMenuChange(false); sendTask?.cancel(); stickerSender.cancel() }
     }
     private var composerContent: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -455,37 +461,37 @@ struct ChatComposerInput: View {
                         .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44).disabled(stickerSender.busy)
                 }.padding(.horizontal)
             }
-            VStack(spacing: 0) {
-                if let stagedSticker {
-                    ZStack(alignment: .topTrailing) {
-                        ChatStagedStickerImage(sticker: stagedSticker)
-                            .frame(width: verticalSize == .compact ? 48 : 96, height: verticalSize == .compact ? 48 : 96)
-                            .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .accessibilityLabel("待发送贴纸：\(stagedSticker.name)")
-                        Button(action: cancelSticker) { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }
-                            .buttonStyle(.plain).accessibilityLabel("取消待发送贴纸").accessibilityIdentifier("chat.sticker.cancel")
+            GlassEffectContainer(spacing: 10) {
+                HStack(alignment: .bottom, spacing: 10) {
+                    attachmentButton
+                    VStack(spacing: 0) {
+                        if let stagedSticker {
+                            ZStack(alignment: .topTrailing) {
+                                ChatStagedStickerImage(sticker: stagedSticker)
+                                    .frame(width: verticalSize == .compact ? 48 : 96, height: verticalSize == .compact ? 48 : 96)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                    .accessibilityLabel("待发送贴纸：\(stagedSticker.name)")
+                                Button(action: cancelSticker) { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }
+                                    .buttonStyle(.plain).accessibilityLabel("取消待发送贴纸").accessibilityIdentifier("chat.sticker.cancel")
+                            }
+                            Divider().padding(.horizontal, 12)
+                        }
+                        composerRow
                     }
-                    Divider().padding(.horizontal, 12)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 28))
                 }
-                composerRow
-            }.floatingGlass()
+            }.padding(.horizontal, 12).padding(.bottom, 6)
             if let error = stickerSender.error { ErrorBanner(text: error).padding(.horizontal, 12) }
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
         }
     }
     private var drawerHeight: CGFloat {
         let limit = max(110, availableHeight - composerHeight - 30)
-        return min(expanded ? 500 : 300, limit)
+        return min(expanded ? 500 : 320, limit)
     }
     private var composerRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            Button {
-                focus.wrappedValue = false; pickerMode = nil; showingAttachments.toggle()
-            } label: { Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44) }
-                .disabled(preparingMedia || stickerSender.busy).accessibilityLabel("添加照片、视频或贴纸")
-                .popover(isPresented: $showingAttachments, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
-                    attachmentOptions.presentationCompactAdaptation(.popover)
-                }
             Button {
                 if pickerMode != nil { pickerMode = nil; focus.wrappedValue = true }
                 else { open(.emoji) }
@@ -502,17 +508,18 @@ struct ChatComposerInput: View {
                 .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")
         }
     }
-    private var attachmentOptions: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
-                ChatAttachmentOptionLabel(title: "照片或视频", photos: true)
-            }.accessibilityLabel("添加照片或视频")
-            Button {
-                showingAttachments = false; open(.stickers)
-            } label: { ChatAttachmentOptionLabel(title: "贴纸", photos: false) }
-                .accessibilityIdentifier("chat.stickers.open")
-        }.buttonStyle(.plain).padding(12)
-            .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
+    private var attachmentButton: some View {
+        Button {
+            focus.wrappedValue = false; pickerMode = nil; showingAttachments = true
+        } label: {
+            Image(systemName: "plus").font(.title2).foregroundStyle(.primary).frame(width: 44, height: 44)
+                .glassEffect(.regular.interactive(), in: .circle)
+        }.buttonStyle(.plain).disabled(preparingMedia || stickerSender.busy)
+            .accessibilityLabel("添加照片、视频或贴纸")
+            .popover(isPresented: $showingAttachments, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+                ChatAttachmentMenu(picks: $picks) { showingAttachments = false; open(.stickers) }
+                    .presentationCompactAdaptation(.popover)
+            }
     }
     private var textSelection: Binding<TextSelection?> {
         Binding(get: { selection }, set: { value in
@@ -559,32 +566,5 @@ struct ChatComposerInput: View {
     private func finishSend(text: String, quoteID: Int?) {
         if store.draft == text { store.draft = ""; selection = nil; caret = nil; store.saveDraft() }
         if quote?.id == quoteID { quote = nil }
-    }
-}
-
-private struct ChatAttachmentOptionLabel: View {
-    let title: String
-    let photos: Bool
-    private let petalColors: [Color] = [.pink, .red, .orange, .yellow, .green, .cyan, .blue, .purple]
-    var body: some View {
-        HStack(spacing: 20) {
-            ZStack {
-                if photos {
-                    Circle().fill(.white)
-                    ForEach(0..<8) { index in
-                        Capsule().fill(petalColors[index].opacity(0.8))
-                            .frame(width: 14, height: 24).offset(y: -9)
-                            .rotationEffect(.degrees(Double(index) * 45))
-                    }
-                } else {
-                    Circle().fill(LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    Image(systemName: "square.on.circle").font(.system(size: 27, weight: .medium)).foregroundStyle(.white)
-                }
-            }.frame(width: 48, height: 48).accessibilityHidden(true)
-            Text(title).font(.title3.weight(.semibold)).foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }.padding(.horizontal, 12).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading).contentShape(Rectangle())
     }
 }

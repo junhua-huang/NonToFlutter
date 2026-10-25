@@ -78,15 +78,18 @@ struct PostComposer: View {
                 .navigationTitle(editing == nil ? "" : "编辑动态").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消", action: close).foregroundStyle(accent.color).disabled(busy)
+                        Button(action: close) { Image(systemName: "xmark") }
+                            .foregroundStyle(.primary).disabled(busy).accessibilityLabel("关闭发布页")
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await publish() } } label: {
                             if busy { ProgressView().accessibilityLabel("正在提交") }
                             else {
                                 Text(editing == nil ? "发布" : "保存").fontWeight(.semibold)
+                                    .foregroundStyle(canPublish && !reading ? accent.foregroundColor : Color.secondary)
                             }
                         }.disabled(busy || reading || !canPublish)
+                            .buttonStyle(.glassProminent).tint(accent.color)
                             .keyboardShortcut(.return, modifiers: .command).accessibilityIdentifier("post.composer.publish")
                     }
                 }

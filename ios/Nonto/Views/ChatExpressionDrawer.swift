@@ -16,6 +16,7 @@ struct ChatExpressionDrawer: View {
     @State private var emoji: NotoEmojiBrowser
     @State private var noto: NotoEmojiBrowser
     @State private var history: [NotoStickerHistory.Use] = []
+    @State private var recentEmoji: [NotoEmoji] = []
     @State private var recentQuery = ""
     @State private var searchOpen = false
     @State private var photo: PhotosPickerItem?
@@ -41,7 +42,7 @@ struct ChatExpressionDrawer: View {
         self.defaults = defaults
         _stickers = State(initialValue: stickers ?? ChatStickerBrowser(accountID: accountID, defaults: defaults))
         let emojiBrowser = emoji ?? NotoEmojiBrowser(accountID: accountID, defaults: defaults)
-        if emojiBrowser.scope == .favorites { emojiBrowser.show(.all) }
+        emojiBrowser.show(.all)
         _emoji = State(initialValue: emojiBrowser)
         let notoBrowser = noto ?? NotoEmojiBrowser(accountID: accountID, defaults: defaults)
         notoBrowser.show(.all); _noto = State(initialValue: notoBrowser)
@@ -52,51 +53,35 @@ struct ChatExpressionDrawer: View {
                 Capsule().fill(.secondary.opacity(0.55)).frame(width: 36, height: 5)
                     .frame(maxWidth: .infinity, minHeight: 20)
             }.buttonStyle(.plain).accessibilityLabel(expanded ? "收起选择器" : "展开选择器")
+                .accessibilityAction(named: Text("关闭选择器"), onClose)
                 .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
                     if value.translation.height < -30 { expanded = true }
                     else if value.translation.height > 30 { expanded = false }
                 })
             sourceBar
             if searchOpen {
-                NotoEmojiSearchField(text: query, focus: $searchFocused, prompt: tab == .emoji ? "搜索表情名称或 emoji" : "搜索贴纸名称")
+                NotoEmojiSearchField(text: query, focus: $searchFocused, prompt: searchPrompt)
                     .padding(.horizontal, 12).padding(.bottom, 6)
             }
-            if importing { ProgressView("正在制作贴纸…").font(.caption).padding(8) }
+            if importing {
+                ProgressView("正在制作贴纸…").font(.caption).padding(.vertical, 8)
+            }
             ScrollView {
-                switch tab {
-                case .stickers: personalStickers
-                case .recent: recentStickers
-                case .emoji:
-                    if emoji.items.isEmpty { emptySearch }
-                    else { NotoEmojiGrid(items: emoji.items, selectedID: nil, favorites: [], canFavorite: false,
-                                  onSelect: { item in if onInsertEmoji(item) { emoji.recordInsertion(item) } }, onFavorite: { _ in },
-                                  systemGlyphs: true, onUseAsSticker: stageNoto) }
-                case .noto:
-                    if noto.items.isEmpty { emptySearch }
-                    else { NotoEmojiGrid(items: noto.items, selectedID: selection?.notoEmoji?.id,
-                                  favorites: noto.favoriteIDs, canFavorite: noto.canFavorite,
-                                  onSelect: stageNoto, onFavorite: noto.toggleFavorite) }
-                }
-            }.contentMargins(.horizontal, 12, for: .scrollContent).scrollDismissesKeyboard(.interactively)
+                VStack(alignment: .leading, spacing: 12) {
+                    switch tab {
+                    case .stickers: personalStickers
+                    case .recent: recentExpressions
+                    case .emoji: emojiSections(emoji, systemGlyphs: true)
+                    case .noto: emojiSections(noto, systemGlyphs: false)
+                    }
+                }.padding(.vertical, 8)
+            }.contentMargins(.horizontal, 16, for: .scrollContent).scrollDismissesKeyboard(.interactively)
                 .scrollPosition($position)
                 .frame(maxWidth: .infinity, maxHeight: .infinity).accessibilityIdentifier("chat.expressions.grid")
             if let importError { Text(importError).font(.caption).foregroundStyle(.red).padding(8) }
-            if tab == .emoji || tab == .noto {
-                HStack(spacing: 0) {
-                    let browser = tab == .emoji ? emoji : noto
-                    NotoEmojiScopeStrip(scopes: browser.scopes.filter { tab == .emoji ? $0 != .favorites : $0 != .recent },
-                                        active: browser.isSearching ? nil : browser.scope,
-                                        onSelect: { scope in searchFocused = false; browser.show(scope) })
-                    if tab == .noto {
-                        Button { searchFocused = false; showingCredits = true } label: {
-                            Image(systemName: "slider.horizontal.3").foregroundStyle(.secondary).frame(width: 44, height: 44)
-                        }.buttonStyle(.plain).accessibilityLabel("动态贴纸设置与许可")
-                    }
-                }
-            }
         }
-        .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 26))
-        .clipShape(.rect(cornerRadius: 26))
+        .clipShape(.rect(cornerRadius: 32))
+        .glassEffect(.regular, in: .rect(cornerRadius: 32))
         .disabled(disabled)
         .onAppear(perform: reload)
         .onChange(of: selection?.id) { _, _ in reload() }
@@ -133,25 +118,25 @@ struct ChatExpressionDrawer: View {
                     Image(systemName: source.symbol).font(.system(size: min(sourceIconSize, 24)))
                         .frame(width: 44, height: 44)
                         .foregroundStyle(tab == source ? Color.primary : .secondary)
-                        .background(tab == source ? Color(uiColor: .tertiarySystemFill) : .clear,
+                        .background(tab == source ? Color.primary.opacity(0.06) : .clear,
                                     in: .rect(cornerRadius: 12))
                         .contentShape(Rectangle())
                 }.buttonStyle(.plain).disabled(importing).accessibilityLabel(source.title).accessibilityAddTraits(tab == source ? .isSelected : [])
                     .accessibilityIdentifier("chat.expressions.tab.\(source.id)")
             }
             Spacer(minLength: 0)
-            Button { searchOpen.toggle(); searchFocused = searchOpen; if searchOpen { expanded = true } } label: {
+            Button(action: toggleSearch) {
                 Image(systemName: "magnifyingglass").frame(width: 44, height: 44)
                     .foregroundStyle(searchOpen ? Color.primary : .secondary)
-                    .background(searchOpen ? Color(uiColor: .tertiarySystemFill) : .clear,
+                    .background(searchOpen ? Color.primary.opacity(0.06) : .clear,
                                 in: .rect(cornerRadius: 12))
-            }.buttonStyle(.plain).disabled(importing).accessibilityLabel("搜索\(tab == .emoji ? "表情" : "贴纸")")
-            Button(action: onClose) {
-                Image(systemName: "xmark").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
+            }.buttonStyle(.plain).disabled(importing).accessibilityLabel(searchPrompt)
+            if tab == .noto {
+                Button { searchFocused = false; showingCredits = true } label: {
+                    Image(systemName: "slider.horizontal.3").foregroundStyle(.secondary).frame(width: 44, height: 44)
+                }.buttonStyle(.plain).accessibilityLabel("动态贴纸设置与许可")
             }
-                .buttonStyle(.plain).accessibilityLabel("关闭选择器")
-        }.padding(.horizontal, 10).padding(.bottom, 6)
+        }.padding(.horizontal, 12).padding(.bottom, 4)
     }
     private var emptySearch: some View {
         VStack(spacing: 8) {
@@ -171,12 +156,11 @@ struct ChatExpressionDrawer: View {
         })
     }
     private var personalStickers: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
                 PhotosPicker(selection: $photo, matching: .images) {
-                    Image(systemName: "plus").font(.title2).foregroundStyle(.secondary)
+                    Image(systemName: "plus").font(.system(size: 36, weight: .medium)).foregroundStyle(.primary)
                         .frame(width: 60, height: 60)
-                        .background(Color(uiColor: .tertiarySystemFill), in: .rect(cornerRadius: 16))
                         .frame(maxWidth: .infinity, minHeight: 84)
                 }.buttonStyle(.plain).disabled(importing || stickers.items.count >= ChatStickerLibrary.limit)
                     .accessibilityLabel("从照片添加新贴纸").accessibilityIdentifier("chat.stickers.add")
@@ -192,24 +176,69 @@ struct ChatExpressionDrawer: View {
             } else if stickers.results.isEmpty {
                 emptySearch
             }
-            Text("贴纸收藏按账号保存在本机 · 长按可删除").font(.caption2).foregroundStyle(.secondary).padding(.vertical, 8)
         }.padding(.bottom, 8)
     }
-    private var recentStickers: some View {
+    private var recentExpressions: some View {
         let saved = stickers.items.compactMap { item in item.lastUsed.map { RecentSticker(source: .saved(item), date: $0) } }
         let animated = history.compactMap { use in NotoEmojiCatalog.item(id: use.id).map { RecentSticker(source: .noto($0), date: use.date) } }
         let items = (saved + animated).sorted { $0.date > $1.date }.prefix(24)
             .filter { recentQuery.isEmpty || $0.name.localizedStandardContains(recentQuery) }
-        return Group {
-            if items.isEmpty {
+        let textEmoji = recentEmoji.filter { recentQuery.isEmpty || $0.matches(recentQuery) }
+        return VStack(alignment: .leading, spacing: 12) {
+            if items.isEmpty && textEmoji.isEmpty {
                 if !recentQuery.isEmpty { emptySearch }
-                else { Text("发送过的贴纸会出现在这里。").font(.subheadline).foregroundStyle(.secondary).padding(24) }
+                else { Text("最近使用的表情和贴纸会出现在这里。").font(.subheadline).foregroundStyle(.secondary).padding(24) }
             }
-            else {
+            if !textEmoji.isEmpty {
+                sectionHeading("表情符号")
+                expressionGrid(textEmoji, systemGlyphs: true)
+            }
+            if !items.isEmpty {
+                sectionHeading("贴纸")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
                     ForEach(items) { item in stickerTile(item.source) }
                 }
             }
+        }
+    }
+    @ViewBuilder private func emojiSections(_ browser: NotoEmojiBrowser, systemGlyphs: Bool) -> some View {
+        if browser.items.isEmpty { emptySearch }
+        else if browser.isSearching {
+            expressionGrid(browser.items, systemGlyphs: systemGlyphs)
+        } else {
+            let groups = Dictionary(grouping: browser.items, by: \.category)
+            LazyVStack(alignment: .leading, spacing: 16) {
+                if !systemGlyphs && !browser.favoriteIDs.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        sectionHeading("收藏")
+                        expressionGrid(browser.items.filter { browser.favoriteIDs.contains($0.id) }, systemGlyphs: false)
+                    }
+                }
+                ForEach(NotoEmojiCatalog.categories.filter { groups[$0]?.isEmpty == false }, id: \.self) { category in
+                    VStack(alignment: .leading, spacing: 8) {
+                        sectionHeading(category)
+                        expressionGrid(groups[category] ?? [], systemGlyphs: systemGlyphs)
+                    }
+                }
+            }
+        }
+    }
+    private func sectionHeading(_ title: String) -> some View {
+        Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            .padding(.horizontal, 8).accessibilityAddTraits(.isHeader)
+    }
+    private func expressionGrid(_ items: [NotoEmoji], systemGlyphs: Bool) -> some View {
+        NotoEmojiGrid(items: items, selectedID: systemGlyphs ? nil : selection?.notoEmoji?.id,
+                      favorites: systemGlyphs ? [] : noto.favoriteIDs, canFavorite: !systemGlyphs && noto.canFavorite,
+                      onSelect: { item in if systemGlyphs { insertEmoji(item) } else { stageNoto(item) } },
+                      onFavorite: noto.toggleFavorite, systemGlyphs: systemGlyphs,
+                      onUseAsSticker: systemGlyphs ? stageNoto : nil)
+    }
+    private func insertEmoji(_ item: NotoEmoji) {
+        searchFocused = false
+        if onInsertEmoji(item) {
+            emoji.recordInsertion(item)
+            recentEmoji = NotoEmojiRecents(accountID: accountID, defaults: defaults).items
         }
     }
     private func stickerTile(_ source: StagedChatSticker.Source) -> some View {
@@ -221,8 +250,26 @@ struct ChatExpressionDrawer: View {
             .accessibilityAddTraits(selection?.sourceID == item.sourceID ? .isSelected : [])
     }
     private func stageNoto(_ item: NotoEmoji) { searchFocused = false; onStageSticker(.init(source: .noto(item))) }
-    private func choose(_ source: ChatExpressionTab) { searchFocused = false; searchOpen = false; tab = source }
-    private func reload() { stickers.reload(); history = NotoStickerHistory(accountID: accountID, defaults: defaults).items }
+    private var searchPrompt: String {
+        switch tab {
+        case .recent: return "搜索表情或贴纸"
+        case .emoji: return "搜索表情名称或 emoji"
+        case .stickers, .noto: return "搜索贴纸名称"
+        }
+    }
+    private func toggleSearch() {
+        if searchOpen { query.wrappedValue = "" }
+        searchOpen.toggle(); searchFocused = searchOpen
+        if searchOpen { expanded = true }
+    }
+    private func choose(_ source: ChatExpressionTab) {
+        searchFocused = false; searchOpen = false; tab = source; query.wrappedValue = ""
+    }
+    private func reload() {
+        stickers.reload()
+        history = NotoStickerHistory(accountID: accountID, defaults: defaults).items
+        recentEmoji = NotoEmojiRecents(accountID: accountID, defaults: defaults).items
+    }
 }
 
 private struct StickerCreationSession: Identifiable { let id = UUID(); let browser: ChatStickerBrowser }

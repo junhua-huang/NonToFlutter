@@ -1,5 +1,49 @@
 import SwiftUI
 import AVKit
+import PhotosUI
+
+/// Native popover chrome, with full-size source icons independent of the app tint.
+struct ChatAttachmentMenu: View {
+    @Binding var picks: [PhotosPickerItem]
+    let onStickers: () -> Void
+    @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 64
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 44
+    private let petalColors: [Color] = [.pink, .red, .orange, .yellow, .green, .cyan, .blue, .purple]
+
+    var body: some View {
+        VStack(spacing: 4) {
+            PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
+                row("照片或视频", photos: true)
+            }.accessibilityLabel("添加照片或视频")
+            Button(action: onStickers) {
+                row("贴纸", photos: false)
+            }.accessibilityIdentifier("chat.stickers.open")
+        }.buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(width: 288).fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("chat.attachments.menu")
+    }
+
+    private func row(_ title: String, photos: Bool) -> some View {
+        HStack(spacing: 20) {
+            ZStack {
+                if photos {
+                    Circle().fill(.white)
+                    ForEach(0..<8) { index in
+                        Capsule().fill(petalColors[index].opacity(0.8))
+                            .frame(width: 13, height: 23).offset(y: -8)
+                            .rotationEffect(.degrees(Double(index) * 45))
+                    }
+                } else {
+                    Circle().fill(LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: "square.on.circle").font(.system(size: 27, weight: .medium)).foregroundStyle(.white)
+                }
+            }.frame(width: min(iconSize, 52), height: min(iconSize, 52)).accessibilityHidden(true)
+            Text(title).font(.title3.weight(.semibold)).foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }.frame(minHeight: rowHeight).contentShape(Rectangle())
+    }
+}
 
 enum ImageMessageCaption {
     private static let links = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
