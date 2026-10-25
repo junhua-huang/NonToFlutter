@@ -95,10 +95,12 @@ struct ComposerTextEditor: View {
 }
 
 private struct ComposerNativeTextView: UIViewRepresentable {
+    @Environment(\.appAccent) private var accent
     let editor: ComposerEditor
     @Environment(\.isEnabled) private var isEnabled
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
+        view.tintColor = accent.uiColor
         view.backgroundColor = .clear; view.textColor = .label
         view.isEditable = isEnabled
         let font = UIFont.preferredFont(forTextStyle: .title3); view.font = font
@@ -113,6 +115,7 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: UITextView, context: Context) {
+        view.tintColor = accent.uiColor
         if view.isEditable != isEnabled { view.isEditable = isEnabled }
         editor.attach(view); editor.synchronize()
     }
