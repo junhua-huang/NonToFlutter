@@ -118,8 +118,7 @@ struct ChatStickerPickerContent: View {
                 ChatStickerImage(url: sticker.url).frame(height: cellSize - 12)
                 Text(sticker.name).font(.caption).foregroundStyle(.primary).lineLimit(1)
             }.padding(6).frame(maxWidth: .infinity)
-                .background(browser.selection?.id == sticker.id ? accent.color.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
-                .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(browser.selection?.id == sticker.id ? accent.textColor : .clear, lineWidth: 1.5) }
+                .modifier(ExpressionPickerSelection(selected: browser.selection?.id == sticker.id, cornerRadius: 14))
         }.buttonStyle(.plain).disabled(busy)
             .accessibilityLabel(sticker.name).accessibilityHint("轻点预览并发送，长按可删除")
             .accessibilityAddTraits(browser.selection?.id == sticker.id ? .isSelected : [])
@@ -132,7 +131,7 @@ struct ChatStickerPickerContent: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 Group {
-                    if let prepared = browser.prepared { Image(uiImage: prepared.image).resizable().scaledToFit() }
+                    if let prepared = browser.prepared { StickerArtwork(image: prepared.image) }
                     else if let selection = browser.selection { ChatStickerImage(url: selection.url) }
                 }.frame(width: 72, height: 72).accessibilityLabel("贴纸预览")
                 if browser.prepared != nil {
@@ -160,6 +159,7 @@ struct ChatStickerPickerContent: View {
     private var sendButton: some View {
         Button { commit(send: true) } label: {
             Text(browser.prepared == nil ? "发送贴纸" : "添加并发送").frame(maxWidth: .infinity)
+                .foregroundStyle(browser.canCommit && !readingPhoto ? accent.foregroundColor : Color.secondary)
         }.buttonStyle(.borderedProminent).disabled(!browser.canCommit || readingPhoto)
             .accessibilityIdentifier("chat.stickers.send")
     }

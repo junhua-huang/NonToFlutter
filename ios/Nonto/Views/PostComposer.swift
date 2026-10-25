@@ -17,6 +17,7 @@ struct PostComposer: View {
     @State private var visibility = "public"
     @State private var role = ""
     @State private var picks: [PhotosPickerItem] = []
+    @State private var showPhotoPicker = false
     @State private var attachments: ComposerAttachments
     @State private var preview: SelectedMedia?
     @State private var uploaded: [UUID: String] = [:]
@@ -24,6 +25,7 @@ struct PostComposer: View {
     @State private var busy = false
     @State private var reading = false
     @State private var status = ""
+    @State private var completedUploads = 0
     @State private var published = false
     @State private var draftLoaded = false
     @State private var restoredDraft = false
@@ -54,11 +56,8 @@ struct PostComposer: View {
         @Bindable var editor = editor
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 24) {
                     authorAndAudience
-                    if restoredDraft {
-                        Label("已恢复上次文字草稿", systemImage: "doc.text").font(.caption).foregroundStyle(.secondary)
-                    }
                     ComposerTextEditor(editor: editor)
                     if let quoted {
                         VStack(alignment: .leading, spacing: 6) {
@@ -72,10 +71,10 @@ struct PostComposer: View {
                             MediaView(images: editing.images, video: editing.video, postLayout: true)
                             Text("原有照片和视频将保留").font(.caption).foregroundStyle(.secondary)
                         }
-                    } else if !media.isEmpty { attachmentGrid }
-                    if editing == nil { rolePicker }
-                    if editing == nil && media.isEmpty && !reading {
-                        Text("分享照片、作品，或记录此刻的想法。").font(.subheadline).foregroundStyle(.tertiary)
+                    } else if !media.isEmpty {
+                        attachmentGrid
+                    } else if !reading {
+                        emptyMediaPicker
                     }
                 }.padding(20).frame(maxWidth: 720).frame(maxWidth: .infinity, alignment: .top)
             }.disabled(busy).scrollDismissesKeyboard(.interactively)
@@ -83,13 +82,17 @@ struct PostComposer: View {
                 .navigationTitle(editing == nil ? "发布动态" : "编辑动态").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { editor.endEditing(); if hasChanges { confirmClose = true } else { dismiss() } }.disabled(busy)
+                        Button("取消", action: close).disabled(busy)
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await publish() } } label: {
                             if busy { ProgressView().accessibilityLabel("正在提交") }
-                            else { Text(editing == nil ? "发布" : "保存").fontWeight(.semibold) }
-                        }.disabled(busy || reading || !canPublish)
+                            else {
+                                Text(editing == nil ? "发布" : "保存").fontWeight(.semibold).padding(.horizontal, 6)
+                                    .foregroundStyle(reading || !canPublish ? Color.secondary : accent.foregroundColor)
+                            }
+                        }.buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+                            .disabled(busy || reading || !canPublish)
                             .keyboardShortcut(.return, modifiers: .command).accessibilityIdentifier("post.composer.publish")
                     }
                 }
@@ -107,6 +110,9 @@ struct PostComposer: View {
                         Text("文字和可见范围可保留为草稿，照片和视频关闭后需要重新选择。")
                     }
                 }
+                .photosPicker(isPresented: $showPhotoPicker, selection: $picks,
+                              maxSelectionCount: max(1, attachments.remainingCount), selectionBehavior: .ordered,
+                              matching: media.isEmpty ? .any(of: [.images, .videos]) : .images)
                 .sheet(item: $preview) { item in ComposerMediaPreview(item: item) }
                 .sheet(item: $editor.referenceKind, onDismiss: {
                     editor.finishReference(allowed: accountEpoch == session.api.generation && accountID == session.user?.id)
@@ -127,37 +133,114 @@ struct PostComposer: View {
                 }
                 .onChange(of: phase) { _, value in if value != .active { saveDraft() } }
                 .onChange(of: session.user?.id) { _, value in
-                    if draftLoaded && value != accountID { preview = nil; editor.endEditing(); dismiss() }
+                    if draftLoaded && value != accountID { showPhotoPicker = false; preview = nil; editor.endEditing(); dismiss() }
                 }
                 .task(id: picks) { await readSelection() }
         }
     }
     private var authorAndAudience: some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 42)
-            VStack(alignment: .leading, spacing: 4) {
+            AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 44)
+            VStack(alignment: .leading, spacing: 6) {
                 Text(session.user?.name ?? "我的动态").font(.subheadline.bold())
                 visibilityPicker
+                if editing == nil { rolePicker }
             }
             Spacer(minLength: 0)
         }
     }
     private var attachmentGrid: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(media.first?.isVideo == true ? "视频预览" : "已选照片 \(media.count)/9").font(.subheadline.bold())
-                Spacer()
-                if media.count > 1 { Text("长按调整顺序").font(.caption).foregroundStyle(.secondary) }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    attachmentHeading
+                    Spacer(minLength: 8)
+                    attachmentHint
+                }
+                VStack(alignment: .leading, spacing: 4) { attachmentHeading; attachmentHint }
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 220), spacing: 12)], spacing: 12) {
+            if media.count == 1, let item = media.first {
+                attachmentTile(item, large: true).frame(maxWidth: 420)
+                if attachments.canAddPhotos { addMorePhotos }
+            } else {
+                photoGrid
+            }
+        }.accessibilityIdentifier("post.composer.attachments")
+    }
+    private var attachmentHeading: some View {
+        Text(media.first?.isVideo == true ? "视频预览" : "已选照片 \(media.count)/9").font(.subheadline.bold())
+    }
+    private var attachmentHint: some View {
+        Group {
+            if media.first?.isVideo == true { Text("视频单独发布") }
+            else if media.count > 1 {
+                if #available(iOS 27, *) { Text("长按拖动排序") }
+                else { Text("长按照片调整顺序") }
+            } else { Text("轻点查看大图") }
+        }.font(.caption).foregroundStyle(.secondary)
+    }
+    @ViewBuilder private var photoGrid: some View {
+        if #available(iOS 27, *) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(media) { item in
-                    ComposerAttachmentTile(item: item, index: media.firstIndex(where: { $0.id == item.id }) ?? 0,
-                        count: media.count, open: { editor.endEditing(); preview = item },
-                        remove: { attachments.remove(item.id); uploaded.removeValue(forKey: item.id) },
-                        move: { attachments.move(item.id, by: $0) })
+                    attachmentTile(item)
+                }.reorderable()
+                if attachments.canAddPhotos { addPhotoTile }
+            }.reorderContainer(for: SelectedMedia.self, isEnabled: !busy && !reading) { difference in
+                guard !busy && !reading else { return }
+                switch difference.destination.position {
+                case .before(let target): attachments.reorder(difference.sources, before: target)
+                case .end: attachments.reorder(difference.sources)
+                @unknown default: break
                 }
             }
+        } else {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(media) { item in attachmentTile(item) }
+                if attachments.canAddPhotos { addPhotoTile }
+            }
         }
+    }
+    private func attachmentTile(_ item: SelectedMedia, large: Bool = false) -> some View {
+        ComposerAttachmentTile(item: item, index: media.firstIndex(where: { $0.id == item.id }) ?? 0,
+            count: media.count, large: large, open: { editor.endEditing(); preview = item },
+            remove: {
+                guard !busy && !reading else { return }
+                attachments.remove(item.id); uploaded.removeValue(forKey: item.id)
+            }, move: { offset in
+                guard !busy && !reading else { return }
+                attachments.move(item.id, by: offset)
+            }).disabled(reading)
+    }
+    private var addPhotoTile: some View {
+        Button(action: openPhotos) {
+            VStack(spacing: 6) {
+                Image(systemName: "plus").font(.title2)
+                Text("添加照片").font(.caption)
+            }.frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+                .background(accent.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(accent.color.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [5, 4])) }
+        }.buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
+            .accessibilityHint("还可以添加 \(attachments.remainingCount) 张照片")
+            .accessibilityIdentifier("post.composer.add-photo")
+    }
+    private var addMorePhotos: some View {
+        Button(action: openPhotos) { Label("继续添加照片", systemImage: "plus").font(.subheadline).frame(minHeight: 44) }
+            .buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
+    }
+    private var emptyMediaPicker: some View {
+        Button(action: openPhotos) {
+            HStack(spacing: 14) {
+                Image(systemName: "photo.on.rectangle.angled").font(.title2).foregroundStyle(accent.textColor)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("添加照片或视频").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                    Text("最多 9 张照片，或 1 段视频").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(accent.textColor)
+            }.padding(16).frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+                .background(accent.color.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+        }.buttonStyle(.plain).disabled(busy || reading).accessibilityIdentifier("post.composer.add-media")
     }
     @ViewBuilder private var rolePicker: some View {
         if let user = session.user, !user.raw["verified_roles"].array.isEmpty {
@@ -167,52 +250,80 @@ struct PostComposer: View {
                     let index = user.raw["verified_roles"].array.map(\.string).firstIndex(of: value) ?? 0
                     Text(user.verifiedLabels.indices.contains(index) ? user.verifiedLabels[index] : value).tag(value)
                 }
-            }.pickerStyle(.menu).font(.subheadline)
+            }.pickerStyle(.menu).font(.caption)
         }
     }
     private var composerFooter: some View {
         VStack(alignment: .leading, spacing: 8) {
             if reading || busy {
-                ProgressView(status.isEmpty ? "正在准备媒体…" : status).font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 6) {
+                    if busy && !media.isEmpty {
+                        ProgressView(value: Double(completedUploads), total: Double(media.count))
+                    } else { ProgressView().controlSize(.small) }
+                    Text(status.isEmpty ? "正在准备媒体…" : status).font(.caption).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
             }
             if let error {
                 ErrorBanner(text: error)
                 Text("内容仍保留在此页，可调整后重新操作。").font(.caption2).foregroundStyle(.secondary)
             }
             HStack(spacing: 8) {
-                if editing == nil { mediaPicker }
+                if editing == nil {
+                    Button(action: openPhotos) { toolLabel("照片", symbol: "photo") }
+                        .disabled(!attachments.canAddPhotos)
+                        .accessibilityLabel(media.isEmpty ? "添加照片或视频" : "继续添加照片")
+                        .accessibilityHint(media.first?.isVideo == true ? "视频需单独发布" : "最多 9 张照片或一段视频")
+                }
                 Button { editor.beginReference(.mention) } label: {
-                    Image(systemName: "at").frame(width: 44, height: 44)
+                    toolLabel("好友", symbol: "at")
                 }.accessibilityLabel("艾特好友")
                 Button { editor.beginReference(.topic) } label: {
-                    Image(systemName: "number").frame(width: 44, height: 44)
+                    toolLabel("话题", symbol: "number")
                 }.accessibilityLabel("引用话题")
                 Spacer(minLength: 0)
                 if editor.isEditing {
                     Button { editor.endEditing() } label: {
                         Image(systemName: "keyboard.chevron.compact.down").frame(width: 44, height: 44)
                     }.accessibilityLabel("收起键盘")
-                } else if editing == nil {
-                    Text("文字草稿自动保留").font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                 }
-            }.font(.title3).buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
+            }.font(.body).buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
+            if editing == nil && !editor.isEditing && !busy && !reading {
+                Label(restoredDraft ? "已恢复文字草稿 · 自动保存" : "文字草稿自动保存", systemImage: "doc.text")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
         }.padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
             .frame(maxWidth: 720).frame(maxWidth: .infinity).background(.bar)
     }
-    private var mediaPicker: some View {
-        PhotosPicker(selection: $picks, maxSelectionCount: max(1, attachments.remainingCount),
-                     selectionBehavior: .ordered, matching: media.isEmpty ? .any(of: [.images, .videos]) : .images) {
-            Image(systemName: "photo.on.rectangle.angled").frame(width: 44, height: 44)
-        }.disabled(!attachments.canAddPhotos || busy || reading)
-            .accessibilityLabel(media.isEmpty ? "添加照片或视频" : "继续添加照片")
-            .accessibilityHint(media.first?.isVideo == true ? "视频需单独发布" : "最多 9 张照片或一段视频")
+    private func toolLabel(_ title: String, symbol: String) -> some View {
+        ViewThatFits(in: .horizontal) {
+            Label(title, systemImage: symbol).font(.subheadline.weight(.medium)).padding(.horizontal, 10)
+            Image(systemName: symbol).frame(width: 44)
+        }.frame(minWidth: 44, minHeight: 44)
+            .background(accent.color.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
     private var visibilityPicker: some View {
-        Picker("谁可以看", selection: $visibility) {
-            Label("公开", systemImage: "globe.asia.australia").tag("public")
-            Label("仅好友", systemImage: "person.2").tag("friends")
-        }.pickerStyle(.menu).font(.caption).fixedSize(horizontal: false, vertical: true)
+        Menu {
+            Picker("谁可以看", selection: $visibility) {
+                Label("公开 · 所有人可见", systemImage: "globe.asia.australia").tag("public")
+                Label("仅好友 · 好友可见", systemImage: "person.2").tag("friends")
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Label(visibility == "public" ? "公开" : "仅好友", systemImage: visibility == "public" ? "globe.asia.australia" : "person.2")
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+            }.font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 7)
+                .background(accent.color.opacity(0.08), in: Capsule())
+        }.foregroundStyle(accent.textColor).accessibilityLabel("谁可以看")
+            .accessibilityValue(visibility == "public" ? "公开" : "仅好友")
+            .accessibilityIdentifier("post.composer.audience")
+    }
+    private func openPhotos() {
+        guard editing == nil, attachments.canAddPhotos, !busy, !reading else { return }
+        editor.endEditing(); showPhotoPicker = true
+    }
+    private func close() {
+        editor.endEditing()
+        if hasChanges { confirmClose = true } else { dismiss() }
     }
     private func restoreDraft() {
         guard !draftLoaded else { return }; draftLoaded = true
@@ -259,7 +370,7 @@ struct PostComposer: View {
         editor.endEditing()
         guard canPublish else { return }
         let content = text, audience = visibility, selected = media, identity = role
-        busy = true; error = nil; status = editing == nil ? "正在发布…" : "正在保存…"
+        busy = true; error = nil; completedUploads = 0; status = editing == nil ? "正在发布…" : "正在保存…"
         defer { busy = false; status = "" }
         do {
             try checkAccount()
@@ -281,6 +392,7 @@ struct PostComposer: View {
                         try checkAccount(); uploaded[item.id] = url
                     }
                     if item.isVideo { fields["video_url"] = url } else { images.append(url) }
+                    completedUploads = index + 1
                 }
                 if !images.isEmpty { fields["image_urls"] = String(decoding: try JSON.array(images.map(JSON.text)).encoded(), as: UTF8.self) }
                 if !identity.isEmpty { fields["display_role_type"] = identity }

@@ -30,4 +30,18 @@ struct ComposerAttachments {
         guard let index = items.firstIndex(where: { $0.id == id }), items.indices.contains(index + offset) else { return }
         let item = items.remove(at: index); items.insert(item, at: index + offset)
     }
+    /// Resolve a native drag by identity; stale drops leave the composition intact.
+    mutating func reorder(_ sources: [UUID], before target: UUID? = nil) {
+        let ids = Set(sources)
+        guard !ids.isEmpty, ids.count == sources.count,
+              ids.isSubset(of: Set(items.map(\.id))) else { return }
+        if let target {
+            guard !ids.contains(target), items.contains(where: { $0.id == target }) else { return }
+        }
+        let moved = items.filter { ids.contains($0.id) }
+        var remaining = items.filter { !ids.contains($0.id) }
+        let destination = target.flatMap { id in remaining.firstIndex(where: { $0.id == id }) } ?? remaining.endIndex
+        remaining.insert(contentsOf: moved, at: destination)
+        items = remaining
+    }
 }

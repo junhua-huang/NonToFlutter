@@ -60,7 +60,7 @@ struct NotoEmojiPoster: View {
     var body: some View {
         Group {
             if let poster, poster.id == item.id {
-                Image(uiImage: poster.image).resizable().scaledToFit()
+                StickerArtwork(image: poster.image)
             } else {
                 GeometryReader { geometry in
                     Text(item.emoji).font(.system(size: max(1, min(geometry.size.width, geometry.size.height) * 0.82)))

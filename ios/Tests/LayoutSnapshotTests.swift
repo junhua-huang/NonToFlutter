@@ -177,10 +177,17 @@ final class LayoutSnapshotTests: XCTestCase {
             UIColor.systemBlue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 160, height: 120))
         }
         let photos = try (0..<3).map { _ in try SelectedMedia.image(data) }
-        PostDraftStore().save(PostDraft(text: "分享今天拍到的风景 #摄影", visibility: "friends"), userID: userID)
         defer { PostDraftStore().remove(userID: userID) }
+        PostDraftStore().remove(userID: userID)
+        try await capture(PostComposer(), session: session, name: "composer-empty-dark", width: 390, dark: true, expectsScrollChrome: false)
+        try await capture(PostComposer(), session: session, name: "composer-empty-small-large-text", width: 320, largeText: true, expectsScrollChrome: false)
+        PostDraftStore().save(PostDraft(text: "分享今天拍到的风景 #摄影", visibility: "friends"), userID: userID)
+        try await capture(PostComposer(initialMedia: [photos[0]]), session: session, name: "composer-single-photo", width: 390, expectsScrollChrome: false)
         try await capture(PostComposer(initialMedia: photos), session: session, name: "composer-photos-small", width: 320, expectsScrollChrome: false)
         try await capture(PostComposer(initialMedia: photos), session: session, name: "composer-photos-large-text-dark", width: 768, dark: true, largeText: true, expectsScrollChrome: false)
+        let full = try (0..<9).map { _ in try SelectedMedia.image(data) }
+        try await capture(PostComposer(initialMedia: full), session: session, name: "composer-nine-photos", width: 390, expectsScrollChrome: false)
+        try await capture(PostComposer(initialMedia: photos), session: session, name: "composer-photos-keyboard-small", width: 320, expectsScrollChrome: false, focusComposer: true)
     }
 
     func testComposerOpensPicksAndReturnsWithTheKeyboardAcrossBothReferenceActions() async throws {
