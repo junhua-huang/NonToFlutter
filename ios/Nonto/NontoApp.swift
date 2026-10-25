@@ -25,7 +25,7 @@ struct NontoApp: App {
                 else { AuthView() }
             }
             .environmentObject(session).environmentObject(consent)
-            .environment(\.appAccent, accent).tint(accent.textColor)
+            .environment(\.appAccent, accent).tint(accent.color)
             .preferredColorScheme(appearance == "system" ? nil : (appearance == "dark" ? .dark : .light))
             .task(id: consent.accepted) { if consent.accepted { await session.bootstrap() } }
             .onChange(of: session.user?.id) { _, _ in ImageRepository.shared.clear() }
