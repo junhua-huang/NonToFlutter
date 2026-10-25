@@ -1,5 +1,7 @@
 import SwiftUI
 import PhotosUI
+import AVFoundation
+import UIKit
 
 private struct ChatTabBarVisibility: ViewModifier {
     let managedByMessages: Bool
@@ -97,6 +99,14 @@ struct ChatRoomContent: View {
     @State private var highlightedMessage: Int?
     @State private var quoteReturnID: String?
     @State private var attachmentMenuVisible = false
+    @State private var attachmentRequest: ChatAttachmentRequest?
+    @State private var inputDismissal = 0
+    @State private var farFromLatest = false
+    @State private var showingCamera = false
+    @State private var capturedPhoto: Data?
+    @State private var captureFailed = false
+    @State private var cameraError: String?
+    @State private var cameraTask: Task<Void, Never>?
     @State private var highlightTask: Task<Void, Never>?
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     init(session: AppSession, conversation: Conversation, store: ChatStore? = nil,
@@ -112,7 +122,7 @@ struct ChatRoomContent: View {
     }
     var body: some View {
         let timeline = store.timeline
-        GeometryReader { _ in
+        GeometryReader { geometry in
             ScrollView {
                 LazyVStack(spacing: 6) {
                     if store.more && !store.messages.isEmpty {
@@ -152,7 +162,8 @@ struct ChatRoomContent: View {
                         .padding(.horizontal).padding(.top, 8)
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
+            .scrollDismissesKeyboard(.immediately)
+            .simultaneousGesture(TapGesture().onEnded { dismissInput() })
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom, for: .initialOffset)
             .defaultScrollAnchor(.top, for: .sizeChanges)
@@ -172,29 +183,38 @@ struct ChatRoomContent: View {
                     // Keep the concrete final row anchored while lazy cells reflow.
                     followLatest()
                 }
-                else if abs(previous.visibleHeight - value.visibleHeight) > 1
-                        || abs(previous.bottomInset - value.bottomInset) > 1
-                        || abs(previous.topInset - value.topInset) > 1,
+                else if !value.hasSameLayout(as: previous),
                         store.nearBottom, !viewport.userScrolling,
                         !viewport.preservingHistory, !viewport.presentingMedia {
                     followLatest(in: value)
                 }
                 if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
-                    if value.nearBottom || viewport.userScrolling { store.reachedBottom(value.nearBottom) }
+                    if value.nearBottom { store.reachedBottom(true) }
+                    else if viewport.userScrolling && viewport.userMoved && value.hasSameLayout(as: previous) {
+                        store.reachedBottom(false)
+                    }
+                    if farFromLatest != value.farFromBottom { farFromLatest = value.farFromBottom }
                     if value.shouldLoadHistory(userScrolling: viewport.userScrolling), store.more {
                         Task { await loadOlder() }
                     }
                 }
             }
             .onScrollPhaseChange { _, phase in
+                let didScroll = viewport.userScrolling && viewport.userMoved
                 viewport.userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
-                if phase == .idle, let metrics = viewport.metrics, !store.loadingOlder, !viewport.presentingMedia {
+                if phase == .interacting { dismissInput() }
+                // Programmatic scrolling and keyboard layout also end in idle.
+                // Only a real timeline pan can switch off following the latest row.
+                if phase == .idle, didScroll, let metrics = viewport.metrics,
+                   !store.loadingOlder, !viewport.preservingHistory, !viewport.presentingMedia {
                     store.reachedBottom(metrics.nearBottom)
+                    if farFromLatest != metrics.farFromBottom { farFromLatest = metrics.farFromBottom }
                 }
             }
             .onChange(of: store.scrollRequest) { _, _ in
                 viewport.clearPreservation()
                 quoteReturnID = nil; highlightedMessage = nil
+                farFromLatest = false
                 followLatest()
             }
             .onChange(of: timeline.entries.last?.id) { _, _ in
@@ -209,12 +229,22 @@ struct ChatRoomContent: View {
                         } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
                             .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
                     }
-                    if !store.nearBottom && !store.messages.isEmpty && !attachmentMenuVisible {
+                    if !store.nearBottom && (farFromLatest || store.unread > 0)
+                        && !store.messages.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
                         Button { store.jumpToLatest() } label: {
                             Label(store.unread > 0 ? "\(store.unread) 条新消息" : "回到最新", systemImage: "arrow.down")
                         }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
                     }
                 }.padding()
+            }
+            .overlay(alignment: .bottomLeading) {
+                if attachmentMenuVisible {
+                    ChatAttachmentMenu(availableHeight: max(0, geometry.size.height - 24), onSelect: selectAttachment)
+                        .disabled(preparingMedia || stickerSender.busy)
+                        .frame(width: min(320, max(0, geometry.size.width - 24)))
+                        .padding(12)
+                        .transition(.opacity)
+                }
             }
         }
         .frame(maxWidth: 820).frame(maxWidth: .infinity)
@@ -238,6 +268,7 @@ struct ChatRoomContent: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
                               quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused,
+                              attachmentRequest: attachmentRequest, inputDismissal: inputDismissal,
                               onAttachmentMenuChange: { attachmentMenuVisible = $0 })
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
@@ -251,7 +282,7 @@ struct ChatRoomContent: View {
                 if visible && phase == .active { await store.load() }
             }
         }
-        .onDisappear { visible = false; highlightTask?.cancel(); stickerSender.cancel(); store.suspend(); Task { await session.refreshCounts() } }
+        .onDisappear { visible = false; highlightTask?.cancel(); cameraTask?.cancel(); stickerSender.cancel(); store.suspend(); Task { await session.refreshCounts() } }
         .onChange(of: phase) { _, value in
             if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
         }
@@ -262,6 +293,12 @@ struct ChatRoomContent: View {
         }
         .sheet(item: $quoteContext, onDismiss: { mediaPresentationChanged(false) }) { target in
             ChatQuoteContextView(targetID: target.id, store: store, conversation: conversation, socket: socket)
+        }
+        .fullScreenCover(isPresented: $showingCamera, onDismiss: prepareCapturedPhoto) {
+            ChatCameraCapture(onCapture: { data in capturedPhoto = data; showingCamera = false },
+                              onCancel: { showingCamera = false },
+                              onError: { captureFailed = true; showingCamera = false })
+                .ignoresSafeArea()
         }
         .onReceive(socket.events) { payload in
             if visible && phase == .active, store.receive(payload) {
@@ -292,6 +329,57 @@ struct ChatRoomContent: View {
         }
         .confirmationDialog("撤回这条消息？", isPresented: $confirmRecall) {
             Button("撤回", role: .destructive) { if let recall { Task { await store.recall(recall) } } }
+        }
+        .alert("无法使用相机", isPresented: Binding(get: { cameraError != nil }, set: { if !$0 { cameraError = nil } })) {
+            Button("好", role: .cancel) { cameraError = nil }
+        } message: { Text(cameraError ?? "") }
+    }
+    private func dismissInput() {
+        composerFocused = false
+        attachmentMenuVisible = false
+        inputDismissal &+= 1
+    }
+    private func selectAttachment(_ action: ChatAttachmentAction) {
+        attachmentMenuVisible = false
+        if action == .camera { openCamera() }
+        attachmentRequest = ChatAttachmentRequest(action: action)
+    }
+    private func openCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            cameraError = "当前设备无法使用相机。"; return
+        }
+        guard cameraTask == nil else { return }
+        cameraTask = Task {
+            defer { cameraTask = nil }
+            let allowed: Bool
+            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            case .authorized: allowed = true
+            case .notDetermined: allowed = await AVCaptureDevice.requestAccess(for: .video)
+            default: allowed = false
+            }
+            guard !Task.isCancelled, composerEpoch == session.api.generation, visible else { return }
+            if allowed { showingCamera = true }
+            else { cameraError = "请在系统设置中允许南图访问相机后再拍照。" }
+        }
+    }
+    private func prepareCapturedPhoto() {
+        if captureFailed {
+            captureFailed = false; cameraError = "无法读取拍摄的照片，请重试。"; return
+        }
+        guard let data = capturedPhoto else { return }
+        capturedPhoto = nil
+        cameraTask?.cancel()
+        cameraTask = Task {
+            preparingMedia = true
+            defer { preparingMedia = false; cameraTask = nil }
+            do {
+                let photo = try await Task.detached(priority: .userInitiated) { try SelectedMedia.image(data) }.value
+                try Task.checkCancellation()
+                guard composerEpoch == session.api.generation, session.api.token != nil else { return }
+                attachment = ChatAttachments(items: [photo])
+            } catch {
+                if !Task.isCancelled, composerEpoch == session.api.generation { cameraError = error.localizedDescription }
+            }
         }
     }
     private func followLatest(in geometry: ChatViewportMetrics? = nil) {
@@ -405,6 +493,8 @@ struct ChatComposerInput: View {
     @Binding var picks: [PhotosPickerItem]
     let preparingMedia: Bool
     let focus: FocusState<Bool>.Binding
+    let attachmentRequest: ChatAttachmentRequest?
+    let inputDismissal: Int
     let onAttachmentMenuChange: (Bool) -> Void
     @EnvironmentObject private var session: AppSession
     @Environment(\.verticalSizeClass) private var verticalSize
@@ -415,19 +505,23 @@ struct ChatComposerInput: View {
     @State private var selection: TextSelection?
     @State private var caret: NSRange?
     @State private var showingAttachments = false
+    @State private var showingPhotos = false
     @State private var sendTask: Task<Void, Never>?
     @State private var composerHeight: CGFloat = 56
+    @ScaledMetric(relativeTo: .body) private var inputControlHeight: CGFloat = 52
 
     // Optional values are one-time preview seeds; live edits stay in this input bar.
     init(store: ChatStore, stickerSender: ChatStickerSender, accountEpoch: UUID, availableHeight: CGFloat,
          quote: Binding<ChatMessage?>, picks: Binding<[PhotosPickerItem]>, preparingMedia: Bool,
-         focus: FocusState<Bool>.Binding, onAttachmentMenuChange: @escaping (Bool) -> Void = { _ in },
+         focus: FocusState<Bool>.Binding, attachmentRequest: ChatAttachmentRequest? = nil, inputDismissal: Int = 0,
+         onAttachmentMenuChange: @escaping (Bool) -> Void = { _ in },
          initialPicker: ChatExpressionTab? = nil,
          initialSticker: StagedChatSticker? = nil, pickerDefaults: UserDefaults = .standard) {
         _store = Bindable(wrappedValue: store); _stickerSender = Bindable(wrappedValue: stickerSender)
         self.accountEpoch = accountEpoch; self.availableHeight = availableHeight
         self.pickerDefaults = pickerDefaults
         _quote = quote; _picks = picks; self.preparingMedia = preparingMedia; self.focus = focus
+        self.attachmentRequest = attachmentRequest; self.inputDismissal = inputDismissal
         self.onAttachmentMenuChange = onAttachmentMenuChange
         _pickerMode = State(initialValue: initialPicker); _stagedSticker = State(initialValue: initialSticker)
     }
@@ -447,7 +541,22 @@ struct ChatComposerInput: View {
             .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil; showingAttachments = false } }
             .onChange(of: showingAttachments) { _, value in onAttachmentMenuChange(value) }
             .onChange(of: picks) { _, value in if !value.isEmpty { showingAttachments = false } }
+            .onChange(of: attachmentRequest?.id) { _, _ in
+                guard let request = attachmentRequest else { return }
+                focus.wrappedValue = false; showingAttachments = false
+                switch request.action {
+                case .camera: pickerMode = nil
+                case .photos: pickerMode = nil; showingPhotos = true
+                case .emoji: open(.emoji)
+                case .stickers: open(.stickers)
+                }
+            }
+            .onChange(of: inputDismissal) { _, _ in
+                focus.wrappedValue = false; showingAttachments = false; pickerMode = nil
+            }
             .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
+            .photosPicker(isPresented: $showingPhotos, selection: $picks, maxSelectionCount: 9,
+                          matching: .any(of: [.images, .videos]))
             .onDisappear { onAttachmentMenuChange(false); sendTask?.cancel(); stickerSender.cancel() }
     }
     private var composerContent: some View {
@@ -478,8 +587,8 @@ struct ChatComposerInput: View {
                         }
                         composerRow
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 28))
+                    .padding(.horizontal, 12)
+                    .glassEffect(.regular, in: .rect(cornerRadius: inputControlHeight / 2))
                 }
             }.padding(.horizontal, 12).padding(.bottom, 6)
             if let error = stickerSender.error { ErrorBanner(text: error).padding(.horizontal, 12) }
@@ -492,34 +601,31 @@ struct ChatComposerInput: View {
     }
     private var composerRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            Button {
-                if pickerMode != nil { pickerMode = nil; focus.wrappedValue = true }
-                else { open(.emoji) }
-            } label: { Image(systemName: pickerMode == nil ? "face.smiling" : "keyboard").font(.title2).frame(width: 44, height: 44) }
-                .disabled(preparingMedia || stickerSender.busy).accessibilityLabel(pickerMode == nil ? "表情选择器" : "切换到键盘")
-                .accessibilityIdentifier("chat.emoji.open")
             TextField(stagedSticker == nil ? "发送消息…" : "添加文字或发送", text: $store.draft, selection: textSelection, axis: .vertical)
-                .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 11).focused(focus)
+                .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 12).focused(focus)
+                .frame(minHeight: inputControlHeight)
                 .disabled(stickerSender.busy).accessibilityLabel("消息内容")
             Button(action: send) {
-                if stickerSender.busy { ProgressView().frame(width: 44, height: 44) }
-                else { Image(systemName: "arrow.up.circle.fill").font(.title).frame(width: 44, height: 44) }
+                Group {
+                    if stickerSender.busy { ProgressView() }
+                    else { Image(systemName: "arrow.up.circle.fill").font(.system(size: min(inputControlHeight * 0.62, 40))) }
+                }.frame(width: inputControlHeight - 8, height: inputControlHeight - 8)
             }.disabled(stickerSender.busy || (stagedSticker == nil && store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                .padding(.bottom, 4)
                 .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")
         }
     }
     private var attachmentButton: some View {
         Button {
-            focus.wrappedValue = false; pickerMode = nil; showingAttachments = true
+            focus.wrappedValue = false; pickerMode = nil; showingAttachments.toggle()
         } label: {
-            Image(systemName: "plus").font(.title2).foregroundStyle(.primary).frame(width: 44, height: 44)
+            Image(systemName: showingAttachments ? "xmark" : "plus")
+                .font(.system(size: min(inputControlHeight * 0.44, 32), weight: .medium)).foregroundStyle(accent.color)
+                .frame(width: inputControlHeight, height: inputControlHeight)
                 .glassEffect(.regular.interactive(), in: .circle)
         }.buttonStyle(.plain).disabled(preparingMedia || stickerSender.busy)
-            .accessibilityLabel("添加照片、视频或贴纸")
-            .popover(isPresented: $showingAttachments, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
-                ChatAttachmentMenu(picks: $picks) { showingAttachments = false; open(.stickers) }
-                    .presentationCompactAdaptation(.popover)
-            }
+            .accessibilityLabel(showingAttachments ? "关闭添加菜单" : "拍照、相册、表情或贴纸")
+            .accessibilityIdentifier("chat.attachments.open")
     }
     private var textSelection: Binding<TextSelection?> {
         Binding(get: { selection }, set: { value in

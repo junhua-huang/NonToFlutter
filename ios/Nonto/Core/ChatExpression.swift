@@ -1,5 +1,23 @@
 import Foundation
 
+enum ChatAttachmentAction: String, CaseIterable, Identifiable {
+    case camera, photos, emoji, stickers
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .camera: return "拍照"
+        case .photos: return "相册"
+        case .emoji: return "表情"
+        case .stickers: return "贴纸"
+        }
+    }
+}
+
+struct ChatAttachmentRequest: Identifiable {
+    let id = UUID()
+    let action: ChatAttachmentAction
+}
+
 enum ChatExpressionTab: String, CaseIterable, Identifiable, Hashable {
     case recent, stickers, emoji, noto
     var id: String { rawValue }

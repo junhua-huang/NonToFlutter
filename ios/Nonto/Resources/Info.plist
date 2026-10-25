@@ -50,5 +50,7 @@
 	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>仅在你点击保存图片时，将所选图片添加到相册。</string>
+	<key>NSCameraUsageDescription</key>
+	<string>仅在你点击拍照时使用相机，拍摄的照片由你预览并确认后发送。</string>
 </dict>
 </plist>

@@ -82,7 +82,14 @@ struct ChatViewportMetrics: Equatable {
     // space, even when the scroll view's full container bounds stay unchanged.
     private var bottom: CGFloat { offset + visibleHeight - bottomInset }
     private var usableHeight: CGFloat { max(0, visibleHeight - topInset - bottomInset) }
-    var nearBottom: Bool { contentHeight - bottom < 80 }
+    var distanceFromBottom: CGFloat { max(0, contentHeight - bottom) }
+    var nearBottom: Bool { distanceFromBottom < 80 }
+    var farFromBottom: Bool { distanceFromBottom > max(180, usableHeight * 0.5) }
+    func hasSameLayout(as other: Self) -> Bool {
+        abs(contentHeight - other.contentHeight) < 1 && abs(visibleHeight - other.visibleHeight) < 1
+            && abs(topInset - other.topInset) < 1 && abs(bottomInset - other.bottomInset) < 1
+            && abs(visibleWidth - other.visibleWidth) < 1
+    }
     func shouldLoadHistory(userScrolling: Bool) -> Bool {
         userScrolling && offset + topInset < 100 && contentHeight > usableHeight + 120
     }
@@ -96,14 +103,21 @@ struct ChatViewportMetrics: Equatable {
     private var historyFinished = false
     private var mediaOffset: CGFloat?
     private(set) var presentingMedia = false
+    private(set) var userMoved = false
     var userScrolling = false {
-        didSet { if userScrolling && historyFinished { history = nil } }
+        didSet {
+            if userScrolling && !oldValue { userMoved = false }
+            if userScrolling && historyFinished { history = nil }
+        }
     }
     var preservingHistory: Bool { history != nil }
 
     func record(_ value: ChatViewportMetrics) -> CGFloat? {
         let previous = metrics
         metrics = value
+        if userScrolling, let previous, value.hasSameLayout(as: previous), abs(value.offset - previous.offset) > 1 {
+            userMoved = true
+        }
         guard !presentingMedia, var anchor = history else { return nil }
         if userScrolling, let previous, abs(value.contentHeight - previous.contentHeight) < 1 {
             anchor.offset += value.offset - previous.offset; history = anchor

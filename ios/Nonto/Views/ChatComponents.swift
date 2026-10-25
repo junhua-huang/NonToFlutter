@@ -1,47 +1,121 @@
 import SwiftUI
 import AVKit
 import PhotosUI
+import UIKit
+import UniformTypeIdentifiers
 
-/// Native popover chrome, with full-size source icons independent of the app tint.
+/// An in-chat glass panel: its shape has no popover arrow or bubble tail.
 struct ChatAttachmentMenu: View {
-    @Binding var picks: [PhotosPickerItem]
-    let onStickers: () -> Void
+    let availableHeight: CGFloat
+    let onSelect: (ChatAttachmentAction) -> Void
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 64
     @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 44
     private let petalColors: [Color] = [.pink, .red, .orange, .yellow, .green, .cyan, .blue, .purple]
 
     var body: some View {
-        VStack(spacing: 4) {
-            PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
-                row("照片或视频", photos: true)
-            }.accessibilityLabel("添加照片或视频")
-            Button(action: onStickers) {
-                row("贴纸", photos: false)
-            }.accessibilityIdentifier("chat.stickers.open")
-        }.buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 12)
-            .frame(width: 288).fixedSize(horizontal: false, vertical: true)
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(ChatAttachmentAction.allCases) { action in
+                    Button { onSelect(action) } label: { row(action) }
+                        .disabled(action == .camera && !UIImagePickerController.isSourceTypeAvailable(.camera))
+                        .accessibilityLabel(action.title)
+                        .accessibilityIdentifier(action == .emoji ? "chat.emoji.open" : "chat.attachments.\(action.id)")
+                }
+            }.buttonStyle(.plain).padding(.horizontal, 20).padding(.vertical, 12)
+        }.scrollBounceBehavior(.basedOnSize).scrollIndicators(.hidden)
+            .frame(height: min(max(0, availableHeight), rowHeight * CGFloat(ChatAttachmentAction.allCases.count) + 24))
+            .clipShape(.rect(cornerRadius: 32))
+            .glassEffect(.regular, in: .rect(cornerRadius: 32))
             .accessibilityIdentifier("chat.attachments.menu")
     }
 
-    private func row(_ title: String, photos: Bool) -> some View {
+    private func row(_ action: ChatAttachmentAction) -> some View {
         HStack(spacing: 20) {
-            ZStack {
-                if photos {
-                    Circle().fill(.white)
-                    ForEach(0..<8) { index in
-                        Capsule().fill(petalColors[index].opacity(0.8))
-                            .frame(width: 13, height: 23).offset(y: -8)
-                            .rotationEffect(.degrees(Double(index) * 45))
-                    }
-                } else {
-                    Circle().fill(LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    Image(systemName: "square.on.circle").font(.system(size: 27, weight: .medium)).foregroundStyle(.white)
-                }
-            }.frame(width: min(iconSize, 52), height: min(iconSize, 52)).accessibilityHidden(true)
-            Text(title).font(.title3.weight(.semibold)).foregroundStyle(.primary)
+            icon(action).frame(width: min(iconSize, 52), height: min(iconSize, 52)).accessibilityHidden(true)
+            Text(action.title).font(.title3.weight(.semibold)).foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }.frame(minHeight: rowHeight).contentShape(Rectangle())
+    }
+    @ViewBuilder private func icon(_ action: ChatAttachmentAction) -> some View {
+        switch action {
+        case .camera:
+            Image(systemName: "camera.fill").font(.system(size: 25)).foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(LinearGradient(colors: [.gray, .black], startPoint: .top, endPoint: .bottom), in: Circle())
+        case .photos:
+            ZStack {
+                Circle().fill(.white)
+                ForEach(0..<8) { index in
+                    Capsule().fill(petalColors[index].opacity(0.8))
+                        .frame(width: 13, height: 23).offset(y: -8)
+                        .rotationEffect(.degrees(Double(index) * 45))
+                }
+            }
+        case .emoji:
+            Text("😀").font(.system(size: min(iconSize, 48)))
+        case .stickers:
+            ZStack {
+                StickerMenuShape(fold: false)
+                    .fill(LinearGradient(colors: [Color(red: 0.78, green: 0.67, blue: 0.98), .blue.opacity(0.6)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                StickerMenuShape(fold: true)
+                    .fill(LinearGradient(colors: [.white.opacity(0.95), .indigo.opacity(0.5)],
+                                         startPoint: .topTrailing, endPoint: .bottomLeading))
+            }
+        }
+    }
+}
+
+private struct StickerMenuShape: Shape {
+    let fold: Bool
+    func path(in rect: CGRect) -> Path {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * rect.width, y: rect.minY + y * rect.height) }
+        var path = Path()
+        path.move(to: point(0.27, 0.03))
+        if fold {
+            path.addCurve(to: point(0.95, 0.64), control1: point(0.33, 0.36), control2: point(0.64, 0.60))
+            path.addCurve(to: point(0.27, 0.03), control1: point(0.77, 0.82), control2: point(0.23, 0.54))
+        } else {
+            path.addCurve(to: point(0.06, 0.55), control1: point(0.11, 0.20), control2: point(0.01, 0.36))
+            path.addCurve(to: point(0.57, 0.96), control1: point(0.10, 0.82), control2: point(0.31, 0.99))
+            path.addCurve(to: point(0.95, 0.64), control1: point(0.74, 0.94), control2: point(0.90, 0.82))
+            path.addCurve(to: point(0.27, 0.03), control1: point(0.70, 0.64), control2: point(0.37, 0.34))
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// SwiftUI has no system camera picker; keep capture inside Apple's camera UI.
+struct ChatCameraCapture: UIViewControllerRepresentable {
+    let onCapture: (Data) -> Void
+    let onCancel: () -> Void
+    let onError: () -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.mediaTypes = [UTType.image.identifier]
+        picker.cameraCaptureMode = .photo
+        picker.allowsEditing = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+    func updateUIViewController(_ picker: UIImagePickerController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    static func dismantleUIViewController(_ picker: UIImagePickerController, coordinator: Coordinator) { picker.delegate = nil }
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let owner: ChatCameraCapture
+        init(_ owner: ChatCameraCapture) { self.owner = owner }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { owner.onCancel() }
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            guard let image = info[.originalImage] as? UIImage, let data = image.jpegData(compressionQuality: 0.95) else {
+                owner.onError(); return
+            }
+            owner.onCapture(data)
+        }
     }
 }
 
