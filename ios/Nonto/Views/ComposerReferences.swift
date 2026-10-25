@@ -259,13 +259,14 @@ struct ComposerReferencePicker: View {
 struct ComposerMediaThumbnail: View {
     let item: SelectedMedia
     var side: CGFloat = 72
+    var aspect: CGFloat = 1
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
     var body: some View {
         Group {
             if let image { Image(uiImage: image).resizable().scaledToFill() }
             else { Image(systemName: item.isVideo ? "video" : "photo").font(.title) }
-        }.frame(width: side, height: side).background(Color.secondary.opacity(0.08))
+        }.frame(width: side, height: side / aspect).background(Color.secondary.opacity(0.08))
             .clipped().clipShape(RoundedRectangle(cornerRadius: 12))
             .task(id: item.id) {
                 guard !item.isVideo else { return }

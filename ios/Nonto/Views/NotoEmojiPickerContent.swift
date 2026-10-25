@@ -138,7 +138,7 @@ struct NotoEmojiScopeStrip: View {
                             }.padding(.horizontal, active == scope ? 12 : 0)
                                 .frame(minWidth: 44, minHeight: 44)
                                 .foregroundStyle(active == scope ? accent.textColor : .secondary)
-                                .background(active == scope ? accent.color.opacity(0.12) : .clear, in: Capsule())
+                                .background(active == scope ? Color(uiColor: .tertiarySystemFill) : .clear, in: Capsule())
                         }.buttonStyle(.plain).id(scope.id)
                             .accessibilityLabel(scope.title).accessibilityAddTraits(active == scope ? .isSelected : [])
                             .accessibilityIdentifier("noto.scope.\(scope.id)")
@@ -150,6 +150,31 @@ struct NotoEmojiScopeStrip: View {
                     withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { proxy.scrollTo(value.id, anchor: .center) }
                 }
         }
+    }
+}
+
+/// The artwork stays on a neutral surface; a border and check distinguish selection.
+struct ExpressionPickerSelection: ViewModifier {
+    let selected: Bool
+    var cornerRadius: CGFloat = 16
+    @Environment(\.appAccent) private var accent
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content
+            .background(selected ? Color(uiColor: .tertiarySystemFill) : .clear, in: .rect(cornerRadius: cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(selected ? accent.textColor : .clear, lineWidth: contrast == .increased ? 2.5 : 1.5)
+            }
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Image(systemName: "checkmark").font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(accent.foregroundColor).frame(width: 16, height: 16)
+                        .background(accent.color, in: Circle()).padding(4).accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                }
+            }
     }
 }
 
@@ -176,7 +201,6 @@ struct NotoEmojiGrid: View {
 }
 
 private struct NotoEmojiTile: View {
-    @Environment(\.appAccent) private var accent
     let item: NotoEmoji
     let selected: Bool
     let favorite: Bool
@@ -193,8 +217,7 @@ private struct NotoEmojiTile: View {
                 else { NotoEmojiPoster(item: item) }
             }.frame(width: min(cellSize * 0.78, 64), height: min(cellSize * 0.78, 64))
                 .frame(maxWidth: .infinity, minHeight: cellSize)
-                .background(selected ? accent.color.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
-                .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(selected ? accent.textColor : .clear, lineWidth: 1.5) }
+                .modifier(ExpressionPickerSelection(selected: selected, cornerRadius: 14))
                 .overlay(alignment: .bottomTrailing) {
                     if favorite { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(.orange).padding(5) }
                 }

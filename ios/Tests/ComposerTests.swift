@@ -65,4 +65,27 @@ import UIKit
         XCTAssertEqual(editor.text, view.text)
         XCTAssertFalse(editor.isEditing)
     }
+    func testDragReorderingKeepsSourceOrderAndAssetDeduplication() throws {
+        var selection = ComposerAttachments()
+        let photos = (0..<5).map { _ in photo() }
+        try selection.append(photos, assetIDs: ["a", "b", "c", "d", "e"])
+        selection.reorder([photos[3].id, photos[1].id], before: photos[0].id)
+        XCTAssertEqual(selection.items.map(\.id), [photos[1], photos[3], photos[0], photos[2], photos[4]].map(\.id))
+        selection.reorder([photos[1].id])
+        XCTAssertEqual(selection.items.map(\.id), [photos[3], photos[0], photos[2], photos[4], photos[1]].map(\.id))
+        try selection.append([photo()], assetIDs: ["b"])
+        XCTAssertEqual(selection.items.count, 5, "Reordering must preserve picker asset identities")
+    }
+    func testStaleAndSelfTargetedDropsNeverRemoveAttachments() throws {
+        var selection = ComposerAttachments()
+        let photos = (0..<3).map { _ in photo() }
+        try selection.append(photos)
+        for sources in [[], [UUID()], [photos[0].id, UUID()], [photos[0].id, photos[0].id]] {
+            selection.reorder(sources)
+            XCTAssertEqual(selection.items.map(\.id), photos.map(\.id))
+        }
+        selection.reorder([photos[0].id], before: photos[0].id)
+        selection.reorder([photos[0].id], before: UUID())
+        XCTAssertEqual(selection.items.map(\.id), photos.map(\.id))
+    }
 }

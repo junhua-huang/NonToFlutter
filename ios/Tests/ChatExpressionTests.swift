@@ -18,6 +18,37 @@ import PhotosUI
             UIColor.systemOrange.setFill(); context.cgContext.fillEllipse(in: CGRect(x: 35, y: 15, width: 110, height: 180))
         }
     }
+    func testStickerArtworkKeepsItsPixelsAndTransparencyUnderEveryAccent() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = false
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32), format: format).image { context in
+            UIColor(red: 1, green: 0.4, blue: 0.1, alpha: 1).setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: 8, y: 8, width: 16, height: 16))
+        }.withRenderingMode(.alwaysTemplate)
+        func pixel(_ image: CGImage, x: Int, y: Int) throws -> [UInt8] {
+            let crop = try XCTUnwrap(image.cropping(to: CGRect(x: CGFloat(x), y: CGFloat(y), width: 1, height: 1)))
+            var bytes = [UInt8](repeating: 0, count: 4)
+            try bytes.withUnsafeMutableBytes { storage in
+                let context = try XCTUnwrap(CGContext(data: storage.baseAddress, width: 1, height: 1, bitsPerComponent: 8,
+                    bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue))
+                context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            }
+            return bytes
+        }
+        for accent in AppAccent.allCases {
+            for scheme in [ColorScheme.light, .dark] {
+                let view = Button {} label: { StickerArtwork(image: source).frame(width: 32, height: 32) }
+                    .buttonStyle(.plain).foregroundStyle(accent.color).tint(accent.color)
+                    .environment(\.appAccent, accent).environment(\.colorScheme, scheme)
+                let renderer = ImageRenderer(content: view); renderer.scale = 1
+                let rendered = try XCTUnwrap(renderer.cgImage)
+                let center = try pixel(rendered, x: 16, y: 16)
+                for (actual, expected) in zip(center, [255, 102, 26, 255]) {
+                    XCTAssertEqual(Double(actual), Double(expected), accuracy: 2, accent.name)
+                }
+                XCTAssertEqual(try pixel(rendered, x: 1, y: 1)[3], 0, "Transparent edges must stay transparent")
+            }
+        }
+    }
     func testTransparentPostersFallBackToVisibleEmojiAtTileAndMessageSizes() async throws {
         let cache = NotoEmojiPosterCache()
         for id in ["1f409", "2763_fe0f", "1f64c", "1f485"] {
@@ -140,6 +171,16 @@ import PhotosUI
                                               mode: mode, sticker: sticker, defaults: defaults)
             try await capture(view, size: size, name: name, large: large)
         }
+        for (accent, dark) in [(AppAccent.purple, false), (.yellow, true)] {
+            let store = ChatStore(api: api, conversation: Conversation(.object(["id": .id(77)])), userID: account, defaults: defaults)
+            let saved = try XCTUnwrap(library.items.first)
+            let view = ExpressionInputHarness(session: session, store: store, sender: ChatStickerSender(accountID: account, defaults: defaults),
+                                              mode: .stickers, sticker: .init(source: .saved(saved)), defaults: defaults)
+            try await capture(view, size: CGSize(width: 320, height: 740), name: "stickers-colors-\(accent.rawValue)", dark: dark, accent: accent)
+            try await capture(AccentColorOptions(selection: .constant(accent))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28)),
+                size: CGSize(width: 320, height: 560), name: "accent-menu-\(accent.rawValue)", dark: dark, accent: accent)
+        }
         let model = ChatStickerBrowser(accountID: account, defaults: defaults); await model.prepare(try XCTUnwrap(image().pngData()))
         try await capture(ChatStickerCreationView(browser: model, api: api, epoch: api.generation, onSaved: {}),
                           size: CGSize(width: 390, height: 844), name: "messages-new-sticker", navigationTitle: "新贴纸")
@@ -153,11 +194,13 @@ import PhotosUI
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.timelineBackground).environmentObject(session)
         try await capture(bubbles, size: CGSize(width: 390, height: 844), name: "messages-no-duplicate-emoji")
     }
-    private func capture<V: View>(_ view: V, size: CGSize, name: String, large: Bool = false, navigationTitle: String? = nil) async throws {
+    private func capture<V: View>(_ view: V, size: CGSize, name: String, large: Bool = false, navigationTitle: String? = nil,
+                                  dark: Bool = true, accent: AppAccent = .blue) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene); window.frame = CGRect(origin: .zero, size: size)
-        let root = view.environment(\.scenePhase, .inactive).environment(\.dynamicTypeSize, large ? .accessibility2 : .large).preferredColorScheme(.dark)
+        let root = view.environment(\.scenePhase, .inactive).environment(\.dynamicTypeSize, large ? .accessibility2 : .large)
+            .environment(\.appAccent, accent).tint(accent.color).preferredColorScheme(dark ? .dark : .light)
         let controller = UIHostingController(rootView: AnyView(root))
         window.rootViewController = controller; window.makeKeyAndVisible(); controller.loadViewIfNeeded()
         controller.view.frame = window.bounds; window.layoutIfNeeded()

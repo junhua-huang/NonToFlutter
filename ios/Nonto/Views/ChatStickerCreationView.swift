@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ChatStickerCreationView: View {
+    @Environment(\.appAccent) private var accent
     @Bindable var browser: ChatStickerBrowser
     let api: APIClient
     let epoch: UUID
@@ -13,7 +14,7 @@ struct ChatStickerCreationView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     if let prepared = browser.prepared {
-                        Image(uiImage: prepared.image).resizable().scaledToFit().frame(maxWidth: 360, minHeight: 180, maxHeight: 320)
+                        StickerArtwork(image: prepared.image).frame(maxWidth: 360, minHeight: 180, maxHeight: 320)
                             .accessibilityLabel("新贴纸预览")
                     }
                     if browser.canToggleBackground {
@@ -32,6 +33,7 @@ struct ChatStickerCreationView: View {
             .safeAreaBar(edge: .bottom) {
                 Button(action: save) {
                     HStack { if browser.busy { ProgressView() }; Text(browser.busy ? "正在添加…" : "添加贴纸") }
+                        .foregroundStyle(browser.canCommit && !saved ? accent.foregroundColor : Color.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }.buttonStyle(.borderedProminent).disabled(!browser.canCommit || saved).padding(16)
                     .accessibilityIdentifier("chat.stickers.save")

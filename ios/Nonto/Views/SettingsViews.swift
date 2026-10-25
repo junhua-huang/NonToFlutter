@@ -12,16 +12,7 @@ struct SettingsView: View {
         Form {
             Section("外观") {
                 Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }
-                NavigationLink {
-                    AccentColorSettingsView()
-                } label: {
-                    HStack {
-                        Text("强调色")
-                        Spacer()
-                        Text(accent.name).foregroundStyle(.secondary)
-                        Circle().fill(accent.color).frame(width: 18, height: 18).accessibilityHidden(true)
-                    }
-                }.accessibilityIdentifier("settings.accent")
+                AccentColorMenu(selection: $accent)
             }
             Section("账号") {
                 RouteButton(.personalInformation) { Text("个人信息与权限") }
