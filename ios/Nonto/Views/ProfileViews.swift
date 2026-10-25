@@ -2,7 +2,6 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileView: View {
-    @Environment(\.appAccent) private var accent
     let userID: Int
     @EnvironmentObject private var session: AppSession
     @State private var person: Person?
@@ -91,7 +90,7 @@ struct ProfileView: View {
                     }
                     if !user.verifiedLabels.isEmpty {
                         Label(user.verifiedLabels.joined(separator: " · "), systemImage: "checkmark.seal.fill")
-                            .font(.caption).foregroundStyle(accent.textColor)
+                            .font(.caption).foregroundStyle(Color.brand)
                     }
                     if !user.bio.isEmpty { Text(user.bio).font(.body).lineSpacing(3).textSelection(.enabled) }
                     if let email = user.publicEmail, !email.isEmpty {

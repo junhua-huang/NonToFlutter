@@ -39,7 +39,7 @@ final class AccentColorTests: XCTestCase {
                         XCTAssertGreaterThanOrEqual(ratio(accent.textUIColor, background, traits: traits), minimum - 0.001, context)
                         let backdrop = components(background, traits: traits)
                         let tint = components(accent.uiColor, traits: traits)
-                        let mixed = zip(backdrop, tint).map { $0 * 0.84 + $1 * 0.16 }
+                        let mixed = zip(backdrop, tint).map { pair in pair.0 * 0.84 + pair.1 * 0.16 }
                         let selectedSurface = UIColor(red: CGFloat(mixed[0]), green: CGFloat(mixed[1]), blue: CGFloat(mixed[2]), alpha: 1)
                         XCTAssertGreaterThanOrEqual(ratio(accent.textUIColor, selectedSurface, traits: traits), minimum - 0.001, context)
                     }
