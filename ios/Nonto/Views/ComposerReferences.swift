@@ -87,7 +87,7 @@ struct ComposerTextEditor: View {
         ComposerNativeTextView(editor: editor).frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .topLeading) {
                 if editor.text.isEmpty {
-                    Text("有什么新鲜事？").font(.title3).foregroundStyle(.tertiary)
+                    Text("有什么新鲜事？").font(.body).foregroundStyle(.tertiary)
                         .allowsHitTesting(false).accessibilityHidden(true)
                 }
             }
@@ -103,7 +103,7 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         view.tintColor = accent.uiColor
         view.backgroundColor = .clear; view.textColor = .label
         view.isEditable = isEnabled
-        let font = UIFont.preferredFont(forTextStyle: .title3); view.font = font
+        let font = UIFont.preferredFont(forTextStyle: .body); view.font = font
         view.adjustsFontForContentSizeCategory = true
         view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
         let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = 4

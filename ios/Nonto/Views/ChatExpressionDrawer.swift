@@ -61,12 +61,7 @@ struct ChatExpressionDrawer: View {
                 NotoEmojiSearchField(text: query, focus: $searchFocused, prompt: tab == .emoji ? "搜索表情名称或 emoji" : "搜索贴纸名称")
                     .padding(.horizontal, 12).padding(.bottom, 6)
             }
-            HStack {
-                Text(sectionTitle).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                if let resultCount { Text("\(resultCount)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary) }
-                Spacer()
-                if importing { ProgressView().controlSize(.mini); Text("正在制作贴纸…").font(.caption2) }
-            }.padding(.horizontal, 16).padding(.vertical, 5).accessibilityAddTraits(.isHeader)
+            if importing { ProgressView("正在制作贴纸…").font(.caption).padding(8) }
             ScrollView {
                 switch tab {
                 case .stickers: personalStickers
@@ -157,12 +152,6 @@ struct ChatExpressionDrawer: View {
             }
                 .buttonStyle(.plain).accessibilityLabel("关闭选择器")
         }.padding(.horizontal, 10).padding(.bottom, 6)
-    }
-    private var sectionTitle: String {
-        switch tab { case .recent: return "最近使用的贴纸"; case .stickers: return "我的贴纸"; case .emoji: return "表情符号 · 轻点插入文字"; case .noto: return "Noto 动态贴纸" }
-    }
-    private var resultCount: Int? {
-        switch tab { case .recent: return nil; case .stickers: return stickers.results.count; case .emoji: return emoji.items.count; case .noto: return noto.items.count }
     }
     private var emptySearch: some View {
         VStack(spacing: 8) {

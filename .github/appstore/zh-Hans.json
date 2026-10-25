@@ -13,7 +13,7 @@
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
   "betaBuildVersion": "86.1",
-  "betaWhatsNew": "本次修正发布页和贴纸选择器的视觉风格。\n\n• 发布页恢复简洁内容区与玻璃操作栏，保留照片预览、追加与排序。\n• 贴纸分类按信息 App 参考调整为图标与中性选中底色，不使用下划线。\n• 贴纸保持原色和透明背景，统一贴纸面板及浅深色表现。\n\n反馈邮箱：nonto@foxmail.com。请勿发送密码、验证码或他人的聊天隐私。",
+  "betaWhatsNew": "本次简化动态发布页，并调整聊天附件与表情面板。\n\n• 发布页统一使用当前强调色，移除重复添加入口与常驻提示，操作栏改为紧凑布局。\n• 聊天附件菜单改为彩色大图标列表，提供照片、视频和贴纸入口。\n• 表情与贴纸面板移除多余说明和数量，保留无下划线的图标分类。\n\n反馈邮箱：nonto@foxmail.com。请勿发送密码、验证码或他人的聊天隐私。",
   "screenshots": [
     {
       "file": ".github/appstore/screenshots/01-share.png",

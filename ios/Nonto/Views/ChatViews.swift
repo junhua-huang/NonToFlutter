@@ -411,7 +411,7 @@ struct ChatComposerInput: View {
     @State private var stagedSticker: StagedChatSticker?
     @State private var selection: TextSelection?
     @State private var caret: NSRange?
-    @State private var showingPhotos = false
+    @State private var showingAttachments = false
     @State private var sendTask: Task<Void, Never>?
     @State private var composerHeight: CGFloat = 56
 
@@ -439,9 +439,9 @@ struct ChatComposerInput: View {
             }
         }.padding(.top, 6)
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
-            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil } }
+            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil; showingAttachments = false } }
+            .onChange(of: picks) { _, value in if !value.isEmpty { showingAttachments = false } }
             .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
-            .photosPicker(isPresented: $showingPhotos, selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos]))
             .onDisappear { sendTask?.cancel(); stickerSender.cancel() }
     }
     private var composerContent: some View {
@@ -479,14 +479,13 @@ struct ChatComposerInput: View {
     }
     private var composerRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            Menu {
-                Button("照片或视频", systemImage: "photo.on.rectangle") {
-                    focus.wrappedValue = false; pickerMode = nil; showingPhotos = true
-                }
-                Button("贴纸", systemImage: "square.on.circle") { open(.stickers) }
-                    .accessibilityIdentifier("chat.stickers.open")
+            Button {
+                focus.wrappedValue = false; pickerMode = nil; showingAttachments.toggle()
             } label: { Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44) }
                 .disabled(preparingMedia || stickerSender.busy).accessibilityLabel("添加照片、视频或贴纸")
+                .popover(isPresented: $showingAttachments, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+                    attachmentOptions.presentationCompactAdaptation(.popover)
+                }
             Button {
                 if pickerMode != nil { pickerMode = nil; focus.wrappedValue = true }
                 else { open(.emoji) }
@@ -502,6 +501,18 @@ struct ChatComposerInput: View {
             }.disabled(stickerSender.busy || (stagedSticker == nil && store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")
         }
+    }
+    private var attachmentOptions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
+                ChatAttachmentOptionLabel(title: "照片或视频", photos: true)
+            }.accessibilityLabel("添加照片或视频")
+            Button {
+                showingAttachments = false; open(.stickers)
+            } label: { ChatAttachmentOptionLabel(title: "贴纸", photos: false) }
+                .accessibilityIdentifier("chat.stickers.open")
+        }.buttonStyle(.plain).padding(12)
+            .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
     }
     private var textSelection: Binding<TextSelection?> {
         Binding(get: { selection }, set: { value in
@@ -548,5 +559,32 @@ struct ChatComposerInput: View {
     private func finishSend(text: String, quoteID: Int?) {
         if store.draft == text { store.draft = ""; selection = nil; caret = nil; store.saveDraft() }
         if quote?.id == quoteID { quote = nil }
+    }
+}
+
+private struct ChatAttachmentOptionLabel: View {
+    let title: String
+    let photos: Bool
+    private let petalColors: [Color] = [.pink, .red, .orange, .yellow, .green, .cyan, .blue, .purple]
+    var body: some View {
+        HStack(spacing: 20) {
+            ZStack {
+                if photos {
+                    Circle().fill(.white)
+                    ForEach(0..<8) { index in
+                        Capsule().fill(petalColors[index].opacity(0.8))
+                            .frame(width: 14, height: 24).offset(y: -9)
+                            .rotationEffect(.degrees(Double(index) * 45))
+                    }
+                } else {
+                    Circle().fill(LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: "square.on.circle").font(.system(size: 27, weight: .medium)).foregroundStyle(.white)
+                }
+            }.frame(width: 48, height: 48).accessibilityHidden(true)
+            Text(title).font(.title3.weight(.semibold)).foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }.padding(.horizontal, 12).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading).contentShape(Rectangle())
     }
 }
