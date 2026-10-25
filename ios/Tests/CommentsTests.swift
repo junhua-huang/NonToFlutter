@@ -159,12 +159,15 @@ import UIKit
     }
     func testAccountSwitchDoesNotConsumeAnotherAccountsComposer() async throws {
         let started = expectation(description: "Sending old account")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
         let (store, api, _) = try setup { _ in
-            started.fulfill(); Thread.sleep(forTimeInterval: 0.1)
+            started.fulfill(); _ = release.wait(timeout: .now() + 10)
             return (200, .object(["comment": self.comment(30)]))
         }
         store.text = "旧账号草稿"; let pending = Task { await store.send() }
-        await fulfillment(of: [started], timeout: 2); try api.setToken("different-account"); await pending.value
+        await fulfillment(of: [started], timeout: 2)
+        try api.setToken("different-account"); release.signal(); await pending.value
         XCTAssertEqual(store.text, "旧账号草稿"); XCTAssertTrue(store.threads.isEmpty); XCTAssertNil(store.notice)
     }
     func testConfirmedLegacyEnvelopeDoesNotInviteDuplicateResend() async throws {
