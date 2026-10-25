@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: nonto-testflight
+  group: ${{ (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight-resume:')) && 'nonto-testflight' || format('nonto-testflight-resume-skip-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   finalize:
