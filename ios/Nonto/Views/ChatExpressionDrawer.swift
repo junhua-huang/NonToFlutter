@@ -25,7 +25,6 @@ struct ChatExpressionDrawer: View {
     @State private var showingCredits = false
     @State private var position = ScrollPosition(edge: .top)
     @FocusState private var searchFocused: Bool
-    @Environment(\.dynamicTypeSize) private var dynamicType
     @ScaledMetric(relativeTo: .body) private var sourceIconSize: CGFloat = 20
     private let epoch: UUID
     private let defaults: UserDefaults
@@ -103,7 +102,6 @@ struct ChatExpressionDrawer: View {
         }
         .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 26))
         .clipShape(.rect(cornerRadius: 26))
-        .overlay { RoundedRectangle(cornerRadius: 26).strokeBorder(Color(uiColor: .separator).opacity(0.25), lineWidth: 0.5).allowsHitTesting(false) }
         .disabled(disabled)
         .onAppear(perform: reload)
         .onChange(of: selection?.id) { _, _ in reload() }
@@ -137,28 +135,28 @@ struct ChatExpressionDrawer: View {
         HStack(spacing: 2) {
             ForEach(ChatExpressionTab.allCases) { source in
                 Button { choose(source) } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: source.symbol).font(.system(size: min(sourceIconSize, 24)))
-                        if !dynamicType.isAccessibilitySize { Text(source == .noto ? "动态" : source.title).font(.caption2.weight(.medium)).lineLimit(1) }
-                    }.frame(width: 44, height: 48)
-                        .foregroundStyle(tab == source ? accent.textColor : .secondary)
-                        .background(tab == source ? accent.color.opacity(0.1) : .clear, in: .rect(cornerRadius: 12))
+                    Image(systemName: source.symbol).font(.system(size: min(sourceIconSize, 24)))
+                        .frame(width: 44, height: 44)
+                        .foregroundStyle(tab == source ? Color.primary : .secondary)
+                        .background(tab == source ? Color(uiColor: .tertiarySystemFill) : .clear,
+                                    in: .rect(cornerRadius: 12))
+                        .contentShape(Rectangle())
                 }.buttonStyle(.plain).disabled(importing).accessibilityLabel(source.title).accessibilityAddTraits(tab == source ? .isSelected : [])
                     .accessibilityIdentifier("chat.expressions.tab.\(source.id)")
             }
             Spacer(minLength: 0)
             Button { searchOpen.toggle(); searchFocused = searchOpen; if searchOpen { expanded = true } } label: {
                 Image(systemName: "magnifyingglass").frame(width: 44, height: 44)
-                    .foregroundStyle(searchOpen ? accent.textColor : .secondary)
-                    .background(searchOpen ? Color(uiColor: .tertiarySystemFill) : .clear, in: Circle())
+                    .foregroundStyle(searchOpen ? Color.primary : .secondary)
+                    .background(searchOpen ? Color(uiColor: .tertiarySystemFill) : .clear,
+                                in: .rect(cornerRadius: 12))
             }.buttonStyle(.plain).disabled(importing).accessibilityLabel("搜索\(tab == .emoji ? "表情" : "贴纸")")
             Button(action: onClose) {
                 Image(systemName: "xmark").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32).background(Color(uiColor: .tertiarySystemFill), in: Circle())
                     .frame(width: 44, height: 44)
             }
                 .buttonStyle(.plain).accessibilityLabel("关闭选择器")
-        }.padding(.horizontal, 10).padding(.bottom, 2)
+        }.padding(.horizontal, 10).padding(.bottom, 6)
     }
     private var sectionTitle: String {
         switch tab { case .recent: return "最近使用的贴纸"; case .stickers: return "我的贴纸"; case .emoji: return "表情符号 · 轻点插入文字"; case .noto: return "Noto 动态贴纸" }
@@ -187,10 +185,11 @@ struct ChatExpressionDrawer: View {
         VStack(spacing: 8) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
                 PhotosPicker(selection: $photo, matching: .images) {
-                    Image(systemName: "plus").font(.system(size: 28, weight: .medium)).foregroundStyle(accent.textColor)
+                    Image(systemName: "plus").font(.title2).foregroundStyle(.secondary)
+                        .frame(width: 60, height: 60)
+                        .background(Color(uiColor: .tertiarySystemFill), in: .rect(cornerRadius: 16))
                         .frame(maxWidth: .infinity, minHeight: 84)
-                        .background(Color(uiColor: .tertiarySystemFill), in: .rect(cornerRadius: 20))
-                }.disabled(importing || stickers.items.count >= ChatStickerLibrary.limit)
+                }.buttonStyle(.plain).disabled(importing || stickers.items.count >= ChatStickerLibrary.limit)
                     .accessibilityLabel("从照片添加新贴纸").accessibilityIdentifier("chat.stickers.add")
                 ForEach(stickers.results) { sticker in
                     stickerTile(.saved(sticker)).contextMenu {

@@ -43,11 +43,11 @@ struct ChatStickerPickerContent: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 8) {
+            VStack(spacing: 0) {
                 Picker("贴纸范围", selection: $browser.recentOnly) {
                     Text("我的贴纸").tag(false)
                     Text("最近使用").tag(true)
-                }.pickerStyle(.segmented).padding(.horizontal, 16).disabled(busy)
+                }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.bottom, 8).disabled(busy)
                 if browser.items.isEmpty {
                     ContentUnavailableView {
                         Label("添加你的第一张贴纸", systemImage: "square.on.circle")
@@ -73,6 +73,7 @@ struct ChatStickerPickerContent: View {
                 if let error = browser.error { ErrorBanner(text: error).padding(.horizontal, 16).padding(.bottom, 8) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.timelineBackground)
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 if browser.prepared != nil || browser.selection != nil { selectionBar }
             }
@@ -148,19 +149,19 @@ struct ChatStickerPickerContent: View {
                     VStack(spacing: 8) { saveButton; sendButton }
                 } else { HStack(spacing: 12) { saveButton; sendButton } }
             }.controlSize(.large)
-        }.padding(16).background(.bar).accessibilityIdentifier("chat.stickers.preview")
+        }.padding(16).accessibilityIdentifier("chat.stickers.preview")
     }
     @ViewBuilder private var saveButton: some View {
         if browser.prepared != nil {
             Button { commit(send: false) } label: { Text("仅保存").frame(maxWidth: .infinity) }
-                .buttonStyle(.bordered).disabled(!browser.canCommit || readingPhoto)
+                .buttonStyle(.glass).disabled(!browser.canCommit || readingPhoto)
         }
     }
     private var sendButton: some View {
         Button { commit(send: true) } label: {
             Text(browser.prepared == nil ? "发送贴纸" : "添加并发送").frame(maxWidth: .infinity)
                 .foregroundStyle(browser.canCommit && !readingPhoto ? accent.foregroundColor : Color.secondary)
-        }.buttonStyle(.borderedProminent).disabled(!browser.canCommit || readingPhoto)
+        }.buttonStyle(.glassProminent).disabled(!browser.canCommit || readingPhoto)
             .accessibilityIdentifier("chat.stickers.send")
     }
     private func commit(send: Bool) {

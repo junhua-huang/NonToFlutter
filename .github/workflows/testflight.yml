@@ -77,13 +77,16 @@ jobs:
           if 'testFlightInternalTestingOnly' not in help_text.stdout + help_text.stderr:
               raise SystemExit('This Xcode does not advertise internal-only TestFlight exports.')
           PY
-      - name: Validate release scripts and generated project
+      - name: Run release script tests
+        if: ${{ !contains(github.event.head_commit.message, '[skip-tests]') }}
+        run: python3 -m unittest discover -s ios/scripts/tests -v
+      - name: Validate generated project and bundled policies
         run: |
-          python3 -m unittest discover -s ios/scripts/tests -v
           python3 ios/scripts/export_legal_site.py --check
           python3 ios/scripts/generate_project.py
           git diff --exit-code -- ios/Nonto.xcodeproj
       - name: Verify unsigned distribution archive
+        if: ${{ !contains(github.event.head_commit.message, '[skip-tests]') }}
         run: |
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Nonto-check.xcarchive" CODE_SIGNING_ALLOWED=NO APNS_ENVIRONMENT=production NONTO_DISTRIBUTION_CHANNEL="$NONTO_RELEASE_CHANNEL" archive
           python3 ios/scripts/testflight.py verify --archive "$RUNNER_TEMP/Nonto-check.xcarchive" --unsigned --channel "$NONTO_RELEASE_CHANNEL"

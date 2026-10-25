@@ -3,7 +3,6 @@ import PhotosUI
 
 struct PostComposer: View {
     @Environment(\.appAccent) private var accent
-    @Environment(\.dynamicTypeSize) private var dynamicType
     var editing: Post? = nil
     var quoted: Post? = nil
     var communityID: Int? = nil
@@ -57,7 +56,7 @@ struct PostComposer: View {
         @Bindable var editor = editor
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 20) {
                     authorAndAudience
                     ComposerTextEditor(editor: editor)
                     if let quoted {
@@ -77,8 +76,9 @@ struct PostComposer: View {
                     } else if !reading {
                         emptyMediaPicker
                     }
-                }.padding(20).frame(maxWidth: 720).frame(maxWidth: .infinity, alignment: .top)
+                }.padding(16).frame(maxWidth: 720).frame(maxWidth: .infinity, alignment: .top)
             }.disabled(busy).scrollDismissesKeyboard(.interactively)
+                .background(Color.timelineBackground)
                 .safeAreaInset(edge: .bottom, spacing: 0) { composerFooter }
                 .navigationTitle(editing == nil ? "发布动态" : "编辑动态").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -89,11 +89,9 @@ struct PostComposer: View {
                         Button { Task { await publish() } } label: {
                             if busy { ProgressView().accessibilityLabel("正在提交") }
                             else {
-                                Text(editing == nil ? "发布" : "保存").fontWeight(.semibold).padding(.horizontal, 6)
-                                    .foregroundStyle(reading || !canPublish ? Color.secondary : accent.foregroundColor)
+                                Text(editing == nil ? "发布" : "保存").fontWeight(.semibold)
                             }
-                        }.buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
-                            .disabled(busy || reading || !canPublish)
+                        }.disabled(busy || reading || !canPublish)
                             .keyboardShortcut(.return, modifiers: .command).accessibilityIdentifier("post.composer.publish")
                     }
                 }
@@ -141,7 +139,7 @@ struct PostComposer: View {
     }
     private var authorAndAudience: some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 44)
+            AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 42)
             VStack(alignment: .leading, spacing: 6) {
                 Text(session.user?.name ?? "我的动态").font(.subheadline.bold())
                 visibilityPicker
@@ -219,8 +217,7 @@ struct PostComposer: View {
                 Image(systemName: "plus").font(.title2)
                 Text("添加照片").font(.caption).lineLimit(1).minimumScaleFactor(0.7)
             }.padding(6).frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(accent.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-                .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(accent.color.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [5, 4])) }
+                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         }.buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
             .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
             .accessibilityHint("还可以添加 \(attachments.remainingCount) 张照片")
@@ -232,26 +229,12 @@ struct PostComposer: View {
     }
     private var emptyMediaPicker: some View {
         Button(action: openPhotos) {
-            Group {
-                if dynamicType.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("添加照片或视频", systemImage: "photo.on.rectangle.angled")
-                            .font(.subheadline.weight(.medium)).foregroundStyle(accent.textColor)
-                        Text("最多 9 张照片，或 1 段视频").font(.caption).foregroundStyle(.secondary)
-                    }
-                } else {
-                    HStack(spacing: 14) {
-                        Image(systemName: "photo.on.rectangle.angled").font(.title2).foregroundStyle(accent.textColor)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("添加照片或视频").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
-                            Text("最多 9 张照片，或 1 段视频").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(accent.textColor)
-                    }
-                }
-            }.padding(16).frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-                .background(accent.color.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+            VStack(alignment: .leading, spacing: 4) {
+                Label("添加照片或视频", systemImage: "photo.on.rectangle.angled")
+                    .font(.subheadline).foregroundStyle(accent.textColor)
+                Text("最多 9 张照片，或 1 段视频").font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .contentShape(Rectangle())
         }.buttonStyle(.plain).disabled(busy || reading).accessibilityIdentifier("post.composer.add-media")
     }
     @ViewBuilder private var rolePicker: some View {
@@ -273,24 +256,25 @@ struct PostComposer: View {
                         ProgressView(value: Double(completedUploads), total: Double(media.count))
                     } else { ProgressView().controlSize(.small) }
                     Text(status.isEmpty ? "正在准备媒体…" : status).font(.caption).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
             }
             if let error {
-                ErrorBanner(text: error)
-                Text("内容仍保留在此页，可调整后重新操作。").font(.caption2).foregroundStyle(.secondary)
+                ErrorBanner(text: error).padding(.horizontal, 16)
+                Text("内容仍保留在此页，可调整后重新操作。")
+                    .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 16)
             }
             HStack(spacing: 8) {
                 if editing == nil {
-                    Button(action: openPhotos) { toolLabel("照片", symbol: "photo") }
+                    Button(action: openPhotos) { toolSymbol("photo") }
                         .disabled(!attachments.canAddPhotos)
                         .accessibilityLabel(media.isEmpty ? "添加照片或视频" : "继续添加照片")
                         .accessibilityHint(media.first?.isVideo == true ? "视频需单独发布" : "最多 9 张照片或一段视频")
                 }
                 Button { editor.beginReference(.mention) } label: {
-                    toolLabel("好友", symbol: "at")
+                    toolSymbol("at")
                 }.accessibilityLabel("艾特好友")
                 Button { editor.beginReference(.topic) } label: {
-                    toolLabel("话题", symbol: "number")
+                    toolSymbol("number")
                 }.accessibilityLabel("引用话题")
                 Spacer(minLength: 0)
                 if editor.isEditing {
@@ -298,20 +282,17 @@ struct PostComposer: View {
                         Image(systemName: "keyboard.chevron.compact.down").frame(width: 44, height: 44)
                     }.accessibilityLabel("收起键盘")
                 }
-            }.font(.body).buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
+            }.font(.title3).buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
+                .floatingGlass()
             if editing == nil && !editor.isEditing && !busy && !reading {
                 Label(restoredDraft ? "已恢复文字草稿 · 自动保存" : "文字草稿自动保存", systemImage: "doc.text")
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 20)
             }
-        }.padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
-            .frame(maxWidth: 720).frame(maxWidth: .infinity).background(.bar)
+        }.padding(.top, 6).padding(.bottom, 6)
+            .frame(maxWidth: 720).frame(maxWidth: .infinity)
     }
-    private func toolLabel(_ title: String, symbol: String) -> some View {
-        ViewThatFits(in: .horizontal) {
-            Label(title, systemImage: symbol).font(.subheadline.weight(.medium)).padding(.horizontal, 10)
-            Image(systemName: symbol).frame(width: 44)
-        }.frame(minWidth: 44, minHeight: 44)
-            .background(accent.color.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+    private func toolSymbol(_ symbol: String) -> some View {
+        Image(systemName: symbol).frame(width: 44, height: 44)
     }
     private var visibilityPicker: some View {
         Menu {
@@ -323,8 +304,7 @@ struct PostComposer: View {
             HStack(spacing: 5) {
                 Label(visibility == "public" ? "公开" : "仅好友", systemImage: visibility == "public" ? "globe.asia.australia" : "person.2")
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
-            }.font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 7)
-                .background(accent.color.opacity(0.08), in: Capsule())
+            }.font(.caption.weight(.medium)).frame(minHeight: 32).contentShape(Rectangle())
         }.foregroundStyle(accent.textColor).accessibilityLabel("谁可以看")
             .accessibilityValue(visibility == "public" ? "公开" : "仅好友")
             .accessibilityIdentifier("post.composer.audience")

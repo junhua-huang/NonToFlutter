@@ -121,29 +121,27 @@ struct NotoEmojiSearchField: View {
 }
 
 struct NotoEmojiScopeStrip: View {
-    @Environment(\.appAccent) private var accent
     let scopes: [NotoEmojiScope]
     let active: NotoEmojiScope?
     let onSelect: (NotoEmojiScope) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 20
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 HStack(spacing: 4) {
                     ForEach(scopes) { scope in
                         Button { onSelect(scope) } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: scope.symbol).font(.body)
-                                if active == scope { Text(scope.title).font(.caption.weight(.semibold)).lineLimit(1) }
-                            }.padding(.horizontal, active == scope ? 12 : 0)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .foregroundStyle(active == scope ? accent.textColor : .secondary)
-                                .background(active == scope ? Color(uiColor: .tertiarySystemFill) : .clear, in: Capsule())
+                            Image(systemName: scope.symbol).font(.system(size: min(iconSize, 28)))
+                                .frame(width: 44, height: 44)
+                                .foregroundStyle(active == scope ? Color.primary : .secondary)
+                                .background(active == scope ? Color(uiColor: .tertiarySystemFill) : .clear, in: Circle())
+                                .contentShape(Rectangle())
                         }.buttonStyle(.plain).id(scope.id)
                             .accessibilityLabel(scope.title).accessibilityAddTraits(active == scope ? .isSelected : [])
                             .accessibilityIdentifier("noto.scope.\(scope.id)")
                     }
-                }.padding(.horizontal, 16).padding(.vertical, 8)
+                }.padding(.horizontal, 8).padding(.vertical, 4)
             }.scrollIndicators(.hidden)
                 .onChange(of: active, initial: true) { _, value in
                     guard let value else { return }
@@ -153,7 +151,7 @@ struct NotoEmojiScopeStrip: View {
     }
 }
 
-/// The artwork stays on a neutral surface; a border and check distinguish selection.
+/// Artwork stays transparent; a border and check distinguish selection.
 struct ExpressionPickerSelection: ViewModifier {
     let selected: Bool
     var cornerRadius: CGFloat = 16
@@ -162,7 +160,6 @@ struct ExpressionPickerSelection: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(selected ? Color(uiColor: .tertiarySystemFill) : .clear, in: .rect(cornerRadius: cornerRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(selected ? accent.textColor : .clear, lineWidth: contrast == .increased ? 2.5 : 1.5)
