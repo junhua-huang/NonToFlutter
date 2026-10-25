@@ -325,30 +325,39 @@ final class LayoutSnapshotTests: XCTestCase {
             store.messages.count == 7 && self.descendants(of: controller.view).contains { $0 is UITextView || $0 is UITextField }
         }
         try await Task.sleep(for: .milliseconds(500))
-        let field = try XCTUnwrap(descendants(of: controller.view).first { $0 is UITextView || $0 is UITextField })
+        // SwiftUI may replace the platform text control when editing ends. Query
+        // the mounted composer at every stage instead of measuring a stale view.
+        func currentField() -> UIView? {
+            descendants(of: controller.view).first { ($0 is UITextView || $0 is UITextField) && $0.window === window }
+        }
+        let field = try XCTUnwrap(currentField())
         let unfocusedComposerY = field.convert(field.bounds, to: window).minY
-        try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "before-keyboard")
+        try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "before-keyboard")
         for cycle in 1...2 {
-            XCTAssertTrue(field.becomeFirstResponder())
+            XCTAssertTrue(try XCTUnwrap(currentField()).becomeFirstResponder())
             try await Task.sleep(for: .milliseconds(400))
-            XCTAssertLessThan(field.convert(field.bounds, to: window).minY, unfocusedComposerY - 120,
+            let focusedField = try XCTUnwrap(currentField())
+            XCTAssertTrue(focusedField.isFirstResponder)
+            XCTAssertLessThan(focusedField.convert(focusedField.bounds, to: window).minY, unfocusedComposerY - 120,
                               "The keyboard must actually resize the viewport, not just focus the field")
-            try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "keyboard-\(cycle)")
+            try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "keyboard-\(cycle)")
             store.draft = "???"
-            try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "typing-\(cycle)")
+            try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "typing-\(cycle)")
             for send in 1...2 {
                 XCTAssertTrue(store.enqueue(content: store.draft.isEmpty ? "???" : store.draft))
                 store.draft = ""
-                try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "send-\(cycle)-\(send)")
+                try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "send-\(cycle)-\(send)")
                 XCTAssertTrue(store.pending.isEmpty, "The fixture must acknowledge the real outbox request")
             }
             window.endEditing(true)
             try await waitForComposer("keyboard dismissal restores the chat viewport") {
-                !field.isFirstResponder && abs(field.convert(field.bounds, to: window).minY - unfocusedComposerY) <= 5
+                guard let field = currentField() else { return false }
+                return !field.isFirstResponder && abs(field.convert(field.bounds, to: window).minY - unfocusedComposerY) <= 5
             }
-            XCTAssertEqual(field.convert(field.bounds, to: window).minY, unfocusedComposerY, accuracy: 5,
+            let restoredField = try XCTUnwrap(currentField())
+            XCTAssertEqual(restoredField.convert(restoredField.bounds, to: window).minY, unfocusedComposerY, accuracy: 5,
                            "Dismissing the keyboard must restore the viewport")
-            try await assertChatBubblesStayVisible(window: window, field: field, store: store, frames: frames, stage: "dismiss-\(cycle)")
+            try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "dismiss-\(cycle)")
         }
         // Tear down the pushed SwiftUI navigation graph while its window is
         // still mounted, before the next test presents another keyboard/sheet.
@@ -362,12 +371,13 @@ final class LayoutSnapshotTests: XCTestCase {
     /// Check the rendered message area throughout each transition, not just the
     /// model count or one settled screenshot: the reported failure leaves data
     /// intact while every bubble disappears from the viewport for seconds.
-    private func assertChatBubblesStayVisible(window: UIWindow, field: UIView, store: ChatStore,
+    private func assertChatBubblesStayVisible(window: UIWindow, field: @MainActor () -> UIView?, store: ChatStore,
                                             frames: ChatReplayFrames, stage: String) async throws {
         for sample in 0..<6 {
             try await Task.sleep(for: .milliseconds(100))
             window.layoutIfNeeded()
-            let composerTop = field.convert(field.bounds, to: window).minY - 10
+            let input = try XCTUnwrap(field(), "The composer must remain mounted during \(stage)")
+            let composerTop = input.convert(input.bounds, to: window).minY - 10
             let top = window.safeAreaInsets.top + 60
             XCTAssertGreaterThan(composerTop - top, 100, "The keyboard must leave a real message viewport")
             let format = UIGraphicsImageRendererFormat(); format.scale = 1
