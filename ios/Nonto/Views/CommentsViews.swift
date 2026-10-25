@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PostDetailView: View {
+    @Environment(\.appAccent) private var accent
     let postID: Int
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: AppSession
@@ -110,7 +111,7 @@ struct PostDetailView: View {
                     if thread.expanded && thread.replies.count > 2 {
                         Button("收起") { comments.collapseReplies(thread.id) }.frame(minHeight: 44)
                     }
-                }.font(.caption).buttonStyle(.plain).foregroundStyle(Color.brand)
+                }.font(.caption).buttonStyle(.plain).foregroundStyle(accent.textColor)
                 if let error = comments.replyErrors[thread.id] { Text(error).font(.caption).foregroundStyle(.red) }
             }.padding(.leading, 52)
         }
@@ -143,6 +144,7 @@ struct PostDetailView: View {
 }
 
 private struct CommentComposer: View {
+    @Environment(\.appAccent) private var accent
     @Bindable var store: CommentsStore
     var focused: FocusState<Bool>.Binding
     var body: some View {
@@ -172,7 +174,7 @@ private struct CommentComposer: View {
                 Button { Task { await store.send() } } label: {
                     Group {
                         if store.sending { ProgressView() }
-                        else { Image(systemName: "arrow.up.circle.fill").font(.title).foregroundStyle(store.canSend ? Color.brand : Color.secondary) }
+                        else { Image(systemName: "arrow.up.circle.fill").font(.title).foregroundStyle(store.canSend ? accent.textColor : Color.secondary) }
                     }.frame(width: 44, height: 44)
                 }.disabled(!store.canSend).accessibilityLabel(store.sending ? "正在发送评论" : "发送评论")
                     .accessibilityIdentifier("comment-send")
@@ -184,6 +186,7 @@ private struct CommentComposer: View {
 }
 
 private struct CommentItemRow: View {
+    @Environment(\.appAccent) private var accent
     let comment: Comment
     let nested: Bool
     let busy: Bool
@@ -203,12 +206,12 @@ private struct CommentItemRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     RouteButton(.profile(comment.author.id)) { Text(comment.author.name).font(.subheadline.bold()).foregroundStyle(.primary) }
-                    if isPostAuthor { Text("作者").font(.caption2).foregroundStyle(Color.brand) }
+                    if isPostAuthor { Text("作者").font(.caption2).foregroundStyle(accent.textColor) }
                     Spacer(minLength: 2)
                     if let date = comment.date { Text(date, style: .relative).font(.caption2).foregroundStyle(.secondary) }
                 }
                 if let target = comment.replyTo {
-                    RouteButton(.profile(target.id)) { Text("回复 @\(target.username)").font(.caption).foregroundStyle(Color.brand) }
+                    RouteButton(.profile(target.id)) { Text("回复 @\(target.username)").font(.caption).foregroundStyle(accent.textColor) }
                 }
                 Text(comment.content).font(.body).lineSpacing(3).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 18) {

@@ -7,7 +7,7 @@ enum PostText {
     static func trimmed(_ content: String) -> String {
         content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    static func styled(_ content: String) -> AttributedString {
+    static func styled(_ content: String, accent: AppAccent = .blue) -> AttributedString {
         let text = trimmed(content)
         var result = AttributedString(text)
         result.foregroundColor = .primary
@@ -15,7 +15,7 @@ enum PostText {
             guard let range = Range(match.range, in: text),
                   let start = AttributedString.Index(range.lowerBound, within: result),
                   let end = AttributedString.Index(range.upperBound, within: result) else { continue }
-            result[start..<end].foregroundColor = .brand
+            result[start..<end].foregroundColor = accent.textColor
         }
         return result
     }
@@ -37,21 +37,20 @@ enum PostThread {
 }
 
 struct PostBodyText: View {
+    @Environment(\.appAccent) private var accent
     let content: String
     let detailed: Bool
     let route: AppRoute?
-    private let styled: AttributedString
     @State private var expanded = false
     @State private var collapsedHeight: CGFloat = 0
     @State private var fullHeight: CGFloat = 0
 
     init(content: String, detailed: Bool = false, route: AppRoute? = nil) {
         self.content = PostText.trimmed(content); self.detailed = detailed; self.route = route
-        styled = PostText.styled(content)
     }
     private var font: Font { detailed ? .title3 : .body }
     private var fullText: some View {
-        Text(styled).font(font).lineSpacing(detailed ? 4 : 3)
+        Text(PostText.styled(content, accent: accent)).font(font).lineSpacing(detailed ? 4 : 3)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
     private var visibleText: some View {
@@ -76,7 +75,7 @@ struct PostBodyText: View {
                     } else { visibleText.textSelection(.enabled) }
                     if expanded || fullHeight > collapsedHeight + 1 {
                         Button(expanded ? "收起" : "显示更多") { expanded.toggle() }
-                            .font(.subheadline).foregroundStyle(Color.brand).buttonStyle(.plain)
+                            .font(.subheadline).foregroundStyle(accent.textColor).buttonStyle(.plain)
                             .frame(minHeight: 28, alignment: .leading)
                     }
                 }

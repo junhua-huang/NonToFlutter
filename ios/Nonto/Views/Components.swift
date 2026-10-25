@@ -5,15 +5,16 @@ import UniformTypeIdentifiers
 import ImageIO
 
 struct AvatarView: View {
+    @Environment(\.appAccent) private var accent
     var url: String
     var name: String
     var size: CGFloat = 44
     @State private var image: UIImage?
     var body: some View {
         ZStack {
-            Color.brand.opacity(0.12)
+            accent.textColor.opacity(0.12)
             if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipped() }
-            else { Text(String(name.prefix(1))).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(Color.brand) }
+            else { Text(String(name.prefix(1))).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(accent.textColor) }
         }.frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
             .task(id: url) {
                 image = nil
@@ -23,6 +24,7 @@ struct AvatarView: View {
 }
 
 struct ProfileCover: View {
+    @Environment(\.appAccent) private var accent
     let url: String
     var height: CGFloat? = 144
     @State private var image: UIImage?
@@ -30,7 +32,7 @@ struct ProfileCover: View {
         GeometryReader { geometry in
             ZStack {
                 if let image { Image(uiImage: image).resizable().scaledToFill() }
-                else { LinearGradient(colors: [Color.brand.opacity(0.28), Color.brand.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+                else { LinearGradient(colors: [accent.color.opacity(0.28), accent.color.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing) }
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.frame(height: height).accessibilityHidden(true)
             .task(id: url) {

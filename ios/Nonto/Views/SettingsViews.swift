@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var session: AppSession
     @AppStorage("nonto.native.appearance") private var appearance = "system"
+    @AppStorage(AppAccent.storageKey) private var accent = AppAccent.blue
     @State private var error: String?
     @State private var confirmLogout = false
     @State private var cacheCleared = false
@@ -11,6 +12,16 @@ struct SettingsView: View {
         Form {
             Section("外观") {
                 Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }
+                NavigationLink {
+                    AccentColorSettingsView()
+                } label: {
+                    HStack {
+                        Text("强调色")
+                        Spacer()
+                        Text(accent.name).foregroundStyle(.secondary)
+                        Circle().fill(accent.color).frame(width: 18, height: 18).accessibilityHidden(true)
+                    }
+                }.accessibilityIdentifier("settings.accent")
             }
             Section("账号") {
                 RouteButton(.personalInformation) { Text("个人信息与权限") }
@@ -61,6 +72,7 @@ struct SettingsView: View {
 }
 
 struct PrivacySettingsView: View {
+    @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var profile = "public"
     @State private var visibility = "public"
@@ -82,7 +94,7 @@ struct PrivacySettingsView: View {
             }.disabled(!loaded || busy)
             if !loaded && error == nil { ProgressView() }
             ErrorBanner(text: error) { Task { await load() } }
-            if saved { Text("已保存").foregroundStyle(Color.brand) }
+            if saved { Text("已保存").foregroundStyle(accent.textColor) }
             Button("保存设置") { Task { await save() } }.disabled(!loaded || busy)
         }.navigationTitle("隐私设置").task { await load() }
     }
@@ -107,6 +119,7 @@ struct PrivacySettingsView: View {
     }
 }
 struct NotificationSettingsView: View {
+    @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @ObservedObject private var push = APNsService.shared
     @State private var pushEnabled = false
@@ -136,7 +149,7 @@ struct NotificationSettingsView: View {
             if loading { ProgressView("正在读取设置…") }
             if busy { ProgressView("正在保存…") }
             Button("保存") { Task { await save() } }.disabled(!loaded || busy)
-            if saved { Text("已保存").foregroundStyle(Color.brand) }
+            if saved { Text("已保存").foregroundStyle(accent.textColor) }
             ErrorBanner(text: error) { Task { await load() } }
         }.disabled(busy).navigationTitle("消息提醒").task { if !loaded { await load() } }
             .onChange(of: [pushEnabled, message, sound]) { _, _ in saved = false }
@@ -157,6 +170,7 @@ struct NotificationSettingsView: View {
     }
 }
 struct PasswordView: View {
+    @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var old = ""
     @State private var new = ""
@@ -170,7 +184,7 @@ struct PasswordView: View {
             SecureField("新密码（至少 8 位）", text: $new).textContentType(.newPassword)
             SecureField("确认新密码", text: $repeatPassword).textContentType(.newPassword)
             ErrorBanner(text: error)
-            if saved { Text("密码已修改").foregroundStyle(Color.brand) }
+            if saved { Text("密码已修改").foregroundStyle(accent.textColor) }
             Button("修改密码") { Task { await save() } }.disabled(busy || old.isEmpty || new.count < 8 || new != repeatPassword)
             if busy { ProgressView("正在修改…") }
         }.disabled(busy).scrollDismissesKeyboard(.interactively).navigationTitle("修改密码")

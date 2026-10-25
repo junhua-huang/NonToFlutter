@@ -206,7 +206,7 @@ import SwiftUI
     }
     func testPostHighlightsUnicodeTopicsAndMentionsWithoutColoringEmailOrURLFragments() {
         let text = PostText.styled("🌅聊聊#生活，欢迎@小明 和 @user_name #旅行# #生活 mail@example.com https://example.test/#fragment")
-        let highlighted = text.runs.filter { $0.foregroundColor == Color.brand }
+        let highlighted = text.runs.filter { $0.foregroundColor == AppAccent.blue.textColor }
             .map { String(text[$0.range].characters) }
         XCTAssertEqual(highlighted, ["#生活", "@小明", "@user_name", "#旅行#", "#生活"])
     }

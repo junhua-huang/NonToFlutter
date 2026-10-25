@@ -62,7 +62,6 @@ struct NotoEmojiPickerContent: View {
             .sensoryFeedback(.selection, trigger: browser.selection?.id) { old, new in new != nil && old != new }
             .sheet(isPresented: $showingCredits) { NavigationStack { NotoEmojiCreditsView() } }
         }
-        .tint(.brand)
         .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
@@ -122,6 +121,7 @@ struct NotoEmojiSearchField: View {
 }
 
 struct NotoEmojiScopeStrip: View {
+    @Environment(\.appAccent) private var accent
     let scopes: [NotoEmojiScope]
     let active: NotoEmojiScope?
     let onSelect: (NotoEmojiScope) -> Void
@@ -137,8 +137,8 @@ struct NotoEmojiScopeStrip: View {
                                 if active == scope { Text(scope.title).font(.caption.weight(.semibold)).lineLimit(1) }
                             }.padding(.horizontal, active == scope ? 12 : 0)
                                 .frame(minWidth: 44, minHeight: 44)
-                                .foregroundStyle(active == scope ? Color.brand : .secondary)
-                                .background(active == scope ? Color.brand.opacity(0.12) : .clear, in: Capsule())
+                                .foregroundStyle(active == scope ? accent.textColor : .secondary)
+                                .background(active == scope ? accent.color.opacity(0.12) : .clear, in: Capsule())
                         }.buttonStyle(.plain).id(scope.id)
                             .accessibilityLabel(scope.title).accessibilityAddTraits(active == scope ? .isSelected : [])
                             .accessibilityIdentifier("noto.scope.\(scope.id)")
@@ -176,6 +176,7 @@ struct NotoEmojiGrid: View {
 }
 
 private struct NotoEmojiTile: View {
+    @Environment(\.appAccent) private var accent
     let item: NotoEmoji
     let selected: Bool
     let favorite: Bool
@@ -192,8 +193,8 @@ private struct NotoEmojiTile: View {
                 else { NotoEmojiPoster(item: item) }
             }.frame(width: min(cellSize * 0.78, 64), height: min(cellSize * 0.78, 64))
                 .frame(maxWidth: .infinity, minHeight: cellSize)
-                .background(selected ? Color.brand.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
-                .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(selected ? Color.brand : .clear, lineWidth: 1.5) }
+                .background(selected ? accent.color.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
+                .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(selected ? accent.textColor : .clear, lineWidth: 1.5) }
                 .overlay(alignment: .bottomTrailing) {
                     if favorite { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(.orange).padding(5) }
                 }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AuthView: View {
+    @Environment(\.appAccent) private var accent
     enum Mode: String, CaseIterable { case login = "登录", register = "注册", reset = "找回密码" }
     @EnvironmentObject private var session: AppSession
     @State private var mode: Mode = .login
@@ -71,10 +72,10 @@ struct AuthView: View {
                         NavigationLink("隐私政策") { PolicyView(kind: "privacy") }
                     }.font(.footnote)
                     ErrorBanner(text: error)
-                    if let message { Text(message).font(.subheadline).foregroundStyle(Color.brand) }
+                    if let message { Text(message).font(.subheadline).foregroundStyle(accent.textColor) }
                     Button { Task { await submit() } } label: {
-                        HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(mode == .reset ? "重设密码" : mode.rawValue) }
-                            .frame(maxWidth: .infinity, minHeight: 24)
+                        HStack(spacing: 8) { if busy { ProgressView().tint(accent.foregroundColor) }; Text(mode == .reset ? "重设密码" : mode.rawValue) }
+                            .frame(maxWidth: .infinity, minHeight: 24).foregroundStyle(accent.foregroundColor)
                     }.buttonStyle(.glassProminent).controlSize(.large)
                         .disabled(!canSubmit)
                 }.padding(.horizontal, 24).padding(.vertical, 16).frame(maxWidth: 440)

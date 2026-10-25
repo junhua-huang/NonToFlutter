@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct PrivacyWelcomeView: View {
+    @Environment(\.appAccent) private var accent
     @EnvironmentObject private var consent: PrivacyConsent
     @State private var declined = false
     @State private var ageGroup: ServiceAgeGroup?
@@ -10,7 +11,7 @@ struct PrivacyWelcomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(Color.brand)
+                    Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(accent.textColor)
                     Text(declined ? "你可以先了解南图" : "欢迎使用南图").font(.largeTitle.bold())
                     Text("请先阅读服务条款和隐私政策，再决定是否使用账号与社交服务。")
                     Text("账号服务会处理邮箱、账号资料、你主动发送的内容和服务安全信息。照片与视频仅在你选择时读取；通知在你开启时申请，不影响文字功能。")
@@ -184,6 +185,7 @@ struct FilingDisclosureSection: View {
 
 struct ReportRecord: Record { var raw: JSON; init(_ raw: JSON) { self.raw = raw } }
 struct ReportHistoryView: View {
+    @Environment(\.appAccent) private var accent
     @StateObject private var resource: PagedResource<ReportRecord>
     init(session: AppSession) {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/reports/", keys: ["reports", "items"], userID: session.user?.id ?? 0))
@@ -195,7 +197,7 @@ struct ReportHistoryView: View {
                     HStack {
                         Text("举报 #\(record.id)").font(.headline)
                         Spacer()
-                        Text(status(record.raw["status"].string)).font(.caption).foregroundStyle(Color.brand)
+                        Text(status(record.raw["status"].string)).font(.caption).foregroundStyle(accent.textColor)
                     }
                     Text(record.raw["reason"].string).textSelection(.enabled)
                     if !record.raw["resolution_note"].string.isEmpty {
