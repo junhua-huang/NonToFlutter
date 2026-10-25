@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ChatExpressionDrawer: View {
+    @Environment(\.appAccent) private var accent
     let accountID: Int
     let api: APIClient
     let selection: StagedChatSticker?
@@ -191,7 +192,7 @@ struct ChatExpressionDrawer: View {
         let item = StagedChatSticker(source: source)
         return Button { searchFocused = false; onStageSticker(item) } label: {
             ChatStagedStickerImage(sticker: item, animated: false).frame(height: 80).padding(4).frame(maxWidth: .infinity)
-                .background(selection?.sourceID == item.sourceID ? Color.brand.opacity(0.12) : .clear, in: .rect(cornerRadius: 16))
+                .background(selection?.sourceID == item.sourceID ? accent.color.opacity(0.12) : .clear, in: .rect(cornerRadius: 16))
         }.buttonStyle(.plain).accessibilityLabel(item.name).accessibilityHint("添加到待发送贴纸")
     }
     private func stageNoto(_ item: NotoEmoji) { searchFocused = false; onStageSticker(.init(source: .noto(item))) }

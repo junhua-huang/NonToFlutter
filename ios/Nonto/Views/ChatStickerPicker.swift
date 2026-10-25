@@ -25,6 +25,7 @@ struct ChatStickerPicker: View {
 }
 
 struct ChatStickerPickerContent: View {
+    @Environment(\.appAccent) private var accent
     @Bindable var browser: ChatStickerBrowser
     let upload: (Data) async throws -> String
     let onSend: (ChatSticker) -> Bool
@@ -101,7 +102,7 @@ struct ChatStickerPickerContent: View {
                 Button("取消", role: .cancel) { deletion = nil }
             } message: { Text("已发送的消息不受影响。") }
         }
-        .tint(.brand).presentationDetents([.medium, .large], selection: $detent)
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible).presentationContentInteraction(.resizes)
         .interactiveDismissDisabled(busy)
         .onDisappear { operation?.cancel(); browser.cancel() }
@@ -117,8 +118,8 @@ struct ChatStickerPickerContent: View {
                 ChatStickerImage(url: sticker.url).frame(height: cellSize - 12)
                 Text(sticker.name).font(.caption).foregroundStyle(.primary).lineLimit(1)
             }.padding(6).frame(maxWidth: .infinity)
-                .background(browser.selection?.id == sticker.id ? Color.brand.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
-                .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(browser.selection?.id == sticker.id ? Color.brand : .clear, lineWidth: 1.5) }
+                .background(browser.selection?.id == sticker.id ? accent.color.opacity(0.12) : .clear, in: .rect(cornerRadius: 14))
+                .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(browser.selection?.id == sticker.id ? accent.textColor : .clear, lineWidth: 1.5) }
         }.buttonStyle(.plain).disabled(busy)
             .accessibilityLabel(sticker.name).accessibilityHint("轻点预览并发送，长按可删除")
             .accessibilityAddTraits(browser.selection?.id == sticker.id ? .isSelected : [])

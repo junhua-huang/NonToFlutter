@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension Color {
-    /// Exact brand and interaction colors from lib/config/app_theme.dart.
+    /// Identity and like colors stay fixed; personalized controls use appAccent.
     static let brand = Color(red: 29 / 255, green: 155 / 255, blue: 240 / 255)
     static let brandLike = Color(red: 249 / 255, green: 24 / 255, blue: 128 / 255)
     static let timelineBackground = Color(uiColor: .systemBackground)
@@ -35,6 +35,7 @@ extension View {
 
 /// Underlined content navigation stays visually separate from glass controls.
 struct TimelineTabs<Selection: Hashable>: View {
+    @Environment(\.appAccent) private var accent
     let title: String
     let tabs: [(value: Selection, title: String)]
     @Binding var selection: Selection
@@ -50,7 +51,7 @@ struct TimelineTabs<Selection: Hashable>: View {
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .overlay(alignment: .bottom) {
                             if selection == tab.value {
-                                Capsule().fill(Color.brand).frame(width: 32, height: 4)
+                                Capsule().fill(accent.textColor).frame(width: 32, height: 4)
                             }
                         }.contentShape(Rectangle())
                 }.buttonStyle(.plain)
@@ -64,14 +65,15 @@ struct TimelineTabs<Selection: Hashable>: View {
 }
 
 struct ComposeButton: View {
+    @Environment(\.appAccent) private var accent
     let action: () -> Void
     var body: some View {
         Button(action: action) {
             Image(systemName: "square.and.pencil").font(.system(size: 23, weight: .semibold))
-                .foregroundStyle(.white).frame(width: 58, height: 58)
-                .glassEffect(.regular.tint(.brand).interactive(), in: Circle())
+                .foregroundStyle(accent.foregroundColor).frame(width: 58, height: 58)
+                .glassEffect(.regular.tint(accent.color).interactive(), in: Circle())
         }.buttonStyle(.plain).accessibilityLabel("发布动态")
-            .shadow(color: Color.brand.opacity(0.18), radius: 12, y: 4)
+            .shadow(color: accent.color.opacity(0.18), radius: 12, y: 4)
     }
 }
 

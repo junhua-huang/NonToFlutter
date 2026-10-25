@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct IdentityCenterView: View {
+    @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var applications: [JSON] = []
     @State private var applying = false
@@ -15,7 +16,7 @@ struct IdentityCenterView: View {
             Section("申请记录") {
                 ForEach(Array(applications.enumerated()), id: \.offset) { _, row in
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack { Text(row["role_label"].or(row["role"]["label"]).string).font(.headline); Spacer(); Text(status(row["status"].string)).font(.caption).foregroundStyle(Color.brand) }
+                        HStack { Text(row["role_label"].or(row["role"]["label"]).string).font(.headline); Spacer(); Text(status(row["status"].string)).font(.caption).foregroundStyle(accent.textColor) }
                         Text(row["application_text"].or(row["reason"]).string)
                         if !row["review_comment"].or(row["admin_reason"]).string.isEmpty { Text("审核意见：\(row["review_comment"].or(row["admin_reason"]).string)").font(.caption).foregroundStyle(.secondary) }
                     }.padding(.vertical, 6)

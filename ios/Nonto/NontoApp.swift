@@ -8,6 +8,7 @@ struct NontoApp: App {
     @StateObject private var consent = PrivacyConsent.shared
     @Environment(\.scenePhase) private var phase
     @AppStorage("nonto.native.appearance") private var appearance = "system"
+    @AppStorage(AppAccent.storageKey) private var accent = AppAccent.blue
     var body: some Scene {
         WindowGroup {
             Group {
@@ -23,7 +24,8 @@ struct NontoApp: App {
                 } else if let user = session.user { MainTabs().id(user.id) }
                 else { AuthView() }
             }
-            .environmentObject(session).environmentObject(consent).tint(.brand)
+            .environmentObject(session).environmentObject(consent)
+            .environment(\.appAccent, accent).tint(accent.color)
             .preferredColorScheme(appearance == "system" ? nil : (appearance == "dark" ? .dark : .light))
             .task(id: consent.accepted) { if consent.accepted { await session.bootstrap() } }
             .onChange(of: session.user?.id) { _, _ in ImageRepository.shared.clear() }

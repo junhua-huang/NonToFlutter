@@ -83,6 +83,7 @@ struct ExploreView: View {
 
 
 struct SearchHistorySection: View {
+    @Environment(\.appAccent) private var accent
     let history: [String]
     let clearing: Bool
     let search: (String) -> Void
@@ -111,7 +112,7 @@ struct SearchHistorySection: View {
                 Button(action: clear) {
                     HStack(spacing: 4) { if clearing { ProgressView() }; Text("清空") }
                         .font(.subheadline).frame(minHeight: 44)
-                }.foregroundStyle(Color.brand).disabled(clearing).accessibilityLabel("清空搜索记录")
+                }.foregroundStyle(accent.textColor).disabled(clearing).accessibilityLabel("清空搜索记录")
             }.textCase(nil)
         }
     }
@@ -182,6 +183,7 @@ struct FollowedTopicsView: View {
 }
 
 struct NotificationsView: View {
+    @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<Notice>
     @ObservedObject private var socket: RealtimeClient
@@ -204,11 +206,11 @@ struct NotificationsView: View {
                             Text(notice.content).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
                             if let d = ServerDate.parse(notice.raw["created_at"]) { Text(d, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).font(.caption2).foregroundStyle(.secondary) }
                         }
-                        if !notice.isRead { Circle().fill(Color.brand).frame(width: 8, height: 8) }
+                        if !notice.isRead { Circle().fill(accent.textColor).frame(width: 8, height: 8) }
                     }.padding(.vertical, 10)
                 }.disabled(removing.contains(notice.id)).swipeActions {
                     Button(role: .destructive) { Task { await remove(notice) } } label: { Label("删除", systemImage: "trash") }
-                }.listRowBackground(notice.isRead ? Color.timelineBackground : Color.brand.opacity(0.045))
+                }.listRowBackground(notice.isRead ? Color.timelineBackground : accent.color.opacity(0.045))
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有通知", emptyDescription: "新的互动和提醒会出现在这里。", emptyIcon: "bell")
         }.navigationTitle("通知").navigationBarTitleDisplayMode(.inline).timelineList()

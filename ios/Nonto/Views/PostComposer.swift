@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct PostComposer: View {
+    @Environment(\.appAccent) private var accent
     var editing: Post? = nil
     var quoted: Post? = nil
     var communityID: Int? = nil
@@ -195,7 +196,7 @@ struct PostComposer: View {
                 } else if editing == nil {
                     Text("文字草稿自动保留").font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                 }
-            }.font(.title3).buttonStyle(.plain).foregroundStyle(Color.brand).disabled(busy || reading)
+            }.font(.title3).buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
         }.padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
             .frame(maxWidth: 720).frame(maxWidth: .infinity).background(.bar)
     }

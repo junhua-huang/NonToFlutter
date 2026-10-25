@@ -11,6 +11,7 @@ private struct ChatTabBarVisibility: ViewModifier {
 }
 
 struct MessagesView: View {
+    @Environment(\.appAccent) private var accent
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -38,14 +39,14 @@ struct MessagesView: View {
                         }
                         if conversation.unread > 0 {
                             Text(conversation.unread > 99 ? "99+" : "\(conversation.unread)").font(.caption2.bold())
-                                .padding(.horizontal, 7).padding(.vertical, 4).background(Color.brand.opacity(0.15), in: Capsule())
+                                .padding(.horizontal, 7).padding(.vertical, 4).background(accent.color.opacity(0.15), in: Capsule())
                                 .foregroundStyle(.primary).accessibilityLabel("\(conversation.unread) 条未读消息")
                         }
                     }.padding(.vertical, 10)
                 }
                 // A retained split-view selection is not a selected row when
                 // the phone has popped back to its single-column list.
-                .listRowBackground(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? Color.brand.opacity(0.10) : Color.timelineBackground)
+                .listRowBackground(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? accent.color.opacity(0.10) : Color.timelineBackground)
                 .accessibilityAddTraits(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
                 .listRowSeparator(.hidden)
             }
@@ -392,6 +393,7 @@ struct SharePostView: View {
 
 /// Only this subtree observes keystrokes and attachment selection.
 struct ChatComposerInput: View {
+    @Environment(\.appAccent) private var accent
     @Bindable var store: ChatStore
     @Bindable var stickerSender: ChatStickerSender
     let accountEpoch: UUID
@@ -446,7 +448,7 @@ struct ChatComposerInput: View {
         VStack(alignment: .leading, spacing: 6) {
             if let quote {
                 HStack(spacing: 8) {
-                    Image(systemName: "quote.bubble").foregroundStyle(Color.brand)
+                    Image(systemName: "quote.bubble").foregroundStyle(accent.textColor)
                     Text(ChatQuoteSummary.text(quote).isEmpty ? "引用消息" : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption)
                     Spacer()
                     Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }

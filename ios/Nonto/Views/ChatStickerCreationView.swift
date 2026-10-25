@@ -39,7 +39,7 @@ struct ChatStickerCreationView: View {
             .navigationTitle("新贴纸").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { operation?.cancel(); browser.cancel(); dismiss() } } }
         }
-        .interactiveDismissDisabled(browser.busy).tint(.brand)
+        .interactiveDismissDisabled(browser.busy)
         .onDisappear { operation?.cancel(); browser.cancel() }
     }
     private func save() {

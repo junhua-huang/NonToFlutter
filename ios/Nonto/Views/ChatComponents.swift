@@ -77,6 +77,7 @@ struct ChatTimelinePlaceholder: View {
 }
 
 struct ChatMessageRow: View {
+    @Environment(\.appAccent) private var accent
     let row: ChatTimeline.Row
     let community: Bool
     let showsReceipt: Bool
@@ -159,7 +160,7 @@ struct ChatMessageRow: View {
                 if !mine { Spacer(minLength: 48) }
             }
         }.padding(.horizontal).padding(.top, row.startsRun ? 6 : 0)
-            .background(Color.brand.opacity(highlighted ? 0.10 : 0))
+            .background(accent.color.opacity(highlighted ? 0.10 : 0))
             .sheet(isPresented: $reporting) {
                 ReportView(kind: "user", targetID: message.senderID, context: "聊天消息 #\(message.id)：\n")
             }
@@ -219,7 +220,7 @@ struct ChatMessageRow: View {
     }
     private var quotePreview: some View {
         HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 2).fill(Color.brand).frame(width: 3)
+            RoundedRectangle(cornerRadius: 2).fill(accent.textColor).frame(width: 3)
             Text(message.raw["quote_preview"].string).font(.caption).foregroundStyle(.secondary).lineLimit(3)
             if onJumpToQuote != nil, message.raw["quote_message_id"].int > 0 {
                 Image(systemName: "arrow.up.left").font(.caption2).foregroundStyle(.secondary)
@@ -357,13 +358,14 @@ struct ChatVideoPreview: View {
 
 /// Media keeps its own rounded viewport; only text messages have a chat bubble.
 private struct ChatBubbleSurface: ViewModifier {
+    @Environment(\.appAccent) private var accent
     let media: Bool
     let mine: Bool
     @ViewBuilder func body(content: Content) -> some View {
         if media { content }
         else {
             content.padding(.horizontal, 14).padding(.vertical, 11)
-                .background(mine ? Color.brand.opacity(0.16) : Color(uiColor: .secondarySystemBackground),
+                .background(mine ? accent.color.opacity(0.16) : Color(uiColor: .secondarySystemBackground),
                             in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: mine ? 20 : 6,
                                                        bottomTrailingRadius: mine ? 6 : 20, topTrailingRadius: 20))
         }
@@ -450,6 +452,7 @@ struct ChatAttachments: Identifiable {
 
 /// Keep the complete selection local until Send; reuse successful uploads on retry.
 struct ChatAttachmentSheet: View {
+    @Environment(\.appAccent) private var accent
     let media: [SelectedMedia]
     let api: APIClient
     let store: ChatStore
@@ -493,7 +496,7 @@ struct ChatAttachmentSheet: View {
                                                 Image(uiImage: image).resizable().scaledToFill().frame(width: 66, height: 66).clipped()
                                             } else { Image(systemName: "video.fill").frame(width: 66, height: 66) }
                                         }.clipShape(RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
-                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected == index ? Color.brand : .clear, lineWidth: 2))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected == index ? accent.textColor : .clear, lineWidth: 2))
                                     }.buttonStyle(.plain).accessibilityLabel("预览第 \(index + 1) 个附件")
                                     Button("移除", role: .destructive) {
                                         let currentID = selection.indices.contains(selected) ? selection[selected].id : nil

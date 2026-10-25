@@ -95,10 +95,12 @@ struct ComposerTextEditor: View {
 }
 
 private struct ComposerNativeTextView: UIViewRepresentable {
+    @Environment(\.appAccent) private var accent
     let editor: ComposerEditor
     @Environment(\.isEnabled) private var isEnabled
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
+        view.tintColor = accent.uiColor
         view.backgroundColor = .clear; view.textColor = .label
         view.isEditable = isEnabled
         let font = UIFont.preferredFont(forTextStyle: .title3); view.font = font
@@ -113,6 +115,7 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: UITextView, context: Context) {
+        view.tintColor = accent.uiColor
         if view.isEditable != isEnabled { view.isEditable = isEnabled }
         editor.attach(view); editor.synchronize()
     }
@@ -202,6 +205,7 @@ final class ComposerReferenceStore {
 }
 
 struct ComposerReferencePicker: View {
+    @Environment(\.appAccent) private var accent
     let kind: ComposerReferenceKind
     let onSelect: (String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -221,7 +225,7 @@ struct ComposerReferencePicker: View {
                         } label: {
                             HStack(spacing: 12) {
                                 if kind == .mention { AvatarView(url: item.avatar, name: item.title, size: 38) }
-                                else { Image(systemName: "number").font(.title2).foregroundStyle(Color.brand).frame(width: 38) }
+                                else { Image(systemName: "number").font(.title2).foregroundStyle(accent.textColor).frame(width: 38) }
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(item.title).foregroundStyle(.primary)
                                     if kind == .mention { Text("@\(item.value)").font(.caption).foregroundStyle(.secondary) }
