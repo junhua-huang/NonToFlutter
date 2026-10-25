@@ -3,6 +3,7 @@ import PhotosUI
 
 struct PostComposer: View {
     @Environment(\.appAccent) private var accent
+    @Environment(\.dynamicTypeSize) private var dynamicType
     var editing: Post? = nil
     var quoted: Post? = nil
     var communityID: Int? = nil
@@ -216,11 +217,12 @@ struct PostComposer: View {
         Button(action: openPhotos) {
             VStack(spacing: 6) {
                 Image(systemName: "plus").font(.title2)
-                Text("添加照片").font(.caption)
-            }.frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+                Text("添加照片").font(.caption).lineLimit(1).minimumScaleFactor(0.7)
+            }.padding(6).frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(accent.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                 .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(accent.color.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [5, 4])) }
         }.buttonStyle(.plain).foregroundStyle(accent.textColor).disabled(busy || reading)
+            .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
             .accessibilityHint("还可以添加 \(attachments.remainingCount) 张照片")
             .accessibilityIdentifier("post.composer.add-photo")
     }
@@ -230,14 +232,24 @@ struct PostComposer: View {
     }
     private var emptyMediaPicker: some View {
         Button(action: openPhotos) {
-            HStack(spacing: 14) {
-                Image(systemName: "photo.on.rectangle.angled").font(.title2).foregroundStyle(accent.textColor)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("添加照片或视频").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
-                    Text("最多 9 张照片，或 1 段视频").font(.caption).foregroundStyle(.secondary)
+            Group {
+                if dynamicType.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("添加照片或视频", systemImage: "photo.on.rectangle.angled")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(accent.textColor)
+                        Text("最多 9 张照片，或 1 段视频").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else {
+                    HStack(spacing: 14) {
+                        Image(systemName: "photo.on.rectangle.angled").font(.title2).foregroundStyle(accent.textColor)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("添加照片或视频").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                            Text("最多 9 张照片，或 1 段视频").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(accent.textColor)
+                    }
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(accent.textColor)
             }.padding(16).frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
                 .background(accent.color.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
         }.buttonStyle(.plain).disabled(busy || reading).accessibilityIdentifier("post.composer.add-media")
