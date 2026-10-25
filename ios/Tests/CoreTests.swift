@@ -45,10 +45,26 @@ final class CoreTests: XCTestCase {
         let list = Records.messages([b, a], [replacement])
         XCTAssertEqual(list.map(\.id), [1, 2]); XCTAssertEqual(list.last?.content, "updated"); XCTAssertNil(a.date)
     }
-    func testBeijingLegacyDateAndNumericEpoch() throws {
-        XCTAssertEqual(ServerDate.parse(.text("2026-01-01T08:00:00")), ServerDate.parse(.text("2026-01-01T00:00:00Z")))
+    func testUTCLegacyDateAndNumericEpoch() throws {
+        XCTAssertEqual(ServerDate.parse(.text("2026-01-01T00:00:00")), ServerDate.parse(.text("2026-01-01T00:00:00Z")))
         XCTAssertEqual(ServerDate.parse(.number(1_700_000_000_000)), ServerDate.parse(.number(1_700_000_000)))
         XCTAssertNil(ServerDate.parse(.null))
+    }
+    func testServerDateFormatsRepresentTheSameInstant() throws {
+        let expected = try XCTUnwrap(ServerDate.parse(.text("2026-10-25T00:00:00.123Z")))
+        for value in ["2026-10-25T00:00:00.123", "2026-10-25 00:00:00.123000",
+                      "2026-10-25T08:00:00.123+08:00", "2026-10-24T17:00:00.123-07:00"] {
+            let actual = try XCTUnwrap(ServerDate.parse(.text(value)), value)
+            XCTAssertEqual(actual.timeIntervalSince1970, expected.timeIntervalSince1970, accuracy: 0.001, value)
+        }
+        XCTAssertEqual(ServerDate.parse(.text("2026-10-25 00:00:00")), ServerDate.parse(.text("2026-10-25T00:00:00Z")))
+        XCTAssertNil(ServerDate.parse(.text("not a date")))
+        XCTAssertNil(ServerDate.parse(.text("")))
+    }
+    func testEventWallClockDatesKeepBeijingTime() throws {
+        let zone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        XCTAssertEqual(ServerDate.parse(.text("2026-10-25T08:30"), timeZone: zone),
+                       ServerDate.parse(.text("2026-10-25T00:30:00Z")))
     }
     func testMultipartIsNotJSON() {
         let data = Multipart.encode(["content": "你好\nhello", "visibility": "friends", "image_urls": "[\"x\"]"], boundary: "test")

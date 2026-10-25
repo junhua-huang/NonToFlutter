@@ -480,7 +480,7 @@ struct ChatAttachmentSheet: View {
                             if let url = videoURLs[item.id] { NativeVideo(url: url).frame(height: 320) }
                             else { ProgressView("正在准备视频…").frame(height: 320) }
                         } else if let image = (selectedPreview?.id == item.id ? selectedPreview?.image : nil) ?? images[item.id] {
-                            ZoomImageSurface(image: image).frame(height: 360).accessibilityLabel("待发送图片，可缩放预览")
+                            ZoomImageSurface(image: image).id(item.id).frame(height: 360).accessibilityLabel("待发送图片，可缩放预览")
                         } else { ProgressView().frame(height: 200) }
                     }
                     ScrollView(.horizontal) {
