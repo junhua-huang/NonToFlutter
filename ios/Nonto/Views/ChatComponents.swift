@@ -4,18 +4,106 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// An in-chat glass panel: its shape has no popover arrow or bubble tail.
+struct ChatAttachmentSourcePreference: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
+/// A single surface grows from the measured button; content keeps its own size.
+struct ChatAttachmentMenuOverlay: View {
+    let presented: Bool
+    let source: CGRect
+    let containerSize: CGSize
+    let disabled: Bool
+    let onSelect: (ChatAttachmentAction) -> Void
+    let onDismiss: () -> Void
+    @Environment(\.appAccent) private var accent
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 66
+
+    private var destination: CGRect {
+        let width = min(320, max(1, containerSize.width - 24))
+        let left = min(max(12, source.minX), max(12, containerSize.width - width - 12))
+        let bottom = min(containerSize.height - 6, source.maxY)
+        let height = min(max(1, bottom - 12), rowHeight * CGFloat(ChatAttachmentAction.allCases.count) + 24)
+        return CGRect(x: left, y: bottom - height, width: width, height: height)
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if presented {
+                Button(action: onDismiss) {
+                    Color.clear.contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityHidden(true)
+                    .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { _ in onDismiss() })
+                    .transition(.opacity)
+                ChatAttachmentMenu(rowHeight: rowHeight, onSelect: onSelect, onDismiss: onDismiss)
+                    .disabled(disabled)
+                    .transition(.modifier(
+                        active: ChatAttachmentReveal(progress: 0, source: source, destination: destination,
+                                                     accent: accent.color, reduceMotion: reduceMotion),
+                        identity: ChatAttachmentReveal(progress: 1, source: source, destination: destination,
+                                                       accent: accent.color, reduceMotion: reduceMotion)))
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(presented)
+    }
+}
+
+private struct ChatAttachmentReveal: ViewModifier, Animatable {
+    var progress: CGFloat
+    let source: CGRect
+    let destination: CGRect
+    let accent: Color
+    let reduceMotion: Bool
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let value = min(1, max(0, progress))
+        let geometryProgress: CGFloat = reduceMotion ? 1 : value
+        let frame = CGRect(x: interpolate(source.minX, destination.minX, geometryProgress),
+                           y: interpolate(source.minY, destination.minY, geometryProgress),
+                           width: interpolate(source.width, destination.width, geometryProgress),
+                           height: interpolate(source.height, destination.height, geometryProgress))
+        let radius = interpolate(min(source.width, source.height) / 2, 32, geometryProgress)
+        let contentOpacity: CGFloat = reduceMotion ? 1 : min(1, max(0, (value - 0.12) / 0.65))
+        return content
+            .frame(width: destination.width, height: destination.height)
+            .opacity(Double(contentOpacity))
+            .offset(y: reduceMotion ? 0 : (1 - value) * 12)
+            .frame(width: max(1, frame.width), height: max(1, frame.height), alignment: .topLeading)
+            .overlay(alignment: .bottomLeading) {
+                if !reduceMotion {
+                    Image(systemName: "plus")
+                        .font(.system(size: min(source.width * 0.44, 32), weight: .medium))
+                        .foregroundStyle(accent)
+                        .frame(width: source.width, height: source.height)
+                        .opacity(Double(max(0, 1 - value * 5))).accessibilityHidden(true)
+                }
+            }
+            .clipShape(.rect(cornerRadius: radius))
+            .glassEffect(.regular, in: .rect(cornerRadius: radius))
+            .opacity(reduceMotion ? Double(value) : 1)
+            .position(x: frame.midX, y: frame.midY)
+    }
+    private func interpolate(_ start: CGFloat, _ end: CGFloat, _ value: CGFloat) -> CGFloat {
+        start + (end - start) * value
+    }
+}
+
+/// The surface owns its reveal; only the list participates in native bouncing.
 struct ChatAttachmentMenu: View {
-    let availableHeight: CGFloat
+    let rowHeight: CGFloat
     let onSelect: (ChatAttachmentAction) -> Void
     let onDismiss: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 66
     @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 36
-    @State private var edgePull: CGFloat = 0
     private let petalColors: [Color] = [.pink, .red, .orange, .yellow, .green, .cyan, .blue, .purple]
-    private var panelHeight: CGFloat { min(max(0, availableHeight), rowHeight * CGFloat(ChatAttachmentAction.allCases.count) + 24) }
-    private var stretch: CGFloat { reduceMotion ? 0 : min(abs(edgePull) * 0.2, 18) }
 
     var body: some View {
         ScrollView {
@@ -28,23 +116,6 @@ struct ChatAttachmentMenu: View {
                 }
             }.buttonStyle(ChatAttachmentRowStyle()).padding(.leading, 32).padding(.trailing, 24).padding(.vertical, 12)
         }.scrollBounceBehavior(reduceMotion ? .basedOnSize : .always, axes: .vertical).scrollIndicators(.hidden)
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                let offset = geometry.contentOffset.y + geometry.contentInsets.top
-                let end = max(0, geometry.contentSize.height + geometry.contentInsets.top
-                              + geometry.contentInsets.bottom - geometry.containerSize.height)
-                if offset < 0 { return -offset }
-                if offset > end { return end - offset }
-                return 0
-            } action: { _, value in
-                // Native scrolling supplies resistance and spring-back. Transform
-                // only this panel; never feed the stretch back into scroll layout.
-                edgePull = reduceMotion ? 0 : value
-            }
-            .frame(height: panelHeight)
-            .clipShape(.rect(cornerRadius: 32))
-            .glassEffect(.regular, in: .rect(cornerRadius: 32))
-            .scaleEffect(x: 1 - stretch * 0.0008, y: 1 + stretch / max(1, panelHeight), anchor: edgePull > 0 ? .top : .bottom)
-            .offset(y: reduceMotion ? 0 : max(-8, min(8, edgePull * 0.1)))
             .accessibilityAddTraits(.isModal)
             .accessibilityAction(.escape, onDismiss)
             .accessibilityIdentifier("chat.attachments.menu")

@@ -101,7 +101,6 @@ struct ChatRoomContent: View {
     @State private var quoteReturnID: String?
     @State private var attachmentMenuVisible = false
     @State private var pendingAttachmentAction: ChatAttachmentRequest?
-    @Namespace private var attachmentNamespace
     @State private var attachmentRequest: ChatAttachmentRequest?
     @State private var inputDismissal = 0
     @State private var farFromLatest = false
@@ -124,22 +123,13 @@ struct ChatRoomContent: View {
         socket = session.socket
     }
     var body: some View {
-        GlassEffectContainer(spacing: 10) {
-            chatContent.overlay {
+        chatContent.overlayPreferenceValue(ChatAttachmentSourcePreference.self) { anchor in
+            if let anchor {
                 GeometryReader { geometry in
-                    ZStack(alignment: .bottomLeading) {
-                        if attachmentMenuVisible {
-                            ChatAttachmentMenu(availableHeight: max(0, geometry.size.height - 24),
-                                               onSelect: selectAttachment, onDismiss: { setAttachmentMenu(false) })
-                                .disabled(preparingMedia || stickerSender.busy || pendingAttachmentAction != nil)
-                                .frame(width: min(320, max(0, geometry.size.width - 24)))
-                                .glassEffectID("chat.attachments", in: attachmentNamespace)
-                                .glassEffectTransition(reduceMotion ? .materialize : .matchedGeometry)
-                                .padding(.leading, 12).padding(.bottom, 6)
-                        }
-                    }
-                    .frame(maxWidth: 820, maxHeight: .infinity, alignment: .bottomLeading)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ChatAttachmentMenuOverlay(presented: attachmentMenuVisible, source: geometry[anchor],
+                                              containerSize: geometry.size,
+                                              disabled: preparingMedia || stickerSender.busy || pendingAttachmentAction != nil,
+                                              onSelect: selectAttachment, onDismiss: { setAttachmentMenu(false) })
                 }
             }
         }
@@ -284,8 +274,7 @@ struct ChatRoomContent: View {
             ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
                               quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused,
                               attachmentRequest: attachmentRequest, inputDismissal: inputDismissal,
-                              attachmentMenu: Binding(get: { attachmentMenuVisible }, set: setAttachmentMenu),
-                              attachmentNamespace: attachmentNamespace)
+                              attachmentMenu: Binding(get: { attachmentMenuVisible }, set: setAttachmentMenu))
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
@@ -300,7 +289,8 @@ struct ChatRoomContent: View {
         }
         .onDisappear { visible = false; pendingAttachmentAction = nil; attachmentMenuVisible = false; highlightTask?.cancel(); cameraTask?.cancel(); stickerSender.cancel(); store.suspend(); Task { await session.refreshCounts() } }
         .onChange(of: phase) { _, value in
-            if value == .active && visible { Task { if visible { await store.activate() } } } else { store.suspend() }
+            if value == .active && visible { Task { if visible { await store.activate() } } }
+            else { setAttachmentMenu(false); store.suspend() }
         }
         .sheet(item: $attachment) { media in
             ChatAttachmentSheet(media: media.items, api: session.api, store: store, quoteID: quote?.id) {
@@ -355,11 +345,12 @@ struct ChatRoomContent: View {
         setAttachmentMenu(false)
         inputDismissal &+= 1
     }
-    private var attachmentAnimation: Animation? { reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86) }
     private func setAttachmentMenu(_ presented: Bool) {
         pendingAttachmentAction = nil
         guard attachmentMenuVisible != presented else { return }
-        withAnimation(attachmentAnimation) { attachmentMenuVisible = presented }
+        let animation: Animation = reduceMotion ? .easeOut(duration: 0.12)
+            : (presented ? .smooth(duration: 0.28) : .easeOut(duration: 0.18))
+        withAnimation(animation) { attachmentMenuVisible = presented }
     }
     private func selectAttachment(_ action: ChatAttachmentAction) {
         guard attachmentMenuVisible, pendingAttachmentAction == nil, !preparingMedia, !stickerSender.busy else { return }
@@ -367,7 +358,7 @@ struct ChatRoomContent: View {
         pendingAttachmentAction = request
         // Finish returning the glass to its source before presenting the picker.
         // An outside tap, navigation, or a new presentation cancels this action.
-        withAnimation(attachmentAnimation, completionCriteria: .logicallyComplete) {
+        withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.18), completionCriteria: .removed) {
             attachmentMenuVisible = false
         } completion: {
             guard pendingAttachmentAction?.id == request.id, !attachmentMenuVisible, !composerFocused,
@@ -540,19 +531,19 @@ struct ChatComposerInput: View {
     let focus: FocusState<Bool>.Binding
     let attachmentRequest: ChatAttachmentRequest?
     let inputDismissal: Int
-    let attachmentNamespace: Namespace.ID?
     @Binding private var showingAttachments: Bool
     @EnvironmentObject private var session: AppSession
     @Environment(\.verticalSizeClass) private var verticalSize
     @Environment(\.dynamicTypeSize) private var dynamicType
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var phase
     @State private var drawer: ChatComposerDrawer?
     @State private var drawerDetent: PresentationDetent
     @State private var pendingPhotos: [PhotosPickerItem] = []
+    @State private var reopenMenuAfterDrawer = false
     @State private var stagedSticker: StagedChatSticker?
     @State private var selection: TextSelection?
     @State private var caret: NSRange?
-    @Namespace private var localAttachmentNamespace
     @State private var sendTask: Task<Void, Never>?
     @State private var composerHeight: CGFloat = 56
     @ScaledMetric(relativeTo: .body) private var inputControlHeight: CGFloat = 52
@@ -561,7 +552,7 @@ struct ChatComposerInput: View {
     init(store: ChatStore, stickerSender: ChatStickerSender, accountEpoch: UUID, availableHeight: CGFloat,
          quote: Binding<ChatMessage?>, picks: Binding<[PhotosPickerItem]>, preparingMedia: Bool,
          focus: FocusState<Bool>.Binding, attachmentRequest: ChatAttachmentRequest? = nil, inputDismissal: Int = 0,
-         attachmentMenu: Binding<Bool> = .constant(false), attachmentNamespace: Namespace.ID? = nil,
+         attachmentMenu: Binding<Bool> = .constant(false),
          initialPicker: ChatExpressionTab? = nil,
          initialSticker: StagedChatSticker? = nil, pickerDefaults: UserDefaults = .standard) {
         _store = Bindable(wrappedValue: store); _stickerSender = Bindable(wrappedValue: stickerSender)
@@ -569,7 +560,7 @@ struct ChatComposerInput: View {
         self.pickerDefaults = pickerDefaults
         _quote = quote; _picks = picks; self.preparingMedia = preparingMedia; self.focus = focus
         self.attachmentRequest = attachmentRequest; self.inputDismissal = inputDismissal
-        _showingAttachments = attachmentMenu; self.attachmentNamespace = attachmentNamespace
+        _showingAttachments = attachmentMenu
         _drawer = State(initialValue: initialPicker.map { .expressions($0) })
         _drawerDetent = State(initialValue: .height(min(320, max(110, availableHeight - 56 - 30))))
         _stagedSticker = State(initialValue: initialSticker)
@@ -594,10 +585,13 @@ struct ChatComposerInput: View {
                     .presentationCornerRadius(32)
             }
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
-            .onChange(of: focus.wrappedValue) { _, value in if value { drawer = nil; showingAttachments = false } }
+            .onChange(of: focus.wrappedValue) { _, value in
+                if value { reopenMenuAfterDrawer = false; drawer = nil; showingAttachments = false }
+            }
             .onChange(of: picks) { _, value in if !value.isEmpty { showingAttachments = false } }
             .onChange(of: attachmentRequest?.id) { _, _ in
                 guard let request = attachmentRequest else { return }
+                reopenMenuAfterDrawer = false
                 focus.wrappedValue = false; showingAttachments = false
                 switch request.action {
                 case .camera: drawer = nil
@@ -607,13 +601,13 @@ struct ChatComposerInput: View {
                 }
             }
             .onChange(of: inputDismissal) { _, _ in
-                focus.wrappedValue = false; showingAttachments = false; drawer = nil
+                reopenMenuAfterDrawer = false; focus.wrappedValue = false; showingAttachments = false; drawer = nil
             }
             .onChange(of: compactDrawerHeight) { _, _ in
                 if drawerDetent != .large { drawerDetent = compactDrawerDetent }
             }
             .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { drawerDetent = .large } }
-            .onDisappear { showingAttachments = false; sendTask?.cancel(); stickerSender.cancel() }
+            .onDisappear { reopenMenuAfterDrawer = false; showingAttachments = false; sendTask?.cancel(); stickerSender.cancel() }
     }
     @ViewBuilder private func drawerContent(_ panel: ChatComposerDrawer) -> some View {
         switch panel {
@@ -639,10 +633,16 @@ struct ChatComposerInput: View {
     private func drawerDismissed() {
         // Present the existing media preview only after the library sheet has
         // finished dismissing; two presentations must not compete.
-        guard !pendingPhotos.isEmpty else { return }
-        let items = pendingPhotos; pendingPhotos = []
-        guard session.api.generation == accountEpoch, session.api.token != nil else { return }
-        picks = items
+        if !pendingPhotos.isEmpty {
+            let items = pendingPhotos; pendingPhotos = []; reopenMenuAfterDrawer = false
+            guard session.api.generation == accountEpoch, session.api.token != nil else { return }
+            picks = items
+        } else if reopenMenuAfterDrawer {
+            reopenMenuAfterDrawer = false
+            guard session.api.generation == accountEpoch, session.api.token != nil, phase == .active,
+                  !focus.wrappedValue, !preparingMedia, !stickerSender.busy else { return }
+            showingAttachments = true
+        }
     }
     private func stageSticker(_ sticker: StagedChatSticker) {
         stagedSticker = sticker; stickerSender.error = nil
@@ -659,25 +659,26 @@ struct ChatComposerInput: View {
                         .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44).disabled(stickerSender.busy)
                 }.padding(.horizontal)
             }
-            HStack(alignment: .bottom, spacing: 10) {
-                attachmentButton
-                VStack(spacing: 0) {
-                    if let stagedSticker {
-                        ZStack(alignment: .topTrailing) {
-                            ChatStagedStickerImage(sticker: stagedSticker)
-                                .frame(width: verticalSize == .compact ? 48 : 96, height: verticalSize == .compact ? 48 : 96)
-                                .frame(maxWidth: .infinity).padding(.vertical, 8)
-                                .accessibilityLabel("待发送贴纸：\(stagedSticker.name)")
-                            Button(action: cancelSticker) { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }
-                                .buttonStyle(.plain).accessibilityLabel("取消待发送贴纸").accessibilityIdentifier("chat.sticker.cancel")
+            GlassEffectContainer(spacing: 10) {
+                HStack(alignment: .bottom, spacing: 10) {
+                    attachmentButton
+                    VStack(spacing: 0) {
+                        if let stagedSticker {
+                            ZStack(alignment: .topTrailing) {
+                                ChatStagedStickerImage(sticker: stagedSticker)
+                                    .frame(width: verticalSize == .compact ? 48 : 96, height: verticalSize == .compact ? 48 : 96)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                    .accessibilityLabel("待发送贴纸：\(stagedSticker.name)")
+                                Button(action: cancelSticker) { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }
+                                    .buttonStyle(.plain).accessibilityLabel("取消待发送贴纸").accessibilityIdentifier("chat.sticker.cancel")
+                            }
+                            Divider().padding(.horizontal, 12)
                         }
-                        Divider().padding(.horizontal, 12)
+                        composerRow
                     }
-                    composerRow
+                    .padding(.horizontal, 12)
+                    .glassEffect(.regular, in: .rect(cornerRadius: inputControlHeight / 2))
                 }
-                .padding(.horizontal, 12)
-                .glassEffect(.regular, in: .rect(cornerRadius: inputControlHeight / 2))
-                .glassEffectID("chat.composer", in: attachmentNamespace ?? localAttachmentNamespace)
             }.padding(.horizontal, 12).padding(.bottom, 6)
             if let error = stickerSender.error { ErrorBanner(text: error).padding(.horizontal, 12) }
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
@@ -701,24 +702,25 @@ struct ChatComposerInput: View {
                 .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")
         }
     }
-    @ViewBuilder private var attachmentButton: some View {
-        if showingAttachments {
-            // Preserve the input layout while its circle becomes the menu.
-            Color.clear.frame(width: inputControlHeight, height: inputControlHeight).accessibilityHidden(true)
-        } else {
-            Button {
-                focus.wrappedValue = false; drawer = nil; showingAttachments = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: min(inputControlHeight * 0.44, 32), weight: .medium)).foregroundStyle(accent.color)
-                    .frame(width: inputControlHeight, height: inputControlHeight)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                    .glassEffectID("chat.attachments", in: attachmentNamespace ?? localAttachmentNamespace)
-                    .glassEffectTransition(reduceMotion ? .materialize : .matchedGeometry)
-            }.buttonStyle(.plain).disabled(preparingMedia || stickerSender.busy)
-                .accessibilityLabel("相机、照片、贴纸或表情")
-                .accessibilityIdentifier("chat.attachments.open")
-        }
+    private var attachmentButton: some View {
+        Button(action: showAttachmentMenu) {
+            Image(systemName: "plus")
+                .font(.system(size: min(inputControlHeight * 0.44, 32), weight: .medium)).foregroundStyle(accent.color)
+                .frame(width: inputControlHeight, height: inputControlHeight)
+                .glassEffect(.regular.interactive(), in: .circle)
+        }.buttonStyle(.plain).disabled(preparingMedia || stickerSender.busy || reopenMenuAfterDrawer)
+            .opacity(showingAttachments ? 0 : 1).animation(nil, value: showingAttachments)
+            .accessibilityHidden(showingAttachments)
+            .accessibilityLabel("相机、照片、贴纸或表情")
+            .accessibilityIdentifier("chat.attachments.open")
+            .anchorPreference(key: ChatAttachmentSourcePreference.self, value: .bounds) { $0 }
+    }
+    private func showAttachmentMenu() {
+        guard !reopenMenuAfterDrawer else { return }
+        focus.wrappedValue = false
+        if drawer != nil {
+            reopenMenuAfterDrawer = true; drawer = nil
+        } else { showingAttachments = true }
     }
     private var textSelection: Binding<TextSelection?> {
         Binding(get: { selection }, set: { value in
