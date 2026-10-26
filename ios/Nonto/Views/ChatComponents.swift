@@ -77,25 +77,14 @@ private struct ChatAttachmentRowStyle: ButtonStyle {
     }
 }
 
-/// Keep Apple's private, system-rendered photo library in the keyboard area.
+/// The system sheet owns dragging and hands scrolling to the embedded library.
 struct ChatPhotoDrawer: View {
-    @Binding var expanded: Bool
     let onAdd: ([PhotosPickerItem]) -> Void
     let onClose: () -> Void
     @State private var selection: [PhotosPickerItem] = []
 
     var body: some View {
         VStack(spacing: 0) {
-            Button { expanded.toggle() } label: {
-                Capsule().fill(.secondary.opacity(0.5)).frame(width: 36, height: 5)
-                    .frame(maxWidth: .infinity, minHeight: 24)
-            }.buttonStyle(.plain).accessibilityLabel(expanded ? "收起相册" : "展开相册")
-                .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
-                    if value.translation.height < -30 { expanded = true }
-                    else if value.translation.height > 30 {
-                        if expanded { expanded = false } else { onClose() }
-                    }
-                })
             HStack {
                 Text("相册").font(.headline)
                 Spacer()
@@ -111,8 +100,7 @@ struct ChatPhotoDrawer: View {
                 .photosPickerDisabledCapabilities(.selectionActions)
                 .photosPickerAccessoryVisibility(.hidden, edges: .bottom)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }.background(Color.timelineBackground)
-            .clipShape(.rect(cornerRadius: 32))
+        }.padding(.top, 8)
             .accessibilityIdentifier("chat.photos.drawer")
     }
 }

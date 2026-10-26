@@ -49,17 +49,6 @@ struct ChatExpressionDrawer: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Button { expanded.toggle() } label: {
-                Capsule().fill(.secondary.opacity(0.55)).frame(width: 36, height: 5)
-                    .frame(maxWidth: .infinity, minHeight: 20)
-            }.buttonStyle(.plain).accessibilityLabel(expanded ? "收起选择器" : "展开选择器")
-                .accessibilityAction(named: Text("关闭选择器"), onClose)
-                .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
-                    if value.translation.height < -30 { expanded = true }
-                    else if value.translation.height > 30 {
-                        if expanded { expanded = false } else { onClose() }
-                    }
-                })
             sourceBar
             if searchOpen {
                 NotoEmojiSearchField(text: query, focus: $searchFocused, prompt: searchPrompt)
@@ -82,8 +71,7 @@ struct ChatExpressionDrawer: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity).accessibilityIdentifier("chat.expressions.grid")
             if let importError { Text(importError).font(.caption).foregroundStyle(.red).padding(8) }
         }
-        .clipShape(.rect(cornerRadius: 32))
-        .glassEffect(.regular, in: .rect(cornerRadius: 32))
+        .padding(.top, 8)
         .disabled(disabled)
         .onAppear(perform: reload)
         .onChange(of: selection?.id) { _, _ in reload() }
@@ -114,6 +102,13 @@ struct ChatExpressionDrawer: View {
         .accessibilityIdentifier("chat.expressions.drawer")
     }
     private var sourceBar: some View {
+        ViewThatFits(in: .horizontal) {
+            sourceControls
+            ScrollView(.horizontal) { sourceControls }
+                .scrollIndicators(.hidden).scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        }.padding(.horizontal, 12).padding(.bottom, 4)
+    }
+    private var sourceControls: some View {
         HStack(spacing: 2) {
             ForEach(ChatExpressionTab.allCases) { source in
                 Button { choose(source) } label: {
@@ -138,7 +133,10 @@ struct ChatExpressionDrawer: View {
                     Image(systemName: "slider.horizontal.3").foregroundStyle(.secondary).frame(width: 44, height: 44)
                 }.buttonStyle(.plain).accessibilityLabel("动态贴纸设置与许可")
             }
-        }.padding(.horizontal, 12).padding(.bottom, 4)
+            Button(action: onClose) {
+                Image(systemName: "xmark").foregroundStyle(.secondary).frame(width: 44, height: 44)
+            }.buttonStyle(.plain).accessibilityLabel("关闭选择器")
+        }
     }
     private var emptySearch: some View {
         VStack(spacing: 8) {

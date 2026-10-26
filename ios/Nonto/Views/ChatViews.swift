@@ -484,6 +484,18 @@ struct SharePostView: View {
     }
 }
 
+private enum ChatComposerDrawer: Identifiable {
+    case photos
+    case expressions(ChatExpressionTab)
+
+    var id: String {
+        switch self {
+        case .photos: return "photos"
+        case .expressions(let tab): return "expressions.\(tab.id)"
+        }
+    }
+}
+
 /// Only this subtree observes keystrokes and attachment selection.
 struct ChatComposerInput: View {
     @Environment(\.appAccent) private var accent
@@ -503,13 +515,13 @@ struct ChatComposerInput: View {
     @Environment(\.verticalSizeClass) private var verticalSize
     @Environment(\.dynamicTypeSize) private var dynamicType
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pickerMode: ChatExpressionTab?
-    @State private var expanded = false
+    @State private var drawer: ChatComposerDrawer?
+    @State private var drawerDetent: PresentationDetent
+    @State private var pendingPhotos: [PhotosPickerItem] = []
     @State private var stagedSticker: StagedChatSticker?
     @State private var selection: TextSelection?
     @State private var caret: NSRange?
     @State private var showingAttachments = false
-    @State private var showingPhotos = false
     @State private var sendTask: Task<Void, Never>?
     @State private var composerHeight: CGFloat = 56
     @ScaledMetric(relativeTo: .body) private var inputControlHeight: CGFloat = 52
@@ -527,50 +539,84 @@ struct ChatComposerInput: View {
         _quote = quote; _picks = picks; self.preparingMedia = preparingMedia; self.focus = focus
         self.attachmentRequest = attachmentRequest; self.inputDismissal = inputDismissal
         self.onAttachmentMenuChange = onAttachmentMenuChange
-        _pickerMode = State(initialValue: initialPicker); _stagedSticker = State(initialValue: initialSticker)
+        _drawer = State(initialValue: initialPicker.map { .expressions($0) })
+        _drawerDetent = State(initialValue: .height(min(320, max(110, availableHeight - 56 - 30))))
+        _stagedSticker = State(initialValue: initialSticker)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             composerContent
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
-            if showingPhotos {
-                ChatPhotoDrawer(expanded: $expanded, onAdd: { items in
-                    picks = items; showingPhotos = false
-                }, onClose: { showingPhotos = false })
-                    .disabled(preparingMedia || stickerSender.busy)
-                    .frame(height: drawerHeight).padding(.horizontal, 8).padding(.bottom, 4)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if let mode = pickerMode {
-                ChatExpressionDrawer(accountID: session.user?.id ?? 0, api: session.api, initialTab: mode,
-                                     selection: stagedSticker, expanded: $expanded, disabled: stickerSender.busy, defaults: pickerDefaults,
-                                     onInsertEmoji: insertEmoji, onStageSticker: { stagedSticker = $0; stickerSender.error = nil },
-                                     onClose: { pickerMode = nil })
-                    .id(mode).frame(height: drawerHeight).padding(.horizontal, 8).padding(.bottom, 4)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            if drawer != nil {
+                // Keep the composer above the resting sheet. Expanding the sheet
+                // covers the composer instead of pushing it beyond the navigation bar.
+                Color.clear.frame(height: compactDrawerHeight).allowsHitTesting(false).accessibilityHidden(true)
             }
         }.padding(.top, 6)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.25, extraBounce: 0), value: pickerMode)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.25, extraBounce: 0), value: showingPhotos)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.25, extraBounce: 0), value: expanded)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.25, extraBounce: 0), value: drawer != nil)
+            .sheet(item: $drawer, onDismiss: drawerDismissed) { panel in
+                drawerContent(panel)
+                    .presentationDetents([compactDrawerDetent, .large], selection: $drawerDetent)
+                    .presentationDragIndicator(.visible)
+                    .presentationContentInteraction(.resizes)
+                    .presentationBackgroundInteraction(.enabled(upThrough: compactDrawerDetent))
+                    .presentationCornerRadius(32)
+            }
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
-            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil; showingPhotos = false; showingAttachments = false } }
+            .onChange(of: focus.wrappedValue) { _, value in if value { drawer = nil; showingAttachments = false } }
             .onChange(of: showingAttachments) { _, value in onAttachmentMenuChange(value) }
             .onChange(of: picks) { _, value in if !value.isEmpty { showingAttachments = false } }
             .onChange(of: attachmentRequest?.id) { _, _ in
                 guard let request = attachmentRequest else { return }
                 focus.wrappedValue = false; showingAttachments = false
                 switch request.action {
-                case .camera: pickerMode = nil; showingPhotos = false
-                case .photos: pickerMode = nil; showingPhotos = true
+                case .camera: drawer = nil
+                case .photos: open(.photos)
                 case .emoji: open(.emoji)
                 case .stickers: open(.stickers)
                 }
             }
             .onChange(of: inputDismissal) { _, _ in
-                focus.wrappedValue = false; showingAttachments = false; pickerMode = nil; showingPhotos = false
+                focus.wrappedValue = false; showingAttachments = false; drawer = nil
             }
-            .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
+            .onChange(of: compactDrawerHeight) { _, _ in
+                if drawerDetent != .large { drawerDetent = compactDrawerDetent }
+            }
+            .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { drawerDetent = .large } }
             .onDisappear { onAttachmentMenuChange(false); sendTask?.cancel(); stickerSender.cancel() }
+    }
+    @ViewBuilder private func drawerContent(_ panel: ChatComposerDrawer) -> some View {
+        switch panel {
+        case .photos:
+            ChatPhotoDrawer(onAdd: { items in
+                pendingPhotos = items; drawer = nil
+            }, onClose: { drawer = nil })
+                .disabled(preparingMedia || stickerSender.busy)
+        case .expressions(let mode):
+            ChatExpressionDrawer(accountID: session.user?.id ?? 0, api: session.api, initialTab: mode,
+                                 selection: stagedSticker, expanded: drawerExpanded, disabled: stickerSender.busy, defaults: pickerDefaults,
+                                 onInsertEmoji: insertEmoji, onStageSticker: stageSticker,
+                                 onClose: { drawer = nil })
+        }
+    }
+    private var drawerExpanded: Binding<Bool> {
+        Binding(get: { drawerDetent == .large }, set: { value in
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+                drawerDetent = value ? .large : compactDrawerDetent
+            }
+        })
+    }
+    private func drawerDismissed() {
+        // Present the existing media preview only after the library sheet has
+        // finished dismissing; two presentations must not compete.
+        guard !pendingPhotos.isEmpty else { return }
+        let items = pendingPhotos; pendingPhotos = []
+        guard session.api.generation == accountEpoch, session.api.token != nil else { return }
+        picks = items
+    }
+    private func stageSticker(_ sticker: StagedChatSticker) {
+        stagedSticker = sticker; stickerSender.error = nil
+        drawerExpanded.wrappedValue = false
     }
     private var composerContent: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -608,10 +654,8 @@ struct ChatComposerInput: View {
             if preparingMedia { ProgressView("正在准备预览…").font(.caption).padding(.horizontal) }
         }
     }
-    private var drawerHeight: CGFloat {
-        let limit = max(110, availableHeight - composerHeight - 30)
-        return min(expanded ? 500 : 320, limit)
-    }
+    private var compactDrawerHeight: CGFloat { min(320, max(110, availableHeight - composerHeight - 30)) }
+    private var compactDrawerDetent: PresentationDetent { .height(compactDrawerHeight) }
     private var composerRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField(stagedSticker == nil ? "发送消息…" : "添加文字或发送", text: $store.draft, selection: textSelection, axis: .vertical)
@@ -630,7 +674,7 @@ struct ChatComposerInput: View {
     }
     private var attachmentButton: some View {
         Button {
-            focus.wrappedValue = false; pickerMode = nil; showingPhotos = false; showingAttachments.toggle()
+            focus.wrappedValue = false; drawer = nil; showingAttachments.toggle()
         } label: {
             Image(systemName: "plus")
                 .rotationEffect(.degrees(showingAttachments ? 45 : 0))
@@ -653,7 +697,12 @@ struct ChatComposerInput: View {
             }
         })
     }
-    private func open(_ mode: ChatExpressionTab) { focus.wrappedValue = false; showingPhotos = false; pickerMode = mode }
+    private func open(_ mode: ChatExpressionTab) { open(.expressions(mode)) }
+    private func open(_ panel: ChatComposerDrawer) {
+        focus.wrappedValue = false; pendingPhotos = []
+        drawerDetent = dynamicType.isAccessibilitySize ? .large : compactDrawerDetent
+        drawer = panel
+    }
     private func insertEmoji(_ item: NotoEmoji) -> Bool {
         guard !stickerSender.busy else { return false }
         let result = ChatEmojiInsertion.insert(item.emoji, into: store.draft, selection: caret)
