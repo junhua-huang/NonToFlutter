@@ -277,8 +277,26 @@ struct ReportView: View {
         }
     }
     private func submit() async {
-        guard !busy else { return }; busy = true; defer { busy = false }
-        do { _ = try await session.api.request("/reports/\(kind)", method: "POST", body: .object(["\(kind)_id": .id(targetID), "reason": .text(reason)])); dismiss() }
-        catch { self.error = error.localizedDescription }
+        guard !busy, let reporterID = session.user?.id else { return }
+        let epoch = session.api.generation
+        busy = true; defer { busy = false }
+        do {
+            let result = try await session.api.request("/reports/\(kind)", method: "POST", body: .object(["\(kind)_id": .id(targetID), "reason": .text(reason)]))
+            guard epoch == session.api.generation, session.user?.id == reporterID else { return }
+            let receipt = result["notification"]
+            if receipt["id"].int > 0, receipt["user_id"].int == reporterID, Notice(receipt).isReportReceipt {
+                // Use the committed server row. HTTP, WebSocket and APNs copies
+                // share its ID, so foreground receipt delivery alerts only once.
+                NativeNotifications.shared.receive(.object([
+                    "event": .text("new_notification"),
+                    "data": .object(["notification": receipt]),
+                ]), seq: 0)
+            }
+            session.noticeRevision += 1
+            dismiss()
+            Task { await session.refreshCounts() }
+        } catch {
+            if epoch == session.api.generation, session.user?.id == reporterID { self.error = error.localizedDescription }
+        }
     }
 }

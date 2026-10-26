@@ -116,6 +116,12 @@ struct Notice: Record {
     var title: String { raw["title"].string }
     var content: String { raw["content"].string }
     var isRead: Bool { raw["is_read"].bool }
+    var notificationType: String { raw["notification_type"].or(raw["type"]).string }
+    var isSystemNotification: Bool { raw["sender_id"].int == 0 && raw["sender"].isNull }
+    var isReportReceipt: Bool { isSystemNotification && notificationType == "report_received" && raw["related_type"].string == "report" }
+    var isReportNotice: Bool {
+        raw["related_type"].string == "report" && ["report_received", "report_resolved", "report_rejected"].contains(notificationType)
+    }
 }
 struct Topic: Record {
     var raw: JSON

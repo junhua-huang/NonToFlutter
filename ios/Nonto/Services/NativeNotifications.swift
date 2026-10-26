@@ -84,7 +84,12 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
         let content = UNMutableNotificationContent()
         content.title = data["title"].string.isEmpty ? "南图" : data["title"].string
         // Avoid exposing private message content in notification previews.
-        content.body = event == "new_message" ? "你收到了一条新消息" : "你有一条新通知"
+        if event == "new_notification", Notice(data).isReportReceipt {
+            content.title = "举报已收到"
+            content.body = "我们已收到你的举报，将尽快核查。"
+        } else {
+            content.body = event == "new_message" ? "你收到了一条新消息" : "你有一条新通知"
+        }
         if soundEnabled { content.sound = .default }
         content.userInfo = ["recipient_id": userID, "dedupe_key": key, "message_id": messageID,
                             "notification_id": event == "new_notification" ? data["id"].int : 0,
@@ -92,7 +97,11 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
                             "related_id": conversationID > 0 ? conversationID : data["related_id"].int,
                             "nonto_local": true]
         let request = UNNotificationRequest(identifier: "nonto.\(userID).\(key)", content: content, trigger: nil)
-        Task { try? await center.add(request) }
+        let recipientID = userID
+        Task {
+            guard self.userID == recipientID, self.authorized, self.pushEnabled else { return }
+            try? await center.add(request)
+        }
     }
     func open(_ payload: JSON) {
         guard let target = PushRoute(payload) else { return }

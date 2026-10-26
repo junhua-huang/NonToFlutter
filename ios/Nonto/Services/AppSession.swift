@@ -21,6 +21,7 @@ final class AppSession: ObservableObject {
     @Published var postRevision = 0
     @Published var postChange: PostChange?
     @Published var noticeChange: NoticeChange?
+    @Published var noticeRevision = 0
     @Published var messageUnread = 0
     @Published var noticeUnread = 0
     @Published var defaultVisibility = "public"

@@ -200,7 +200,12 @@ struct NotificationsView: View {
             ForEach(resource.items) { notice in
                 RouteButton(.notice(notice)) {
                     HStack(alignment: .top, spacing: 12) {
-                        AvatarView(url: notice.sender.avatar, name: notice.sender.name, size: 42)
+                        if notice.isSystemNotification {
+                            Image(systemName: "bell.badge.fill").font(.system(size: 20))
+                                .foregroundStyle(accent.textColor).frame(width: 42, height: 42)
+                                .background(accent.color.opacity(0.1), in: Circle())
+                                .accessibilityLabel("南图系统通知")
+                        } else { AvatarView(url: notice.sender.avatar, name: notice.sender.name, size: 42) }
                         VStack(alignment: .leading, spacing: 5) {
                             Text(notice.title.isEmpty ? notice.sender.name : notice.title).font(.headline)
                             Text(notice.content).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
@@ -217,6 +222,7 @@ struct NotificationsView: View {
             .toolbar { Button("全部已读") { Task { await readAll() } }.disabled(readingAll || session.noticeUnread == 0) }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
+            .onReceive(session.$noticeRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
             .onReceive(session.$noticeChange.dropFirst().compactMap { $0 }) { change in
                 let patch: JSON = .object(["is_read": .bool(true)])
                 if let id = change.id { resource.apply(id: id, patch: patch) }
@@ -254,7 +260,19 @@ struct NoticeDestination: View {
             else if !resolved { ProgressView("正在打开通知…") }
             else if let postID { PostDetailView(session: session, postID: postID) }
             else if notice.raw["related_type"].string == "community" { CommunityDetailView(communityID: notice.raw["related_id"].int) }
-            else { ScrollView { VStack(alignment: .leading, spacing: 16) { Text(notice.title).font(.title2.bold()); Text(notice.content); ErrorBanner(text: error) }.padding().frame(maxWidth: .infinity, alignment: .leading) } }
+            else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(notice.title).font(.title2.bold())
+                        Text(notice.content)
+                        if notice.isReportNotice {
+                            RouteButton(.reportHistory) { Label("查看举报处理记录", systemImage: "flag") }
+                                .buttonStyle(.glass)
+                        }
+                        ErrorBanner(text: error)
+                    }.padding().frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }.task(id: notice.id) {
             postID = nil; resolved = false; error = nil
             defer { resolved = true }
