@@ -1,0 +1,41 @@
+name: Latest Store Recording
+on:
+  push:
+    branches: [codex/store-latest-capture-20261026]
+permissions:
+  contents: read
+jobs:
+  record:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      SOURCE_COMMIT: fd3288ff300815d6255c5d18c84ec53acdb73f0c
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select current Xcode
+        run: |
+          python3 - <<'PY'
+          import glob,subprocess
+          candidates=sorted(glob.glob('/Applications/Xcode_27*.app'),reverse=True)
+          if candidates: subprocess.run(['sudo','xcode-select','-s',candidates[0]+'/Contents/Developer'],check=True)
+          print(subprocess.check_output(['xcodebuild','-version'],text=True))
+          PY
+      - name: Prepare capture-only app
+        run: |
+          python3 ios/scripts/prepare_latest_capture.py
+          python3 ios/scripts/generate_project.py
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
+      - name: Build latest app for recording only
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath build/StoreApp CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=NO build > build-store-capture.log 2>&1
+      - name: Record real app pages on iPhone and iPad
+        run: python3 ios/scripts/record_latest_capture.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nonto-Latest-Store-Recording
+          path: |
+            build/StoreLatest
+            build-store-capture.log
+          retention-days: 7
