@@ -8,9 +8,17 @@ def run(*args, **kwargs):
 
 out = Path('build/StoreLatest'); out.mkdir(parents=True, exist_ok=True)
 devices = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j'], text=True,timeout=180))['devices']
-available = [d for runtime, group in devices.items() if 'iOS-27' in runtime for d in group if d['isAvailable']]
+available = [d for runtime, group in devices.items() if ('iOS-27' in runtime or 'iOS-26' in runtime) for d in group if d['isAvailable']]
 phones = [d for d in available if d['name'].startswith('iPhone') and 'Pro Max' not in d['name'] and 'Plus' not in d['name'] and 'Air' not in d['name']]
-pads = [d for d in available if d['name'].startswith('iPad') and '13-inch' in d['name']]
+pads = [dict(d,runtime=runtime) for runtime,group in devices.items() if ('iOS-26' in runtime or 'iOS-27' in runtime) for d in group if d['isAvailable'] and d['name'].startswith('iPad') and '13-inch' in d['name']]
+pads.sort(key=lambda d:('iOS-26' not in d['runtime'], d['name']))
+if os.environ.get('CAPTURE_DEVICE') == 'ipad' and pads:
+    pad = pads[0]
+    types=json.loads(subprocess.check_output(['xcrun','simctl','list','devicetypes','-j'],text=True,timeout=120))['devicetypes']
+    kind=pad.get('deviceTypeIdentifier') or next(x['identifier'] for x in types if x['name']==pad['name'])
+    fresh=subprocess.check_output(['xcrun','simctl','create','NontoStoreCapture-'+os.environ['GITHUB_RUN_ID'],kind,pad['runtime']],text=True,timeout=180).strip()
+    pads=[dict(pad,udid=fresh,state='Shutdown')]
+    print('Fresh capture simulator:',pads[0]['name'],pads[0]['runtime'],flush=True)
 if not phones: raise SystemExit('No current iPhone simulator available')
 selected = [('iphone', phones[0])] + ([('ipad',pads[0])] if pads else [])
 selected = [(kind, device) for kind, device in selected if kind == os.environ.get('CAPTURE_DEVICE',kind)]
@@ -20,7 +28,7 @@ for kind, device in selected:
     run('xcrun','simctl','boot',udid) if device['state'] != 'Booted' else None
     run('xcrun','simctl','bootstatus',udid,'-b',timeout=180)
     run('xcrun','simctl','status_bar',udid,'override','--time','9:41','--dataNetwork','wifi','--wifiMode','active','--wifiBars','3','--batteryState','charged','--batteryLevel','100')
-    run('xcrun','simctl','install',udid,'build/StoreApp/Build/Products/Release-iphonesimulator/Nonto.app')
+    run('xcrun','simctl','install',udid,'build/StoreApp/Build/Products/Release-iphonesimulator/Nonto.app',timeout=600)
     container = Path(subprocess.check_output(['xcrun','simctl','get_app_container',udid,'online.nonto.native','data'],text=True,timeout=90).strip()) / 'Documents'
     container.mkdir(exist_ok=True)
     for file in container.glob('capture-*.txt'): file.unlink()

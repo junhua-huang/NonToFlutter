@@ -13,6 +13,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 30
     env:
+      CAPTURE_DEVICE: ipad
       SOURCE_COMMIT: fd3288ff300815d6255c5d18c84ec53acdb73f0c
     steps:
       - uses: actions/checkout@v4
