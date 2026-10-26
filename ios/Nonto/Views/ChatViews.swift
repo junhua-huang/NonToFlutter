@@ -144,7 +144,7 @@ struct ChatRoomContent: View {
             }
         }
     }
-    private var chatContent: some View {
+    @ViewBuilder private var chatContent: some View {
         let timeline = store.timeline
         GeometryReader { _ in
             ScrollView {
