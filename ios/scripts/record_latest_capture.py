@@ -38,6 +38,13 @@ for kind, device in selected:
         run('xcrun','simctl','io',udid,'screenshot',str(target/(name+'.png')))
     screenshot('01-feed')
     video = subprocess.Popen(['xcrun','simctl','io',udid,'recordVideo','--codec=h264','--force',str(target/'latest-raw.mp4')],stdout=(target/'recording.log').open('w'),stderr=subprocess.STDOUT)
+    recording_deadline=time.monotonic()+180
+    while 'Recording started' not in (target/'recording.log').read_text():
+        if video.poll() is not None: raise RuntimeError((target/'recording.log').read_text())
+        if time.monotonic()>recording_deadline:
+            video.send_signal(signal.SIGINT)
+            raise TimeoutError('Video recorder did not confirm startup')
+        time.sleep(0.25)
     timeline=[]; start=time.monotonic()
     def step(action, seconds):
         timeline.append({'time':round(time.monotonic()-start,2),'action':action,'hold':seconds})

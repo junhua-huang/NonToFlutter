@@ -82,7 +82,7 @@ __SNAPSHOT__
             client?.urlProtocol(self, didFailWithError: URLError(.noPermissionsToReadFile)); return
         } else if path.hasSuffix("/auth/profile") || path.contains("/auth/users/") { response = snapshot["profile"] }
         else if path.contains("/posts/user/") { response = .object(["posts": .array(own), "has_more": .bool(false)]) }
-        else if path.hasSuffix("/posts/") || path.contains("/recommendations/feed") {
+        else if path.hasSuffix("/posts/") || path.hasSuffix("/posts") || path.contains("/recommendations/feed") {
             response = .object(["posts": .array(feed.sorted { $0["id"].int == 214 && $1["id"].int != 214 }), "has_more": .bool(false)])
         } else if path.hasSuffix("/comments") { response = .object(["comments": .array([]), "has_more": .bool(false)]) }
         else if let id = Int(path.split(separator: "/").last ?? ""), let post = (feed + own).first(where: { $0["id"].int == id }) { response = .object(["post": post]) }

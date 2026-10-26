@@ -4,13 +4,15 @@ on:
     branches: [codex/store-latest-capture-20261026]
 permissions:
   contents: read
+concurrency:
+  group: latest-store-capture
+  cancel-in-progress: true
 jobs:
   record:
     if: contains(github.event.head_commit.message, '[record-capture]')
     runs-on: xcode-27
     timeout-minutes: 30
     env:
-      CAPTURE_DEVICE: ipad
       SOURCE_COMMIT: fd3288ff300815d6255c5d18c84ec53acdb73f0c
     steps:
       - uses: actions/checkout@v4
