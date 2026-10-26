@@ -80,6 +80,7 @@ struct ChatRoomContent: View {
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.messagesOwnsTabBar) private var messagesOwnsTabBar
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var store: ChatStore
     @State private var stickerSender: ChatStickerSender
     @State private var availableHeight: CGFloat = 700
@@ -238,13 +239,15 @@ struct ChatRoomContent: View {
                 }.padding()
             }
             .overlay(alignment: .bottomLeading) {
-                if attachmentMenuVisible {
-                    ChatAttachmentMenu(availableHeight: max(0, geometry.size.height - 24), onSelect: selectAttachment)
-                        .disabled(preparingMedia || stickerSender.busy)
-                        .frame(width: min(320, max(0, geometry.size.width - 24)))
-                        .padding(12)
-                        .transition(.opacity)
-                }
+                VStack(alignment: .leading, spacing: 0) {
+                    if attachmentMenuVisible {
+                        ChatAttachmentMenu(availableHeight: max(0, geometry.size.height - 24), onSelect: selectAttachment)
+                            .disabled(preparingMedia || stickerSender.busy)
+                            .frame(width: min(320, max(0, geometry.size.width - 24)))
+                            .padding(12)
+                            .transition(.scale(scale: 0.94, anchor: .bottomLeading).combined(with: .opacity))
+                    }
+                }.animation(reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0), value: attachmentMenuVisible)
             }
         }
         .frame(maxWidth: 820).frame(maxWidth: .infinity)
@@ -499,6 +502,7 @@ struct ChatComposerInput: View {
     @EnvironmentObject private var session: AppSession
     @Environment(\.verticalSizeClass) private var verticalSize
     @Environment(\.dynamicTypeSize) private var dynamicType
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pickerMode: ChatExpressionTab?
     @State private var expanded = false
     @State private var stagedSticker: StagedChatSticker?
@@ -529,34 +533,43 @@ struct ChatComposerInput: View {
         VStack(alignment: .leading, spacing: 6) {
             composerContent
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
-            if let mode = pickerMode {
+            if showingPhotos {
+                ChatPhotoDrawer(expanded: $expanded, onAdd: { items in
+                    picks = items; showingPhotos = false
+                }, onClose: { showingPhotos = false })
+                    .disabled(preparingMedia || stickerSender.busy)
+                    .frame(height: drawerHeight).padding(.horizontal, 8).padding(.bottom, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let mode = pickerMode {
                 ChatExpressionDrawer(accountID: session.user?.id ?? 0, api: session.api, initialTab: mode,
                                      selection: stagedSticker, expanded: $expanded, disabled: stickerSender.busy, defaults: pickerDefaults,
                                      onInsertEmoji: insertEmoji, onStageSticker: { stagedSticker = $0; stickerSender.error = nil },
                                      onClose: { pickerMode = nil })
                     .id(mode).frame(height: drawerHeight).padding(.horizontal, 8).padding(.bottom, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }.padding(.top, 6)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.25, extraBounce: 0), value: pickerMode)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.25, extraBounce: 0), value: showingPhotos)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.25, extraBounce: 0), value: expanded)
             .onChange(of: store.draft) { _, _ in store.scheduleDraftSave() }
-            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil; showingAttachments = false } }
+            .onChange(of: focus.wrappedValue) { _, value in if value { pickerMode = nil; showingPhotos = false; showingAttachments = false } }
             .onChange(of: showingAttachments) { _, value in onAttachmentMenuChange(value) }
             .onChange(of: picks) { _, value in if !value.isEmpty { showingAttachments = false } }
             .onChange(of: attachmentRequest?.id) { _, _ in
                 guard let request = attachmentRequest else { return }
                 focus.wrappedValue = false; showingAttachments = false
                 switch request.action {
-                case .camera: pickerMode = nil
+                case .camera: pickerMode = nil; showingPhotos = false
                 case .photos: pickerMode = nil; showingPhotos = true
                 case .emoji: open(.emoji)
                 case .stickers: open(.stickers)
                 }
             }
             .onChange(of: inputDismissal) { _, _ in
-                focus.wrappedValue = false; showingAttachments = false; pickerMode = nil
+                focus.wrappedValue = false; showingAttachments = false; pickerMode = nil; showingPhotos = false
             }
             .onChange(of: dynamicType, initial: true) { _, value in if value.isAccessibilitySize { expanded = true } }
-            .photosPicker(isPresented: $showingPhotos, selection: $picks, maxSelectionCount: 9,
-                          matching: .any(of: [.images, .videos]))
             .onDisappear { onAttachmentMenuChange(false); sendTask?.cancel(); stickerSender.cancel() }
     }
     private var composerContent: some View {
@@ -617,13 +630,15 @@ struct ChatComposerInput: View {
     }
     private var attachmentButton: some View {
         Button {
-            focus.wrappedValue = false; pickerMode = nil; showingAttachments.toggle()
+            focus.wrappedValue = false; pickerMode = nil; showingPhotos = false; showingAttachments.toggle()
         } label: {
-            Image(systemName: showingAttachments ? "xmark" : "plus")
+            Image(systemName: "plus")
+                .rotationEffect(.degrees(showingAttachments ? 45 : 0))
                 .font(.system(size: min(inputControlHeight * 0.44, 32), weight: .medium)).foregroundStyle(accent.color)
                 .frame(width: inputControlHeight, height: inputControlHeight)
                 .glassEffect(.regular.interactive(), in: .circle)
         }.buttonStyle(.plain).disabled(preparingMedia || stickerSender.busy)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.22, extraBounce: 0), value: showingAttachments)
             .accessibilityLabel(showingAttachments ? "关闭添加菜单" : "拍照、相册、表情或贴纸")
             .accessibilityIdentifier("chat.attachments.open")
     }
@@ -638,7 +653,7 @@ struct ChatComposerInput: View {
             }
         })
     }
-    private func open(_ mode: ChatExpressionTab) { focus.wrappedValue = false; pickerMode = mode }
+    private func open(_ mode: ChatExpressionTab) { focus.wrappedValue = false; showingPhotos = false; pickerMode = mode }
     private func insertEmoji(_ item: NotoEmoji) -> Bool {
         guard !stickerSender.busy else { return false }
         let result = ChatEmojiInsertion.insert(item.emoji, into: store.draft, selection: caret)

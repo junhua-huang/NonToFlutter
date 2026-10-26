@@ -7,6 +7,8 @@ import UIKit
 final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, ObservableObject {
     static let shared = NativeNotifications()
     @Published private(set) var authorized = false
+    @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    @Published private(set) var authorizationError: String?
     @Published var route: PushRoute?
     var onAuthorizationChanged: (() -> Void)?
     private var deduplicator = PushDeduplicator()
@@ -24,15 +26,33 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
     var messageEnabled = false
     var soundEnabled = false
     private let center = UNUserNotificationCenter.current()
+    private var authorizationTask: Task<Void, Error>?
     override private init() { super.init(); center.delegate = self }
 
     func refreshAuthorization() async {
         let settings = await center.notificationSettings()
+        authorizationStatus = settings.authorizationStatus
         authorized = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
     }
     func requestAuthorization() async throws {
-        authorized = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-        onAuthorizationChanged?()
+        // Automatic and manual requests share one system prompt and one result.
+        if let authorizationTask { try await authorizationTask.value; return }
+        authorizationError = nil
+        let task = Task<Void, Error> {
+            do {
+                _ = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                await refreshAuthorization()
+                onAuthorizationChanged?()
+            } catch {
+                authorizationError = error.localizedDescription
+                await refreshAuthorization()
+                onAuthorizationChanged?()
+                throw error
+            }
+        }
+        authorizationTask = task
+        defer { authorizationTask = nil }
+        try await task.value
     }
     func setBadge(_ count: Int) { Task { try? await center.setBadgeCount(count) } }
     func clear() {

@@ -1,27 +1,31 @@
 import SwiftUI
+import UIKit
 
-/// System popover chrome surrounds rows with a leading check, color dot, and name.
+/// Match the theme picker: the system owns presentation, selection and dismissal.
 struct AccentColorMenu: View {
     @Binding var selection: AppAccent
-    @State private var showingColors = false
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        Button { showingColors = true } label: {
-            HStack(spacing: 8) {
-                Text("强调色").foregroundStyle(.primary)
-                Spacer(minLength: 12)
-                Circle().fill(selection.color).frame(width: 14, height: 14).accessibilityHidden(true)
-                Text(selection.name).foregroundStyle(.secondary)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
-            }.frame(minHeight: 32).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel("强调色").accessibilityValue(selection.name)
+        Picker("强调色", selection: $selection) {
+            ForEach(AppAccent.allCases) { option in
+                Label { Text(option.name) } icon: {
+                    Image(uiImage: swatch(option)).accessibilityHidden(true)
+                }.tag(option).accessibilityIdentifier("accent.option.\(option.rawValue)")
+            }
+        }.pickerStyle(.menu).accessibilityValue(selection.name)
             .accessibilityHint("选择应用的强调色")
             .accessibilityIdentifier("settings.accent")
             .sensoryFeedback(.selection, trigger: selection)
-            .popover(isPresented: $showingColors) {
-                AccentColorOptions(selection: $selection)
-                    .presentationCompactAdaptation(.popover)
-            }
+    }
+    private func swatch(_ option: AppAccent) -> UIImage {
+        let traits = UITraitCollection(traitsFrom: [
+            UITraitCollection(userInterfaceStyle: scheme == .dark ? .dark : .light),
+            UITraitCollection(accessibilityContrast: contrast == .increased ? .high : .normal)
+        ])
+        return (UIImage(systemName: "circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 14)) ?? UIImage())
+            .withTintColor(option.uiColor.resolvedColor(with: traits), renderingMode: .alwaysOriginal)
     }
 }
 

@@ -36,6 +36,7 @@ struct NontoApp: App {
 
 struct MainTabs: View {
     @EnvironmentObject private var session: AppSession
+    @Environment(\.scenePhase) private var phase
     // The initial tab is a one-time seed, also used by deterministic previews.
     @State private var selectedTab: Int
     private let initialConversation: Conversation?
@@ -83,6 +84,10 @@ struct MainTabs: View {
             notifications.route = nil
         }
         .environment(\.openComposer, { compose = true })
+        .task(id: session.notificationAuthorizationReady && phase == .active && !compose && pushDestination == nil) {
+            guard phase == .active, !compose, pushDestination == nil else { return }
+            await session.requestNotificationAuthorizationIfNeeded()
+        }
         .task {
             while !Task.isCancelled {
                 await session.refreshCounts()

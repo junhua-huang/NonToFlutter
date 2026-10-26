@@ -11,7 +11,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("外观") {
-                Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }
+                Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }.pickerStyle(.menu)
                 AccentColorMenu(selection: $accent)
             }
             Section("账号") {
@@ -113,6 +113,7 @@ struct NotificationSettingsView: View {
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @ObservedObject private var push = APNsService.shared
+    @ObservedObject private var notifications = NativeNotifications.shared
     @State private var pushEnabled = false
     @State private var message = false
     @State private var sound = false
@@ -127,10 +128,18 @@ struct NotificationSettingsView: View {
                 Text(push.status).foregroundStyle(.secondary)
                 Button("重试推送连接") { push.retry() }
                 ErrorBanner(text: push.error)
-                Button("开启系统通知") { Task { do { try await NativeNotifications.shared.requestAuthorization() } catch { self.error = error.localizedDescription } } }
+                if notifications.authorizationStatus == .denied {
+                    Text("系统通知权限已关闭，请前往系统设置开启。").font(.caption).foregroundStyle(.secondary)
+                    if let url = URL(string: UIApplication.openSettingsURLString) { Link("前往系统设置开启通知", destination: url) }
+                } else if !notifications.authorized {
+                    Button("开启系统通知") { Task { do { try await notifications.requestAuthorization() } catch { self.error = error.localizedDescription } } }
+                } else {
+                    Label("系统通知已允许", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                }
+                if error == nil { ErrorBanner(text: notifications.authorizationError) }
                 Button("发送远程测试通知") { Task { do { try await push.testRemote() } catch { self.error = error.localizedDescription } } }.disabled(!push.bound)
                 Button("发送本地测试通知") { Task { do { try await NativeNotifications.shared.test() } catch { self.error = error.localizedDescription } } }
-                if let url = URL(string: UIApplication.openSettingsURLString) { Link("打开系统设置", destination: url) }
+                if notifications.authorizationStatus != .denied, let url = URL(string: UIApplication.openSettingsURLString) { Link("打开系统设置", destination: url) }
             }
             Section("提醒偏好") {
                 Toggle("系统推送", isOn: $pushEnabled)
@@ -142,7 +151,10 @@ struct NotificationSettingsView: View {
             Button("保存") { Task { await save() } }.disabled(!loaded || busy)
             if saved { Text("已保存").foregroundStyle(accent.textColor) }
             ErrorBanner(text: error) { Task { await load() } }
-        }.disabled(busy).navigationTitle("消息提醒").task { if !loaded { await load() } }
+        }.disabled(busy).navigationTitle("消息提醒").task {
+            await notifications.refreshAuthorization()
+            if !loaded { await load() }
+        }
             .onChange(of: [pushEnabled, message, sound]) { _, _ in saved = false }
     }
     private func load() async {

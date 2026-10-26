@@ -24,6 +24,7 @@ final class AppSession: ObservableObject {
     @Published var messageUnread = 0
     @Published var noticeUnread = 0
     @Published var defaultVisibility = "public"
+    @Published private(set) var notificationAuthorizationReady = false
     private var foreground = true
 
     init(api: APIClient? = nil, consent: PrivacyConsent? = nil) {
@@ -79,6 +80,7 @@ final class AppSession: ObservableObject {
         await refreshCounts()
     }
     func loadPreferences() async {
+        notificationAuthorizationReady = false
         let epoch = api.generation
         await NativeNotifications.shared.refreshAuthorization()
         guard epoch == api.generation else { return }
@@ -91,6 +93,7 @@ final class AppSession: ObservableObject {
         }
         guard epoch == api.generation else { return }
         syncPush()
+        notificationAuthorizationReady = true
         if let privacy = try? await api.request("/auth/privacy") {
             guard epoch == api.generation else { return }
             defaultVisibility = ["friends", "friends_only"].contains(privacy["post_default_visibility"].string) ? "friends" : "public"
@@ -109,6 +112,18 @@ final class AppSession: ObservableObject {
     }
     func syncPush() {
         APNsService.shared.setAccount(user?.id, enabled: NativeNotifications.shared.authorized && NativeNotifications.shared.pushEnabled)
+    }
+    func requestNotificationAuthorizationIfNeeded() async {
+        guard consent.accepted, foreground, notificationAuthorizationReady, let userID = user?.id, api.token != nil else { return }
+        let epoch = api.generation
+        let notifications = NativeNotifications.shared
+        await notifications.refreshAuthorization()
+        guard !Task.isCancelled, consent.accepted, foreground, notificationAuthorizationReady,
+              epoch == api.generation, user?.id == userID,
+              notifications.authorizationStatus == .notDetermined else { return }
+        // The home screen owns timing. A refusal is respected; errors remain
+        // visible in notification settings without blocking entry to the app.
+        try? await notifications.requestAuthorization()
     }
     func scene(active: Bool) {
         guard consent.accepted else { socket.stop(); return }
@@ -129,6 +144,7 @@ final class AppSession: ObservableObject {
         try api.setToken(nil); clearUI()
     }
     func clearUI() {
+        notificationAuthorizationReady = false
         APNsService.shared.setAccount(nil, enabled: false)
         socket.stop(); socket.resetRooms(); user = nil; messageUnread = 0; noticeUnread = 0
         NativeNotifications.shared.clear()

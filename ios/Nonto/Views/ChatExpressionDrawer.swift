@@ -56,7 +56,9 @@ struct ChatExpressionDrawer: View {
                 .accessibilityAction(named: Text("关闭选择器"), onClose)
                 .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
                     if value.translation.height < -30 { expanded = true }
-                    else if value.translation.height > 30 { expanded = false }
+                    else if value.translation.height > 30 {
+                        if expanded { expanded = false } else { onClose() }
+                    }
                 })
             sourceBar
             if searchOpen {

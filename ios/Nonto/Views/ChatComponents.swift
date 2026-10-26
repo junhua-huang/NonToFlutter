@@ -21,7 +21,7 @@ struct ChatAttachmentMenu: View {
                         .accessibilityLabel(action.title)
                         .accessibilityIdentifier(action == .emoji ? "chat.emoji.open" : "chat.attachments.\(action.id)")
                 }
-            }.buttonStyle(.plain).padding(.horizontal, 20).padding(.vertical, 12)
+            }.buttonStyle(ChatAttachmentRowStyle()).padding(.horizontal, 20).padding(.vertical, 12)
         }.scrollBounceBehavior(.basedOnSize).scrollIndicators(.hidden)
             .frame(height: min(max(0, availableHeight), rowHeight * CGFloat(ChatAttachmentAction.allCases.count) + 24))
             .clipShape(.rect(cornerRadius: 32))
@@ -64,6 +64,56 @@ struct ChatAttachmentMenu: View {
                                          startPoint: .topTrailing, endPoint: .bottomLeading))
             }
         }
+    }
+}
+
+private struct ChatAttachmentRowStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.primary.opacity(0.06) : .clear, in: .rect(cornerRadius: 16))
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// Keep Apple's private, system-rendered photo library in the keyboard area.
+struct ChatPhotoDrawer: View {
+    @Binding var expanded: Bool
+    let onAdd: ([PhotosPickerItem]) -> Void
+    let onClose: () -> Void
+    @State private var selection: [PhotosPickerItem] = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button { expanded.toggle() } label: {
+                Capsule().fill(.secondary.opacity(0.5)).frame(width: 36, height: 5)
+                    .frame(maxWidth: .infinity, minHeight: 24)
+            }.buttonStyle(.plain).accessibilityLabel(expanded ? "收起相册" : "展开相册")
+                .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
+                    if value.translation.height < -30 { expanded = true }
+                    else if value.translation.height > 30 {
+                        if expanded { expanded = false } else { onClose() }
+                    }
+                })
+            HStack {
+                Text("相册").font(.headline)
+                Spacer()
+                Button(selection.isEmpty ? "添加" : "添加 \(selection.count)") { onAdd(selection) }
+                    .disabled(selection.isEmpty).accessibilityIdentifier("chat.photos.add")
+                Button(action: onClose) {
+                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("关闭相册")
+            }.padding(.leading, 16).padding(.trailing, 4)
+            PhotosPicker(selection: $selection, maxSelectionCount: 9, selectionBehavior: .continuousAndOrdered,
+                         matching: .any(of: [.images, .videos])) { EmptyView() }
+                .photosPickerStyle(.inline)
+                .photosPickerDisabledCapabilities(.selectionActions)
+                .photosPickerAccessoryVisibility(.hidden, edges: .bottom)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }.background(Color.timelineBackground)
+            .clipShape(.rect(cornerRadius: 32))
+            .accessibilityIdentifier("chat.photos.drawer")
     }
 }
 
