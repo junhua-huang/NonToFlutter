@@ -100,7 +100,7 @@ struct ChatRoomContent: View {
     @State private var highlightedMessage: Int?
     @State private var quoteReturnID: String?
     @State private var attachmentMenuVisible = false
-    @State private var pendingAttachmentAction: ChatAttachmentAction?
+    @State private var pendingAttachmentAction: ChatAttachmentRequest?
     @Namespace private var attachmentNamespace
     @State private var attachmentRequest: ChatAttachmentRequest?
     @State private var inputDismissal = 0
@@ -363,17 +363,18 @@ struct ChatRoomContent: View {
     }
     private func selectAttachment(_ action: ChatAttachmentAction) {
         guard attachmentMenuVisible, pendingAttachmentAction == nil, !preparingMedia, !stickerSender.busy else { return }
-        pendingAttachmentAction = action
+        let request = ChatAttachmentRequest(action: action)
+        pendingAttachmentAction = request
         // Finish returning the glass to its source before presenting the picker.
         // An outside tap, navigation, or a new presentation cancels this action.
         withAnimation(attachmentAnimation, completionCriteria: .logicallyComplete) {
             attachmentMenuVisible = false
         } completion: {
-            guard pendingAttachmentAction == action, !attachmentMenuVisible, !composerFocused,
+            guard pendingAttachmentAction?.id == request.id, !attachmentMenuVisible, !composerFocused,
                   visible, phase == .active, composerEpoch == session.api.generation, session.api.token != nil else { return }
             pendingAttachmentAction = nil
             if action == .camera { openCamera() }
-            attachmentRequest = ChatAttachmentRequest(action: action)
+            attachmentRequest = request
         }
     }
     private func openCamera() {
