@@ -10,6 +10,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 30
     env:
+      CAPTURE_DEVICE: ipad
       SOURCE_COMMIT: fd3288ff300815d6255c5d18c84ec53acdb73f0c
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +32,7 @@ jobs:
           set -o pipefail
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath build/StoreApp CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=NO build > build-store-capture.log 2>&1
       - name: Record real app pages on iPhone and iPad
-        run: python3 ios/scripts/record_latest_capture.py
+        run: python3 -u ios/scripts/record_latest_capture.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

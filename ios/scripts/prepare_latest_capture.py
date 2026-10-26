@@ -116,6 +116,7 @@ __SNAPSHOT__
         session.restoring = false
         featured = Post(CaptureReplay.snapshot["feed"].array.first { $0["id"].int == 214 }!)
         editor.replaceText("记录此刻的热爱 #二次元")
+        PostDraftStore().save(PostDraft(text: "记录此刻的热爱 #二次元"), userID: session.user!.id)
     }
     func prepareAndListen() async {
         guard !listening else { return }; listening = true
