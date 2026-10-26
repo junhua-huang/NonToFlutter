@@ -1,12 +1,12 @@
 import Foundation
 
 enum ChatAttachmentAction: String, CaseIterable, Identifiable {
-    case camera, photos, emoji, stickers
+    case camera, photos, stickers, emoji
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .camera: return "拍照"
-        case .photos: return "相册"
+        case .camera: return "相机"
+        case .photos: return "照片"
         case .emoji: return "表情"
         case .stickers: return "贴纸"
         }

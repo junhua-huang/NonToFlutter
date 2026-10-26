@@ -8,9 +8,14 @@ import UniformTypeIdentifiers
 struct ChatAttachmentMenu: View {
     let availableHeight: CGFloat
     let onSelect: (ChatAttachmentAction) -> Void
-    @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 64
-    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 44
+    let onDismiss: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 66
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 36
+    @State private var edgePull: CGFloat = 0
     private let petalColors: [Color] = [.pink, .red, .orange, .yellow, .green, .cyan, .blue, .purple]
+    private var panelHeight: CGFloat { min(max(0, availableHeight), rowHeight * CGFloat(ChatAttachmentAction.allCases.count) + 24) }
+    private var stretch: CGFloat { reduceMotion ? 0 : min(abs(edgePull) * 0.2, 18) }
 
     var body: some View {
         ScrollView {
@@ -21,18 +26,34 @@ struct ChatAttachmentMenu: View {
                         .accessibilityLabel(action.title)
                         .accessibilityIdentifier(action == .emoji ? "chat.emoji.open" : "chat.attachments.\(action.id)")
                 }
-            }.buttonStyle(ChatAttachmentRowStyle()).padding(.horizontal, 20).padding(.vertical, 12)
-        }.scrollBounceBehavior(.basedOnSize).scrollIndicators(.hidden)
-            .frame(height: min(max(0, availableHeight), rowHeight * CGFloat(ChatAttachmentAction.allCases.count) + 24))
+            }.buttonStyle(ChatAttachmentRowStyle()).padding(.leading, 32).padding(.trailing, 24).padding(.vertical, 12)
+        }.scrollBounceBehavior(reduceMotion ? .basedOnSize : .always, axes: .vertical).scrollIndicators(.hidden)
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                let offset = geometry.contentOffset.y + geometry.contentInsets.top
+                let end = max(0, geometry.contentSize.height + geometry.contentInsets.top
+                              + geometry.contentInsets.bottom - geometry.containerSize.height)
+                if offset < 0 { return -offset }
+                if offset > end { return end - offset }
+                return 0
+            } action: { _, value in
+                // Native scrolling supplies resistance and spring-back. Transform
+                // only this panel; never feed the stretch back into scroll layout.
+                edgePull = reduceMotion ? 0 : value
+            }
+            .frame(height: panelHeight)
             .clipShape(.rect(cornerRadius: 32))
             .glassEffect(.regular, in: .rect(cornerRadius: 32))
+            .scaleEffect(x: 1 - stretch * 0.0008, y: 1 + stretch / max(1, panelHeight), anchor: edgePull > 0 ? .top : .bottom)
+            .offset(y: reduceMotion ? 0 : max(-8, min(8, edgePull * 0.1)))
+            .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape, onDismiss)
             .accessibilityIdentifier("chat.attachments.menu")
     }
 
     private func row(_ action: ChatAttachmentAction) -> some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 26) {
             icon(action).frame(width: min(iconSize, 52), height: min(iconSize, 52)).accessibilityHidden(true)
-            Text(action.title).font(.title3.weight(.semibold)).foregroundStyle(.primary)
+            Text(action.title).font(.title2.weight(.medium)).foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }.frame(minHeight: rowHeight).contentShape(Rectangle())
@@ -40,29 +61,52 @@ struct ChatAttachmentMenu: View {
     @ViewBuilder private func icon(_ action: ChatAttachmentAction) -> some View {
         switch action {
         case .camera:
-            Image(systemName: "camera.fill").font(.system(size: 25)).foregroundStyle(.white)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(LinearGradient(colors: [.gray, .black], startPoint: .top, endPoint: .bottom), in: Circle())
+            ChatCameraMenuLens()
         case .photos:
-            ZStack {
-                Circle().fill(.white)
-                ForEach(0..<8) { index in
-                    Capsule().fill(petalColors[index].opacity(0.8))
-                        .frame(width: 13, height: 23).offset(y: -8)
-                        .rotationEffect(.degrees(Double(index) * 45))
-                }
+            GeometryReader { geometry in
+                ZStack {
+                    Circle().fill(.white).shadow(color: .black.opacity(0.1), radius: 0.5)
+                    ForEach(0..<8) { index in
+                        Ellipse().fill(petalColors[index].opacity(0.72))
+                            .frame(width: geometry.size.width * 0.32, height: geometry.size.height * 0.49)
+                            .offset(y: -geometry.size.height * 0.20)
+                            .rotationEffect(.degrees(Double(index) * 45))
+                    }
+                }.frame(width: geometry.size.width, height: geometry.size.height)
             }
         case .emoji:
             Text("😀").font(.system(size: min(iconSize, 48)))
         case .stickers:
             ZStack {
                 StickerMenuShape(fold: false)
-                    .fill(LinearGradient(colors: [Color(red: 0.78, green: 0.67, blue: 0.98), .blue.opacity(0.6)],
+                    .fill(LinearGradient(colors: [Color(red: 0.72, green: 0.55, blue: 0.97), Color(red: 0.61, green: 0.78, blue: 1)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                 StickerMenuShape(fold: true)
-                    .fill(LinearGradient(colors: [.white.opacity(0.95), .indigo.opacity(0.5)],
+                    .fill(LinearGradient(colors: [.white, Color(red: 0.84, green: 0.77, blue: 1), Color(red: 0.51, green: 0.57, blue: 0.89)],
                                          startPoint: .topTrailing, endPoint: .bottomLeading))
+                    .shadow(color: .indigo.opacity(0.16), radius: 1, y: 1)
             }
+        }
+    }
+}
+
+private struct ChatCameraMenuLens: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size.width
+            ZStack {
+                Circle().fill(LinearGradient(colors: [.white, Color(white: 0.64), Color(white: 0.9)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Circle().fill(Color(white: 0.13)).padding(size * 0.12)
+                Circle().strokeBorder(Color(white: 0.55), lineWidth: size * 0.035).padding(size * 0.17)
+                Circle().fill(LinearGradient(colors: [Color(red: 0.08, green: 0.13, blue: 0.25), .black,
+                                                      Color(red: 0.17, green: 0.32, blue: 0.59)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing)).padding(size * 0.23)
+                Ellipse().fill(LinearGradient(colors: [.white, .blue.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: size * 0.33, height: size * 0.18).rotationEffect(.degrees(-12))
+                    .offset(x: -size * 0.02, y: -size * 0.16).blur(radius: size * 0.015)
+                Ellipse().fill(.cyan.opacity(0.7)).frame(width: size * 0.24, height: size * 0.06)
+                    .offset(y: size * 0.19).blur(radius: size * 0.025)
+            }.frame(width: size, height: size)
         }
     }
 }
