@@ -225,7 +225,7 @@ struct ComposerReferencePicker: View {
                         } label: {
                             HStack(spacing: 12) {
                                 if kind == .mention { AvatarView(url: item.avatar, name: item.title, size: 38) }
-                                else { Image(systemName: "number").font(.title2).foregroundStyle(accent.textColor).frame(width: 38) }
+                                else { Image(systemName: "number").font(.title2).foregroundStyle(accent.symbolColor).frame(width: 38) }
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(item.title).foregroundStyle(.primary)
                                     if kind == .mention { Text("@\(item.value)").font(.caption).foregroundStyle(.secondary) }

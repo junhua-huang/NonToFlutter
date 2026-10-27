@@ -29,6 +29,7 @@ struct ChatExpressionDrawer: View {
     @ScaledMetric(relativeTo: .body) private var sourceIconSize: CGFloat = 20
     private let epoch: UUID
     private let defaults: UserDefaults
+    private var canAddSticker: Bool { !disabled && !importing && stickers.items.count < ChatStickerLibrary.limit }
 
     // The drawer owns one account's browsers for this presentation only.
     init(accountID: Int, api: APIClient, initialTab: ChatExpressionTab, selection: StagedChatSticker?,
@@ -114,8 +115,8 @@ struct ChatExpressionDrawer: View {
                 Button { choose(source) } label: {
                     Image(systemName: source.symbol).font(.system(size: min(sourceIconSize, 24)))
                         .frame(width: 44, height: 44)
-                        .foregroundStyle(tab == source ? Color.primary : .secondary)
-                        .background(tab == source ? Color.primary.opacity(0.06) : .clear,
+                        .foregroundStyle(tab == source ? accent.symbolColor : .secondary)
+                        .background(tab == source ? accent.color.opacity(0.12) : .clear,
                                     in: .rect(cornerRadius: 12))
                         .contentShape(Rectangle())
                 }.buttonStyle(.plain).disabled(importing).accessibilityLabel(source.title).accessibilityAddTraits(tab == source ? .isSelected : [])
@@ -124,8 +125,8 @@ struct ChatExpressionDrawer: View {
             Spacer(minLength: 0)
             Button(action: toggleSearch) {
                 Image(systemName: "magnifyingglass").frame(width: 44, height: 44)
-                    .foregroundStyle(searchOpen ? Color.primary : .secondary)
-                    .background(searchOpen ? Color.primary.opacity(0.06) : .clear,
+                    .foregroundStyle(searchOpen ? accent.symbolColor : .secondary)
+                    .background(searchOpen ? accent.color.opacity(0.12) : .clear,
                                 in: .rect(cornerRadius: 12))
             }.buttonStyle(.plain).disabled(importing).accessibilityLabel(searchPrompt)
             if tab == .noto {
@@ -159,10 +160,11 @@ struct ChatExpressionDrawer: View {
         VStack(alignment: .leading, spacing: 8) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
                 PhotosPicker(selection: $photo, matching: .images) {
-                    Image(systemName: "plus").font(.system(size: 36, weight: .medium)).foregroundStyle(.primary)
+                    Image(systemName: "plus").font(.system(size: 36, weight: .medium))
+                        .foregroundStyle(canAddSticker ? accent.symbolColor : .secondary)
                         .frame(width: 60, height: 60)
                         .frame(maxWidth: .infinity, minHeight: 84)
-                }.buttonStyle(.plain).disabled(importing || stickers.items.count >= ChatStickerLibrary.limit)
+                }.buttonStyle(.plain).disabled(!canAddSticker)
                     .accessibilityLabel("从照片添加新贴纸").accessibilityIdentifier("chat.stickers.add")
                 ForEach(stickers.results) { sticker in
                     stickerTile(.saved(sticker)).contextMenu {

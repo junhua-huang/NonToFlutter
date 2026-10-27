@@ -19,14 +19,15 @@ enum AppAccent: String, CaseIterable, Identifiable, Sendable {
     }
 
     var color: Color { Color(uiColor: uiColor) }
-    /// Small text needs more contrast than an icon or a large color swatch.
+    /// Nonto Blue keeps its approved hue in the standard appearance. Increased
+    /// Contrast can adapt text and symbols separately for their backgrounds.
     var textColor: Color { Color(uiColor: textUIColor) }
-    /// Icons and selection outlines use their own contrast role, not the
-    /// unnecessarily dark small-text color or an unrelated system blue.
+    /// Use for icons and selection outlines, including Increased Contrast.
     var symbolColor: Color { Color(uiColor: palette.symbol) }
     var foregroundColor: Color { Color(uiColor: foregroundUIColor) }
     var uiColor: UIColor { palette.fill }
     var textUIColor: UIColor { palette.text }
+    var symbolUIColor: UIColor { palette.symbol }
     var foregroundUIColor: UIColor { palette.foreground }
 
     private var palette: AccentPalette {
@@ -42,7 +43,7 @@ enum AppAccent: String, CaseIterable, Identifiable, Sendable {
 
     // Cache immutable dynamic UIColors so repeated reads have stable identity.
     private static let bluePalette = AccentPalette(fill: UIColor(named: "AccentColor") ?? custom(
-        light: 0x1D9BF0, dark: 0x1D9BF0, highLight: 0x0876BC, highDark: 0x6CC6FF))
+        light: 0x1D9BF0, dark: 0x1D9BF0, highLight: 0x0876BC, highDark: 0x6CC6FF)), preservesStandardColor: true)
     private static let purplePalette = AccentPalette(fill: custom(
         light: 0x7854F6, dark: 0x7854F6, highLight: 0x5936CA, highDark: 0xAD96FF))
     private static let pinkPalette = AccentPalette(fill: custom(
@@ -71,17 +72,22 @@ private struct AccentPalette {
     let symbol: UIColor
     let foreground: UIColor
 
-    init(fill: UIColor) {
+    init(fill: UIColor, preservesStandardColor: Bool = false) {
         self.fill = fill
-        text = Self.legible(fill, normal: 4.5, high: 7)
-        symbol = Self.legible(fill, normal: 3, high: 4.5)
+        text = Self.legible(fill, normal: 4.5, high: 7, preservesStandardColor: preservesStandardColor)
+        symbol = Self.legible(fill, normal: 3, high: 4.5, preservesStandardColor: preservesStandardColor)
         foreground = UIColor { traits in
             let base = AccentRGB(fill, traits: traits)
             return base.contrast(with: .white) >= base.contrast(with: .black) ? .white : .black
         }
     }
-    private static func legible(_ fill: UIColor, normal: Double, high: Double) -> UIColor {
+    private static func legible(_ fill: UIColor, normal: Double, high: Double, preservesStandardColor: Bool) -> UIColor {
         UIColor { traits in
+            // A normal text/icon must not silently become a different brand
+            // color from the swatch, cursor, native tint or selection fill.
+            if preservesStandardColor && traits.accessibilityContrast != .high {
+                return fill.resolvedColor(with: traits)
+            }
             let base = AccentRGB(fill, traits: traits)
             let surfaces = [UIColor.systemBackground, .secondarySystemBackground, .tertiarySystemBackground]
                 .map { AccentRGB($0, traits: traits) }

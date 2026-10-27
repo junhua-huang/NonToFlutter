@@ -24,24 +24,31 @@ final class AccentColorTests: XCTestCase {
         for style in [UIUserInterfaceStyle.light, .dark] {
             let traits = traits(style: style, contrast: .normal)
             XCTAssertEqual(hex(AppAccent.blue.uiColor, traits: traits), 0x1D9BF0)
+            XCTAssertEqual(hex(AppAccent.blue.textUIColor, traits: traits), 0x1D9BF0)
+            XCTAssertEqual(hex(AppAccent.blue.symbolUIColor, traits: traits), 0x1D9BF0)
             XCTAssertEqual(hex(AppAccent.purple.uiColor, traits: traits), 0x7854F6)
         }
     }
 
-    func testLabelsAndSolidButtonForegroundsRemainReadableInAllAppearances() {
+    func testAdaptiveLabelsAndSolidButtonForegroundsRemainReadable() {
         for accent in AppAccent.allCases {
             for style in [UIUserInterfaceStyle.light, .dark] {
                 for contrast in [UIAccessibilityContrast.normal, .high] {
                     let traits = traits(style: style, contrast: contrast)
                     let context = "\(accent.rawValue), \(style.rawValue), \(contrast.rawValue)"
                     let minimum: Double = contrast == .high ? 7 : 4.5
-                    for background in [UIColor.systemBackground, .secondarySystemBackground, .tertiarySystemBackground] {
-                        XCTAssertGreaterThanOrEqual(ratio(accent.textUIColor, background, traits: traits), minimum - 0.001, context)
-                        let backdrop = components(background, traits: traits)
-                        let tint = components(accent.uiColor, traits: traits)
-                        let mixed = zip(backdrop, tint).map { pair in pair.0 * 0.84 + pair.1 * 0.16 }
-                        let selectedSurface = UIColor(red: CGFloat(mixed[0]), green: CGFloat(mixed[1]), blue: CGFloat(mixed[2]), alpha: 1)
-                        XCTAssertGreaterThanOrEqual(ratio(accent.textUIColor, selectedSurface, traits: traits), minimum - 0.001, context)
+                    // Standard Nonto Blue intentionally keeps the approved
+                    // brand value. Increased Contrast still adapts every role.
+                    if accent != .blue || contrast == .high {
+                        for background in [UIColor.systemBackground, .secondarySystemBackground, .tertiarySystemBackground] {
+                            XCTAssertGreaterThanOrEqual(ratio(accent.textUIColor, background, traits: traits), minimum - 0.001, context)
+                            let backdrop = components(background, traits: traits)
+                            let tint = components(accent.uiColor, traits: traits)
+                            let mixed = zip(backdrop, tint).map { pair in pair.0 * 0.84 + pair.1 * 0.16 }
+                            let selectedSurface = UIColor(red: CGFloat(mixed[0]), green: CGFloat(mixed[1]), blue: CGFloat(mixed[2]), alpha: 1)
+                            XCTAssertGreaterThanOrEqual(ratio(accent.textUIColor, selectedSurface, traits: traits), minimum - 0.001, context)
+                            XCTAssertGreaterThanOrEqual(ratio(accent.symbolUIColor, background, traits: traits), contrast == .high ? 4.5 - 0.001 : 3 - 0.001, context)
+                        }
                     }
                     XCTAssertGreaterThanOrEqual(ratio(accent.foregroundUIColor, accent.uiColor, traits: traits), 4.5, context)
                 }

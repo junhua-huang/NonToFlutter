@@ -11,7 +11,7 @@ struct PrivacyWelcomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(accent.textColor)
+                    Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(accent.symbolColor)
                     Text(declined ? "你可以先了解南图" : "欢迎使用南图").font(.largeTitle.bold())
                     Text("请先阅读服务条款和隐私政策，再决定是否使用账号与社交服务。")
                     Text("账号服务会处理邮箱、账号资料、你主动发送的内容和服务安全信息。照片与视频仅在你选择时读取；通知在你开启时申请，不影响文字功能。")

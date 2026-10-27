@@ -42,6 +42,7 @@ struct AccentColorOptions: View {
                     Button { selection = option; dismiss() } label: {
                         HStack(spacing: 16) {
                             Image(systemName: "checkmark").font(.body.weight(.semibold))
+                                .foregroundStyle(selection.symbolColor)
                                 .frame(width: 20).opacity(selection == option ? 1 : 0).accessibilityHidden(true)
                             Circle().fill(option.color).frame(width: swatchSize, height: swatchSize).accessibilityHidden(true)
                             Text(option.name).font(.body.weight(.medium)).fixedSize(horizontal: false, vertical: true)
@@ -86,7 +87,7 @@ private struct AccentColorPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "sparkles").font(.title3).foregroundStyle(accent.textColor)
+                Image(systemName: "sparkles").font(.title3).foregroundStyle(accent.symbolColor)
                     .frame(width: 42, height: 42).background(accent.color.opacity(0.12), in: Circle())
                 VStack(alignment: .leading, spacing: 6) {
                     Text("南图").font(.headline)
@@ -95,8 +96,11 @@ private struct AccentColorPreview: View {
                 }
             }
             footerLayout {
-                Label(accent.name, systemImage: "circle.fill").font(.subheadline)
-                    .foregroundStyle(accent.textColor)
+                Label {
+                    Text(accent.name).foregroundStyle(accent.textColor)
+                } icon: {
+                    Image(systemName: "circle.fill").foregroundStyle(accent.color)
+                }.font(.subheadline)
                 if !dynamicType.isAccessibilitySize { Spacer(minLength: 12) }
                 Button {} label: {
                     Label("发布动态", systemImage: "square.and.pencil").font(.subheadline.bold())

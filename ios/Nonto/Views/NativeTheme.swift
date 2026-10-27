@@ -46,7 +46,7 @@ struct TimelineTabs<Selection: Hashable>: View {
                 let tab = tabs[index]
                 Button { selection = tab.value } label: {
                     Text(tab.title).font(.subheadline.weight(selection == tab.value ? .bold : .medium))
-                        .foregroundStyle(selection == tab.value ? Color.primary : Color.secondary)
+                        .foregroundStyle(selection == tab.value ? accent.textColor : Color.secondary)
                         .padding(.horizontal, 8).padding(.vertical, 15)
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .overlay(alignment: .bottom) {

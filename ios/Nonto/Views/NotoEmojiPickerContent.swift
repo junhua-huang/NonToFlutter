@@ -121,6 +121,7 @@ struct NotoEmojiSearchField: View {
 }
 
 struct NotoEmojiScopeStrip: View {
+    @Environment(\.appAccent) private var accent
     let scopes: [NotoEmojiScope]
     let active: NotoEmojiScope?
     let onSelect: (NotoEmojiScope) -> Void
@@ -134,8 +135,8 @@ struct NotoEmojiScopeStrip: View {
                         Button { onSelect(scope) } label: {
                             Image(systemName: scope.symbol).font(.system(size: min(iconSize, 28)))
                                 .frame(width: 44, height: 44)
-                                .foregroundStyle(active == scope ? Color.primary : .secondary)
-                                .background(active == scope ? Color(uiColor: .tertiarySystemFill) : .clear, in: Circle())
+                                .foregroundStyle(active == scope ? accent.symbolColor : .secondary)
+                                .background(active == scope ? accent.color.opacity(0.12) : .clear, in: Circle())
                                 .contentShape(Rectangle())
                         }.buttonStyle(.plain).id(scope.id)
                             .accessibilityLabel(scope.title).accessibilityAddTraits(active == scope ? .isSelected : [])
