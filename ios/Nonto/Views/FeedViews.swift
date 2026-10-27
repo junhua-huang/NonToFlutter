@@ -34,9 +34,9 @@ struct PostList: View {
     @StateObject private var resource: PagedResource<Post>
     @EnvironmentObject private var session: AppSession
     private let header: AnyView?
-    init(session: AppSession, path: String, query: [String: String] = [:], header: AnyView? = nil) {
+    init(session: AppSession, path: String, query: [String: String] = [:], header: AnyView? = nil, cacheEnabled: Bool = true) {
         self.header = header
-        _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: path, keys: ["posts", "items"], query: query, userID: session.user?.id ?? 0))
+        _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: path, keys: ["posts", "items"], query: query, userID: session.user?.id ?? 0, cacheEnabled: cacheEnabled))
     }
     var body: some View {
         List {

@@ -18,6 +18,7 @@ final class AppSession: ObservableObject {
     @Published var user: Person?
     @Published var restoring = true
     @Published var startupError: String?
+    @Published var authenticationMessage: String?
     @Published var postRevision = 0
     @Published var postChange: PostChange?
     @Published var noticeChange: NoticeChange?
@@ -139,12 +140,13 @@ final class AppSession: ObservableObject {
         }
         if active, let id = user?.id { socket.start(userID: id) } else { socket.stop() }
     }
-    func logout() async throws {
+    func logout(message: String? = nil) async throws {
         APNsService.shared.setAccount(nil, enabled: false)
         await APNsService.shared.waitUntilIdle()
-        try api.setToken(nil); clearUI()
+        try api.setToken(nil); clearUI(); authenticationMessage = message
     }
     func clearUI() {
+        authenticationMessage = nil
         notificationAuthorizationReady = false
         APNsService.shared.setAccount(nil, enabled: false)
         socket.stop(); socket.resetRooms(); user = nil; messageUnread = 0; noticeUnread = 0
@@ -191,6 +193,7 @@ final class PagedResource<T: Record>: ObservableObject {
     private(set) var page = 0
     private var lastLoadedAt: Date?
     private var failedReset = true
+    private var emptyPageStreak = 0
     private var cursor: String?
     private var requestID = UUID()
     private var activeTask: Task<Void, Never>?
@@ -206,6 +209,7 @@ final class PagedResource<T: Record>: ObservableObject {
     let userID: Int
     let paginated: Bool
     let usesOffset: Bool
+    let cacheEnabled: Bool
     var cacheKey: String {
         var components = URLComponents()
         components.path = path
@@ -214,10 +218,11 @@ final class PagedResource<T: Record>: ObservableObject {
     }
 
     init(api: APIClient, path: String, keys: [String], query: [String: String] = [:],
-         userID: Int, pageSize: Int = 20, paginated: Bool = true, usesOffset: Bool = false) {
+         userID: Int, pageSize: Int = 20, paginated: Bool = true, usesOffset: Bool = false, cacheEnabled: Bool = true) {
         self.api = api; accountEpoch = api.generation; self.path = path; self.keys = keys; self.query = query
         self.userID = userID; self.pageSize = pageSize; self.paginated = paginated; self.usesOffset = usesOffset
-        if let cache = LocalCache.read(userID: userID, key: cacheKey) {
+        self.cacheEnabled = cacheEnabled
+        if cacheEnabled, let cache = LocalCache.read(userID: userID, key: cacheKey) {
             items = Records.unique(cache.array.map(T.init)); showingCache = !items.isEmpty
         }
     }
@@ -225,7 +230,7 @@ final class PagedResource<T: Record>: ObservableObject {
         if error == nil, let lastLoadedAt, Date().timeIntervalSince(lastLoadedAt) < maxAge { return }
         await load(reset: true)
     }
-    func retry() async { await load(reset: failedReset) }
+    func retry() async { emptyPageStreak = 0; await load(reset: failedReset) }
     func applyAll(patch: JSON) {
         guard api.generation == accountEpoch else { return }
         if loading {
@@ -280,14 +285,22 @@ final class PagedResource<T: Record>: ObservableObject {
             else if !json["total_pages"].isNull { inferredMore = next < json["total_pages"].int }
             else if !json["pages"].isNull { inferredMore = next < json["pages"].int }
             else { inferredMore = rows.count >= pageSize }
-            hasMore = paginated && !parsed.isEmpty && (json["has_more"].isNull ? inferredMore : json["has_more"].bool)
+            hasMore = paginated && (json["has_more"].isNull ? (!parsed.isEmpty && inferredMore) : json["has_more"].bool)
             // Advancing cursors can legitimately return overlapping records or short pages.
             // Only a non-advancing cursor, or a repeated page without cursors, ends pagination.
-            if !reset && next > 1 && ((cursor != nil && cursor == previousCursor) || (cursor == nil && !added)) { hasMore = false }
+            if !reset && next > 1 && ((cursor != nil && cursor == previousCursor) || (cursor == nil && !added && !parsed.isEmpty)) { hasMore = false }
+            emptyPageStreak = hasMore && parsed.isEmpty ? (reset ? 1 : emptyPageStreak + 1) : 0
+            if emptyPageStreak >= 5 {
+                failedReset = false; error = "这一段暂无可见内容，可重试继续加载。"
+            }
             persist()
         } catch is CancellationError {} catch {
             guard requestID == ticket, api.generation == epoch else { return }
             if (error as? URLError)?.code != .cancelled {
+                if ["PROFILE_PRIVATE", "PROFILE_FRIENDS_ONLY"].contains((error as? APIError)?.code ?? "") {
+                    items = []; showingCache = false; hasMore = false
+                    LocalCache.write(.array([]), userID: userID, key: cacheKey)
+                }
                 failedReset = reset; self.error = error.localizedDescription
             }
         }
@@ -309,6 +322,7 @@ final class PagedResource<T: Record>: ObservableObject {
         persist()
     }
     private func persist() {
+        guard cacheEnabled else { return }
         LocalCache.write(.array(Array(items.prefix(100)).map(\.raw)), userID: userID, key: cacheKey)
     }
 }

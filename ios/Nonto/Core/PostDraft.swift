@@ -52,7 +52,7 @@ enum ComposerReferenceInsertion {
     }
 }
 
-struct PostDraft: Codable, Equatable {
+struct PostDraft: Codable, Equatable, Sendable {
     var text: String
     var visibility: String
     var role: String
@@ -70,6 +70,7 @@ struct PostDraftStore {
     func read(userID: Int, communityID: Int = 0, quoteID: Int = 0, defaultVisibility: String) -> PostDraft {
         guard userID > 0 else { return PostDraft(visibility: defaultVisibility) }
         let key = key(userID, communityID, quoteID)
+        if defaults.bool(forKey: key + ".discarded") { return PostDraft(visibility: defaultVisibility) }
         if let data = defaults.data(forKey: key + ".v2"), let saved = try? JSONDecoder().decode(PostDraft.self, from: data) {
             return PostDraft(text: saved.text, visibility: saved.visibility, role: saved.role)
         }
@@ -78,11 +79,16 @@ struct PostDraftStore {
     func save(_ draft: PostDraft, userID: Int, communityID: Int = 0, quoteID: Int = 0) {
         guard userID > 0, let data = try? JSONEncoder().encode(draft) else { return }
         let key = key(userID, communityID, quoteID)
+        defaults.removeObject(forKey: key + ".discarded")
         defaults.set(data, forKey: key + ".v2"); defaults.removeObject(forKey: key)
     }
     func remove(userID: Int, communityID: Int = 0, quoteID: Int = 0) {
         guard userID > 0 else { return }
         let key = key(userID, communityID, quoteID)
+        defaults.set(true, forKey: key + ".discarded")
         defaults.removeObject(forKey: key); defaults.removeObject(forKey: key + ".v2")
+    }
+    func isDiscarded(userID: Int, communityID: Int, quoteID: Int) -> Bool {
+        defaults.bool(forKey: key(userID, communityID, quoteID) + ".discarded")
     }
 }

@@ -79,7 +79,7 @@ struct PostComposer: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(action: close) { Image(systemName: "xmark") }
-                            .foregroundStyle(.primary).disabled(busy).accessibilityLabel("关闭发布页")
+                            .foregroundStyle(.primary).disabled(busy || reading).accessibilityLabel("关闭发布页")
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await publish() } } label: {
@@ -95,16 +95,22 @@ struct PostComposer: View {
                 }
                 .interactiveDismissDisabled(busy || reading || !media.isEmpty || (editing != nil && hasChanges))
                 .confirmationDialog(editing == nil ? "关闭发布？" : "放弃尚未保存的修改？", isPresented: $confirmClose, titleVisibility: .visible) {
-                    if editing == nil { Button("保留文字草稿并关闭") { saveDraft(); dismiss() } }
+                    if editing == nil { Button("保留草稿并关闭") {
+                        draftSaveTask?.cancel()
+                        Task { busy = true; defer { busy = false }; if await saveDraft() { dismiss() } }
+                    } }
                     Button(editing == nil ? "放弃本次内容" : "放弃修改", role: .destructive) {
                         draftSaveTask?.cancel()
-                        if editing == nil { published = true; clearDraft() }
-                        dismiss()
+                        Task {
+                            busy = true; defer { busy = false }
+                            if editing == nil { published = true; await clearDraft() }
+                            dismiss()
+                        }
                     }
                     Button("继续编辑", role: .cancel) {}
                 } message: {
                     if editing == nil && (!media.isEmpty || reading) {
-                        Text("文字和可见范围可保留为草稿，照片和视频关闭后需要重新选择。")
+                        Text("文字、可见范围和所选照片或视频会保存在本机，下次打开时恢复。")
                     }
                 }
                 .photosPicker(isPresented: $showPhotoPicker, selection: $picks,
@@ -119,16 +125,13 @@ struct PostComposer: View {
                         editor.stageReference(value, kind: kind)
                     }
                 }
-                .onAppear { restoreDraft() }
-                .onDisappear { saveDraft() }
-                .onChange(of: [text, visibility, role]) { _, _ in
-                    draftSaveTask?.cancel()
-                    draftSaveTask = Task {
-                        do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
-                        saveDraft()
-                    }
+                .task { await restoreDraft() }
+                .onDisappear { draftSaveTask?.cancel(); Task { _ = await saveDraft() } }
+                .onChange(of: [text, visibility, role]) { _, _ in scheduleDraftSave() }
+                .onChange(of: media.map(\.id)) { _, _ in scheduleDraftSave() }
+                .onChange(of: phase) { _, value in
+                    if value != .active { draftSaveTask?.cancel(); Task { _ = await saveDraft() } }
                 }
-                .onChange(of: phase) { _, value in if value != .active { saveDraft() } }
                 .onChange(of: session.user?.id) { _, value in
                     if draftLoaded && value != accountID { showPhotoPicker = false; preview = nil; editor.endEditing(); dismiss() }
                 }
@@ -264,10 +267,27 @@ struct PostComposer: View {
         editor.endEditing()
         if hasChanges { confirmClose = true } else { dismiss() }
     }
-    private func restoreDraft() {
-        guard !draftLoaded else { return }; draftLoaded = true
+    private func restoreDraft() async {
+        guard !draftLoaded else { return }
         accountID = session.user?.id ?? 0; accountEpoch = session.api.generation
-        let saved = PostDraftStore().read(userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0, defaultVisibility: session.defaultVisibility)
+        reading = true
+        defer { reading = false; draftLoaded = true }
+        let store = PostDraftStore(), community = communityID ?? 0, quote = quoted?.id ?? 0
+        var saved = store.read(userID: accountID, communityID: community, quoteID: quote, defaultVisibility: session.defaultVisibility)
+        if editing == nil && !store.isDiscarded(userID: accountID, communityID: community, quoteID: quote) {
+            do {
+                if let restored = try await PostDraftFiles.shared.read(userID: accountID, communityID: community, quoteID: quote) {
+                    try checkAccount()
+                    saved = restored.draft
+                    if media.isEmpty { try attachments.append(restored.media, assetIDs: restored.assetIDs) }
+                }
+            } catch {
+                if accountEpoch == session.api.generation, !(error is CancellationError) {
+                    self.error = "部分草稿无法恢复，已保留可读取的文字。请检查附件后再发布。"
+                }
+            }
+        }
+        guard accountEpoch == session.api.generation, accountID == session.user?.id else { return }
         text = editing?.content ?? saved.text
         visibility = editing?.visibilityForEdit ?? saved.visibility
         let roles = session.user?.raw["verified_roles"].array.map(\.string) ?? []
@@ -290,15 +310,38 @@ struct PostComposer: View {
         catch { self.error = error.localizedDescription }
         picks = []
     }
-    private func saveDraft() {
-        draftSaveTask?.cancel(); draftSaveTask = nil
-        if accountID > 0 && accountEpoch == session.api.generation && editing == nil && !published {
-            PostDraftStore().save(PostDraft(text: text, visibility: visibility, role: role), userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0)
+    private func scheduleDraftSave() {
+        guard draftLoaded, editing == nil, !published else { return }
+        draftSaveTask?.cancel()
+        draftSaveTask = Task {
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+            _ = await saveDraft()
         }
     }
-    private func clearDraft() {
+    private func saveDraft() async -> Bool {
+        guard editing == nil, !published else { return true }
+        guard draftLoaded, accountID > 0, accountEpoch == session.api.generation, accountID == session.user?.id else { return false }
+        let draft = PostDraft(text: text, visibility: visibility, role: role)
+        let revision = DispatchTime.now().uptimeNanoseconds
+        do {
+            try await PostDraftFiles.shared.save(draft, media: media, assetIDs: attachments.assetIDs,
+                userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0, revision: revision)
+            try checkAccount()
+            guard !published else { return true }
+            PostDraftStore().save(draft, userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0)
+            return true
+        } catch {
+            if !Task.isCancelled, accountEpoch == session.api.generation {
+                self.error = "草稿未能保存，请检查本机存储空间后重试。"
+            }
+            return false
+        }
+    }
+    private func clearDraft() async {
         draftSaveTask?.cancel(); draftSaveTask = nil
         PostDraftStore().remove(userID: accountID, communityID: communityID ?? 0, quoteID: quoted?.id ?? 0)
+        try? await PostDraftFiles.shared.remove(userID: accountID, communityID: communityID ?? 0,
+            quoteID: quoted?.id ?? 0, revision: DispatchTime.now().uptimeNanoseconds)
     }
     private func checkAccount() throws {
         try Task.checkCancellation()
@@ -339,7 +382,7 @@ struct PostComposer: View {
                 if let quoted { fields["quoted_post_id"] = String(quoted.id) }
                 try checkAccount(); status = "正在发布…"
                 _ = try await session.api.request("/posts", method: "POST", form: fields)
-                try checkAccount(); clearDraft()
+                try checkAccount(); published = true; await clearDraft()
             }
             published = true
             if editing == nil { session.postRevision += 1 }

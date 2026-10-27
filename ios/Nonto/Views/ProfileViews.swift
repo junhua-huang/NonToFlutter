@@ -16,27 +16,26 @@ struct ProfileView: View {
     @State private var liked = false
     @State private var blocked = false
     @State private var coverVisible = true
+    @State private var accessMessage: String?
+    @State private var canRequestAccess = false
     private var isOwn: Bool { session.user?.id == userID }
     var body: some View {
-        PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader)).id(liked)
-            .contentMargins(.top, 0, for: .scrollContent)
-            .ignoresSafeArea(.container, edges: .top)
-            .scrollEdgeEffectHidden(coverVisible, for: .top)
-            .toolbarBackgroundVisibility(coverVisible ? .hidden : .visible, for: .navigationBar)
-            .toolbarColorScheme(coverVisible ? .dark : nil, for: .navigationBar)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top < geometry.containerSize.width / 3.3
-            } action: { _, value in
-                // Only change the material, never the navigation bar's visibility or height.
-                if coverVisible != value { coverVisible = value }
-            }
+        Group {
+            if let accessMessage {
+                ContentUnavailableView {
+                    Label("主页暂不可见", systemImage: "lock")
+                } description: { Text(accessMessage) } actions: {
+                    if canRequestAccess {
+                        Button(friendLabel) { Task { await friendAction() } }
+                            .buttonStyle(.glassProminent).disabled(busy || friendship.isNull || friendship["status"].string == "accepted")
+                    }
+                    Button("重新加载") { Task { await load() } }
+                    ErrorBanner(text: error)
+                }
+            } else { profileTimeline }
+        }
             .navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text(person?.name ?? (isOwn ? session.user?.name ?? "我的主页" : "个人主页"))
-                        .font(.headline).lineLimit(1)
-                        .foregroundStyle(coverVisible ? Color.white : Color.primary)
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     if isOwn { RouteButton(.settings) { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
                     else {
@@ -57,6 +56,28 @@ struct ProfileView: View {
             }
             .confirmationDialog("删除这位好友？", isPresented: $confirmUnfriend) {
                 Button("删除好友", role: .destructive) { Task { await unfriend() } }
+            }
+    }
+    private var profileTimeline: some View {
+        PostList(session: session, path: "/posts/user/\(userID)\(liked ? "/liked" : "")", header: AnyView(profileHeader), cacheEnabled: isOwn).id(liked)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .ignoresSafeArea(.container, edges: .top)
+            .scrollEdgeEffectHidden(coverVisible, for: .top)
+            .toolbarBackgroundVisibility(coverVisible ? .hidden : .visible, for: .navigationBar)
+            .toolbarColorScheme(coverVisible ? .dark : nil, for: .navigationBar)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top < geometry.containerSize.width / 3.3
+            } action: { _, value in
+                // Only change the material, never the navigation bar's visibility or height.
+                if coverVisible != value { coverVisible = value }
+            }
+            .navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(person?.name ?? (isOwn ? session.user?.name ?? "我的主页" : "个人主页"))
+                        .font(.headline).lineLimit(1)
+                        .foregroundStyle(coverVisible ? Color.white : Color.primary)
+                }
             }
     }
     private var profileHeader: some View {
@@ -116,9 +137,19 @@ struct ProfileView: View {
     private func load() async {
         do {
             let j = try await session.api.request(isOwn ? "/auth/profile" : "/auth/users/\(userID)")
-            person = Person(j["user"].or(j)); error = nil
+            person = Person(j["user"].or(j)); error = nil; accessMessage = nil; canRequestAccess = false
             if !isOwn { friendship = try await session.api.request("/friends/status/\(userID)") }
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            if ["PROFILE_PRIVATE", "PROFILE_FRIENDS_ONLY"].contains((error as? APIError)?.code ?? "") {
+                person = nil; friendship = .null; accessMessage = error.localizedDescription; coverVisible = false
+                canRequestAccess = (error as? APIError)?.code == "PROFILE_FRIENDS_ONLY"
+                self.error = nil
+                if canRequestAccess {
+                    do { friendship = try await session.api.request("/friends/status/\(userID)") }
+                    catch { self.error = error.localizedDescription }
+                }
+            } else { self.error = error.localizedDescription }
+        }
     }
     private func friendAction() async {
         guard !busy else { return }; busy = true; defer { busy = false }

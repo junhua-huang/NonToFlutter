@@ -80,6 +80,9 @@ struct AuthView: View {
                         .disabled(!canSubmit)
                 }.padding(.horizontal, 24).padding(.vertical, 16).frame(maxWidth: 440)
             }.frame(maxWidth: .infinity).scrollDismissesKeyboard(.interactively)
+                .onAppear {
+                    if let notice = session.authenticationMessage { message = notice; session.authenticationMessage = nil }
+                }
                 .onReceive(timer) { _ in if cooldown > 0 { cooldown -= 1 } }
         }
     }

@@ -183,7 +183,16 @@ struct FilingDisclosureSection: View {
     }
 }
 
-struct ReportRecord: Record { var raw: JSON; init(_ raw: JSON) { self.raw = raw } }
+struct ReportRecord: Record {
+    var raw: JSON
+    init(_ raw: JSON) {
+        self.raw = raw
+        // An older server/cache may still expose internal fields. Never retain
+        // or render them as reporter-facing feedback.
+        self.raw["resolution_note"] = raw["reporter_notice"]
+        self.raw["resolved_by"] = .null
+    }
+}
 struct ReportHistoryView: View {
     @Environment(\.appAccent) private var accent
     @StateObject private var resource: PagedResource<ReportRecord>
@@ -200,8 +209,8 @@ struct ReportHistoryView: View {
                         Text(status(record.raw["status"].string)).font(.caption).foregroundStyle(accent.textColor)
                     }
                     Text(record.raw["reason"].string).textSelection(.enabled)
-                    if !record.raw["resolution_note"].string.isEmpty {
-                        Text("处理反馈：\(record.raw["resolution_note"].string)").font(.subheadline).foregroundStyle(.secondary)
+                    if !record.raw["reporter_notice"].string.isEmpty {
+                        Text("处理反馈：\(record.raw["reporter_notice"].string)").font(.subheadline).foregroundStyle(.secondary)
                     }
                     if let date = ServerDate.parse(record.raw["created_at"]) { Text(date, style: .date).font(.caption).foregroundStyle(.secondary) }
                 }.padding(.vertical, 6)

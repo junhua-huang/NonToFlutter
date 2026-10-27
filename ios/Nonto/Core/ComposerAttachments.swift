@@ -4,6 +4,7 @@ import Foundation
 struct ComposerAttachments {
     private(set) var items: [SelectedMedia] = []
     private var assets: [UUID: String] = [:]
+    var assetIDs: [String?] { items.map { assets[$0.id] } }
     var canAddPhotos: Bool { !items.contains(where: \.isVideo) && items.count < 9 }
     var remainingCount: Int { max(0, 9 - items.count) }
 

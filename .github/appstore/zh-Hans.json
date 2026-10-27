@@ -12,8 +12,8 @@
   "marketingUrl": "https://nonto.online/",
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
-  "betaBuildVersion": "106.1",
-  "betaWhatsNew": "新增举报收件确认。\n\n• 举报被服务器接收后，通知中心会收到“举报已收到”的系统消息。\n• 开启系统推送时，可收到收件提醒；关闭推送仍可在应用内查看回执。\n• 通知详情可前往“举报处理记录”查看进展。\n• 动态、评论和用户举报共用收件流程，重复提交不重复提醒。\n• 通知不展示举报理由，举报失败不会生成回执。\n\n举报回执需本次配套服务器更新后生效。\n\n反馈邮箱：nonto@foxmail.com。请勿发送密码、验证码或他人的聊天隐私。",
+  "betaBuildVersion": "108.1",
+  "betaWhatsNew": "完善隐私、通知、发布与草稿。\n\n• 主页受限时显示明确提示，仅好友主页保留好友申请入口。\n• 修复 @提及 及发帖结果提示、举报处理反馈和处理结果推送。\n• 修改密码后需重新登录，配套服务端撤销旧登录和推送绑定。\n• 修复“与你相关”分页，并改进空页的继续加载。\n• 发布草稿可恢复照片、顺序和视频；草稿仅在本机保存。\n\n服务端修复需先执行 2026_10_28_0100 数据库迁移并部署全部后端进程。当前为内部 TestFlight，公开政策部署和生产运营核验尚未完成。\n\n反馈邮箱：nonto@foxmail.com。",
   "screenshots": [
     {
       "file": ".github/appstore/screenshots/01-share.png",

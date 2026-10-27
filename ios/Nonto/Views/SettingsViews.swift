@@ -195,7 +195,13 @@ struct PasswordView: View {
     private func save() async {
         guard !busy else { return }
         busy = true; saved = false; error = nil; defer { busy = false }
-        do { _ = try await session.api.request("/auth/change-password", method: "POST", body: .object(["old_password": .text(old), "new_password": .text(new)])); old = ""; new = ""; repeatPassword = ""; saved = true }
+        do {
+            let result = try await session.api.request("/auth/change-password", method: "POST", body: .object(["old_password": .text(old), "new_password": .text(new)]))
+            old = ""; new = ""; repeatPassword = ""; saved = true
+            if result["reauthentication_required"].bool {
+                try await session.logout(message: "密码已修改，请使用新密码重新登录。")
+            }
+        }
         catch { self.error = error.localizedDescription }
     }
 }
@@ -225,6 +231,7 @@ struct DeleteAccountView: View {
                         _ = try await session.api.request("/auth/account", method: "DELETE")
                         try await session.logout()
                         try? AccountLocalData.clear(userID: userID)
+                        try? await PostDraftFiles.shared.removeAccount(userID)
                     }
                     catch { self.error = error.localizedDescription }
                 }

@@ -227,10 +227,13 @@ struct NativeVideo: View {
     }
 }
 struct SelectedMedia: Identifiable, Sendable {
-    let id = UUID()
+    let id: UUID
     let data: Data
     let name: String
     let mime: String
+    init(id: UUID = UUID(), data: Data, name: String, mime: String) {
+        self.id = id; self.data = data; self.name = name; self.mime = mime
+    }
     var isVideo: Bool { mime.hasPrefix("video/") }
     static func image(_ data: Data) throws -> SelectedMedia {
         let options = [kCGImageSourceShouldCache: false] as CFDictionary
