@@ -43,7 +43,7 @@ enum AppAccent: String, CaseIterable, Identifiable, Sendable {
 
     // Cache immutable dynamic UIColors so repeated reads have stable identity.
     private static let bluePalette = AccentPalette(fill: UIColor(named: "AccentColor") ?? custom(
-        light: 0x1D9BF0, dark: 0x1D9BF0, highLight: 0x0876BC, highDark: 0x6CC6FF)), preservesStandardColor: true)
+        light: 0x1D9BF0, dark: 0x1D9BF0, highLight: 0x0876BC, highDark: 0x6CC6FF), preservesStandardColor: true)
     private static let purplePalette = AccentPalette(fill: custom(
         light: 0x7854F6, dark: 0x7854F6, highLight: 0x5936CA, highDark: 0xAD96FF))
     private static let pinkPalette = AccentPalette(fill: custom(
