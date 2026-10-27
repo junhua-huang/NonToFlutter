@@ -12,8 +12,8 @@
   "marketingUrl": "https://nonto.online/",
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
-  "betaBuildVersion": "108.1",
-  "betaWhatsNew": "完善隐私、通知、发布与草稿。\n\n• 主页受限时显示明确提示，仅好友主页保留好友申请入口。\n• 修复 @提及 及发帖结果提示、举报处理反馈和处理结果推送。\n• 修改密码后需重新登录，配套服务端撤销旧登录和推送绑定。\n• 修复“与你相关”分页，并改进空页的继续加载。\n• 发布草稿可恢复照片、顺序和视频；草稿仅在本机保存。\n\n服务端修复需先执行 2026_10_28_0100 数据库迁移并部署全部后端进程。当前为内部 TestFlight，公开政策部署和生产运营核验尚未完成。\n\n反馈邮箱：nonto@foxmail.com。",
+  "betaBuildVersion": "109.1",
+  "betaWhatsNew": "修正南图蓝的使用一致性。\n\n• 统一品牌蓝、系统默认强调色和原生界面的颜色来源。\n• 修正发布、登录及贴纸按钮的前景色与禁用状态。\n• 统一聊天和评论发送图标、加号、选中边框、通知标记的颜色用法。\n• 强调色设置预览与实际按钮保持一致，保留浅深色及增强对比度适配。\n\n此构建可用于 App Store 草稿选择；正式提交前仍需补齐公开政策地址与生产运营核验。\n\n反馈邮箱：nonto@foxmail.com。",
   "screenshots": [
     {
       "file": ".github/appstore/screenshots/01-share.png",

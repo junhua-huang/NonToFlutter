@@ -86,7 +86,6 @@ struct PostComposer: View {
                             if busy { ProgressView().accessibilityLabel("正在提交") }
                             else {
                                 Text(editing == nil ? "发布" : "保存").fontWeight(.semibold)
-                                    .foregroundStyle(canPublish && !reading ? accent.foregroundColor : Color.secondary)
                             }
                         }.disabled(busy || reading || !canPublish)
                             .buttonStyle(.glassProminent).tint(accent.color)
@@ -235,7 +234,7 @@ struct PostComposer: View {
                             .glassEffect(.regular.interactive(), in: Circle())
                             .accessibilityLabel("收起键盘")
                     }
-                }.font(.title3).buttonStyle(.plain).foregroundStyle(accent.color).disabled(busy || reading)
+                }.font(.title3).buttonStyle(.plain).foregroundStyle(accent.symbolColor).disabled(busy || reading)
                     .padding(.horizontal, 16)
             }
         }.padding(.top, 6).padding(.bottom, 6)

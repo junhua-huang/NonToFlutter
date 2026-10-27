@@ -19,8 +19,11 @@ enum AppAccent: String, CaseIterable, Identifiable, Sendable {
     }
 
     var color: Color { Color(uiColor: uiColor) }
-    /// Text and small symbols need more contrast than a large color swatch.
+    /// Small text needs more contrast than an icon or a large color swatch.
     var textColor: Color { Color(uiColor: textUIColor) }
+    /// Icons and selection outlines use their own contrast role, not the
+    /// unnecessarily dark small-text color or an unrelated system blue.
+    var symbolColor: Color { Color(uiColor: palette.symbol) }
     var foregroundColor: Color { Color(uiColor: foregroundUIColor) }
     var uiColor: UIColor { palette.fill }
     var textUIColor: UIColor { palette.text }
@@ -38,7 +41,7 @@ enum AppAccent: String, CaseIterable, Identifiable, Sendable {
     }
 
     // Cache immutable dynamic UIColors so repeated reads have stable identity.
-    private static let bluePalette = AccentPalette(fill: custom(
+    private static let bluePalette = AccentPalette(fill: UIColor(named: "AccentColor") ?? custom(
         light: 0x1D9BF0, dark: 0x1D9BF0, highLight: 0x0876BC, highDark: 0x6CC6FF))
     private static let purplePalette = AccentPalette(fill: custom(
         light: 0x7854F6, dark: 0x7854F6, highLight: 0x5936CA, highDark: 0xAD96FF))
@@ -65,16 +68,25 @@ extension EnvironmentValues {
 private struct AccentPalette {
     let fill: UIColor
     let text: UIColor
+    let symbol: UIColor
     let foreground: UIColor
 
     init(fill: UIColor) {
         self.fill = fill
-        text = UIColor { traits in
+        text = Self.legible(fill, normal: 4.5, high: 7)
+        symbol = Self.legible(fill, normal: 3, high: 4.5)
+        foreground = UIColor { traits in
+            let base = AccentRGB(fill, traits: traits)
+            return base.contrast(with: .white) >= base.contrast(with: .black) ? .white : .black
+        }
+    }
+    private static func legible(_ fill: UIColor, normal: Double, high: Double) -> UIColor {
+        UIColor { traits in
             let base = AccentRGB(fill, traits: traits)
             let surfaces = [UIColor.systemBackground, .secondarySystemBackground, .tertiarySystemBackground]
                 .map { AccentRGB($0, traits: traits) }
             let backgrounds = surfaces + surfaces.map { $0.mixed(with: base, amount: 0.16) }
-            let minimum: Double = traits.accessibilityContrast == .high ? 7 : 4.5
+            let minimum = traits.accessibilityContrast == .high ? high : normal
             let target: AccentRGB = traits.userInterfaceStyle == .dark ? .white : .black
             guard !backgrounds.allSatisfy({ base.contrast(with: $0) >= minimum }) else { return base.uiColor }
             var lower = 0.0, upper = 1.0
@@ -85,10 +97,6 @@ private struct AccentPalette {
                 else { lower = middle }
             }
             return base.mixed(with: target, amount: upper).uiColor
-        }
-        foreground = UIColor { traits in
-            let base = AccentRGB(fill, traits: traits)
-            return base.contrast(with: .white) >= base.contrast(with: .black) ? .white : .black
         }
     }
 }

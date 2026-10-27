@@ -174,7 +174,7 @@ private struct CommentComposer: View {
                 Button { Task { await store.send() } } label: {
                     Group {
                         if store.sending { ProgressView() }
-                        else { Image(systemName: "arrow.up.circle.fill").font(.title).foregroundStyle(store.canSend ? accent.textColor : Color.secondary) }
+                        else { Image(systemName: "arrow.up.circle.fill").font(.title).foregroundStyle(store.canSend ? accent.symbolColor : Color.secondary) }
                     }.frame(width: 44, height: 44)
                 }.disabled(!store.canSend).accessibilityLabel(store.sending ? "正在发送评论" : "发送评论")
                     .accessibilityIdentifier("comment-send")

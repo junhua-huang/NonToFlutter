@@ -98,9 +98,10 @@ private struct AccentColorPreview: View {
                 Label(accent.name, systemImage: "circle.fill").font(.subheadline)
                     .foregroundStyle(accent.textColor)
                 if !dynamicType.isAccessibilitySize { Spacer(minLength: 12) }
-                Label("发布动态", systemImage: "square.and.pencil").font(.subheadline.bold())
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .foregroundStyle(accent.foregroundColor).background(accent.color, in: Capsule())
+                Button {} label: {
+                    Label("发布动态", systemImage: "square.and.pencil").font(.subheadline.bold())
+                }.buttonStyle(.glassProminent).tint(accent.color)
+                    .allowsHitTesting(false).accessibilityHidden(true)
             }
         }.padding(.vertical, 8).accessibilityElement(children: .combine)
     }

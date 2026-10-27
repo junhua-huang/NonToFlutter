@@ -686,6 +686,9 @@ struct ChatComposerInput: View {
     }
     private var compactDrawerHeight: CGFloat { min(320, max(110, availableHeight - composerHeight - 30)) }
     private var compactDrawerDetent: PresentationDetent { .height(compactDrawerHeight) }
+    private var canSend: Bool {
+        !stickerSender.busy && (stagedSticker != nil || !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
     private var composerRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField(stagedSticker == nil ? "发送消息…" : "添加文字或发送", text: $store.draft, selection: textSelection, axis: .vertical)
@@ -694,10 +697,13 @@ struct ChatComposerInput: View {
                 .disabled(stickerSender.busy).accessibilityLabel("消息内容")
             Button(action: send) {
                 Group {
-                    if stickerSender.busy { ProgressView() }
-                    else { Image(systemName: "arrow.up.circle.fill").font(.system(size: min(inputControlHeight * 0.62, 40))) }
+                    if stickerSender.busy { ProgressView().tint(accent.symbolColor) }
+                    else {
+                        Image(systemName: "arrow.up.circle.fill").font(.system(size: min(inputControlHeight * 0.62, 40)))
+                            .foregroundStyle(canSend ? accent.symbolColor : Color.secondary)
+                    }
                 }.frame(width: inputControlHeight - 8, height: inputControlHeight - 8)
-            }.disabled(stickerSender.busy || (stagedSticker == nil && store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+            }.disabled(!canSend)
                 .padding(.bottom, 4)
                 .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")
         }
@@ -705,7 +711,7 @@ struct ChatComposerInput: View {
     private var attachmentButton: some View {
         Button(action: showAttachmentMenu) {
             Image(systemName: "plus")
-                .font(.system(size: min(inputControlHeight * 0.44, 32), weight: .medium)).foregroundStyle(accent.color)
+                .font(.system(size: min(inputControlHeight * 0.44, 32), weight: .medium)).foregroundStyle(accent.symbolColor)
                 .frame(width: inputControlHeight, height: inputControlHeight)
                 .glassEffect(.regular.interactive(), in: .circle)
         }.buttonStyle(.plain).disabled(preparingMedia || stickerSender.busy || reopenMenuAfterDrawer)

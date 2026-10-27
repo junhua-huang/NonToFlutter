@@ -74,8 +74,8 @@ struct AuthView: View {
                     ErrorBanner(text: error)
                     if let message { Text(message).font(.subheadline).foregroundStyle(accent.textColor) }
                     Button { Task { await submit() } } label: {
-                        HStack(spacing: 8) { if busy { ProgressView().tint(accent.foregroundColor) }; Text(mode == .reset ? "重设密码" : mode.rawValue) }
-                            .frame(maxWidth: .infinity, minHeight: 24).foregroundStyle(accent.foregroundColor)
+                        HStack(spacing: 8) { if busy { ProgressView() }; Text(mode == .reset ? "重设密码" : mode.rawValue) }
+                            .frame(maxWidth: .infinity, minHeight: 24)
                     }.buttonStyle(.glassProminent).controlSize(.large)
                         .disabled(!canSubmit)
                 }.padding(.horizontal, 24).padding(.vertical, 16).frame(maxWidth: 440)

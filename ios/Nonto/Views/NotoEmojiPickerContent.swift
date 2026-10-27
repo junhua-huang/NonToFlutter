@@ -162,7 +162,7 @@ struct ExpressionPickerSelection: ViewModifier {
         content
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(selected ? accent.textColor : .clear, lineWidth: contrast == .increased ? 2.5 : 1.5)
+                    .strokeBorder(selected ? accent.symbolColor : .clear, lineWidth: contrast == .increased ? 2.5 : 1.5)
             }
             .overlay(alignment: .topTrailing) {
                 if selected {

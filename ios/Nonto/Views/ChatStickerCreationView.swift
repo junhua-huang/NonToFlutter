@@ -33,9 +33,8 @@ struct ChatStickerCreationView: View {
             .safeAreaBar(edge: .bottom) {
                 Button(action: save) {
                     HStack { if browser.busy { ProgressView() }; Text(browser.busy ? "正在添加…" : "添加贴纸") }
-                        .foregroundStyle(browser.canCommit && !saved ? accent.foregroundColor : Color.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                }.buttonStyle(.borderedProminent).disabled(!browser.canCommit || saved).padding(16)
+                }.buttonStyle(.borderedProminent).tint(accent.color).disabled(!browser.canCommit || saved).padding(16)
                     .accessibilityIdentifier("chat.stickers.save")
             }
             .navigationTitle("新贴纸").navigationBarTitleDisplayMode(.inline)

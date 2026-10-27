@@ -2,7 +2,7 @@ import SwiftUI
 
 extension Color {
     /// Identity and like colors stay fixed; personalized controls use appAccent.
-    static let brand = Color(red: 29 / 255, green: 155 / 255, blue: 240 / 255)
+    static let brand = AppAccent.blue.color
     static let brandLike = Color(red: 249 / 255, green: 24 / 255, blue: 128 / 255)
     static let timelineBackground = Color(uiColor: .systemBackground)
     static let timelineSeparator = Color(uiColor: .separator).opacity(0.35)
@@ -51,7 +51,7 @@ struct TimelineTabs<Selection: Hashable>: View {
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .overlay(alignment: .bottom) {
                             if selection == tab.value {
-                                Capsule().fill(accent.textColor).frame(width: 32, height: 4)
+                                Capsule().fill(accent.color).frame(width: 32, height: 4)
                             }
                         }.contentShape(Rectangle())
                 }.buttonStyle(.plain)
@@ -70,9 +70,8 @@ struct ComposeButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "square.and.pencil").font(.system(size: 23, weight: .semibold))
-                .foregroundStyle(accent.foregroundColor).frame(width: 58, height: 58)
-                .glassEffect(.regular.tint(accent.color).interactive(), in: Circle())
-        }.buttonStyle(.plain).accessibilityLabel("发布动态")
+                .frame(width: 58, height: 58)
+        }.buttonStyle(.glassProminent).buttonBorderShape(.circle).tint(accent.color).accessibilityLabel("发布动态")
             .shadow(color: accent.color.opacity(0.18), radius: 12, y: 4)
     }
 }

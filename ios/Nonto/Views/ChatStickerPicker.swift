@@ -160,8 +160,7 @@ struct ChatStickerPickerContent: View {
     private var sendButton: some View {
         Button { commit(send: true) } label: {
             Text(browser.prepared == nil ? "发送贴纸" : "添加并发送").frame(maxWidth: .infinity)
-                .foregroundStyle(browser.canCommit && !readingPhoto ? accent.foregroundColor : Color.secondary)
-        }.buttonStyle(.glassProminent).disabled(!browser.canCommit || readingPhoto)
+        }.buttonStyle(.glassProminent).tint(accent.color).disabled(!browser.canCommit || readingPhoto)
             .accessibilityIdentifier("chat.stickers.send")
     }
     private func commit(send: Bool) {

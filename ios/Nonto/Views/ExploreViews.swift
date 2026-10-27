@@ -202,7 +202,7 @@ struct NotificationsView: View {
                     HStack(alignment: .top, spacing: 12) {
                         if notice.isSystemNotification {
                             Image(systemName: "bell.badge.fill").font(.system(size: 20))
-                                .foregroundStyle(accent.textColor).frame(width: 42, height: 42)
+                                .foregroundStyle(accent.symbolColor).frame(width: 42, height: 42)
                                 .background(accent.color.opacity(0.1), in: Circle())
                                 .accessibilityLabel("南图系统通知")
                         } else { AvatarView(url: notice.sender.avatar, name: notice.sender.name, size: 42) }
@@ -211,7 +211,7 @@ struct NotificationsView: View {
                             Text(notice.content).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
                             if let d = ServerDate.parse(notice.raw["created_at"]) { Text(d, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).font(.caption2).foregroundStyle(.secondary) }
                         }
-                        if !notice.isRead { Circle().fill(accent.textColor).frame(width: 8, height: 8) }
+                        if !notice.isRead { Circle().fill(accent.color).frame(width: 8, height: 8) }
                     }.padding(.vertical, 10)
                 }.disabled(removing.contains(notice.id)).swipeActions {
                     Button(role: .destructive) { Task { await remove(notice) } } label: { Label("删除", systemImage: "trash") }

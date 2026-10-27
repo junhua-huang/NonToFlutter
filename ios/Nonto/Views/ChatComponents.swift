@@ -43,9 +43,9 @@ struct ChatAttachmentMenuOverlay: View {
                     .disabled(disabled)
                     .transition(.modifier(
                         active: ChatAttachmentReveal(progress: 0, source: source, destination: destination,
-                                                     accent: accent.color, reduceMotion: reduceMotion),
+                                                     accent: accent.symbolColor, reduceMotion: reduceMotion),
                         identity: ChatAttachmentReveal(progress: 1, source: source, destination: destination,
-                                                       accent: accent.color, reduceMotion: reduceMotion)))
+                                                       accent: accent.symbolColor, reduceMotion: reduceMotion)))
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(presented)
@@ -194,6 +194,7 @@ private struct ChatAttachmentRowStyle: ButtonStyle {
 
 /// The system sheet owns dragging and hands scrolling to the embedded library.
 struct ChatPhotoDrawer: View {
+    @Environment(\.appAccent) private var accent
     let onAdd: ([PhotosPickerItem]) -> Void
     let onClose: () -> Void
     @State private var selection: [PhotosPickerItem] = []
@@ -212,6 +213,7 @@ struct ChatPhotoDrawer: View {
             PhotosPicker(selection: $selection, maxSelectionCount: 9, selectionBehavior: .continuousAndOrdered,
                          matching: .any(of: [.images, .videos])) { EmptyView() }
                 .photosPickerStyle(.inline)
+                .tint(accent.color)
                 .photosPickerDisabledCapabilities(.selectionActions)
                 .photosPickerAccessoryVisibility(.hidden, edges: .bottom)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -242,6 +244,7 @@ private struct StickerMenuShape: Shape {
 
 /// SwiftUI has no system camera picker; keep capture inside Apple's camera UI.
 struct ChatCameraCapture: UIViewControllerRepresentable {
+    @Environment(\.appAccent) private var accent
     let onCapture: (Data) -> Void
     let onCancel: () -> Void
     let onError: () -> Void
@@ -253,9 +256,10 @@ struct ChatCameraCapture: UIViewControllerRepresentable {
         picker.cameraCaptureMode = .photo
         picker.allowsEditing = false
         picker.delegate = context.coordinator
+        picker.view.tintColor = accent.uiColor
         return picker
     }
-    func updateUIViewController(_ picker: UIImagePickerController, context: Context) {}
+    func updateUIViewController(_ picker: UIImagePickerController, context: Context) { picker.view.tintColor = accent.uiColor }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     static func dismantleUIViewController(_ picker: UIImagePickerController, coordinator: Coordinator) { picker.delegate = nil }
 
@@ -491,7 +495,7 @@ struct ChatMessageRow: View {
     }
     private var quotePreview: some View {
         HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 2).fill(accent.textColor).frame(width: 3)
+            RoundedRectangle(cornerRadius: 2).fill(accent.color).frame(width: 3)
             Text(message.raw["quote_preview"].string).font(.caption).foregroundStyle(.secondary).lineLimit(3)
             if onJumpToQuote != nil, message.raw["quote_message_id"].int > 0 {
                 Image(systemName: "arrow.up.left").font(.caption2).foregroundStyle(.secondary)
@@ -767,7 +771,7 @@ struct ChatAttachmentSheet: View {
                                                 Image(uiImage: image).resizable().scaledToFill().frame(width: 66, height: 66).clipped()
                                             } else { Image(systemName: "video.fill").frame(width: 66, height: 66) }
                                         }.clipShape(RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
-                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected == index ? accent.textColor : .clear, lineWidth: 2))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected == index ? accent.symbolColor : .clear, lineWidth: 2))
                                     }.buttonStyle(.plain).accessibilityLabel("预览第 \(index + 1) 个附件")
                                     Button("移除", role: .destructive) {
                                         let currentID = selection.indices.contains(selected) ? selection[selected].id : nil

@@ -109,11 +109,19 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m pip install 'cryptography>=45,<47'
-      - name: Require passing native checks before any Store upload
-        if: env.NONTO_RELEASE_CHANNEL != 'testflight-internal'
+      - name: Require native checks for production releases and tested draft uploads
+        if: env.NONTO_RELEASE_CHANNEL == 'app-store' || (env.NONTO_RELEASE_CHANNEL == 'app-store-upload' && !contains(github.event.head_commit.message, '[skip-tests]'))
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/wait_native_checks.py
+      - name: Record draft-only upload without tests requested by the user
+        if: env.NONTO_RELEASE_CHANNEL == 'app-store-upload' && contains(github.event.head_commit.message, '[skip-tests]')
+        run: |
+          python3 - <<'PY'
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Draft build upload requested without tests. Signed compilation and archive verification remain required. Production release checks remain unchanged; this workflow does not submit for review.\n')
+          PY
       - name: Select Xcode 27
         run: |
           python3 - <<'PY'
@@ -162,8 +170,10 @@ jobs:
         run: |
           python3 ios/scripts/testflight.py wait --root "$TF_ROOT"
           python3 .github/scripts/appstore_metadata.py --testflight-notes "$TF_BUILD_NUMBER"
-          if [ "$NONTO_RELEASE_CHANNEL" != "testflight-internal" ]; then
+          if [ "$NONTO_RELEASE_CHANNEL" = "app-store" ]; then
             python3 .github/scripts/appstore_metadata.py --apply --select-build "$TF_BUILD_NUMBER"
+          elif [ "$NONTO_RELEASE_CHANNEL" = "app-store-upload" ]; then
+            python3 .github/scripts/appstore_metadata.py --select-build "$TF_BUILD_NUMBER"
           fi
           python3 - <<'PY'
           import os

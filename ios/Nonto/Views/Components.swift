@@ -12,7 +12,7 @@ struct AvatarView: View {
     @State private var image: UIImage?
     var body: some View {
         ZStack {
-            accent.textColor.opacity(0.12)
+            accent.color.opacity(0.12)
             if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipped() }
             else { Text(String(name.prefix(1))).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(accent.textColor) }
         }.frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
