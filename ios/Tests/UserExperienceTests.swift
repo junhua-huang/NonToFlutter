@@ -1,8 +1,56 @@
 import XCTest
+import Combine
 @testable import Nonto
 
 @MainActor
 final class UserExperienceTests: XCTestCase {
+    func testBlockEnvelopeUsesBlockedUserInsteadOfBlockPrimaryKey() {
+        let raw: JSON = .object(["id": .id(8), "blocker_id": .id(1), "blocked_id": .id(93),
+            "blocked_user": .object(["id": .id(93), "username": .text("artist"), "display_name": .text("画师")])])
+        let record = BlockedRecord(raw)
+        XCTAssertEqual(record.id, 93)
+        XCTAssertEqual(record.person.id, 93)
+        XCTAssertEqual(record.person.name, "画师")
+        XCTAssertEqual(BlockedRecord(record.raw).id, 93)
+    }
+    func testDeletedBlockedUserKeepsOnlyKnownTargetIdentity() {
+        let record = BlockedRecord(.object(["id": .id(8), "blocked_id": .id(93), "blocked_user": .null]))
+        XCTAssertEqual(record.id, 93)
+        XCTAssertFalse(record.person.name.isEmpty)
+        XCTAssertEqual(BlockedRecord(.object(["id": .id(8), "blocker_id": .id(1), "blocked_user": .null])).id, 0)
+        XCTAssertEqual(BlockedRecord(.object(["user": .object(["id": .id(93)])])).id, 93)
+    }
+    func testProvisionalLikeSurvivesStaleRefreshAndCanRollBack() async throws {
+        let original: JSON = .object(["id": .id(1), "content": .text("keep this"), "is_liked": .bool(false), "like_count": .id(4)])
+        let api = try api { _ in (200, .object(["posts": .array([original])])) }
+        let resource = posts(api)
+        resource.items = [Post(original)]
+        resource.apply(id: 1, patch: .object(["is_liked": .bool(true), "like_count": .id(5)]), provisional: true)
+        await resource.load(reset: true)
+        XCTAssertTrue(resource.items[0].liked)
+        XCTAssertEqual(resource.items[0].likes, 5)
+        resource.apply(id: 1, patch: .object(["is_liked": .bool(false), "like_count": .id(4)]))
+        XCTAssertFalse(resource.items[0].liked)
+        XCTAssertEqual(resource.items[0].content, "keep this")
+        await resource.load(reset: true)
+        XCTAssertEqual(resource.items[0].likes, 4)
+    }
+    func testFailedPostLikeBroadcastsOptimisticStateThenRollback() async throws {
+        let api = try api { _ in (503, .object(["detail": .text("offline")])) }
+        let session = AppSession(api: api)
+        session.user = Person(.object(["id": .id(userID)]))
+        var changes: [PostChange] = []
+        let observer = session.$postChange.compactMap { $0 }.sink { changes.append($0) }
+        defer { observer.cancel() }
+        let post = Post(.object(["id": .id(1), "is_liked": .bool(false), "like_count": .id(4)]))
+        do { try await session.togglePostLike(post); XCTFail("Expected request failure") } catch {}
+        XCTAssertEqual(changes.count, 2)
+        XCTAssertEqual(changes.first?.patch?["is_liked"], .bool(true))
+        XCTAssertEqual(changes.first?.provisional, true)
+        XCTAssertEqual(changes.last?.patch?["like_count"], .id(4))
+        XCTAssertEqual(changes.last?.provisional, false)
+        XCTAssertEqual(session.pendingLikePatch(for: 1), .object([:]))
+    }
     private let userID = 900030
     private var defaults: UserDefaults!
     private var suite: String!

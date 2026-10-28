@@ -5,6 +5,10 @@ import CryptoKit
 struct PostChange {
     let postID: Int
     let patch: JSON? // nil means deleted
+    let provisional: Bool
+    init(postID: Int, patch: JSON?, provisional: Bool = false) {
+        self.postID = postID; self.patch = patch; self.provisional = provisional
+    }
 }
 struct NoticeChange {
     let id: Int? // nil marks all currently loaded notifications as read
@@ -23,11 +27,41 @@ final class AppSession: ObservableObject {
     @Published var postChange: PostChange?
     @Published var noticeChange: NoticeChange?
     @Published var noticeRevision = 0
+    @Published var topicRevision = 0
     @Published var messageUnread = 0
     @Published var noticeUnread = 0
     @Published var defaultVisibility = "public"
     @Published private(set) var notificationAuthorizationReady = false
     private var foreground = true
+    private var pendingPostLikes: [Int: (ticket: UUID, patch: JSON)] = [:]
+
+    func pendingLikePatch(for id: Int) -> JSON { pendingPostLikes[id]?.patch ?? .object([:]) }
+
+    func togglePostLike(_ post: Post) async throws {
+        guard user != nil, post.id > 0, pendingPostLikes[post.id] == nil else { return }
+        let epoch = api.generation, ticket = UUID(), liked = !post.liked
+        let before: JSON = .object(["is_liked": .bool(post.liked), "like_count": .id(post.likes)])
+        let optimistic: JSON = .object(["is_liked": .bool(liked), "like_count": .id(max(0, post.likes + (liked ? 1 : -1)))])
+        pendingPostLikes[post.id] = (ticket, optimistic)
+        postChange = PostChange(postID: post.id, patch: optimistic, provisional: true)
+        defer { if pendingPostLikes[post.id]?.ticket == ticket { pendingPostLikes[post.id] = nil } }
+        do {
+            let response = try await api.request("/posts/\(post.id)/like", method: liked ? "POST" : "DELETE")
+            guard api.generation == epoch, pendingPostLikes[post.id]?.ticket == ticket else { return }
+            let result = response["post"].or(response)
+            var confirmed = optimistic
+            let serverLiked = result["is_liked"].or(result["liked"])
+            if !serverLiked.isNull { confirmed["is_liked"] = .bool(serverLiked.bool) }
+            if !result["like_count"].isNull { confirmed["like_count"] = .id(max(0, result["like_count"].int)) }
+            pendingPostLikes[post.id] = nil
+            postChange = PostChange(postID: post.id, patch: confirmed)
+        } catch {
+            guard api.generation == epoch, pendingPostLikes[post.id]?.ticket == ticket else { return }
+            pendingPostLikes[post.id] = nil
+            postChange = PostChange(postID: post.id, patch: before)
+            throw error
+        }
+    }
 
     init(api: APIClient? = nil, consent: PrivacyConsent? = nil) {
         let api = api ?? APIClient()
@@ -146,6 +180,7 @@ final class AppSession: ObservableObject {
         try api.setToken(nil); clearUI(); authenticationMessage = message
     }
     func clearUI() {
+        pendingPostLikes.removeAll()
         authenticationMessage = nil
         notificationAuthorizationReady = false
         APNsService.shared.setAccount(nil, enabled: false)
@@ -200,6 +235,7 @@ final class PagedResource<T: Record>: ObservableObject {
     private var activeReset = false
     private var pendingUpdates: [Int: JSON] = [:]
     private var pendingRemovals = Set<Int>()
+    private var optimisticUpdates: [Int: JSON] = [:]
     private var api: APIClient
     private let accountEpoch: UUID
     let path: String
@@ -271,7 +307,8 @@ final class PagedResource<T: Record>: ObservableObject {
             let parsed = Records.unique(rows.map(T.init))
             guard rows.isEmpty || !parsed.isEmpty else { throw APIError(status: 0, message: "服务器返回的列表缺少有效记录，请重试") }
             let incoming = parsed.filter { !pendingRemovals.contains($0.id) }.map { item in
-                T(item.raw.merging(pendingUpdates[item.id] ?? .object([:])))
+                T(item.raw.merging(pendingUpdates[item.id] ?? .object([:]))
+                    .merging(optimisticUpdates[item.id] ?? .object([:])))
             }
             let known = Set(items.map(\.id))
             let added = incoming.contains { !known.contains($0.id) }
@@ -310,8 +347,10 @@ final class PagedResource<T: Record>: ObservableObject {
         for key in keys { if case .array(let rows) = json[key] { return rows } }
         throw APIError(status: 0, message: "服务器返回的列表不完整，请重试")
     }
-    func apply(id: Int, patch: JSON?) {
+    func apply(id: Int, patch: JSON?, provisional: Bool = false) {
         guard api.generation == accountEpoch else { return }
+        if provisional, let patch { optimisticUpdates[id] = patch }
+        else { optimisticUpdates[id] = nil }
         if let patch {
             if loading { pendingUpdates[id] = (pendingUpdates[id] ?? .object([:])).merging(patch) }
             if let index = items.firstIndex(where: { $0.id == id }) { items[index] = T(items[index].raw.merging(patch)) }

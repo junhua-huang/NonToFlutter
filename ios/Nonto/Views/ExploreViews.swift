@@ -154,6 +154,12 @@ struct TopicDetailView: View {
     @State private var following = false
     @State private var error: String?
     @State private var busy = false
+    @State private var followRevision = 0
+    init(topic: Topic) {
+        self.topic = topic
+        // The incoming snapshot seeds this presentation only.
+        _following = State(initialValue: topic.raw["is_following"].bool)
+    }
     var body: some View {
         VStack(spacing: 0) {
             if !topic.raw["description"].string.isEmpty { Text(topic.raw["description"].string).font(.subheadline).foregroundStyle(.secondary).padding() }
@@ -162,22 +168,36 @@ struct TopicDetailView: View {
         }.navigationTitle("#\(topic.name)").navigationBarTitleDisplayMode(.inline)
             .toolbar { Button(following ? "已关注" : "关注") { Task { await toggle() } }.disabled(busy) }
             .task {
-                following = topic.raw["is_following"].bool
-                if let j = try? await session.api.request("/topics/\(topic.id)") { following = j["topic"].or(j)["is_following"].bool }
+                let revision = followRevision, epoch = session.api.generation
+                if let j = try? await session.api.request("/topics/\(topic.id)"),
+                   epoch == session.api.generation, revision == followRevision, !busy {
+                    following = j["topic"].or(j)["is_following"].bool
+                }
             }
     }
     private func toggle() async {
-        busy = true; defer { busy = false }
-        do { _ = try await session.api.request("/topics/\(topic.id)/\(following ? "unfollow" : "follow")", method: "POST"); following.toggle() }
-        catch { self.error = error.localizedDescription }
+        guard !busy else { return }
+        let previous = following, epoch = session.api.generation
+        following.toggle(); followRevision += 1; busy = true; error = nil
+        defer { busy = false }
+        do {
+            _ = try await session.api.request("/topics/\(topic.id)/\(previous ? "unfollow" : "follow")", method: "POST")
+            guard epoch == session.api.generation else { return }
+            session.topicRevision += 1
+        } catch {
+            guard epoch == session.api.generation else { return }
+            following = previous; self.error = error.localizedDescription
+        }
     }
 }
 
 struct FollowedTopicsView: View {
+    @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<Topic>
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/topics/followed", keys: ["topics", "items"], userID: session.user?.id ?? 0)) }
     var body: some View {
         List { ForEach(resource.items) { topic in RouteButton(.topic(topic)) { Text("#\(topic.name)") } }; ResourceFooter(resource: resource) }
+            .onReceive(session.$topicRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
             .navigationTitle("我的话题").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
 }

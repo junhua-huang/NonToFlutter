@@ -53,6 +53,7 @@ struct ComicDetailView: View {
     @State private var editing = false
     @State private var page = 1
     @State private var more = false
+    @State private var followRevision = 0
     var body: some View {
         List {
             if !event.isNull {
@@ -80,7 +81,15 @@ struct ComicDetailView: View {
             .task { await load() }.refreshable { await load() }
     }
     private func load() async {
-        do { event = try await session.api.request("/comic/events/\(eventID)", query: ["userId": String(session.user?.id ?? 0)]); error = nil; await loadComments() }
+        let epoch = session.api.generation, revision = followRevision
+        do {
+            var loaded = try await session.api.request("/comic/events/\(eventID)", query: ["userId": String(session.user?.id ?? 0)])
+            guard epoch == session.api.generation else { return }
+            if revision != followRevision || busy {
+                for key in ["isFollowed", "is_following", "followCount", "follow_count"] { loaded[key] = event[key] }
+            }
+            event = loaded; error = nil; await loadComments()
+        }
         catch { self.error = error.localizedDescription }
     }
     private func loadComments(append: Bool = false) async {
@@ -88,9 +97,26 @@ struct ComicDetailView: View {
         catch { self.error = error.localizedDescription }
     }
     private func follow() async {
-        busy = true; defer { busy = false }
-        do { _ = try await session.api.request("/comic/events/\(eventID)/follow", method: "POST"); await load() }
-        catch { self.error = error.localizedDescription }
+        guard !busy, !event.isNull else { return }
+        let epoch = session.api.generation
+        let previous = event["isFollowed"].or(event["is_following"]).bool
+        let count = max(0, event["followCount"].or(event["follow_count"]).int)
+        setFollowed(!previous, count: max(0, count + (previous ? -1 : 1)))
+        followRevision += 1; busy = true; error = nil
+        defer { busy = false }
+        do {
+            let result = try await session.api.request("/comic/events/\(eventID)/follow", method: "POST")
+            guard epoch == session.api.generation else { return }
+            setFollowed(result["followed"].isNull ? !previous : result["followed"].bool,
+                        count: result["followCount"].isNull ? event["followCount"].int : max(0, result["followCount"].int))
+        } catch {
+            guard epoch == session.api.generation else { return }
+            setFollowed(previous, count: count); self.error = error.localizedDescription
+        }
+    }
+    private func setFollowed(_ followed: Bool, count: Int) {
+        event["isFollowed"] = .bool(followed); event["is_following"] = .bool(followed)
+        event["followCount"] = .id(count); event["follow_count"] = .id(count)
     }
     private func send() async {
         guard !busy else { return }

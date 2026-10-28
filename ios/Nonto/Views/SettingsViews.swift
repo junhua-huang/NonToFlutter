@@ -241,27 +241,63 @@ struct DeleteAccountView: View {
 }
 struct BlockedRecord: Record {
     var raw: JSON
-    init(_ raw: JSON) { self.raw = raw["user"].or(raw) }
+    init(_ raw: JSON) { self.raw = raw }
+    var id: Int {
+        if raw["blocked_id"].int > 0 { return raw["blocked_id"].int }
+        let nested = raw["blocked_user"].or(raw["user"])
+        if !nested.isNull { return nested["id"].int }
+        // A block row's primary key is never a user ID, even for a deleted user.
+        if raw.object["blocked_user"] != nil || raw.object["blocked_id"] != nil || raw.object["blocker_id"] != nil { return 0 }
+        return raw["id"].int
+    }
+    var person: Person {
+        var user = raw["blocked_user"].or(raw["user"])
+        if user.isNull { user = raw["blocked_id"].isNull ? raw : .object([:]) }
+        user["id"] = .id(id)
+        if user["display_name"].string.isEmpty && user["username"].string.isEmpty {
+            user["display_name"] = .text("账号已不可用")
+        }
+        return Person(user)
+    }
 }
 struct BlockedUsersView: View {
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<BlockedRecord>
     @State private var error: String?
-    @State private var busy = false
-    init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/blocks", keys: ["blocked_users", "blocks", "users"], userID: session.user?.id ?? 0)) }
+    @State private var unblocking = Set<Int>()
+    init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/blocks/", keys: ["blocked_users", "blocks", "users"], userID: session.user?.id ?? 0, cacheEnabled: false)) }
     var body: some View {
         List {
             ErrorBanner(text: error)
-            ForEach(resource.items) { item in
-                HStack { PersonRow(person: Person(item.raw)); Spacer(); Button("解除屏蔽") { Task { await unblock(item.id) } }.disabled(busy).buttonStyle(.glass) }
+            ForEach(resource.items.filter { !unblocking.contains($0.id) }) { item in
+                HStack {
+                    PersonRow(person: item.person)
+                    Spacer()
+                    Button("解除屏蔽") { Task { await unblock(item.id) } }.buttonStyle(.glass)
+                        .accessibilityLabel("解除对\(item.person.name)的屏蔽")
+                }
             }
-            ResourceFooter(resource: resource)
+            if resource.items.isEmpty && resource.page > 0 && !resource.loading && resource.error == nil {
+                ContentUnavailableView("没有屏蔽的用户", systemImage: "person.slash")
+            } else if !resource.items.isEmpty && resource.items.allSatisfy({ unblocking.contains($0.id) }) {
+                ProgressView("正在解除屏蔽…").frame(maxWidth: .infinity)
+            } else { ResourceFooter(resource: resource) }
         }.navigationTitle("屏蔽列表").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
     private func unblock(_ id: Int) async {
-        busy = true; defer { busy = false }
-        do { _ = try await session.api.request("/blocks/\(id)", method: "DELETE"); resource.apply(id: id, patch: nil); session.postRevision += 1 }
-        catch { self.error = error.localizedDescription }
+        guard id > 0, !unblocking.contains(id) else { return }
+        let epoch = session.api.generation
+        unblocking.insert(id); error = nil
+        defer { unblocking.remove(id) }
+        do {
+            _ = try await session.api.request("/blocks/\(id)", method: "DELETE")
+            guard epoch == session.api.generation else { return }
+            resource.apply(id: id, patch: nil); session.postRevision += 1
+            // Removing a row shifts the server's page offsets.
+            if resource.hasMore { await resource.load(reset: true) }
+        } catch {
+            if epoch == session.api.generation { self.error = "解除屏蔽失败，已恢复列表。\(error.localizedDescription)" }
+        }
     }
 }
 struct PolicyView: View {

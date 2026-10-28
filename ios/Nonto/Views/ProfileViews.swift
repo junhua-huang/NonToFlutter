@@ -15,13 +15,25 @@ struct ProfileView: View {
     @State private var busy = false
     @State private var liked = false
     @State private var blocked = false
+    @State private var isBlocked = false
+    @State private var blockBusy = false
+    @State private var blockRevision = 0
     @State private var coverVisible = true
     @State private var accessMessage: String?
     @State private var canRequestAccess = false
     private var isOwn: Bool { session.user?.id == userID }
     var body: some View {
         Group {
-            if let accessMessage {
+            if isBlocked {
+                ContentUnavailableView {
+                    Label("你已屏蔽此用户", systemImage: "person.slash")
+                } description: {
+                    Text(blockBusy ? "正在同步屏蔽状态…" : "解除屏蔽后，可以重新查看对方的公开内容。")
+                } actions: {
+                    Button("解除屏蔽") { Task { await setBlocked(false) } }.disabled(blockBusy)
+                    ErrorBanner(text: error)
+                }
+            } else if let accessMessage {
                 ContentUnavailableView {
                     Label("主页暂不可见", systemImage: "lock")
                 } description: { Text(accessMessage) } actions: {
@@ -41,9 +53,13 @@ struct ProfileView: View {
                     else {
                         Menu {
                             Button("举报用户", systemImage: "flag") { reporting = true }
-                            Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { confirmBlock = true }
+                            if isBlocked {
+                                Button("解除屏蔽", systemImage: "person.crop.circle.badge.checkmark") { Task { await setBlocked(false) } }
+                            } else {
+                                Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { confirmBlock = true }
+                            }
                             if friendship["status"].string == "accepted" { Button("删除好友", role: .destructive) { confirmUnfriend = true } }
-                        } label: { Image(systemName: "ellipsis") }
+                        } label: { Image(systemName: "ellipsis") }.disabled(busy || blockBusy)
                     }
                 }
             }
@@ -52,7 +68,7 @@ struct ProfileView: View {
             .sheet(isPresented: $editing, onDismiss: { Task { await load() } }) { EditProfileView() }
             .sheet(isPresented: $reporting) { ReportView(kind: "user", targetID: userID) }
             .confirmationDialog("屏蔽后将减少彼此的互动，确定继续？", isPresented: $confirmBlock) {
-                Button("屏蔽用户", role: .destructive) { Task { await block() } }
+                Button("屏蔽用户", role: .destructive) { Task { await setBlocked(true) } }
             }
             .confirmationDialog("删除这位好友？", isPresented: $confirmUnfriend) {
                 Button("删除好友", role: .destructive) { Task { await unfriend() } }
@@ -135,11 +151,24 @@ struct ProfileView: View {
         }
     }
     private func load() async {
+        let epoch = session.api.generation, revision = blockRevision
         do {
+            if !isOwn {
+                let status = try await session.api.request("/blocks/check/\(userID)")
+                guard epoch == session.api.generation, revision == blockRevision, !blockBusy else { return }
+                isBlocked = status["is_blocked"].bool
+                if isBlocked { coverVisible = false; return }
+            }
             let j = try await session.api.request(isOwn ? "/auth/profile" : "/auth/users/\(userID)")
+            guard epoch == session.api.generation, revision == blockRevision else { return }
             person = Person(j["user"].or(j)); error = nil; accessMessage = nil; canRequestAccess = false
-            if !isOwn { friendship = try await session.api.request("/friends/status/\(userID)") }
+            if !isOwn {
+                let status = try await session.api.request("/friends/status/\(userID)")
+                guard epoch == session.api.generation, revision == blockRevision else { return }
+                friendship = status
+            }
         } catch {
+            guard epoch == session.api.generation, revision == blockRevision else { return }
             if ["PROFILE_PRIVATE", "PROFILE_FRIENDS_ONLY"].contains((error as? APIError)?.code ?? "") {
                 person = nil; friendship = .null; accessMessage = error.localizedDescription; coverVisible = false
                 canRequestAccess = (error as? APIError)?.code == "PROFILE_FRIENDS_ONLY"
@@ -173,9 +202,23 @@ struct ProfileView: View {
             navigate(.chat(Conversation(value)))
         } catch { self.error = error.localizedDescription }
     }
-    private func block() async {
-        do { _ = try await session.api.request("/blocks", method: "POST", body: .object(["user_id": .id(userID)])); session.postRevision += 1; error = nil; blocked = true }
-        catch { self.error = error.localizedDescription }
+    private func setBlocked(_ value: Bool) async {
+        guard !isOwn, !busy, !blockBusy, isBlocked != value else { return }
+        let epoch = session.api.generation, previous = isBlocked, previousCover = coverVisible
+        blockRevision += 1; blockBusy = true; isBlocked = value; error = nil
+        if value { coverVisible = false }
+        defer { blockBusy = false }
+        do {
+            _ = try await session.api.request(value ? "/blocks" : "/blocks/\(userID)",
+                method: value ? "POST" : "DELETE", body: value ? .object(["user_id": .id(userID)]) : nil)
+            guard epoch == session.api.generation else { return }
+            session.postRevision += 1
+            if value { friendship = .null; blocked = true }
+            else { blockBusy = false; await load() }
+        } catch {
+            guard epoch == session.api.generation else { return }
+            isBlocked = previous; coverVisible = previousCover; self.error = error.localizedDescription
+        }
     }
     private func unfriend() async {
         do { _ = try await session.api.request("/friends/\(userID)", method: "DELETE"); await load() }

@@ -42,8 +42,7 @@ struct PostBodyText: View {
     let detailed: Bool
     let route: AppRoute?
     @State private var expanded = false
-    @State private var collapsedHeight: CGFloat = 0
-    @State private var fullHeight: CGFloat = 0
+    @State private var canExpand = false
 
     init(content: String, detailed: Bool = false, route: AppRoute? = nil) {
         self.content = PostText.trimmed(content); self.detailed = detailed; self.route = route
@@ -55,15 +54,17 @@ struct PostBodyText: View {
     }
     private var visibleText: some View {
         fullText.lineLimit(expanded ? nil : 6).fixedSize(horizontal: false, vertical: true)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                if !expanded && abs(collapsedHeight - height) > 0.5 { collapsedHeight = height }
-            }
             .background(alignment: .topLeading) {
-                fullText.lineLimit(nil).fixedSize(horizontal: false, vertical: true)
-                    .hidden().accessibilityHidden(true).allowsHitTesting(false)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                        if abs(fullHeight - height) > 0.5 { fullHeight = height }
-                    }
+                GeometryReader { visible in
+                    let availableHeight = visible.size.height
+                    fullText.lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+                        .hidden().accessibilityHidden(true).allowsHitTesting(false)
+                        .onGeometryChange(for: Bool.self) { geometry in
+                            geometry.size.height > availableHeight + 1
+                        } action: { truncated in
+                            if canExpand != truncated { canExpand = truncated }
+                        }
+                }
             }
     }
     var body: some View {
@@ -73,7 +74,7 @@ struct PostBodyText: View {
                     if let route {
                         RouteButton(route) { visibleText }.accessibilityLabel("查看动态：\(content)")
                     } else { visibleText.textSelection(.enabled) }
-                    if expanded || fullHeight > collapsedHeight + 1 {
+                    if expanded || canExpand {
                         Button(expanded ? "收起" : "显示更多") { expanded.toggle() }
                             .font(.subheadline).foregroundStyle(accent.textColor).buttonStyle(.plain)
                             .frame(minHeight: 28, alignment: .leading)

@@ -44,7 +44,7 @@ struct MainTabs: View {
         _selectedTab = State(initialValue: initialTab)
         self.initialConversation = initialConversation
     }
-    @State private var compose = false
+    @State private var postComposer = PostComposerPresentation()
     @ObservedObject private var notifications = NativeNotifications.shared
     @State private var pushDestination: PushRoute?
     @State private var pendingPush: PushRoute?
@@ -68,9 +68,9 @@ struct MainTabs: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
-        .sheet(isPresented: $compose, onDismiss: {
+        .sheet(item: $postComposer.destination, onDismiss: {
             if let pendingPush { pushDestination = pendingPush; self.pendingPush = nil }
-        }) { PostComposer() }
+        }) { destination in destination.content }
         .sheet(item: $pushDestination) { route in
             AppNavigationStack {
                 PushDestinationView(route: route).id(route.id)
@@ -79,13 +79,14 @@ struct MainTabs: View {
         }
         .onReceive(notifications.$route.compactMap { $0 }) { route in
             guard route.recipientID == session.user?.id else { return }
-            if compose { pendingPush = route; compose = false }
+            if postComposer.destination != nil { pendingPush = route; postComposer.destination = nil }
             else { pushDestination = route }
             notifications.route = nil
         }
-        .environment(\.openComposer, { compose = true })
-        .task(id: session.notificationAuthorizationReady && phase == .active && !compose && pushDestination == nil) {
-            guard phase == .active, !compose, pushDestination == nil else { return }
+        .environment(\.postComposer, postComposer)
+        .environment(\.openComposer, { postComposer.destination = .new })
+        .task(id: session.notificationAuthorizationReady && phase == .active && postComposer.destination == nil && pushDestination == nil) {
+            guard phase == .active, postComposer.destination == nil, pushDestination == nil else { return }
             await session.requestNotificationAuthorizationIfNeeded()
         }
         .task {

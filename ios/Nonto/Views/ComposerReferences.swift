@@ -22,7 +22,7 @@ final class ComposerEditor {
 
     func attach(_ view: UITextView) { textView = view }
     func detach(_ view: UITextView) { if textView === view { textView = nil; focusTicket = UUID() } }
-    func editingChanged(_ value: Bool) { isEditing = value }
+    func editingChanged(_ value: Bool) { if isEditing != value { isEditing = value } }
     func endEditing() {
         focusTicket = UUID()
         textView?.resignFirstResponder()
@@ -100,6 +100,10 @@ private struct ComposerNativeTextView: UIViewRepresentable {
     @Environment(\.isEnabled) private var isEnabled
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
+        // The surrounding SwiftUI ScrollView owns scrolling and keyboard insets.
+        // A second scrolling text view can repeatedly invalidate the sheet size.
+        view.isScrollEnabled = false
+        view.contentInsetAdjustmentBehavior = .never
         view.tintColor = accent.uiColor
         view.backgroundColor = .clear; view.textColor = .label
         view.isEditable = isEnabled
@@ -123,7 +127,7 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         guard let width = proposal.width, width > 0 else { return nil }
         let line = (uiView.font?.lineHeight ?? 24) + 4
         let fit = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: max(line * 4, min(fit.height, line * 20)))
+        return CGSize(width: width, height: max(line * 4, fit.height))
     }
     func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
     static func dismantleUIView(_ view: UITextView, coordinator: Coordinator) {

@@ -48,8 +48,8 @@ struct PostList: View {
             .task { await resource.loadIfNeeded() }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
             .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
-                let removeUnliked = resource.path == "/posts/user/\(session.user?.id ?? 0)/liked" && change.patch?["is_liked"] == .bool(false)
-                resource.apply(id: change.postID, patch: removeUnliked ? nil : change.patch)
+                let removeUnliked = !change.provisional && resource.path == "/posts/user/\(session.user?.id ?? 0)/liked" && change.patch?["is_liked"] == .bool(false)
+                resource.apply(id: change.postID, patch: removeUnliked ? nil : change.patch, provisional: change.provisional)
             }
     }
 }
@@ -59,11 +59,11 @@ struct PostCard: View {
     var detailed = false
     var onComment: (() -> Void)? = nil
     @EnvironmentObject private var session: AppSession
+    @Environment(\.postComposer) private var composer
     @State private var current: Post
     @State private var busy = false
     @State private var error: String?
-    @State private var editing = false
-    @State private var quoting = false
+    @State private var localComposer: PostComposerDestination?
     @State private var sharing = false
     @State private var reporting = false
     @State private var deleting = false
@@ -86,12 +86,17 @@ struct PostCard: View {
             }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12).frame(maxWidth: .infinity)
             Color.timelineSeparator.frame(height: 0.5)
         }.background(Color.timelineBackground).navigationLinkIndicatorVisibility(.hidden)
-            .onChange(of: post.raw) { _, raw in current = Post(raw) }
-            .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
-                if change.postID == current.id, let patch = change.patch { current = Post(current.raw.merging(patch)) }
+            .onChange(of: post.raw) { _, raw in
+                let updated = Post(raw.merging(session.pendingLikePatch(for: post.id)))
+                if current != updated { current = updated }
             }
-            .sheet(isPresented: $editing) { PostComposer(editing: current) }
-            .sheet(isPresented: $quoting) { PostComposer(quoted: current) }
+            .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
+                if change.postID == current.id, let patch = change.patch {
+                    let updated = Post(current.raw.merging(patch))
+                    if current != updated { current = updated }
+                }
+            }
+            .sheet(item: $localComposer) { destination in destination.content }
             .sheet(isPresented: $sharing) { SharePostView(session: session, post: current) }
             .sheet(isPresented: $reporting) { ReportView(kind: "post", targetID: current.id) }
             .confirmationDialog("删除这条动态？", isPresented: $deleting, titleVisibility: .visible) {
@@ -178,13 +183,13 @@ struct PostCard: View {
     }
     private var postMenu: some View {
         Menu {
-            Button("引用动态", systemImage: "quote.bubble") { quoting = true }
+            Button("引用动态", systemImage: "quote.bubble") { presentComposer(.quote(current)) }
             Button("分享给好友", systemImage: "paperplane") { sharing = true }
             if let url = URL(string: "https://www.nonto.online/posts/\(current.id)") {
                 ShareLink(item: url) { Label("系统分享", systemImage: "square.and.arrow.up") }
             }
             if current.userID == session.user?.id {
-                Button("编辑", systemImage: "pencil") { editing = true }
+                Button("编辑", systemImage: "pencil") { presentComposer(.edit(current)) }
                 Button("删除", systemImage: "trash", role: .destructive) { deleting = true }
             } else { Button("举报", systemImage: "flag") { reporting = true } }
         } label: {
@@ -198,7 +203,7 @@ struct PostCard: View {
                 if let onComment { Button(action: onComment) { TimelineActionSymbol(symbol: "bubble", count: current.comments) } }
                 else { RouteButton(.post(current.id, initial: current)) { TimelineActionSymbol(symbol: "bubble", count: current.comments) } }
             }.accessibilityLabel("评论，\(current.comments) 条")
-            Button { quoting = true } label: { TimelineActionSymbol(symbol: "arrow.2.squarepath") }
+            Button { presentComposer(.quote(current)) } label: { TimelineActionSymbol(symbol: "arrow.2.squarepath") }
                 .accessibilityLabel("引用动态")
             Button { Task { await toggleLike() } } label: {
                 TimelineActionSymbol(symbol: current.liked ? "heart.fill" : "heart", count: current.likes)
@@ -210,15 +215,12 @@ struct PostCard: View {
     }
     private func toggleLike() async {
         guard !busy else { return }
-        let liked = !current.liked
-        let fallbackCount = max(0, current.likes + (liked ? 1 : -1))
         busy = true; error = nil; defer { busy = false }
-        do {
-            let result = try await session.api.request("/posts/\(current.id)/like", method: liked ? "POST" : "DELETE")
-            let fallback: JSON = .object(["is_liked": .bool(liked), "like_count": .id(fallbackCount)])
-            let patch = fallback.merging(result["post"].or(result))
-            current = Post(current.raw.merging(patch))
-            session.postChange = PostChange(postID: current.id, patch: patch)
-        } catch { self.error = error.localizedDescription }
+        do { try await session.togglePostLike(current) }
+        catch { self.error = error.localizedDescription }
+    }
+    private func presentComposer(_ destination: PostComposerDestination) {
+        if let composer { composer.destination = destination }
+        else { localComposer = destination }
     }
 }

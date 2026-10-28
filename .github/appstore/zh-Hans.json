@@ -12,8 +12,8 @@
   "marketingUrl": "https://nonto.online/",
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
-  "betaBuildVersion": "111.1",
-  "betaWhatsNew": "修正南图蓝在更多界面上的偏色与遗漏。\n\n• 普通浅色、深色模式中的强调文字和图标统一使用 #1D9BF0，不再自动加深。\n• 修正聊天表情与贴纸分类、选择器搜索选中态及贴纸添加按钮的用色。\n• 同步首页、搜索、主页内容分类与强调色设置预览。\n• 保留增强对比度适配及按钮禁用状态。\n\n此构建可用于 App Store 草稿选择；正式提交前仍需补齐公开政策地址与生产运营核验。\n\n反馈邮箱：nonto@foxmail.com。",
+  "betaBuildVersion": "112.1",
+  "betaWhatsNew": "修复引用动态与屏蔽列表，并改善常用操作的响应速度。\n\n• 引用和编辑动态使用稳定的上层弹窗，减少列表刷新引起的反复呈现；收敛正文高度更新，统一编辑器滚动。\n• 修复屏蔽列表的用户资料、用户 ID 和解除屏蔽请求；补充空列表、失效账号、失败恢复及分页处理。\n• 帖子点赞、话题关注、漫展关注、屏蔽与解除屏蔽采用即时更新；失败时恢复状态并提示。\n• 点赞同步到已加载的动态列表，防止刷新中的旧数据覆盖操作结果。\n\n反馈邮箱：nonto@foxmail.com。",
   "screenshots": [
     {
       "file": ".github/appstore/screenshots/01-share.png",
