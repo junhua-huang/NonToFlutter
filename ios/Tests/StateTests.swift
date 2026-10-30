@@ -66,12 +66,18 @@ final class StateTests: XCTestCase {
         let feed = resource(api); await feed.load(reset: true); await feed.load(reset: true)
         XCTAssertEqual(feed.items.count, 2); XCTAssertEqual(feed.page, 1); XCTAssertNotNil(feed.error)
     }
-    func testRepeatedPageAndEmptyPageStopPagination() async throws {
+    func testRepeatedPageStopsButExplicitEmptyPagesCanContinue() async throws {
         let api = try client { _ in (200, .object(["posts": .array([self.post(1, "one"), self.post(2, "two")]), "has_more": .bool(true)])) }
         let feed = resource(api); await feed.load(reset: true); XCTAssertTrue(feed.hasMore)
         await feed.load(); XCTAssertFalse(feed.hasMore)
         let emptyAPI = try client { _ in (200, .object(["posts": .array([]), "has_more": .bool(true), "total_pages": .id(99)])) }
-        let empty = resource(emptyAPI); await empty.load(reset: true); XCTAssertFalse(empty.hasMore)
+        let empty = resource(emptyAPI); await empty.load(reset: true)
+        XCTAssertTrue(empty.hasMore); XCTAssertNil(empty.error)
+        for _ in 0..<4 { await empty.load() }
+        XCTAssertEqual(empty.page, 5); XCTAssertTrue(empty.hasMore)
+        XCTAssertNotNil(empty.error, "Five consecutive empty pages pause automatic loading")
+        await empty.retry()
+        XCTAssertEqual(empty.page, 6); XCTAssertTrue(empty.hasMore); XCTAssertNil(empty.error)
     }
     func testConcurrentRefreshesShareOneRequest() async throws {
         var calls = 0
