@@ -66,12 +66,18 @@ final class StateTests: XCTestCase {
         let feed = resource(api); await feed.load(reset: true); await feed.load(reset: true)
         XCTAssertEqual(feed.items.count, 2); XCTAssertEqual(feed.page, 1); XCTAssertNotNil(feed.error)
     }
-    func testRepeatedPageAndEmptyPageStopPagination() async throws {
+    func testRepeatedPageStopsButExplicitEmptyPagesCanContinue() async throws {
         let api = try client { _ in (200, .object(["posts": .array([self.post(1, "one"), self.post(2, "two")]), "has_more": .bool(true)])) }
         let feed = resource(api); await feed.load(reset: true); XCTAssertTrue(feed.hasMore)
         await feed.load(); XCTAssertFalse(feed.hasMore)
         let emptyAPI = try client { _ in (200, .object(["posts": .array([]), "has_more": .bool(true), "total_pages": .id(99)])) }
-        let empty = resource(emptyAPI); await empty.load(reset: true); XCTAssertFalse(empty.hasMore)
+        let empty = resource(emptyAPI); await empty.load(reset: true)
+        XCTAssertTrue(empty.hasMore); XCTAssertNil(empty.error)
+        for _ in 0..<4 { await empty.load() }
+        XCTAssertEqual(empty.page, 5); XCTAssertTrue(empty.hasMore)
+        XCTAssertNotNil(empty.error, "Five consecutive empty pages pause automatic loading")
+        await empty.retry()
+        XCTAssertEqual(empty.page, 6); XCTAssertTrue(empty.hasMore); XCTAssertNil(empty.error)
     }
     func testConcurrentRefreshesShareOneRequest() async throws {
         var calls = 0
@@ -100,6 +106,97 @@ final class StateTests: XCTestCase {
         feed.apply(id: 1, patch: .object(["content": .text("edited")])); feed.apply(id: 2, patch: nil)
         await task.value
         XCTAssertEqual(feed.items.map(\.id), [1]); XCTAssertEqual(feed.items.first?.content, "edited")
+    }
+    func testCommentCountUpdateDoesNotSettleAnInFlightPostLike() async throws {
+        let original = post(1, "keep this").merging(.object(["is_liked": .bool(false), "like_count": .id(4), "comment_count": .id(9)]))
+        let api = try client { _ in (200, .object(["posts": .array([original])])) }
+        let feed = resource(api); feed.items = [Post(original)]
+        feed.apply(id: 1, patch: .object(["is_liked": .bool(true), "like_count": .id(5)]), provisional: true)
+        feed.apply(id: 1, patch: .object(["comment_count": .id(9)]))
+        await feed.load(reset: true)
+        XCTAssertTrue(feed.items[0].liked); XCTAssertEqual(feed.items[0].likes, 5)
+        XCTAssertEqual(feed.items[0].comments, 9)
+        feed.apply(id: 1, patch: .object(["is_liked": .bool(false), "like_count": .id(4)]))
+        await feed.load(reset: true)
+        XCTAssertFalse(feed.items[0].liked); XCTAssertEqual(feed.items[0].likes, 4)
+    }
+    func testDetailKeepsConfirmedMutationsWhenAnOlderResponseArrives() async throws {
+        let started = expectation(description: "Old detail request started")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let original = post(1, "original").merging(.object(["is_liked": .bool(false), "like_count": .id(4), "comment_count": .id(2)]))
+        let api = try client { _ in
+            started.fulfill()
+            guard release.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
+            return (200, .object(["post": original]))
+        }
+        let session = AppSession(api: api)
+        let detail = PostDetailResource(session: session, postID: 1, initial: Post(original))
+        let request = Task { await detail.load() }
+        await fulfillment(of: [started], timeout: 2)
+        session.postChange = PostChange(postID: 1, patch: .object(["is_liked": .bool(true), "like_count": .id(5)]))
+        session.postChange = PostChange(postID: 1, patch: .object(["comment_count": .id(3), "content": .text("edited")]))
+        release.signal(); await request.value
+        XCTAssertEqual(detail.post?.liked, true); XCTAssertEqual(detail.post?.likes, 5)
+        XCTAssertEqual(detail.post?.comments, 3); XCTAssertEqual(detail.post?.content, "edited")
+        XCTAssertNil(detail.error)
+    }
+    func testDeletedDetailCannotBeResurrectedByAnOlderResponse() async throws {
+        let started = expectation(description: "Detail request started before deletion")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let original = post(1, "deleted")
+        let api = try client { _ in
+            started.fulfill()
+            guard release.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
+            return (200, .object(["post": original]))
+        }
+        let session = AppSession(api: api)
+        let detail = PostDetailResource(session: session, postID: 1, initial: Post(original))
+        let request = Task { await detail.load() }
+        await fulfillment(of: [started], timeout: 2)
+        session.postChange = PostChange(postID: 1, patch: nil)
+        release.signal(); await request.value
+        XCTAssertTrue(detail.deleted); XCTAssertNil(detail.post)
+    }
+    func testSearchRowsAndCacheTrackLikesAndDeletionWithoutVisibleCards() async throws {
+        try? LocalCache.clear(userID: userID)
+        defer { try? LocalCache.clear(userID: userID) }
+        let api = try client { _ in (200, .object(["liked": .bool(true), "like_count": .id(5)])) }
+        let session = AppSession(api: api); session.user = Person(.object(["id": .id(userID)]))
+        let search = SearchResultsView.postResource(session: session, query: "optimistic regression")
+        let original = post(1, "search result").merging(.object(["is_liked": .bool(false), "like_count": .id(4)]))
+        search.items = [Post(original)]
+        try await session.togglePostLike(Post(original))
+        XCTAssertTrue(search.items[0].liked); XCTAssertEqual(search.items[0].likes, 5)
+        let cached = try XCTUnwrap(LocalCache.read(userID: userID, key: search.cacheKey)?.array.first)
+        XCTAssertTrue(Post(cached).liked); XCTAssertEqual(Post(cached).likes, 5)
+        session.postChange = PostChange(postID: 1, patch: nil)
+        XCTAssertTrue(search.items.isEmpty)
+        XCTAssertEqual(LocalCache.read(userID: userID, key: search.cacheKey), .array([]))
+    }
+    func testNewSearchAndDetailSeedAnAlreadyPendingLike() async throws {
+        try? LocalCache.clear(userID: userID)
+        defer { try? LocalCache.clear(userID: userID) }
+        let started = expectation(description: "Like is still pending")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let api = try client { _ in
+            started.fulfill()
+            guard release.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
+            return (200, .object(["liked": .bool(true), "like_count": .id(5)]))
+        }
+        let session = AppSession(api: api); session.user = Person(.object(["id": .id(userID)]))
+        let original = post(1, "cached").merging(.object(["is_liked": .bool(false), "like_count": .id(4)]))
+        let cache = PagedResource<Post>(api: api, path: "/search/posts", keys: ["posts", "items"], query: ["q": "pending"], userID: userID)
+        LocalCache.write(.array([original]), userID: userID, key: cache.cacheKey)
+        let like = Task { try await session.togglePostLike(Post(original)) }
+        await fulfillment(of: [started], timeout: 2)
+        let search = SearchResultsView.postResource(session: session, query: "pending")
+        let detail = PostDetailResource(session: session, postID: 1, initial: Post(original))
+        XCTAssertEqual(search.items.first?.liked, true); XCTAssertEqual(search.items.first?.likes, 5)
+        XCTAssertEqual(detail.post?.liked, true); XCTAssertEqual(detail.post?.likes, 5)
+        release.signal(); try await like.value
     }
     func testChatQueueDrainsRapidSendsInOrder() async throws {
         var contents: [String] = []
@@ -248,3 +345,4 @@ final class StateTests: XCTestCase {
         XCTAssertEqual(media.mime, "image/jpeg"); XCTAssertThrowsError(try SelectedMedia.image(Data([1, 2, 3])))
     }
 }
+

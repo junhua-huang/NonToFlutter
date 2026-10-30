@@ -145,7 +145,7 @@ struct CommentThread: Identifiable {
             if ticket != revision { return } // Keep the page available for a clean retry.
             let rows = try PagedResource<Comment>.rows(json, keys: ["comments", "items"])
             let replies = Records.unique(rows.map(Comment.init)).filter { !deletedIDs.contains($0.id) }
-            threads[index].replies = merge(threads[index].replies, replies)
+            threads[index].replies = merge(threads[index].replies, replies.map(preservingBusyLike))
             threads[index].page = next
             threads[index].hasMore = !rows.isEmpty && (json["has_more"].isNull ? rows.count >= 10 : json["has_more"].bool)
         } catch { if current { replyErrors[rootID] = error.localizedDescription } }
@@ -282,3 +282,4 @@ struct CommentThread: Identifiable {
         return result
     }
 }
+

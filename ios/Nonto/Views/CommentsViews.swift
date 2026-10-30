@@ -6,14 +6,16 @@ struct PostDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: AppSession
     @State private var comments: CommentsStore
-    @State private var post: Post?
-    @State private var error: String?
+    @StateObject private var resource: PostDetailResource
+    private var post: Post? { resource.post }
+    private var error: String? { resource.error }
     @State private var reportTarget: Comment?
     @State private var deleteTarget: Comment?
     @FocusState private var commentFocused: Bool
 
     init(session: AppSession, postID: Int, initial: Post? = nil) {
-        self.postID = postID; _post = State(initialValue: initial)
+        self.postID = postID
+        _resource = StateObject(wrappedValue: PostDetailResource(session: session, postID: postID, initial: initial))
         _comments = State(initialValue: CommentsStore(api: session.api, postID: postID, userID: session.user?.id ?? 0))
     }
     var body: some View {
@@ -68,11 +70,7 @@ struct PostDetailView: View {
                 session.postChange = PostChange(postID: postID, patch: .object(["comment_count": .id(count)]))
             }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await loadPost() } }
-            .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
-                guard change.postID == postID else { return }
-                if let patch = change.patch { post = Post((post?.raw ?? .object([:])).merging(patch)) }
-                else { dismiss() }
-            }
+            .onChange(of: resource.deleted) { _, deleted in if deleted { dismiss() } }
             .scrollDismissesKeyboard(.interactively)
             .sheet(item: $reportTarget) { ReportView(kind: "comment", targetID: $0.id) }
             .confirmationDialog("删除这条评论？", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), presenting: deleteTarget) { target in
@@ -133,13 +131,7 @@ struct PostDetailView: View {
         }
     }
     private func loadPost() async {
-        let previousCount = comments.commentCount
-        do {
-            let result = try await session.api.request("/posts/\(postID)")
-            var value = result["post"].or(result)
-            if comments.commentCount != previousCount, let count = comments.commentCount { value["comment_count"] = .id(count) }
-            post = Post(value); error = nil
-        } catch { self.error = error.localizedDescription }
+        await resource.load()
     }
 }
 
@@ -235,3 +227,4 @@ private struct CommentItemRow: View {
             .buttonStyle(.plain).accessibilityIdentifier("comment-row-\(comment.id)")
     }
 }
+

@@ -104,9 +104,10 @@ import Observation
     }
     func testReturningFromChatRestoresTheTabBarRepeatedly() async throws {
         let room = Conversation(.object(["id": .id(55), "other_user": applicant]))
-        var messageReads = 0
+        var messageReads = 0, sessionReads = 0
         let api = try makeAPI { request in
             if request.url?.path == "/api/chat/sessions" {
+                sessionReads += 1
                 return (200, .object(["sessions": .array([room.raw]), "has_more": .bool(false)]))
             }
             if request.url?.path.hasSuffix("/messages") == true {
@@ -140,7 +141,11 @@ import Observation
         window.rootViewController = controller; window.makeKeyAndVisible()
         defer { window.endEditing(true); window.isHidden = true; window.rootViewController = nil; window.windowScene = nil; previous?.makeKey() }
         controller.loadViewIfNeeded(); controller.view.frame = window.bounds; window.layoutIfNeeded()
-        try await waitForUI("The initial conversation list shows the tab bar") { self.hasVisibleTabBar(window) }
+        // A tab bar can appear before the collapsed split view has initialized
+        // its sidebar. Do not race that initial navigation with the first push.
+        try await waitForUI("The initial conversation list loads and shows the tab bar") {
+            sessionReads > 0 && column.value == .sidebar && self.hasVisibleTabBar(window)
+        }
         attachTabBarState(window, column: column.value, name: "messages-initial-tab-bar-state")
         column.value = .detail
         try await waitForUI("Opening chat hides the tab bar") { messageReads > 0 && !self.hasVisibleTabBar(window) }
@@ -230,3 +235,4 @@ import Observation
 @MainActor @Observable private final class ConversationColumnProbe {
     var value: NavigationSplitViewColumn = .sidebar
 }
+
