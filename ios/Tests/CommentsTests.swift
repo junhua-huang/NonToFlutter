@@ -52,6 +52,41 @@ import UIKit
         XCTAssertEqual(store.threads[0].replies[0].likes, 2)
         XCTAssertNotNil(store.actionError); XCTAssertTrue(store.busyIDs.isEmpty)
     }
+    func testOverlappingReplyPageKeepsPendingLikeUntilRollback() async throws {
+        let started = expectation(description: "Reply like remains pending")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal(); ConcurrentCommentProtocol.handler = nil }
+        var root = comment(1, replies: (2...11).map { comment($0, parent: 1) })
+        root["replies_has_more"] = .bool(true); root["reply_count"] = .id(11)
+        ConcurrentCommentProtocol.handler = { request in
+            if request.url!.path.hasSuffix("/like") {
+                started.fulfill()
+                guard release.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
+                return (503, .object(["detail": .text("like failed")]))
+            }
+            let params = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            if params.contains(where: { $0.name == "parent_id" }) {
+                return (200, .object(["comments": .array([self.comment(11, parent: 1), self.comment(12, parent: 1)]), "has_more": .bool(false)]))
+            }
+            return (200, .object(["comments": .array([root])]))
+        }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ConcurrentCommentProtocol.self]
+        let api = APIClient(baseURL: URL(string: "https://comments.example.test/api")!, session: URLSession(configuration: config), credentials: MemoryCredentials())
+        try api.setToken("reply-race")
+        let defaults = UserDefaults(suiteName: "reply-race-\(UUID())")!
+        let store = CommentsStore(api: api, postID: 50, userID: 7, defaults: defaults)
+        await store.load(); await store.expandReplies(1)
+        let like = Task { await store.toggleLike(store.threads[0].replies.last!) }
+        await fulfillment(of: [started], timeout: 2)
+        await store.expandReplies(1)
+        let pending = try XCTUnwrap(store.threads[0].replies.first { $0.id == 11 })
+        XCTAssertTrue(pending.liked); XCTAssertEqual(pending.likes, 3)
+        XCTAssertEqual(store.threads[0].replies.map(\.id), Array(2...12))
+        release.signal(); await like.value
+        let rolledBack = try XCTUnwrap(store.threads[0].replies.first { $0.id == 11 })
+        XCTAssertFalse(rolledBack.liked); XCTAssertEqual(rolledBack.likes, 2)
+        XCTAssertTrue(store.threads[0].expanded); XCTAssertNotNil(store.actionErrors[11])
+    }
     func testReplyPagingDoesNotSkipPageAndSurvivesRefresh() async throws {
         var pages: [String] = []
         var root = comment(1, replies: (2...11).map { comment($0, parent: 1) })
@@ -231,3 +266,23 @@ import UIKit
         attachment.name = "comments-keyboard"; attachment.lifetime = .keepAlways; add(attachment)
     }
 }
+
+/// Separate request workers let a reply page finish while its like is held in flight.
+private final class ConcurrentCommentProtocol: URLProtocol, @unchecked Sendable {
+    static var handler: ((URLRequest) throws -> (Int, JSON))?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        DispatchQueue.global().async { [self] in
+            do {
+                guard let handler = Self.handler else { throw URLError(.badServerResponse) }
+                let (status, json) = try handler(request)
+                let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: try json.encoded()); client?.urlProtocolDidFinishLoading(self)
+            } catch { client?.urlProtocol(self, didFailWithError: error) }
+        }
+    }
+    override func stopLoading() {}
+}
+

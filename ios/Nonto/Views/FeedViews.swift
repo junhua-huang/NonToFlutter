@@ -36,7 +36,12 @@ struct PostList: View {
     private let header: AnyView?
     init(session: AppSession, path: String, query: [String: String] = [:], header: AnyView? = nil, cacheEnabled: Bool = true) {
         self.header = header
-        _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: path, keys: ["posts", "items"], query: query, userID: session.user?.id ?? 0, cacheEnabled: cacheEnabled))
+        _resource = StateObject(wrappedValue: Self.resource(session: session, path: path, query: query, cacheEnabled: cacheEnabled))
+    }
+    private static func resource(session: AppSession, path: String, query: [String: String], cacheEnabled: Bool) -> PagedResource<Post> {
+        let resource = PagedResource<Post>(api: session.api, path: path, keys: ["posts", "items"], query: query, userID: session.user?.id ?? 0, cacheEnabled: cacheEnabled)
+        resource.observePostChanges(in: session)
+        return resource
     }
     var body: some View {
         List {
@@ -47,10 +52,6 @@ struct PostList: View {
             .refreshable { await resource.load(reset: true) }
             .task { await resource.loadIfNeeded() }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
-            .onReceive(session.$postChange.dropFirst().compactMap { $0 }) { change in
-                let removeUnliked = !change.provisional && resource.path == "/posts/user/\(session.user?.id ?? 0)/liked" && change.patch?["is_liked"] == .bool(false)
-                resource.apply(id: change.postID, patch: removeUnliked ? nil : change.patch, provisional: change.provisional)
-            }
     }
 }
 
@@ -86,6 +87,10 @@ struct PostCard: View {
             }.frame(maxWidth: 720).padding(.horizontal, 16).padding(.top, 12).frame(maxWidth: .infinity)
             Color.timelineSeparator.frame(height: 0.5)
         }.background(Color.timelineBackground).navigationLinkIndicatorVisibility(.hidden)
+            .onAppear {
+                let updated = Post(post.raw.merging(session.pendingLikePatch(for: post.id)))
+                if current != updated { current = updated }
+            }
             .onChange(of: post.raw) { _, raw in
                 let updated = Post(raw.merging(session.pendingLikePatch(for: post.id)))
                 if current != updated { current = updated }
@@ -224,3 +229,4 @@ struct PostCard: View {
         else { localComposer = destination }
     }
 }
+

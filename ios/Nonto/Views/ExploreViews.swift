@@ -126,9 +126,14 @@ struct SearchResultsView: View {
     init(session: AppSession, query: String, kind: String) {
         self.kind = kind
         let uid = session.user?.id ?? 0
-        _posts = StateObject(wrappedValue: PagedResource(api: session.api, path: "/search/posts", keys: ["posts", "items"], query: ["q": query], userID: uid))
+        _posts = StateObject(wrappedValue: Self.postResource(session: session, query: query))
         _users = StateObject(wrappedValue: PagedResource(api: session.api, path: "/search/users", keys: ["users", "items"], query: ["q": query], userID: uid))
         _topics = StateObject(wrappedValue: PagedResource(api: session.api, path: "/search/topics", keys: ["topics", "items"], query: ["q": query], userID: uid))
+    }
+    static func postResource(session: AppSession, query: String) -> PagedResource<Post> {
+        let resource = PagedResource<Post>(api: session.api, path: "/search/posts", keys: ["posts", "items"], query: ["q": query], userID: session.user?.id ?? 0)
+        resource.observePostChanges(in: session)
+        return resource
     }
     var body: some View {
         List {
@@ -312,3 +317,4 @@ struct NoticeDestination: View {
         }
     }
 }
+

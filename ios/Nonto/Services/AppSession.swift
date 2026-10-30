@@ -36,6 +36,7 @@ final class AppSession: ObservableObject {
     private var pendingPostLikes: [Int: (ticket: UUID, patch: JSON)] = [:]
 
     func pendingLikePatch(for id: Int) -> JSON { pendingPostLikes[id]?.patch ?? .object([:]) }
+    var pendingLikePatches: [Int: JSON] { pendingPostLikes.mapValues { $0.patch } }
 
     func togglePostLike(_ post: Post) async throws {
         guard user != nil, post.id > 0, pendingPostLikes[post.id] == nil else { return }
@@ -236,6 +237,7 @@ final class PagedResource<T: Record>: ObservableObject {
     private var pendingUpdates: [Int: JSON] = [:]
     private var pendingRemovals = Set<Int>()
     private var optimisticUpdates: [Int: JSON] = [:]
+    private var postObservation: AnyCancellable?
     private var api: APIClient
     private let accountEpoch: UUID
     let path: String
@@ -349,8 +351,15 @@ final class PagedResource<T: Record>: ObservableObject {
     }
     func apply(id: Int, patch: JSON?, provisional: Bool = false) {
         guard api.generation == accountEpoch else { return }
-        if provisional, let patch { optimisticUpdates[id] = patch }
-        else { optimisticUpdates[id] = nil }
+        if provisional, let patch {
+            optimisticUpdates[id] = (optimisticUpdates[id] ?? .object([:])).merging(patch)
+        } else if let patch, var remaining = optimisticUpdates[id]?.object {
+            // A comment count or edit must not settle an unrelated in-flight like.
+            for key in patch.object.keys { remaining[key] = nil }
+            optimisticUpdates[id] = remaining.isEmpty ? nil : .object(remaining)
+        } else if patch == nil {
+            optimisticUpdates[id] = nil
+        }
         if let patch {
             if loading { pendingUpdates[id] = (pendingUpdates[id] ?? .object([:])).merging(patch) }
             if let index = items.firstIndex(where: { $0.id == id }) { items[index] = T(items[index].raw.merging(patch)) }
@@ -365,3 +374,67 @@ final class PagedResource<T: Record>: ObservableObject {
         LocalCache.write(.array(Array(items.prefix(100)).map(\.raw)), userID: userID, key: cacheKey)
     }
 }
+
+extension PagedResource where T == Post {
+    /// Keep the backing rows and their cache in sync even when no card is visible.
+    func observePostChanges(in session: AppSession) {
+        guard postObservation == nil else { return }
+        for (id, patch) in session.pendingLikePatches {
+            apply(id: id, patch: patch, provisional: true)
+        }
+        postObservation = session.$postChange.dropFirst().compactMap { $0 }.sink { [weak self] change in
+            guard let self else { return }
+            let removeUnliked = !change.provisional && path == "/posts/user/\(userID)/liked"
+                && change.patch?["is_liked"] == .bool(false)
+            apply(id: change.postID, patch: removeUnliked ? nil : change.patch, provisional: change.provisional)
+        }
+    }
+}
+
+/// A detail response can finish after a like, edit or deletion has been confirmed.
+/// Retain only mutations made during that request, then overlay any still-pending like.
+@MainActor
+final class PostDetailResource: ObservableObject {
+    @Published private(set) var post: Post?
+    @Published private(set) var error: String?
+    @Published private(set) var deleted = false
+    private let session: AppSession
+    private let postID: Int
+    private let accountEpoch: UUID
+    private var requestID: UUID?
+    private var changesDuringLoad: JSON = .object([:])
+    private var observation: AnyCancellable?
+
+    init(session: AppSession, postID: Int, initial: Post? = nil) {
+        self.session = session; self.postID = postID; accountEpoch = session.api.generation
+        post = initial.map { Post($0.raw.merging(session.pendingLikePatch(for: postID))) }
+        observation = session.$postChange.dropFirst().compactMap { $0 }.sink { [weak self] change in
+            self?.apply(change)
+        }
+    }
+    private func apply(_ change: PostChange) {
+        guard session.api.generation == accountEpoch, change.postID == postID else { return }
+        guard let patch = change.patch else { deleted = true; post = nil; return }
+        guard !deleted else { return }
+        if requestID != nil { changesDuringLoad = changesDuringLoad.merging(patch) }
+        if let post { self.post = Post(post.raw.merging(patch)) }
+    }
+    func load() async {
+        guard session.api.generation == accountEpoch, !deleted else { return }
+        let ticket = UUID(); requestID = ticket; changesDuringLoad = .object([:])
+        defer { if requestID == ticket { requestID = nil } }
+        do {
+            let result = try await session.api.request("/posts/\(postID)")
+            try Task.checkCancellation()
+            guard session.api.generation == accountEpoch, requestID == ticket, !deleted else { return }
+            let value = result["post"].or(result).merging(changesDuringLoad)
+                .merging(session.pendingLikePatch(for: postID))
+            post = Post(value); error = nil
+        } catch {
+            guard session.api.generation == accountEpoch, requestID == ticket, !deleted,
+                  !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
+            self.error = error.localizedDescription
+        }
+    }
+}
+
