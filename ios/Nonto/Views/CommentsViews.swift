@@ -34,9 +34,9 @@ struct PostDetailView: View {
                     Spacer()
                     Text("最新").font(.caption).foregroundStyle(.secondary)
                 }.padding(.vertical, 8).id("comments-header").listRowSeparator(.hidden)
-                ForEach(comments.threads) { thread in
+                ForEach(comments.threads.filter { !session.contentSafety.blockedUsers.contains($0.root.userID) }) { thread in
                     commentRow(thread.root, nested: false).id("comment/\(thread.id)")
-                    ForEach(thread.visibleReplies) { reply in
+                    ForEach(thread.visibleReplies.filter { !session.contentSafety.blockedUsers.contains($0.userID) }) { reply in
                         commentRow(reply, nested: true).id("comment/\(reply.id)")
                     }
                     threadFooter(thread).listRowSeparator(.hidden)
@@ -71,6 +71,8 @@ struct PostDetailView: View {
             }
             .onReceive(session.$postRevision.dropFirst()) { _ in Task { await loadPost() } }
             .onChange(of: resource.deleted) { _, deleted in if deleted { dismiss() } }
+            .onChange(of: resource.hidden) { _, hidden in if hidden { dismiss() } }
+            .onAppear { if resource.hidden { dismiss() } }
             .scrollDismissesKeyboard(.interactively)
             .sheet(item: $reportTarget) { ReportView(kind: "comment", targetID: $0.id) }
             .confirmationDialog("删除这条评论？", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), presenting: deleteTarget) { target in

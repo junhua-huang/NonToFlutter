@@ -64,10 +64,13 @@ struct ProfileView: View {
                 }
             }
             .task { await load() }
+            .onReceive(session.$contentSafety) { safety in
+                if !isOwn, !blockBusy { isBlocked = safety.blockedUsers.contains(userID) }
+            }
             .alert("已屏蔽此用户", isPresented: $blocked) { Button("好", role: .cancel) {} }
             .sheet(isPresented: $editing, onDismiss: { Task { await load() } }) { EditProfileView() }
             .sheet(isPresented: $reporting) { ReportView(kind: "user", targetID: userID) }
-            .confirmationDialog("屏蔽后将减少彼此的互动，确定继续？", isPresented: $confirmBlock) {
+            .confirmationDialog("屏蔽此用户？对方的动态将立即移除，并提交管理端审核。", isPresented: $confirmBlock, titleVisibility: .visible) {
                 Button("屏蔽用户", role: .destructive) { Task { await setBlocked(true) } }
             }
             .confirmationDialog("删除这位好友？", isPresented: $confirmUnfriend) {
@@ -209,10 +212,8 @@ struct ProfileView: View {
         if value { coverVisible = false }
         defer { blockBusy = false }
         do {
-            _ = try await session.api.request(value ? "/blocks" : "/blocks/\(userID)",
-                method: value ? "POST" : "DELETE", body: value ? .object(["user_id": .id(userID)]) : nil)
+            try await session.setUserBlocked(userID, blocked: value)
             guard epoch == session.api.generation else { return }
-            session.postRevision += 1
             if value { friendship = .null; blocked = true }
             else { blockBusy = false; await load() }
         } catch {

@@ -31,6 +31,14 @@ final class AppSession: ObservableObject {
     @Published var messageUnread = 0
     @Published var noticeUnread = 0
     @Published var defaultVisibility = "public"
+    @Published var contentSafety = ContentSafety()
+    @Published var contentSafetyError: String?
+    @Published var safetySyncing = false
+    let contentDefaults: UserDefaults
+    var safetyAccountID = 0
+    var safetyRevision = 0
+    var pendingPostHides: [Int: Bool] = [:]
+    var blockingUserIDs = Set<Int>()
     @Published private(set) var notificationAuthorizationReady = false
     private var foreground = true
     private var pendingPostLikes: [Int: (ticket: UUID, patch: JSON)] = [:]
@@ -64,9 +72,10 @@ final class AppSession: ObservableObject {
         }
     }
 
-    init(api: APIClient? = nil, consent: PrivacyConsent? = nil) {
+    init(api: APIClient? = nil, consent: PrivacyConsent? = nil, contentDefaults: UserDefaults = .standard) {
         let api = api ?? APIClient()
         self.consent = consent ?? PrivacyConsent.shared
+        self.contentDefaults = contentDefaults
         self.api = api; socket = RealtimeClient(api: api)
         APNsService.shared.attach(api: api)
         NativeNotifications.shared.onAuthorizationChanged = { [weak self] in self?.syncPush() }
@@ -111,6 +120,7 @@ final class AppSession: ObservableObject {
         let result = try await api.request("/auth/profile")
         let profile = Person(result["user"].or(result))
         guard profile.id > 0 else { throw APIError(status: 0, message: "用户信息不完整，请重新登录") }
+        restoreContentSafety(userID: profile.id)
         user = profile
         NativeNotifications.shared.userID = profile.id
         if foreground { socket.start(userID: profile.id) }
@@ -135,6 +145,7 @@ final class AppSession: ObservableObject {
             guard epoch == api.generation else { return }
             defaultVisibility = ["friends", "friends_only"].contains(privacy["post_default_visibility"].string) ? "friends" : "public"
         }
+        await refreshContentSafety()
     }
     func refreshCounts() async {
         guard foreground, user != nil else { return }
@@ -171,6 +182,7 @@ final class AppSession: ObservableObject {
                 await NativeNotifications.shared.refreshAuthorization()
                 syncPush()
                 await refreshCounts()
+                await refreshContentSafety()
             }
         }
         if active, let id = user?.id { socket.start(userID: id) } else { socket.stop() }
@@ -182,6 +194,8 @@ final class AppSession: ObservableObject {
     }
     func clearUI() {
         pendingPostLikes.removeAll()
+        safetyAccountID = 0; safetyRevision += 1; pendingPostHides = [:]; blockingUserIDs = []
+        contentSafety = ContentSafety(); contentSafetyError = nil; safetySyncing = false
         authenticationMessage = nil
         notificationAuthorizationReady = false
         APNsService.shared.setAccount(nil, enabled: false)
@@ -238,6 +252,10 @@ final class PagedResource<T: Record>: ObservableObject {
     private var pendingRemovals = Set<Int>()
     private var optimisticUpdates: [Int: JSON] = [:]
     private var postObservation: AnyCancellable?
+    private var safetyObservation: AnyCancellable?
+    private var visibilityFilter: ((T) -> T?)?
+    private var sourceItems: [T]?
+    private var seenPageIDs = Set<Int>()
     private var api: APIClient
     private let accountEpoch: UUID
     let path: String
@@ -274,7 +292,9 @@ final class PagedResource<T: Record>: ObservableObject {
         if loading {
             for item in items { pendingUpdates[item.id] = (pendingUpdates[item.id] ?? .object([:])).merging(patch) }
         }
-        items = items.map { T($0.raw.merging(patch)) }; persist()
+        let updated = (sourceItems ?? items).map { T($0.raw.merging(patch)) }
+        if sourceItems != nil { sourceItems = updated }
+        items = visibilityFilter.map { updated.compactMap($0) } ?? updated; persist()
     }
     func load(reset: Bool = false) async {
         guard api.generation == accountEpoch else { return }
@@ -308,13 +328,15 @@ final class PagedResource<T: Record>: ObservableObject {
             let rows = try Self.rows(json, keys: keys)
             let parsed = Records.unique(rows.map(T.init))
             guard rows.isEmpty || !parsed.isEmpty else { throw APIError(status: 0, message: "服务器返回的列表缺少有效记录，请重试") }
-            let incoming = parsed.filter { !pendingRemovals.contains($0.id) }.map { item in
+            let merged = parsed.filter { !pendingRemovals.contains($0.id) }.map { item in
                 T(item.raw.merging(pendingUpdates[item.id] ?? .object([:]))
                     .merging(optimisticUpdates[item.id] ?? .object([:])))
             }
-            let known = Set(items.map(\.id))
-            let added = incoming.contains { !known.contains($0.id) }
-            items = Records.unique((reset ? [] : items) + incoming)
+            let added = parsed.contains { reset || !seenPageIDs.contains($0.id) }
+            if reset { seenPageIDs = [] }; seenPageIDs.formUnion(parsed.map(\.id))
+            let updated = Records.unique((reset ? [] : (sourceItems ?? items)) + merged)
+            if sourceItems != nil { sourceItems = updated }
+            items = visibilityFilter.map { updated.compactMap($0) } ?? updated
             page = next
             lastLoadedAt = Date(); showingCache = false
             let nextCursor = json["next_cursor"].string
@@ -337,7 +359,7 @@ final class PagedResource<T: Record>: ObservableObject {
             guard requestID == ticket, api.generation == epoch else { return }
             if (error as? URLError)?.code != .cancelled {
                 if ["PROFILE_PRIVATE", "PROFILE_FRIENDS_ONLY"].contains((error as? APIError)?.code ?? "") {
-                    items = []; showingCache = false; hasMore = false
+                    items = []; sourceItems = sourceItems.map { _ in [] }; showingCache = false; hasMore = false
                     LocalCache.write(.array([]), userID: userID, key: cacheKey)
                 }
                 failedReset = reset; self.error = error.localizedDescription
@@ -360,13 +382,16 @@ final class PagedResource<T: Record>: ObservableObject {
         } else if patch == nil {
             optimisticUpdates[id] = nil
         }
+        var updated = sourceItems ?? items
         if let patch {
             if loading { pendingUpdates[id] = (pendingUpdates[id] ?? .object([:])).merging(patch) }
-            if let index = items.firstIndex(where: { $0.id == id }) { items[index] = T(items[index].raw.merging(patch)) }
+            if let index = updated.firstIndex(where: { $0.id == id }) { updated[index] = T(updated[index].raw.merging(patch)) }
         } else {
             if loading { pendingRemovals.insert(id) }
-            items.removeAll { $0.id == id }
+            updated.removeAll { $0.id == id }
         }
+        if sourceItems != nil { sourceItems = updated }
+        items = visibilityFilter.map { updated.compactMap($0) } ?? updated
         persist()
     }
     private func persist() {
@@ -379,6 +404,13 @@ extension PagedResource where T == Post {
     /// Keep the backing rows and their cache in sync even when no card is visible.
     func observePostChanges(in session: AppSession) {
         guard postObservation == nil else { return }
+        visibilityFilter = { [weak session] post in session?.contentSafety.visible(post) }
+        sourceItems = items
+        items = items.compactMap { session.contentSafety.visible($0) }; persist()
+        safetyObservation = session.$contentSafety.dropFirst().sink { [weak self] safety in
+            guard let self, api.generation == accountEpoch else { return }
+            items = (sourceItems ?? items).compactMap { safety.visible($0) }; persist()
+        }
         for (id, patch) in session.pendingLikePatches {
             apply(id: id, patch: patch, provisional: true)
         }
@@ -398,18 +430,26 @@ final class PostDetailResource: ObservableObject {
     @Published private(set) var post: Post?
     @Published private(set) var error: String?
     @Published private(set) var deleted = false
+    @Published private(set) var hidden = false
     private let session: AppSession
     private let postID: Int
     private let accountEpoch: UUID
     private var requestID: UUID?
     private var changesDuringLoad: JSON = .object([:])
     private var observation: AnyCancellable?
+    private var safetyObservation: AnyCancellable?
 
     init(session: AppSession, postID: Int, initial: Post? = nil) {
         self.session = session; self.postID = postID; accountEpoch = session.api.generation
-        post = initial.map { Post($0.raw.merging(session.pendingLikePatch(for: postID))) }
+        post = initial.flatMap { session.contentSafety.visible(Post($0.raw.merging(session.pendingLikePatch(for: postID)))) }
+        hidden = session.contentSafety.hiddenPosts[postID] != nil || (initial != nil && post == nil)
         observation = session.$postChange.dropFirst().compactMap { $0 }.sink { [weak self] change in
             self?.apply(change)
+        }
+        safetyObservation = session.$contentSafety.dropFirst().sink { [weak self] safety in
+            guard let self, session.api.generation == accountEpoch else { return }
+            if let post { self.post = safety.visible(post); hidden = self.post == nil }
+            if safety.hiddenPosts[postID] != nil { hidden = true; post = nil }
         }
     }
     private func apply(_ change: PostChange) {
@@ -417,19 +457,19 @@ final class PostDetailResource: ObservableObject {
         guard let patch = change.patch else { deleted = true; post = nil; return }
         guard !deleted else { return }
         if requestID != nil { changesDuringLoad = changesDuringLoad.merging(patch) }
-        if let post { self.post = Post(post.raw.merging(patch)) }
+        if let post { self.post = session.contentSafety.visible(Post(post.raw.merging(patch))); hidden = self.post == nil }
     }
     func load() async {
-        guard session.api.generation == accountEpoch, !deleted else { return }
+        guard session.api.generation == accountEpoch, !deleted, !hidden else { return }
         let ticket = UUID(); requestID = ticket; changesDuringLoad = .object([:])
         defer { if requestID == ticket { requestID = nil } }
         do {
             let result = try await session.api.request("/posts/\(postID)")
             try Task.checkCancellation()
-            guard session.api.generation == accountEpoch, requestID == ticket, !deleted else { return }
+            guard session.api.generation == accountEpoch, requestID == ticket, !deleted, !hidden else { return }
             let value = result["post"].or(result).merging(changesDuringLoad)
                 .merging(session.pendingLikePatch(for: postID))
-            post = Post(value); error = nil
+            post = session.contentSafety.visible(Post(value)); hidden = post == nil; error = nil
         } catch {
             guard session.api.generation == accountEpoch, requestID == ticket, !deleted,
                   !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }

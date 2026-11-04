@@ -45,6 +45,7 @@ struct PostList: View {
     }
     var body: some View {
         List {
+            if session.contentSafetyError != nil { ErrorBanner(text: session.contentSafetyError) }
             if let header { header.listRowInsets(EdgeInsets()).listRowSeparator(.hidden) }
             ForEach(resource.items) { post in PostCard(post: post).timelinePostRow() }
             ResourceFooter(resource: resource, emptyTitle: "还没有动态", emptyDescription: "分享此刻的想法，或下拉刷新看看。", emptyIcon: "text.bubble")
@@ -68,6 +69,8 @@ struct PostCard: View {
     @State private var sharing = false
     @State private var reporting = false
     @State private var deleting = false
+    @State private var hiding = false
+    @State private var blocking = false
     init(post: Post, detailed: Bool = false, onComment: (() -> Void)? = nil) {
         self.post = post; self.detailed = detailed; self.onComment = onComment; _current = State(initialValue: post)
     }
@@ -104,6 +107,21 @@ struct PostCard: View {
             .sheet(item: $localComposer) { destination in destination.content }
             .sheet(isPresented: $sharing) { SharePostView(session: session, post: current) }
             .sheet(isPresented: $reporting) { ReportView(kind: "post", targetID: current.id) }
+            .confirmationDialog("屏蔽此帖？", isPresented: $hiding, titleVisibility: .visible) {
+                Button("屏蔽此帖", role: .destructive) { Task { await session.setPostHidden(current, hidden: true) } }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("这条动态及其引用预览将不再显示，不影响该用户的其他动态。可在“设置 → 屏蔽列表 → 帖子”中恢复。")
+            }
+            .confirmationDialog("屏蔽 @\(current.author.username)？", isPresented: $blocking, titleVisibility: .visible) {
+                Button("屏蔽此用户", role: .destructive) {
+                    Task { do { try await session.setUserBlocked(current.userID, blocked: true, sourcePostID: current.id) }
+                        catch { self.error = error.localizedDescription } }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("对方的动态将立即移除，并将相关账号和本帖提交给管理端审核。可在设置的屏蔽列表中解除。")
+            }
             .confirmationDialog("删除这条动态？", isPresented: $deleting, titleVisibility: .visible) {
                 Button("删除动态", role: .destructive) {
                     Task {
@@ -196,7 +214,11 @@ struct PostCard: View {
             if current.userID == session.user?.id {
                 Button("编辑", systemImage: "pencil") { presentComposer(.edit(current)) }
                 Button("删除", systemImage: "trash", role: .destructive) { deleting = true }
-            } else { Button("举报", systemImage: "flag") { reporting = true } }
+            } else {
+                Button("屏蔽此帖", systemImage: "eye.slash") { hiding = true }
+                Button("屏蔽此用户", systemImage: "person.slash", role: .destructive) { blocking = true }
+                Button("举报", systemImage: "flag") { reporting = true }
+            }
         } label: {
             Image(systemName: "ellipsis").font(.subheadline).foregroundStyle(.secondary)
                 .frame(width: 28, height: 24).contentShape(Rectangle())

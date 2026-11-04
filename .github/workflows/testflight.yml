@@ -180,33 +180,8 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
               f.write('## Apple processing completed\n\nBuild ' + os.environ['TF_BUILD_NUMBER'] + ' is processed for ' + os.environ['NONTO_RELEASE_CHANNEL'] + '. App Store builds are selected in the editable draft; internal-only builds remain in TestFlight. This workflow does not submit or publish an App Store release.\n')
           PY
-      - name: Confirm availability to existing internal TestFlight groups
-        if: env.NONTO_RELEASE_CHANNEL == 'testflight-internal'
-        run: |
-          python3 - <<'PY'
-          import os, sys
-          sys.path.insert(0, '.github/scripts')
-          from appstore_metadata import Apple, APP_ID, BUNDLE, rows, require
-          api = Apple()
-          app = api.request('GET', 'apps/' + APP_ID)['data']
-          require(app['attributes']['bundleId'] == BUNDLE, 'App identity mismatch.')
-          number = os.environ['TF_BUILD_NUMBER']
-          builds = rows(api, 'builds', {'filter[app]': APP_ID, 'filter[version]': number, 'limit': 10})
-          require(len(builds) == 1 and builds[0]['attributes']['processingState'] == 'VALID',
-                  'This uploaded build is not confirmed processed; do not upload it again.')
-          build_id = builds[0]['id']
-          available = 0
-          for group in rows(api, f'apps/{APP_ID}/betaGroups', {'limit': 200}):
-              if not group['attributes'].get('isInternalGroup'):
-                  continue
-              assigned = rows(api, f'betaGroups/{group["id"]}/builds', {'limit': 200})
-              if group['attributes'].get('hasAccessToAllBuilds') or any(b['id'] == build_id for b in assigned):
-                  available += 1
-          require(available > 0, 'Build is uploaded and processed, but access by an existing internal group is not confirmed. Do not upload another build; check group assignment.')
-          print('TestFlight build', number, 'is available to', available, 'existing internal group(s).')
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
-              f.write('\nInternal TestFlight availability verified for build ' + number + '.\n')
-          PY
+      - name: Publish the processed build to existing internal TestFlight groups
+        run: python3 .github/scripts/distribute_internal_testflight.py "$TF_BUILD_NUMBER"
       - name: Remove runner profile copy and retain reusable Apple signing resources
         if: always()
         run: python3 ios/scripts/testflight.py cleanup --root "$TF_ROOT"

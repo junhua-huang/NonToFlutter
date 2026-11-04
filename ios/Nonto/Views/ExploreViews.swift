@@ -119,6 +119,7 @@ struct SearchHistorySection: View {
 }
 
 struct SearchResultsView: View {
+    @EnvironmentObject private var session: AppSession
     let kind: String
     @StateObject private var posts: PagedResource<Post>
     @StateObject private var users: PagedResource<Person>
@@ -140,11 +141,12 @@ struct SearchResultsView: View {
             if kind == "posts" {
                 ForEach(posts.items) { PostCard(post: $0).timelinePostRow() }; ResourceFooter(resource: posts, emptyTitle: "没有找到相关动态", emptyDescription: "试试其他关键词，或切换搜索类型。", emptyIcon: "magnifyingglass")
             } else if kind == "users" {
-                ForEach(users.items) { user in RouteButton(.profile(user.id)) { PersonRow(person: user) } }; ResourceFooter(resource: users, emptyTitle: "没有找到相关用户", emptyDescription: "试试用户名或显示名称。", emptyIcon: "person.crop.circle.badge.questionmark")
+                ForEach(users.items.filter { !session.contentSafety.blockedUsers.contains($0.id) }) { user in RouteButton(.profile(user.id)) { PersonRow(person: user) } }; ResourceFooter(resource: users, emptyTitle: "没有找到相关用户", emptyDescription: "试试用户名或显示名称。", emptyIcon: "person.crop.circle.badge.questionmark")
             } else {
                 ForEach(topics.items) { topic in RouteButton(.topic(topic)) { Text("#\(topic.name)") } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
             }
         }.timelineList().scrollDismissesKeyboard(.interactively).task { await load() }.refreshable { await load() }
+            .onReceive(session.$postRevision.dropFirst()) { _ in if kind == "posts" { Task { await posts.load(reset: true) } } }
     }
     private func load() async {
         if kind == "posts" { await posts.load(reset: true) }

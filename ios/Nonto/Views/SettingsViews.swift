@@ -265,9 +265,37 @@ struct BlockedUsersView: View {
     @StateObject private var resource: PagedResource<BlockedRecord>
     @State private var error: String?
     @State private var unblocking = Set<Int>()
+    @State private var tab = 0
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/blocks/", keys: ["blocked_users", "blocks", "users"], userID: session.user?.id ?? 0, cacheEnabled: false)) }
     var body: some View {
         List {
+            Picker("屏蔽类型", selection: $tab) { Text("用户").tag(0); Text("帖子").tag(1) }.pickerStyle(.segmented)
+            if session.contentSafetyError != nil {
+                ErrorBanner(text: session.contentSafetyError) { Task { await session.refreshContentSafety() } }
+            }
+            if tab == 1 { hiddenPostRows } else { blockedUserRows }
+        }.navigationTitle("屏蔽列表")
+            .task { await session.refreshContentSafety(); await resource.loadIfNeeded() }
+            .refreshable { await session.refreshContentSafety(); await resource.load(reset: true) }
+    }
+    @ViewBuilder private var hiddenPostRows: some View {
+                ForEach(session.contentSafety.hiddenPosts.values.sorted { $0["id"].int > $1["id"].int }.map(Post.init)) { post in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(post.author.name.isEmpty ? "已屏蔽的帖子" : post.author.name).font(.headline)
+                            Text(post.content.isEmpty ? "动态 #\(post.id)" : post.content).font(.subheadline).lineLimit(3)
+                        }
+                        Spacer()
+                        Button("恢复显示") { Task { await session.setPostHidden(post, hidden: false) } }
+                            .accessibilityLabel("恢复显示动态 \(post.id)")
+                    }
+                }
+                if session.contentSafety.hiddenPosts.isEmpty {
+                    ContentUnavailableView("没有屏蔽的帖子", systemImage: "eye.slash", description: Text("可在动态的操作菜单中屏蔽单条帖子。"))
+                }
+                if !session.pendingPostHides.isEmpty { Text("部分设置等待同步，当前设备已按你的选择过滤。").font(.footnote).foregroundStyle(.secondary) }
+    }
+    @ViewBuilder private var blockedUserRows: some View {
             ErrorBanner(text: error)
             ForEach(resource.items.filter { !unblocking.contains($0.id) }) { item in
                 HStack {
@@ -282,7 +310,6 @@ struct BlockedUsersView: View {
             } else if !resource.items.isEmpty && resource.items.allSatisfy({ unblocking.contains($0.id) }) {
                 ProgressView("正在解除屏蔽…").frame(maxWidth: .infinity)
             } else { ResourceFooter(resource: resource) }
-        }.navigationTitle("屏蔽列表").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
     private func unblock(_ id: Int) async {
         guard id > 0, !unblocking.contains(id) else { return }
@@ -290,9 +317,9 @@ struct BlockedUsersView: View {
         unblocking.insert(id); error = nil
         defer { unblocking.remove(id) }
         do {
-            _ = try await session.api.request("/blocks/\(id)", method: "DELETE")
+            try await session.setUserBlocked(id, blocked: false)
             guard epoch == session.api.generation else { return }
-            resource.apply(id: id, patch: nil); session.postRevision += 1
+            resource.apply(id: id, patch: nil)
             // Removing a row shifts the server's page offsets.
             if resource.hasMore { await resource.load(reset: true) }
         } catch {
