@@ -12,7 +12,7 @@
   "marketingUrl": "https://nonto.online/",
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
-  "betaBuildVersion": "112.1",
+  "betaBuildVersion": "117.2",
   "betaWhatsNew": "完善屏蔽功能与内容安全。\n\n• 动态菜单新增“屏蔽此用户”与“屏蔽此帖”。\n• 屏蔽立即作用于已加载的列表、搜索、详情和引用预览，避免旧响应重新显示内容。\n• 设置 → 屏蔽列表支持分别管理用户与帖子，并恢复显示。\n• 单帖屏蔽按账号保存；离线时保留本机选择，联网后重试同步。跨设备同步需服务器完成本次升级。\n• 后端新增屏蔽反馈审核记录与管理员通知，待生产部署验证。\n\n反馈邮箱：nonto@foxmail.com。",
   "screenshots": [
     {
