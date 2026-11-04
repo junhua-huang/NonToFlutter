@@ -53,7 +53,7 @@ final class ContentSafetyTests: XCTestCase {
         defer { release.signal() }
         let wire = post(10).raw
         let session = try session { request in
-            if request.url!.path == "/api/posts/" {
+            if ["/api/posts", "/api/posts/"].contains(request.url!.path) {
                 started.fulfill()
                 guard release.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
                 return (200, .object(["posts": .array([wire])]))

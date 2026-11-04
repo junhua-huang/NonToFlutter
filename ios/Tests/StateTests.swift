@@ -162,13 +162,17 @@ final class StateTests: XCTestCase {
     func testSearchRowsAndCacheTrackLikesAndDeletionWithoutVisibleCards() async throws {
         try? LocalCache.clear(userID: userID)
         defer { try? LocalCache.clear(userID: userID) }
-        let api = try client { _ in (200, .object(["liked": .bool(true), "like_count": .id(5)])) }
+        let original = post(1, "search result").merging(.object(["is_liked": .bool(false), "like_count": .id(4)]))
+        let api = try client { request in
+            if request.url!.path.hasSuffix("/like") { return (200, .object(["liked": .bool(true), "like_count": .id(5)])) }
+            return (200, .object(["posts": .array([original])]))
+        }
         let session = AppSession(api: api); session.user = Person(.object(["id": .id(userID)]))
         let search = SearchResultsView.postResource(session: session, query: "optimistic regression")
-        let original = post(1, "search result").merging(.object(["is_liked": .bool(false), "like_count": .id(4)]))
-        search.items = [Post(original)]
+        await search.load(reset: true)
         try await session.togglePostLike(Post(original))
-        XCTAssertTrue(search.items[0].liked); XCTAssertEqual(search.items[0].likes, 5)
+        let updated = try XCTUnwrap(search.items.first)
+        XCTAssertTrue(updated.liked); XCTAssertEqual(updated.likes, 5)
         let cached = try XCTUnwrap(LocalCache.read(userID: userID, key: search.cacheKey)?.array.first)
         XCTAssertTrue(Post(cached).liked); XCTAssertEqual(Post(cached).likes, 5)
         session.postChange = PostChange(postID: 1, patch: nil)
