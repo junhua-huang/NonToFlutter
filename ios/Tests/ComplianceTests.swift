@@ -60,8 +60,9 @@ final class ComplianceTests: XCTestCase {
     }
     func testDeletionClearsOnlyTheSpecifiedAccountsLocalData() throws {
         let userID = 900040, otherID = 9000400
-        let own = ["nonto.native.draft.\(userID).0.0.v2", "nonto.native.outbox.\(userID).chat.single.3", "nonto.native.chat-draft.\(userID).chat.single.3", "nonto.native.sequence.\(userID)"]
+        let own = ["nonto.native.draft.\(userID).0.0.v2", "nonto.native.outbox.\(userID).chat.single.3", "nonto.native.chat-draft.\(userID).chat.single.3", "nonto.native.sequence.\(userID)", "nonto.safety.v1.\(userID)"]
         let other = "nonto.native.draft.\(otherID).0.0.v2"
+        defaults.set("other-account-safety", forKey: "nonto.safety.v1.\(otherID)")
         for key in own + [other, "nonto.native.appearance", "nonto.apns.needs-revoke"] { defaults.set("keep-or-remove", forKey: key) }
         LocalCache.write(.text("own"), userID: userID, key: "test")
         LocalCache.write(.text("other"), userID: otherID, key: "test")
@@ -69,6 +70,7 @@ final class ComplianceTests: XCTestCase {
         try AccountLocalData.clear(userID: userID, defaults: defaults)
         for key in own { XCTAssertNil(defaults.object(forKey: key)) }
         XCTAssertEqual(defaults.string(forKey: other), "keep-or-remove")
+        XCTAssertEqual(defaults.string(forKey: "nonto.safety.v1.\(otherID)"), "other-account-safety")
         XCTAssertNotNil(defaults.object(forKey: "nonto.apns.needs-revoke"))
         XCTAssertNotNil(defaults.object(forKey: "nonto.native.appearance"))
         XCTAssertNil(LocalCache.read(userID: userID, key: "test"))

@@ -158,7 +158,9 @@ enum AccountLocalData {
         guard userID > 0 else { return }
         let prefixes = ["nonto.native.draft.\(userID).", "nonto.native.outbox.\(userID).", "nonto.native.chat-draft.\(userID)."]
         for key in defaults.dictionaryRepresentation().keys {
-            if prefixes.contains(where: { key.hasPrefix($0) }) || key == "nonto.native.sequence.\(userID)" { defaults.removeObject(forKey: key) }
+            if prefixes.contains(where: { key.hasPrefix($0) }) || key == "nonto.native.sequence.\(userID)" || key == "nonto.safety.v1.\(userID)" {
+                defaults.removeObject(forKey: key)
+            }
         }
         URLCache.shared.removeAllCachedResponses()
         try LocalCache.clear(userID: userID)
