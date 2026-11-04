@@ -125,4 +125,48 @@ final class ContentSafetyTests: XCTestCase {
         release.signal(); await fetch.value
         XCTAssertNil(detail.post); XCTAssertTrue(detail.hidden)
     }
+    func testRestoreWaitsForServerAcknowledgementBeforeRequestingFeedReload() async throws {
+        let started = expectation(description: "Restore reached server")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let session = try session { request in
+            if request.httpMethod == "DELETE" {
+                started.fulfill()
+                guard release.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
+            }
+            return (200, .object([:]))
+        }
+        await session.setPostHidden(post(10), hidden: true)
+        let before = session.postRevision
+        let restore = Task { await session.setPostHidden(post(10), hidden: false) }
+        await fulfillment(of: [started], timeout: 3)
+        XCTAssertNil(session.contentSafety.hiddenPosts[10])
+        XCTAssertEqual(session.postRevision, before, "An early refresh would still receive the server's hidden list")
+        release.signal(); await restore.value
+        XCTAssertEqual(session.postRevision, before + 1)
+    }
+    func testMutationRefreshSupersedesAnOlderInFlightListResponse() async throws {
+        let started = expectation(description: "Old list request started")
+        let replacing = expectation(description: "Mutation refresh started")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let old = post(10).raw, updated = post(11).raw
+        var calls = 0
+        let session = try session { _ in
+            calls += 1
+            if calls == 1 {
+                started.fulfill()
+                guard release.wait(timeout: .now() + 10) == .success else { throw URLError(.timedOut) }
+                return (200, .object(["posts": .array([old])]))
+            }
+            return (200, .object(["posts": .array([updated])]))
+        }
+        let feed = list(session)
+        let first = Task { await feed.load(reset: true) }
+        await fulfillment(of: [started], timeout: 3)
+        let second = Task { replacing.fulfill(); await feed.load(reset: true, superseding: true) }
+        await fulfillment(of: [replacing], timeout: 3)
+        release.signal(); await first.value; await second.value
+        XCTAssertEqual(calls, 2); XCTAssertEqual(feed.items.map(\.id), [11])
+    }
 }

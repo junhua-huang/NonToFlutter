@@ -296,11 +296,11 @@ final class PagedResource<T: Record>: ObservableObject {
         if sourceItems != nil { sourceItems = updated }
         items = visibilityFilter.map { updated.compactMap($0) } ?? updated; persist()
     }
-    func load(reset: Bool = false) async {
+    func load(reset: Bool = false, superseding: Bool = false) async {
         guard api.generation == accountEpoch else { return }
         if let task = activeTask {
             // Coalesce refresh events; a refresh supersedes an older next-page request.
-            if !reset || activeReset { await task.value; return }
+            if !superseding && (!reset || activeReset) { await task.value; return }
             task.cancel()
         } else if !reset && !hasMore { return }
         let ticket = UUID(); requestID = ticket

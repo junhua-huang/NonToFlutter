@@ -63,7 +63,6 @@ extension AppSession {
         } else { value.hiddenPosts[post.id] = nil }
         pendingPostHides[post.id] = hidden
         safetyRevision += 1; contentSafety = value; saveContentSafety()
-        if !hidden { postRevision += 1 }
         await syncPostHides()
     }
 
@@ -76,7 +75,11 @@ extension AppSession {
             do {
                 _ = try await api.request("/post-hides/\(id)", method: hidden ? "PUT" : "DELETE")
                 guard epoch == api.generation, owner == safetyAccountID else { return }
-                if pendingPostHides[id] == hidden { pendingPostHides[id] = nil; safetyRevision += 1 }
+                if pendingPostHides[id] == hidden {
+                    pendingPostHides[id] = nil; safetyRevision += 1
+                    // Reload only after the server stops filtering this post.
+                    if !hidden { postRevision += 1 }
+                }
                 saveContentSafety(); contentSafetyError = nil
             } catch {
                 guard epoch == api.generation, owner == safetyAccountID else { return }

@@ -146,7 +146,7 @@ struct SearchResultsView: View {
                 ForEach(topics.items) { topic in RouteButton(.topic(topic)) { Text("#\(topic.name)") } }; ResourceFooter(resource: topics, emptyTitle: "没有找到相关话题", emptyDescription: "试试其他关键词。", emptyIcon: "number")
             }
         }.timelineList().scrollDismissesKeyboard(.interactively).task { await load() }.refreshable { await load() }
-            .onReceive(session.$postRevision.dropFirst()) { _ in if kind == "posts" { Task { await posts.load(reset: true) } } }
+            .onReceive(session.$postRevision.dropFirst()) { _ in if kind == "posts" { Task { await posts.load(reset: true, superseding: true) } } }
     }
     private func load() async {
         if kind == "posts" { await posts.load(reset: true) }

@@ -52,7 +52,7 @@ struct PostList: View {
         }.timelineList().scrollDismissesKeyboard(.interactively)
             .refreshable { await resource.load(reset: true) }
             .task { await resource.loadIfNeeded() }
-            .onReceive(session.$postRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
+            .onReceive(session.$postRevision.dropFirst()) { _ in Task { await resource.load(reset: true, superseding: true) } }
     }
 }
 
