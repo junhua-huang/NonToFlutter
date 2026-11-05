@@ -360,6 +360,9 @@ struct ChatRoomContent: View {
         composerFocused = false
         setAttachmentMenu(false)
         inputDismissal &+= 1
+        // Synchronize the native responder as well: keyboard focus can outlive
+        // SwiftUI's binding while acknowledgements rebuild the text control.
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     private func setAttachmentMenu(_ presented: Bool) {
         pendingAttachmentAction = nil

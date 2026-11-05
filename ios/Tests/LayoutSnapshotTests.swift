@@ -375,7 +375,11 @@ final class LayoutSnapshotTests: XCTestCase {
                     return !field.isFirstResponder && abs(y - unfocusedComposerY) <= 5
                 }
             } catch {
-                print("Chat keyboard dismissal \(cycle): \(dismissalGeometry)")
+                let responders = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                    .flatMap(\.windows).flatMap { self.descendants(of: $0) }
+                    .filter { $0.isFirstResponder }
+                    .map { "\(type(of: $0)), keyWindow=\($0.window?.isKeyWindow ?? false), frame=\($0.frame)" }
+                print("Chat keyboard dismissal \(cycle): \(dismissalGeometry), responders=\(responders)")
                 throw error
             }
             let restoredField = try XCTUnwrap(currentField())
