@@ -99,7 +99,7 @@ struct PersonalInformationView: View {
                 if busy { ProgressView("正在退出并关闭账号服务…") }
                 ErrorBanner(text: error)
             }
-        }.navigationTitle("个人信息与权限").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(AppLocalization.string("个人信息与权限")).navigationBarTitleDisplayMode(.inline)
             .confirmationDialog("撤回同意并退出？", isPresented: $confirmWithdrawal, titleVisibility: .visible) {
                 Button("撤回并退出", role: .destructive) {
                     Task {
@@ -155,7 +155,7 @@ struct ContactAndComplaintsView: View {
                 NavigationLink("查看个人信息处理规则") { AnyView(PolicyView(kind: "privacy")) }
                 NavigationLink("查看社区规范") { AnyView(PolicyView(kind: "community")) }
             }
-        }.navigationTitle("联系与投诉").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(AppLocalization.string("联系与投诉")).navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .alert("联系邮箱已复制", isPresented: $copiedEmail) { Button("好", role: .cancel) {} }
     }
@@ -226,7 +226,7 @@ struct ReportHistoryView: View {
                 }.padding(.vertical, 6)
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有举报记录", emptyDescription: "你提交的举报和服务端处理状态会显示在这里。", emptyIcon: "flag")
-        }.navigationTitle("举报处理记录").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
+        }.navigationTitle(AppLocalization.string("举报处理记录")).task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
     private func status(_ value: String) -> String {
         switch value { case "pending": return AppLocalization.string("待处理"); case "resolved": return AppLocalization.string("已处理"); case "rejected", "dismissed": return AppLocalization.string("未采纳"); default: return AppLocalization.string("处理中") }

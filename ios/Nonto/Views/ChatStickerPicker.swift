@@ -82,7 +82,7 @@ struct ChatStickerPickerContent: View {
                 if browser.prepared != nil || browser.selection != nil { selectionBar }
             }
             .searchable(text: $browser.query, prompt: AppLocalization.string("搜索贴纸名称"))
-            .navigationTitle("贴纸").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(AppLocalization.string("贴纸")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭", action: close) }
                 ToolbarItem(placement: .topBarTrailing) { addPhoto }

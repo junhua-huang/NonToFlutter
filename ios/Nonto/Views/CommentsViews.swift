@@ -45,7 +45,7 @@ struct PostDetailView: View {
                 }
                 commentsFooter.listRowSeparator(.hidden)
             }
-            .timelineList().navigationTitle("动态").navigationBarTitleDisplayMode(.inline)
+            .timelineList().navigationTitle(AppLocalization.string("动态")).navigationBarTitleDisplayMode(.inline)
             .toolbarVisibility(.hidden, for: .tabBar)
             .contentMargins(.top, 0, for: .scrollContent)
             .safeAreaInset(edge: .bottom, spacing: 0) {

@@ -47,7 +47,7 @@ struct ExploreView: View {
                     if error != nil { ErrorBanner(text: error) }
                 }.timelineList().refreshable { await load() }
             }
-        }.navigationTitle("发现").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(AppLocalization.string("发现")).navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: AppLocalization.string("搜索动态、用户和话题"))
             .onSubmit(of: .search, search)
             .onChange(of: query) { _, value in
@@ -215,7 +215,7 @@ struct FollowedTopicsView: View {
         let _ = appLocale
         List { ForEach(resource.items) { topic in RouteButton(.topic(topic)) { Text("#\(topic.name)") } }; ResourceFooter(resource: resource) }
             .onReceive(session.$topicRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
-            .navigationTitle("我的话题").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
+            .navigationTitle(AppLocalization.string("我的话题")).task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
 }
 
@@ -257,7 +257,7 @@ struct NotificationsView: View {
                 }.listRowBackground(notice.isRead ? Color.timelineBackground : accent.color.opacity(0.045))
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有通知", emptyDescription: "新的互动和提醒会出现在这里。", emptyIcon: "bell")
-        }.navigationTitle("通知").navigationBarTitleDisplayMode(.inline).timelineList()
+        }.navigationTitle(AppLocalization.string("通知")).navigationBarTitleDisplayMode(.inline).timelineList()
             .toolbar { Button("全部已读") { Task { await readAll() } }.disabled(readingAll || session.noticeUnread == 0) }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }

@@ -68,7 +68,7 @@ struct CommunityDetailView: View {
                 PostList(session: session, path: "/posts/", query: ["community_id": String(communityID)])
             } else if error == nil { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
             ErrorBanner(text: error) { Task { await load() } }
-        }.navigationTitle("社群").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(AppLocalization.string("社群")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if let community {
                     Menu {
@@ -219,7 +219,7 @@ struct CommunityManageView: View {
             }
             if community.raw["my_role"].string == "owner" { Button("解散社群", role: .destructive) { prepare(base) } }
             if loading { ProgressView() }
-        }.buttonStyle(.plain).disabled(acting).navigationTitle("社群信息").task(id: tab) { await load() }.refreshable { await load() }
+        }.buttonStyle(.plain).disabled(acting).navigationTitle(AppLocalization.string("社群信息")).task(id: tab) { await load() }.refreshable { await load() }
             .confirmationDialog("确定执行此操作？", isPresented: $confirm, titleVisibility: .visible) { Button("确定", role: actionMethod == "DELETE" ? .destructive : nil) { Task { await act() } } }
     }
     private func prepare(_ path: String, method: String = "DELETE", body: JSON? = nil) { guard !acting else { return }; actionPath = path; actionMethod = method; actionBody = body; confirm = true }

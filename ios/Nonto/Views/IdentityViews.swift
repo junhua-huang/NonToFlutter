@@ -27,7 +27,7 @@ struct IdentityCenterView: View {
             }
             ErrorBanner(text: error)
             if loading { ProgressView() }
-        }.navigationTitle("身份认证").task { await load() }.refreshable { await load() }
+        }.navigationTitle(AppLocalization.string("身份认证")).task { await load() }.refreshable { await load() }
             .sheet(isPresented: $applying, onDismiss: { Task { await load() } }) { IdentityApplicationView() }
     }
     private func status(_ s: String) -> String {
@@ -64,7 +64,7 @@ struct IdentityApplicationView: View {
                 PhotosPicker(selection: $picks, maxSelectionCount: 9, matching: .images) { Label("证明材料（\(picks.count)/9）", systemImage: "photo.on.rectangle") }
                 ErrorBanner(text: error)
                 if busy { ProgressView("正在提交…") }
-            }.disabled(busy).navigationTitle("申请认证").toolbar {
+            }.disabled(busy).navigationTitle(AppLocalization.string("申请认证")).toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                 ToolbarItem(placement: .confirmationAction) { Button("提交") { Task { await submit() } }.disabled(busy || role.isEmpty || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }.interactiveDismissDisabled(busy).task {

@@ -13,7 +13,7 @@ struct FeedView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             TimelineTabs(title: AppLocalization.string("动态范围"), tabs: [(1, AppLocalization.string("最新")), (2, AppLocalization.string("与你相关"))], selection: $filter)
         }
-        .navigationTitle("南图").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(AppLocalization.string("南图")).navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 RouteButton(.profile(session.user?.id ?? 0)) {

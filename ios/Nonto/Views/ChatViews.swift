@@ -55,7 +55,7 @@ struct MessagesView: View {
                 .listRowSeparator(.hidden)
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
-        }.timelineList().navigationTitle("私信").navigationBarTitleDisplayMode(.inline)
+        }.timelineList().navigationTitle(AppLocalization.string("私信")).navigationBarTitleDisplayMode(.inline)
             .toolbar { RouteButton(.friends) { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
             .task { await resource.loadIfNeeded() }
             .refreshable { await resource.load(reset: true); await session.refreshCounts() }
@@ -495,7 +495,7 @@ struct SharePostView: View {
                     Button { Task { await share(conv) } } label: { HStack { AvatarView(url: conv.avatar, name: conv.name); Text(conv.name) } }.disabled(sending)
                 }
                 ResourceFooter(resource: resource)
-            }.navigationTitle("分享动态").toolbar { Button("取消") { dismiss() }.disabled(sending) }
+            }.navigationTitle(AppLocalization.string("分享动态")).toolbar { Button("取消") { dismiss() }.disabled(sending) }
                 .task { await resource.loadIfNeeded() }.interactiveDismissDisabled(sending)
         }
     }

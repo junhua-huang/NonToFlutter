@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.locale) private var appLocale
     @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @AppStorage("nonto.native.appearance") private var appearance = "system"
@@ -11,6 +12,7 @@ struct SettingsView: View {
     @State private var loggingOut = false
     var body: some View {
         let _ = appLanguage
+        let _ = appLocale
         Form {
             Section("外观") {
                 Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }.pickerStyle(.menu)
@@ -62,7 +64,7 @@ struct SettingsView: View {
                 RouteButton(.deleteAccount) { Text("注销账号") }.foregroundStyle(.red)
             }
             ErrorBanner(text: error)
-        }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(AppLocalization.string("设置")).navigationBarTitleDisplayMode(.inline)
             .alert("本机缓存已清理", isPresented: $cacheCleared) { Button("好", role: .cancel) {} }
     }
     private func logout() async {
@@ -99,7 +101,7 @@ struct PrivacySettingsView: View {
             ErrorBanner(text: error) { Task { await load() } }
             if saved { Text("已保存").foregroundStyle(accent.textColor) }
             Button("保存设置") { Task { await save() } }.disabled(!loaded || busy)
-        }.navigationTitle("隐私设置").task { await load() }
+        }.navigationTitle(AppLocalization.string("隐私设置")).task { await load() }
     }
     private func load() async {
         do {
@@ -165,7 +167,7 @@ struct NotificationSettingsView: View {
             Button("保存") { Task { await save() } }.disabled(!loaded || busy)
             if saved { Text("已保存").foregroundStyle(accent.textColor) }
             ErrorBanner(text: error) { Task { await load() } }
-        }.disabled(busy).navigationTitle("消息提醒").task {
+        }.disabled(busy).navigationTitle(AppLocalization.string("消息提醒")).task {
             await notifications.refreshAuthorization()
             if !loaded { await load() }
         }
@@ -206,7 +208,7 @@ struct PasswordView: View {
             if saved { Text("密码已修改").foregroundStyle(accent.textColor) }
             Button("修改密码") { Task { await save() } }.disabled(busy || old.isEmpty || new.count < 8 || new != repeatPassword)
             if busy { ProgressView("正在修改…") }
-        }.disabled(busy).scrollDismissesKeyboard(.interactively).navigationTitle("修改密码")
+        }.disabled(busy).scrollDismissesKeyboard(.interactively).navigationTitle(AppLocalization.string("修改密码"))
     }
     private func save() async {
         guard !busy else { return }
@@ -240,7 +242,7 @@ struct DeleteAccountView: View {
             ErrorBanner(text: error)
             Button("永久注销账号", role: .destructive) { confirm = true }.disabled(confirmation != AppLocalization.string("注销") || busy)
             if busy { ProgressView("正在处理注销…") }
-        }.disabled(busy).navigationTitle("注销账号").confirmationDialog("申请注销账号？此操作无法撤销。", isPresented: $confirm, titleVisibility: .visible) {
+        }.disabled(busy).navigationTitle(AppLocalization.string("注销账号")).confirmationDialog("申请注销账号？此操作无法撤销。", isPresented: $confirm, titleVisibility: .visible) {
             Button("永久注销", role: .destructive) {
                 Task {
                     busy = true; defer { busy = false }
@@ -294,7 +296,7 @@ struct BlockedUsersView: View {
                 ErrorBanner(text: session.contentSafetyError) { Task { await session.refreshContentSafety() } }
             }
             if tab == 1 { hiddenPostRows } else { blockedUserRows }
-        }.navigationTitle("屏蔽列表")
+        }.navigationTitle(AppLocalization.string("屏蔽列表"))
             .task { await session.refreshContentSafety(); await resource.loadIfNeeded() }
             .refreshable { await session.refreshContentSafety(); await resource.load(reset: true) }
     }

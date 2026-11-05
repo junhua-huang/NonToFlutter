@@ -196,6 +196,7 @@ final class LocalizationTests: XCTestCase {
             try await waitForLanguageUI {
                 probe.accent == accent && self.views(window).compactMap { $0 as? UINavigationBar }.contains { $0.topItem?.title == title }
             }
+            print("Live language \(choice.rawValue): accent=\(probe.accent), titles=\(self.views(window).compactMap { ($0 as? UINavigationBar)?.topItem?.title })")
             XCTAssertEqual(probe.path, ["settings"])
             XCTAssertEqual(probe.identity, stateIdentity, "Changing language must not replace the active screen")
             XCTAssertEqual(probe.draft, "未发送的草稿 · draft %@")
@@ -235,6 +236,10 @@ final class LocalizationTests: XCTestCase {
             return current[2].badgeValue == "3" && current[3].badgeValue == "3"
         }
         let names = ["首页", "发现", "通知", "私信", "我的"].map { AppLocalization.lookup($0) }
+        try await waitForLanguageUI {
+            let labels = items.compactMap(\.accessibilityLabel) + self.views(tabController.tabBar).compactMap(\.accessibilityLabel)
+            return names.allSatisfy { name in labels.contains { $0.localizedStandardContains(name) } }
+        }
         let accessibility = items.compactMap(\.accessibilityLabel) + views(tabController.tabBar).compactMap(\.accessibilityLabel)
         print("Icon-only tab accessibility: \(accessibility)")
         for name in names { XCTAssertTrue(accessibility.contains(where: { $0.localizedStandardContains(name) }), "Missing accessible tab name: \(name)") }

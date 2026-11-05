@@ -39,7 +39,7 @@ struct NotoEmojiCreditsView: View {
                 Text("Lottie iOS · Airbnb · Apache License 2.0")
                 NavigationLink("Lottie 许可") { license("Lottie-LICENSE") }
             }
-        }.navigationTitle("表情资源与许可").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(AppLocalization.string("表情资源与许可")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
     }
     private func license(_ name: String) -> some View {

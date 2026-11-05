@@ -257,7 +257,7 @@ struct EditProfileView: View {
                 }.disabled(busy)
                 if busy { ProgressView("正在保存…") }
                 ErrorBanner(text: error)
-            }.navigationTitle("编辑资料").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle(AppLocalization.string("编辑资料")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                     ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(busy) }
@@ -320,7 +320,7 @@ struct FriendsView: View {
                 ForEach(friends.items) { person in RouteButton(.profile(person.id)) { PersonRow(person: person) } }
                 ResourceFooter(resource: friends, emptyTitle: "还没有好友", emptyDescription: "去发现页搜索朋友，发送好友申请。", emptyIcon: "person.2")
             }
-        }.buttonStyle(.plain).navigationTitle("好友")
+        }.buttonStyle(.plain).navigationTitle(AppLocalization.string("好友"))
             .task { await load() }.refreshable { await load() }
     }
     private func load() async { await friends.load(reset: true); await requests.load(reset: true) }
@@ -353,7 +353,7 @@ struct ReportView: View {
                     Text("请简要说明，勿填写密码、身份证号码等无关敏感信息。").font(.caption).foregroundStyle(.secondary)
                 }
                 ErrorBanner(text: error)
-            }.navigationTitle("举报").toolbar {
+            }.navigationTitle(AppLocalization.string("举报")).toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                 ToolbarItem(placement: .confirmationAction) { Button("提交") { Task { await submit() } }.disabled(busy || reason.count > 200 || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }.interactiveDismissDisabled(busy)

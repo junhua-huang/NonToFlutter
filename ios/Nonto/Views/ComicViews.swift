@@ -18,7 +18,7 @@ struct ComicListView: View {
                 Picker("城市", selection: $city) { Text("全部城市").tag(""); ForEach(Array(cities.enumerated()), id: \.offset) { _, c in Text(c["name"].string).tag(c["name"].string) } }.padding(.horizontal)
             }
             ComicResults(session: session, path: filter, city: filter == "/comic/events" ? city : "").id(filter + city)
-        }.navigationTitle("漫展").toolbar { Button { creating = true } label: { Image(systemName: "plus") } }
+        }.navigationTitle(AppLocalization.string("漫展")).toolbar { Button { creating = true } label: { Image(systemName: "plus") } }
             .sheet(isPresented: $creating) { ComicEditor() }
             .task { if let j = try? await session.api.request("/comic/cities") { cities = j.list("cities", "items") } }
     }
@@ -81,7 +81,7 @@ struct ComicDetailView: View {
                 }
             }
             ErrorBanner(text: error)
-        }.navigationTitle("漫展详情").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(AppLocalization.string("漫展详情")).navigationBarTitleDisplayMode(.inline)
             .toolbar { if event["isOwner"].or(event["is_owner"]).bool { Button("编辑") { editing = true } } }
             .sheet(isPresented: $editing, onDismiss: { Task { await load() } }) { ComicEditor(event: event) }
             .task { await load() }.refreshable { await load() }

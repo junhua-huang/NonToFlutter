@@ -582,7 +582,7 @@ struct ChatQuoteContextView: View {
                 .overlay {
                     if messages.isEmpty { ChatTimelinePlaceholder(loading: loading, error: error) { Task { await load() } } }
                 }
-                .navigationTitle("引用的消息").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(AppLocalization.string("引用的消息")).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
                 .task { await load() }
                 .onReceive(socket.events) { payload in
@@ -825,7 +825,7 @@ struct ChatAttachmentSheet: View {
                             .frame(maxWidth: .infinity).padding(.vertical, 6)
                     }.buttonStyle(.glassProminent).disabled(submitting || selection.isEmpty)
                 }.padding()
-            }.navigationTitle("发送照片与视频").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle(AppLocalization.string("发送照片与视频")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("取消") { cancelled = true; submitting = false; dismiss() }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 @MainActor
@@ -71,6 +72,8 @@ struct MainTabs: View {
             } label: { Image(systemName: "person.crop.circle").accessibilityLabel(Text("我的")) }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .background(TabBarAccessibility(labels: ["首页", "发现", "通知", "私信", "我的"].map { AppLocalization.lookup($0) })
+            .frame(width: 0, height: 0))
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(item: $postComposer.destination, onDismiss: {
             if let pendingPush { pushDestination = pendingPush; self.pendingPush = nil }
@@ -99,6 +102,60 @@ struct MainTabs: View {
                 do { try await Task.sleep(for: .seconds(30)) } catch { break }
             }
         }
+    }
+}
+
+/// An image-only SwiftUI Tab omits its title, including UIKit's accessibility
+/// fallback. Supply names to the public tab items without adding visible text.
+private struct TabBarAccessibility: UIViewControllerRepresentable {
+    let labels: [String]
+    func makeUIViewController(context: Context) -> TabBarAccessibilityController {
+        let controller = TabBarAccessibilityController()
+        controller.labels = labels
+        return controller
+    }
+    func updateUIViewController(_ controller: TabBarAccessibilityController, context: Context) {
+        controller.labels = labels
+        controller.applyLabels()
+        // The TabView's controller may be attached after this update.
+        DispatchQueue.main.async { [weak controller] in controller?.applyLabels() }
+    }
+}
+
+private final class TabBarAccessibilityController: UIViewController {
+    var labels: [String] = []
+    override func loadView() {
+        view = UIView()
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+    }
+    override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        applyLabels()
+    }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        applyLabels()
+    }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        applyLabels()
+    }
+    func applyLabels() {
+        var ancestor = parent
+        while let root = ancestor {
+            if let tabs = findTabs(in: root), let items = tabs.tabBar.items, items.count == labels.count {
+                for (item, label) in zip(items, labels) where item.accessibilityLabel != label {
+                    item.accessibilityLabel = label
+                }
+                return
+            }
+            ancestor = root.parent
+        }
+    }
+    private func findTabs(in controller: UIViewController) -> UITabBarController? {
+        if let tabs = controller as? UITabBarController { return tabs }
+        return controller.children.lazy.compactMap { self.findTabs(in: $0) }.first
     }
 }
 private struct ComposerKey: EnvironmentKey { static let defaultValue: () -> Void = {} }

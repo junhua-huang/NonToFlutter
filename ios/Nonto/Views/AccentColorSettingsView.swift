@@ -82,7 +82,7 @@ struct AccentColorSettingsView: View {
                 AccentColorPreview(accent: selection)
             }
         }
-        .navigationTitle("强调色").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(AppLocalization.string("强调色")).navigationBarTitleDisplayMode(.inline)
     }
 }
 

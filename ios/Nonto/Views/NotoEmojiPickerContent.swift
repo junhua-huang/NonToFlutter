@@ -50,7 +50,7 @@ struct NotoEmojiPickerContent: View {
                                           onFavorite: { browser.toggleFavorite(selection) }, onSend: send)
                 }
             }
-            .navigationTitle("动态表情").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(AppLocalization.string("动态表情")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {

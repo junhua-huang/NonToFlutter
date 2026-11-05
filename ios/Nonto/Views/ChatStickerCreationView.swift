@@ -39,7 +39,7 @@ struct ChatStickerCreationView: View {
                 }.buttonStyle(.borderedProminent).tint(accent.color).disabled(!browser.canCommit || saved).padding(16)
                     .accessibilityIdentifier("chat.stickers.save")
             }
-            .navigationTitle("新贴纸").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(AppLocalization.string("新贴纸")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { operation?.cancel(); browser.cancel(); dismiss() } } }
         }
         .interactiveDismissDisabled(browser.busy)
