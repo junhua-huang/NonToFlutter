@@ -37,7 +37,7 @@ struct NontoApp: App {
 }
 
 struct MainTabs: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     // The initial tab is a one-time seed, also used by deterministic previews.
@@ -52,6 +52,7 @@ struct MainTabs: View {
     @State private var pushDestination: PushRoute?
     @State private var pendingPush: PushRoute?
     var body: some View {
+        let _ = appLocale
         TabView(selection: $selectedTab) {
             Tab(value: 0) {
                 AppNavigationStack { FeedView(session: session) }

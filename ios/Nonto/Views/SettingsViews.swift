@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var cacheCleared = false
     @State private var loggingOut = false
     var body: some View {
+        let _ = appLanguage
         Form {
             Section("外观") {
                 Picker("主题", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }.pickerStyle(.menu)
@@ -72,7 +73,7 @@ struct SettingsView: View {
 }
 
 struct PrivacySettingsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var profile = "public"
@@ -85,6 +86,7 @@ struct PrivacySettingsView: View {
     @State private var error: String?
     @State private var saved = false
     var body: some View {
+        let _ = appLocale
         Form {
             Section {
                 Picker("主页可见范围", selection: $profile) { Text("公开").tag("public"); Text("好友").tag("friends_only"); Text("仅自己").tag("private") }
@@ -120,7 +122,7 @@ struct PrivacySettingsView: View {
     }
 }
 struct NotificationSettingsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @ObservedObject private var push = APNsService.shared
@@ -134,6 +136,7 @@ struct NotificationSettingsView: View {
     @State private var error: String?
     @State private var saved = false
     var body: some View {
+        let _ = appLocale
         Form {
             Section("系统通知") {
                 Text(AppLocalization.relocalizedUI(push.status)).foregroundStyle(.secondary)
@@ -184,7 +187,7 @@ struct NotificationSettingsView: View {
     }
 }
 struct PasswordView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var old = ""
@@ -194,6 +197,7 @@ struct PasswordView: View {
     @State private var busy = false
     @State private var saved = false
     var body: some View {
+        let _ = appLocale
         Form {
             SecureField("当前密码", text: $old).textContentType(.password)
             SecureField("新密码（至少 8 位）", text: $new).textContentType(.newPassword)
@@ -218,13 +222,14 @@ struct PasswordView: View {
     }
 }
 struct DeleteAccountView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @State private var confirmation = ""
     @State private var confirm = false
     @State private var busy = false
     @State private var error: String?
     var body: some View {
+        let _ = appLocale
         Form {
             Section {
                 Text("确认后将向服务器申请注销当前账号。与账号关联的信息、上传文件及依法保留的记录，按照隐私说明中的删除与保留规则处理；本机草稿、发送队列与账号缓存也会清理。注销操作无法撤销。")
@@ -274,7 +279,7 @@ struct BlockedRecord: Record {
     }
 }
 struct BlockedUsersView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<BlockedRecord>
     @State private var error: String?
@@ -282,6 +287,7 @@ struct BlockedUsersView: View {
     @State private var tab = 0
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/blocks/", keys: ["blocked_users", "blocks", "users"], userID: session.user?.id ?? 0, cacheEnabled: false)) }
     var body: some View {
+        let _ = appLocale
         List {
             Picker("屏蔽类型", selection: $tab) { Text("用户").tag(0); Text("帖子").tag(1) }.pickerStyle(.segmented)
             if session.contentSafetyError != nil {
@@ -342,9 +348,10 @@ struct BlockedUsersView: View {
     }
 }
 struct PolicyView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let kind: String
     var body: some View {
+        let _ = appLocale
         let text = ComplianceProfile.current.document(kind)
         let document = LegalDocument(rawValue: kind)
         let sections = PolicySection.parse(text)

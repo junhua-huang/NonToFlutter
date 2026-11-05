@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct NotoEmojiPicker: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     // A picker owns one account's browser for the lifetime of its presentation.
     @State private var browser: NotoEmojiBrowser
     private let onSend: (NotoEmoji) -> Bool
@@ -9,14 +9,17 @@ struct NotoEmojiPicker: View {
         _browser = State(initialValue: NotoEmojiBrowser(accountID: accountID))
         self.onSend = onSend
     }
-    var body: some View { NotoEmojiPickerContent(browser: browser, onSend: onSend) }
+    var body: some View {
+        let _ = appLocale
+        NotoEmojiPickerContent(browser: browser, onSend: onSend) }
 }
 
 struct NotoEmojiCreditsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
     @AppStorage("nonto.native.animated-emoji") private var animations = true
     var body: some View {
+        let _ = appLocale
         Form {
             Section { Toggle("播放动态表情", isOn: $animations) }
             footer: { Text("开启“减弱动态效果”时，表情会显示为静态图片。") }

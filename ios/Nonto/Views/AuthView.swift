@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AuthView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     enum Mode: String, CaseIterable {
         case login, register, reset
@@ -28,6 +28,7 @@ struct AuthView: View {
     private var purpose: String { mode == .register ? "register" : (mode == .reset ? "reset_password" : "login") }
 
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {

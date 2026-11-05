@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChatStickerCreationView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @Bindable var browser: ChatStickerBrowser
     let api: APIClient
@@ -11,6 +11,7 @@ struct ChatStickerCreationView: View {
     @State private var operation: Task<Void, Never>?
     @State private var saved = false
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {

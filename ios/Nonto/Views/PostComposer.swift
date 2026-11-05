@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct PostComposer: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     var editing: Post? = nil
     var quoted: Post? = nil
@@ -53,6 +53,7 @@ struct PostComposer: View {
         _attachments = State(initialValue: attachments)
     }
     var body: some View {
+        let _ = appLocale
         @Bindable var editor = editor
         NavigationStack {
             ScrollView {

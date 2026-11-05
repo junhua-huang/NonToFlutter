@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ChatStickerPicker: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     // Account and credentials are one-time seeds for this presentation.
     @State private var browser: ChatStickerBrowser
     private let api: APIClient
@@ -13,6 +13,7 @@ struct ChatStickerPicker: View {
         self.api = api; epoch = api.generation; self.onSend = onSend
     }
     var body: some View {
+        let _ = appLocale
         ChatStickerPickerContent(browser: browser) { data in
             guard api.generation == epoch, api.token != nil else { throw ChatStickerError.signedOut }
             let url = try await api.upload(data, filename: "sticker-\(UUID().uuidString).png", mime: "image/png", type: "chat")
@@ -26,7 +27,7 @@ struct ChatStickerPicker: View {
 }
 
 struct ChatStickerPickerContent: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @Bindable var browser: ChatStickerBrowser
     let upload: (Data) async throws -> String
@@ -44,6 +45,7 @@ struct ChatStickerPickerContent: View {
     private var busy: Bool { browser.busy || readingPhoto }
 
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             VStack(spacing: 0) {
                 Picker("贴纸范围", selection: $browser.recentOnly) {

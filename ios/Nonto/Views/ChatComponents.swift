@@ -13,7 +13,7 @@ struct ChatAttachmentSourcePreference: PreferenceKey {
 
 /// A single surface grows from the measured button; content keeps its own size.
 struct ChatAttachmentMenuOverlay: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let presented: Bool
     let source: CGRect
     let containerSize: CGSize
@@ -33,6 +33,7 @@ struct ChatAttachmentMenuOverlay: View {
     }
 
     var body: some View {
+        let _ = appLocale
         ZStack(alignment: .topLeading) {
             if presented {
                 Button(action: onDismiss) {
@@ -99,7 +100,7 @@ private struct ChatAttachmentReveal: ViewModifier, Animatable {
 
 /// The surface owns its reveal; only the list participates in native bouncing.
 struct ChatAttachmentMenu: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let rowHeight: CGFloat
     let onSelect: (ChatAttachmentAction) -> Void
     let onDismiss: () -> Void
@@ -108,6 +109,7 @@ struct ChatAttachmentMenu: View {
     private let petalColors: [Color] = [.pink, .red, .orange, .yellow, .green, .cyan, .blue, .purple]
 
     var body: some View {
+        let _ = appLocale
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(ChatAttachmentAction.allCases) { action in
@@ -164,8 +166,9 @@ struct ChatAttachmentMenu: View {
 }
 
 private struct ChatCameraMenuLens: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     var body: some View {
+        let _ = appLocale
         GeometryReader { geometry in
             let size = geometry.size.width
             ZStack {
@@ -197,13 +200,14 @@ private struct ChatAttachmentRowStyle: ButtonStyle {
 
 /// The system sheet owns dragging and hands scrolling to the embedded library.
 struct ChatPhotoDrawer: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let onAdd: ([PhotosPickerItem]) -> Void
     let onClose: () -> Void
     @State private var selection: [PhotosPickerItem] = []
 
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 0) {
             HStack {
                 Text("相册").font(.headline)
@@ -248,7 +252,7 @@ private struct StickerMenuShape: Shape {
 
 /// SwiftUI has no system camera picker; keep capture inside Apple's camera UI.
 struct ChatCameraCapture: UIViewControllerRepresentable {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let onCapture: (Data) -> Void
     let onCancel: () -> Void
@@ -264,7 +268,9 @@ struct ChatCameraCapture: UIViewControllerRepresentable {
         picker.view.tintColor = accent.uiColor
         return picker
     }
-    func updateUIViewController(_ picker: UIImagePickerController, context: Context) { picker.view.tintColor = accent.uiColor }
+    func updateUIViewController(_ picker: UIImagePickerController, context: Context) {
+        _ = appLocale
+        picker.view.tintColor = accent.uiColor }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     static func dismantleUIViewController(_ picker: UIImagePickerController, coordinator: Coordinator) { picker.delegate = nil }
 
@@ -336,11 +342,12 @@ enum ChatQuoteSummary {
 
 /// Status occupies the visible chat viewport, independent of the bottom-anchored message stack.
 struct ChatTimelinePlaceholder: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let loading: Bool
     let error: String?
     let retry: () -> Void
     var body: some View {
+        let _ = appLocale
         Group {
             if loading { ProgressView("正在加载消息…") }
             else if let error {
@@ -358,7 +365,7 @@ struct ChatTimelinePlaceholder: View {
 }
 
 struct ChatMessageRow: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let row: ChatTimeline.Row
     let community: Bool
@@ -386,6 +393,7 @@ struct ChatMessageRow: View {
     private var mine: Bool { message.senderID == session.user?.id }
     private var sender: Person { Person(message.raw["sender"].or(message.raw["user"])) }
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 6) {
             if row.showsTimestamp, let date = row.date {
                 Text(date, format: .dateTime.month().day().hour().minute())
@@ -513,13 +521,14 @@ struct ChatMessageRow: View {
 
 /// The banner floats above the timeline, so a polling error cannot insert a row.
 struct ChatSyncNotice: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let error: String
     let retry: () -> Void
     let dismiss: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showingDetails = false
     var body: some View {
+        let _ = appLocale
         HStack(spacing: 10) {
             Image(systemName: "wifi.exclamationmark").foregroundStyle(.orange)
             Button { showingDetails = true } label: {
@@ -544,7 +553,7 @@ struct ChatQuoteTarget: Identifiable { let id: Int }
 
 /// A separately fetched quote window never changes the main chat's loaded pages.
 struct ChatQuoteContextView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let targetID: Int
     let store: ChatStore
     let conversation: Conversation
@@ -556,6 +565,7 @@ struct ChatQuoteContextView: View {
     @State private var error: String?
     @State private var position = ScrollPosition(idType: Int.self)
     var body: some View {
+        let _ = appLocale
         AppNavigationStack {
             ScrollView {
                 LazyVStack(spacing: 6) {
@@ -602,13 +612,14 @@ struct ChatQuoteContextView: View {
 }
 
 struct ChatVideoPreview: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let url: URL
     let height: CGFloat
     var onPresentationChange: (Bool) -> Void = { _ in }
     @State private var poster: UIImage?
     @State private var presented = false
     var body: some View {
+        let _ = appLocale
         Button {
             onPresentationChange(true); presented = true
         } label: {
@@ -659,7 +670,7 @@ private struct ChatBubbleSurface: ViewModifier {
 
 /// Standalone previews use the same bubble as the unified live timeline.
 struct ChatPendingRow: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: PendingMessage
     let sending: Bool
     let blocked: Bool
@@ -669,6 +680,7 @@ struct ChatPendingRow: View {
     var onMediaPresentation: (Bool) -> Void = { _ in }
     @EnvironmentObject private var session: AppSession
     var body: some View {
+        let _ = appLocale
         if let entry = ChatPresentation(userID: session.user?.id ?? 0, pending: [item]).entries.first {
             ChatMessageRow(row: entry.row, community: false, showsReceipt: false,
                            onMediaPresentation: onMediaPresentation,
@@ -679,7 +691,7 @@ struct ChatPendingRow: View {
 }
 
 struct ChatPendingStatus: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: PendingMessage
     let sending: Bool
     let blocked: Bool
@@ -688,6 +700,7 @@ struct ChatPendingStatus: View {
     var checkDelivery: () -> Void = { }
     @State private var confirmResend = false
     var body: some View {
+        let _ = appLocale
         deliveryStatus
             .confirmationDialog("这条消息可能已经送达", isPresented: $confirmResend, titleVisibility: .visible) {
                 Button("检查最新消息", action: checkDelivery)
@@ -739,7 +752,7 @@ struct ChatAttachments: Identifiable {
 
 /// Keep the complete selection local until Send; reuse successful uploads on retry.
 struct ChatAttachmentSheet: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let media: [SelectedMedia]
     let api: APIClient
@@ -762,6 +775,7 @@ struct ChatAttachmentSheet: View {
     private var selection: [SelectedMedia] { media.filter { !excluded.contains($0.id) } }
     private var selectedMedia: SelectedMedia? { selection.indices.contains(selected) ? selection[selected] : nil }
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {

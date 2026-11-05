@@ -3,7 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct ComposerAttachmentTile: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: SelectedMedia
     let index: Int
     let count: Int
@@ -12,6 +12,7 @@ struct ComposerAttachmentTile: View {
     let remove: () -> Void
     let move: (Int) -> Void
     var body: some View {
+        let _ = appLocale
         ZStack(alignment: .topTrailing) {
             previewButton
             Button(action: remove) {
@@ -55,13 +56,14 @@ struct ComposerAttachmentTile: View {
 
 /// Local previews never upload the selection; the video file lives only for this sheet.
 struct ComposerMediaPreview: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: SelectedMedia
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
     @State private var videoURL: URL?
     @State private var error: String?
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             Group {
                 if let videoURL { NativeVideo(url: videoURL) }

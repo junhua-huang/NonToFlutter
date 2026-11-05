@@ -65,23 +65,25 @@ extension EnvironmentValues {
     }
 }
 struct RouteButton<Label: View>: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let route: AppRoute
     let label: () -> Label
     @Environment(\.navigate) private var navigate
     init(_ route: AppRoute, @ViewBuilder label: @escaping () -> Label) { self.route = route; self.label = label }
     var body: some View {
+        let _ = appLocale
         Button { navigate(route) } label: { label().contentShape(Rectangle()) }
             .buttonStyle(.plain).disabled(!route.isValid)
     }
 }
 struct AppNavigationStack<Root: View>: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @StateObject private var navigation = AppNavigation()
     @EnvironmentObject private var session: AppSession
     let root: () -> Root
     init(@ViewBuilder root: @escaping () -> Root) { self.root = root }
     var body: some View {
+        let _ = appLocale
         NavigationStack(path: $navigation.path) {
             root().navigationDestination(for: AppRoute.self) { route in AppRouteDestination(route: route) }
         }.environment(\.navigate, navigation.open)
@@ -89,10 +91,12 @@ struct AppNavigationStack<Root: View>: View {
 }
 
 struct AppRouteDestination: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let route: AppRoute
     @EnvironmentObject private var session: AppSession
-    var body: some View { destination(route) }
+    var body: some View {
+        let _ = appLocale
+        destination(route) }
     // Bound the registry type instead of nesting every screen into one
     // conditional view type during navigation setup.
     private func destination(_ route: AppRoute) -> AnyView {

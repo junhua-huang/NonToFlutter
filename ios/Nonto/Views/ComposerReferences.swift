@@ -82,9 +82,10 @@ final class ComposerEditor {
 }
 
 struct ComposerTextEditor: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let editor: ComposerEditor
     var body: some View {
+        let _ = appLocale
         ComposerNativeTextView(editor: editor).frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .topLeading) {
                 if editor.text.isEmpty {
@@ -96,7 +97,7 @@ struct ComposerTextEditor: View {
 }
 
 private struct ComposerNativeTextView: UIViewRepresentable {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let editor: ComposerEditor
     @Environment(\.isEnabled) private var isEnabled
@@ -121,6 +122,7 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: UITextView, context: Context) {
+        _ = appLocale
         view.tintColor = accent.uiColor
         if view.isEditable != isEnabled { view.isEditable = isEnabled }
         editor.attach(view); editor.synchronize()
@@ -211,7 +213,7 @@ final class ComposerReferenceStore {
 }
 
 struct ComposerReferencePicker: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let kind: ComposerReferenceKind
     let onSelect: (String) -> Void
@@ -223,6 +225,7 @@ struct ComposerReferencePicker: View {
         _store = State(initialValue: ComposerReferenceStore(api: api, kind: kind))
     }
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             List {
                 Section(query.isEmpty ? (kind == .mention ? AppLocalization.string("我的好友") : AppLocalization.string("热门话题")) : AppLocalization.string("搜索结果")) {
@@ -264,13 +267,14 @@ struct ComposerReferencePicker: View {
 }
 
 struct ComposerMediaThumbnail: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: SelectedMedia
     var side: CGFloat = 72
     var aspect: CGFloat = 1
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
     var body: some View {
+        let _ = appLocale
         Group {
             if let image { Image(uiImage: image).resizable().scaledToFill() }
             else { Image(systemName: item.isVideo ? "video" : "photo").font(.title) }

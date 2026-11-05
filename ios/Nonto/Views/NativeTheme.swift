@@ -35,13 +35,14 @@ extension View {
 
 /// Underlined content navigation stays visually separate from glass controls.
 struct TimelineTabs<Selection: Hashable>: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let title: String
     let tabs: [(value: Selection, title: String)]
     @Binding var selection: Selection
 
     var body: some View {
+        let _ = appLocale
         HStack(alignment: .bottom, spacing: 0) {
             ForEach(tabs.indices, id: \.self) { index in
                 let tab = tabs[index]
@@ -66,10 +67,11 @@ struct TimelineTabs<Selection: Hashable>: View {
 }
 
 struct ComposeButton: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let action: () -> Void
     var body: some View {
+        let _ = appLocale
         Button(action: action) {
             Image(systemName: "square.and.pencil").font(.system(size: 23, weight: .semibold))
                 .frame(width: 58, height: 58)
@@ -79,10 +81,11 @@ struct ComposeButton: View {
 }
 
 struct TimelineActionSymbol: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let symbol: String
     var count: Int = 0
     var body: some View {
+        let _ = appLocale
         HStack(spacing: 5) {
             Image(systemName: symbol).font(.system(size: 17))
             if count > 0 {
@@ -94,11 +97,13 @@ struct TimelineActionSymbol: View {
 }
 
 private struct ScrollingNavigationBar: UIViewRepresentable {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     func makeUIView(context: Context) -> ScrollChrome { ScrollChrome() }
     // Layout updates must never change toolbar visibility. UIKit owns the swipe
     // gesture and its bar animation, without feeding insets back into SwiftUI.
-    func updateUIView(_ marker: ScrollChrome, context: Context) {}
+    func updateUIView(_ marker: ScrollChrome, context: Context) {
+        _ = appLocale
+        }
     static func dismantleUIView(_ marker: ScrollChrome, coordinator: ()) {
         marker.restoreNavigationBar()
     }

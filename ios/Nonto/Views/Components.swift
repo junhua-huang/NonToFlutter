@@ -5,13 +5,14 @@ import UniformTypeIdentifiers
 import ImageIO
 
 struct AvatarView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     var url: String
     var name: String
     var size: CGFloat = 44
     @State private var image: UIImage?
     var body: some View {
+        let _ = appLocale
         ZStack {
             accent.color.opacity(0.12)
             if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipped() }
@@ -25,12 +26,13 @@ struct AvatarView: View {
 }
 
 struct ProfileCover: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let url: String
     var height: CGFloat? = 144
     @State private var image: UIImage?
     var body: some View {
+        let _ = appLocale
         GeometryReader { geometry in
             ZStack {
                 if let image { Image(uiImage: image).resizable().scaledToFill() }
@@ -44,10 +46,11 @@ struct ProfileCover: View {
     }
 }
 struct ErrorBanner: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     var text: String?
     var retry: (() -> Void)? = nil
     var body: some View {
+        let _ = appLocale
         if let text {
             VStack(alignment: .leading, spacing: 8) {
                 Label(AppLocalization.relocalizedUI(text), systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red)
@@ -58,13 +61,14 @@ struct ErrorBanner: View {
     }
 }
 struct ResourceFooter<T: Record>: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @ObservedObject var resource: PagedResource<T>
     var emptyTitle: LocalizedStringKey = "这里还没有内容"
     var emptyDescription: LocalizedStringKey = "稍后再来看看，或下拉刷新。"
     var emptyIcon = "tray"
     var compactEmpty = false
     var body: some View {
+        let _ = appLocale
         Group {
             if let error = resource.error {
                 VStack(spacing: 8) {
@@ -93,9 +97,10 @@ struct ResourceFooter<T: Record>: View {
     }
 }
 struct PersonRow: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     var person: Person
     var body: some View {
+        let _ = appLocale
         HStack(spacing: 12) {
             AvatarView(url: person.avatar, name: person.name)
             VStack(alignment: .leading, spacing: 3) {
@@ -107,7 +112,7 @@ struct PersonRow: View {
     }
 }
 struct MediaView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let images: [String]
     let video: String
     var thumbnailHeight: CGFloat? = nil
@@ -118,6 +123,7 @@ struct MediaView: View {
     var onPresentationChange: (Bool) -> Void = { _ in }
     @State private var selected: MediaSelection?
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 8) {
             if !images.isEmpty {
                 if postLayout && images.count > 1 {
@@ -146,11 +152,12 @@ struct MediaView: View {
     }
 }
 private struct PostImageGrid: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let images: [String]
     let open: (Int) -> Void
     private let spacing: CGFloat = 3
     var body: some View {
+        let _ = appLocale
         GeometryReader { geometry in
             let items = PostMediaLayout.items(images)
             let rows = PostMediaLayout.rows(images)
@@ -183,7 +190,7 @@ private struct PostImageGrid: View {
     }
 }
 private struct MediaThumbnail: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let url: String
     let height: CGFloat
     let label: String
@@ -193,6 +200,7 @@ private struct MediaThumbnail: View {
     @State private var image: UIImage?
     @State private var failed = false
     var body: some View {
+        let _ = appLocale
         Button {
             if failed { attempt += 1 } else { open() }
         } label: {
@@ -222,12 +230,13 @@ private struct MediaThumbnail: View {
 }
 private struct MediaSelection: Identifiable { let id = UUID(); var index: Int }
 struct NativeVideo: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let url: URL
     var autoplay = false
     @State private var player: AVPlayer?
     @Environment(\.scenePhase) private var phase
     var body: some View {
+        let _ = appLocale
         VideoPlayer(player: player)
             .onAppear { player = AVPlayer(url: url); if autoplay { player?.play() } }
             .onChange(of: url) { _, value in player?.pause(); player = AVPlayer(url: value); if autoplay { player?.play() } }

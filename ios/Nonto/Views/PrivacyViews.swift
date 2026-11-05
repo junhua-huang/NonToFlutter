@@ -2,13 +2,14 @@ import SwiftUI
 import UIKit
 
 struct PrivacyWelcomeView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var consent: PrivacyConsent
     @State private var declined = false
     @State private var ageGroup: ServiceAgeGroup?
     @State private var guardianConsent = false
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -50,7 +51,7 @@ struct PrivacyWelcomeView: View {
 }
 
 struct PersonalInformationView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @EnvironmentObject private var consent: PrivacyConsent
     @State private var confirmWithdrawal = false
@@ -58,6 +59,7 @@ struct PersonalInformationView: View {
     @State private var error: String?
     private let profile = ComplianceProfile.current
     var body: some View {
+        let _ = appLocale
         Form {
             Section("个人信息与使用目的") {
                 DisclosureGroup("账号与资料") {
@@ -111,12 +113,13 @@ struct PersonalInformationView: View {
 }
 
 struct ContactAndComplaintsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @State private var kind = SupportRequestKind.support
     @State private var detail = ""
     @State private var copiedEmail = false
     private let profile = ComplianceProfile.current
     var body: some View {
+        let _ = appLocale
         Form {
             Section("联系南图") {
                 Link("官方网站", destination: profile.websiteURL)
@@ -160,9 +163,10 @@ struct ContactAndComplaintsView: View {
 
 /// APP and website registrations have distinct labels and query links.
 struct FilingDisclosureSection: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     private let profile = ComplianceProfile.current
     var body: some View {
+        let _ = appLocale
         Section {
             if !profile.value("appFilingNumber").isEmpty {
                 Link(destination: URL(string: "https://beian.miit.gov.cn/")!) {
@@ -198,13 +202,14 @@ struct ReportRecord: Record {
     }
 }
 struct ReportHistoryView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @StateObject private var resource: PagedResource<ReportRecord>
     init(session: AppSession) {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/reports/", keys: ["reports", "items"], userID: session.user?.id ?? 0))
     }
     var body: some View {
+        let _ = appLocale
         List {
             ForEach(resource.items) { record in
                 VStack(alignment: .leading, spacing: 8) {

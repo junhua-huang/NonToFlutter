@@ -4,13 +4,14 @@ import PhotosUI
 struct ComicRecord: Record { var raw: JSON; init(_ raw: JSON) { self.raw = raw } }
 
 struct ComicListView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @State private var filter = "/comic/events"
     @State private var city = ""
     @State private var cities: [JSON] = []
     @State private var creating = false
     var body: some View {
+        let _ = appLocale
         VStack {
             Picker("漫展范围", selection: $filter) { Text("全部").tag("/comic/events"); Text("已关注").tag("/comic/my-followed"); Text("我发布的").tag("/comic/my-events") }.pickerStyle(.segmented).padding(.horizontal)
             if filter == "/comic/events" {
@@ -23,12 +24,13 @@ struct ComicListView: View {
     }
 }
 struct ComicResults: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @StateObject private var resource: PagedResource<ComicRecord>
     init(session: AppSession, path: String, city: String) {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: path, keys: ["records", "events", "items"], query: ["city": city, "size": "20"], userID: session.user?.id ?? 0))
     }
     var body: some View {
+        let _ = appLocale
         List {
             ForEach(resource.items) { event in
                 RouteButton(.comic(event.id)) {
@@ -45,7 +47,7 @@ struct ComicResults: View {
     }
 }
 struct ComicDetailView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let eventID: Int
     @EnvironmentObject private var session: AppSession
     @State private var event: JSON = .null
@@ -58,6 +60,7 @@ struct ComicDetailView: View {
     @State private var more = false
     @State private var followRevision = 0
     var body: some View {
+        let _ = appLocale
         List {
             if !event.isNull {
                 Section {
@@ -130,7 +133,7 @@ struct ComicDetailView: View {
     }
 }
 struct ComicEditor: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     var event: JSON = .null
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -149,6 +152,7 @@ struct ComicEditor: View {
     @State private var tags: [JSON] = []
     @State private var selectedTags = Set<Int>()
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             Form {
                 TextField("活动名称", text: $name)

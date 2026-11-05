@@ -37,7 +37,7 @@ enum PostThread {
 }
 
 struct PostBodyText: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let content: String
     let detailed: Bool
@@ -69,6 +69,7 @@ struct PostBodyText: View {
             }
     }
     var body: some View {
+        let _ = appLocale
         Group {
             if !content.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {

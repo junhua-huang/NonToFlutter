@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct CommunityListView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     var mine: Bool
     @StateObject private var resource: PagedResource<Community>
     @State private var creating = false
@@ -11,6 +11,7 @@ struct CommunityListView: View {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: mine ? "/communities/my" : "/communities", keys: ["communities", "items"], userID: session.user?.id ?? 0, paginated: !mine, usesOffset: true))
     }
     var body: some View {
+        let _ = appLocale
         List {
             ForEach(resource.items) { community in
                 RouteButton(.community(community.id)) {
@@ -33,7 +34,7 @@ struct CommunityListView: View {
 }
 
 struct CommunityDetailView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let communityID: Int
     @EnvironmentObject private var session: AppSession
     @State private var community: Community?
@@ -43,6 +44,7 @@ struct CommunityDetailView: View {
     @State private var editing = false
     @State private var leaving = false
     var body: some View {
+        let _ = appLocale
         VStack(alignment: .leading, spacing: 0) {
             if let community {
                 VStack(alignment: .leading, spacing: 12) {
@@ -99,7 +101,7 @@ struct CommunityDetailView: View {
 }
 
 struct CommunityEditor: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     var community: Community? = nil
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -115,6 +117,7 @@ struct CommunityEditor: View {
     @State private var busy = false
     @State private var error: String?
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             Form {
                 TextField("社群名称", text: $name)
@@ -153,7 +156,7 @@ struct CommunityEditor: View {
 }
 
 struct CommunityManageView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let community: Community
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -172,6 +175,7 @@ struct CommunityManageView: View {
     @State private var more = false
     private var base: String { "/communities/\(community.id)" }
     var body: some View {
+        let _ = appLocale
         List {
             Picker("社群内容", selection: $tab) {
                 Text("成员").tag("members"); Text("公告").tag("announcements")

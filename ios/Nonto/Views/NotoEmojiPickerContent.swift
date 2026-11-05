@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct NotoEmojiPickerContent: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Bindable var browser: NotoEmojiBrowser
     let onSend: (NotoEmoji) -> Bool
     @Environment(\.dismiss) private var dismiss
@@ -12,6 +12,7 @@ struct NotoEmojiPickerContent: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             VStack(spacing: 0) {
                 NotoEmojiSearchField(text: $browser.query, focus: $searchFocused)
@@ -100,11 +101,12 @@ struct NotoEmojiPickerContent: View {
 }
 
 struct NotoEmojiSearchField: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Binding var text: String
     let focus: FocusState<Bool>.Binding
     var prompt = AppLocalization.string("搜索名称、关键词或 emoji")
     var body: some View {
+        let _ = appLocale
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
             TextField(prompt, text: $text)
@@ -123,7 +125,7 @@ struct NotoEmojiSearchField: View {
 }
 
 struct NotoEmojiScopeStrip: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let scopes: [NotoEmojiScope]
     let active: NotoEmojiScope?
@@ -131,6 +133,7 @@ struct NotoEmojiScopeStrip: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 20
     var body: some View {
+        let _ = appLocale
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 HStack(spacing: 4) {
@@ -180,7 +183,7 @@ struct ExpressionPickerSelection: ViewModifier {
 }
 
 struct NotoEmojiGrid: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let items: [NotoEmoji]
     let selectedID: String?
     let favorites: Set<String>
@@ -191,6 +194,7 @@ struct NotoEmojiGrid: View {
     var onUseAsSticker: ((NotoEmoji) -> Void)? = nil
     @ScaledMetric(relativeTo: .body) private var cellSize: CGFloat = 56
     var body: some View {
+        let _ = appLocale
         LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 6)], spacing: 6) {
             ForEach(items) { item in
                 NotoEmojiTile(item: item, selected: selectedID == item.id, favorite: favorites.contains(item.id),
@@ -203,7 +207,7 @@ struct NotoEmojiGrid: View {
 }
 
 private struct NotoEmojiTile: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: NotoEmoji
     let selected: Bool
     let favorite: Bool
@@ -214,6 +218,7 @@ private struct NotoEmojiTile: View {
     var systemGlyphs = false
     var onUseAsSticker: (() -> Void)? = nil
     var body: some View {
+        let _ = appLocale
         Button(action: onSelect) {
             Group {
                 if systemGlyphs { Text(item.emoji).font(.system(size: min(cellSize * 0.72, 60))) }
@@ -246,7 +251,7 @@ private struct NotoEmojiTile: View {
 }
 
 private struct NotoEmojiSelectionBar: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: NotoEmoji
     let favorite: Bool
     let canFavorite: Bool
@@ -257,6 +262,7 @@ private struct NotoEmojiSelectionBar: View {
     let onSend: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicType
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 8) {
             if dynamicType.isAccessibilitySize {
                 HStack(spacing: 12) { image; name; favoriteButton }

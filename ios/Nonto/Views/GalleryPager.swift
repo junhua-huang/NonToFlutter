@@ -4,7 +4,7 @@ import UIKit
 /// Keep page controllers alive throughout the interactive transition. SwiftUI only
 /// receives the selected index after UIKit has finished (or cancelled) the swipe.
 struct GalleryPager: UIViewControllerRepresentable {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let images: [String]
     let index: Int
     var animated = true
@@ -17,6 +17,7 @@ struct GalleryPager: UIViewControllerRepresentable {
         GalleryPagerController(images: images, initial: index)
     }
     func updateUIViewController(_ controller: GalleryPagerController, context: Context) {
+        _ = appLocale
         controller.onSelect = onSelect; controller.onTransition = onTransition
         controller.onTap = onTap; controller.onLoaded = onLoaded; controller.onDismiss = onDismiss
         controller.show(images: images, index: index, animated: animated)

@@ -261,13 +261,13 @@ final class LocalizationTests: XCTestCase {
 }
 
 private struct LiveLanguageStateView: View {
-    // Deliberately unused in body: AppStorage must invalidate imperative labels
-    // just as it does throughout the real screens, without replacing State.
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    // Read the injected locale as the real screens do, preserving the same State storage.
+    @Environment(\.locale) private var appLocale
     @State private var draft = ""
     @State private var identity = UUID()
     let probe: LiveLanguageProbe
     var body: some View {
+        let _ = appLocale
         let _ = record()
         TextField("消息内容", text: $draft).accessibilityIdentifier("language.test.draft")
             .onAppear { probe.editDraft = { draft = $0 } }

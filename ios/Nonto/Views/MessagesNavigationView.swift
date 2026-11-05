@@ -3,7 +3,7 @@ import SwiftUI
 /// One split container owns the selection across window and orientation changes.
 /// The system collapses it to a normal push navigation on narrow displays.
 struct MessagesNavigationView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @ObservedObject var session: AppSession
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var detailNavigation = AppNavigation()
@@ -35,6 +35,7 @@ struct MessagesNavigationView: View {
     }
 
     var body: some View {
+        let _ = appLocale
         NavigationSplitView(columnVisibility: $visibility, preferredCompactColumn: preferredColumn) {
             NavigationStack {
                 // A narrow sidebar can itself report compact even while the

@@ -2,20 +2,23 @@ import SwiftUI
 
 /// Button tint and selection colors never replace a sticker's original pixels.
 struct StickerArtwork: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let image: UIImage
-    var body: some View { Image(uiImage: image).renderingMode(.original).resizable().scaledToFit() }
+    var body: some View {
+        let _ = appLocale
+        Image(uiImage: image).renderingMode(.original).resizable().scaledToFit() }
 }
 
 /// Preserve alpha and the entire image; stickers have no photo crop or bubble fill.
 struct ChatStickerImage: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let url: String
     @Environment(\.displayScale) private var displayScale
     @State private var loaded: (url: String, image: UIImage)?
     @State private var failed = false
     @State private var retry = 0
     var body: some View {
+        let _ = appLocale
         Group {
             if let loaded, loaded.url == url { StickerArtwork(image: loaded.image).accessibilityLabel("贴纸") }
             else if failed {

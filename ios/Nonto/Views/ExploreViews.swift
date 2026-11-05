@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ExploreView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @State private var query = ""
     @State private var submitted = ""
@@ -12,6 +12,7 @@ struct ExploreView: View {
     @State private var queryError: String?
     @State private var clearingHistory = false
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 0) {
             if queryError != nil { ErrorBanner(text: queryError).padding(.horizontal) }
             if !submitted.isEmpty {
@@ -84,7 +85,7 @@ struct ExploreView: View {
 
 
 struct SearchHistorySection: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let history: [String]
     let clearing: Bool
@@ -92,6 +93,7 @@ struct SearchHistorySection: View {
     let reuse: (String) -> Void
     let clear: () -> Void
     var body: some View {
+        let _ = appLocale
         Section {
             ForEach(history, id: \.self) { item in
                 HStack(spacing: 8) {
@@ -121,7 +123,7 @@ struct SearchHistorySection: View {
 }
 
 struct SearchResultsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     let kind: String
     @StateObject private var posts: PagedResource<Post>
@@ -140,6 +142,7 @@ struct SearchResultsView: View {
         return resource
     }
     var body: some View {
+        let _ = appLocale
         List {
             if kind == "posts" {
                 ForEach(posts.items) { PostCard(post: $0).timelinePostRow() }; ResourceFooter(resource: posts, emptyTitle: "没有找到相关动态", emptyDescription: "试试其他关键词，或切换搜索类型。", emptyIcon: "magnifyingglass")
@@ -159,7 +162,7 @@ struct SearchResultsView: View {
 }
 
 struct TopicDetailView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let topic: Topic
     @EnvironmentObject private var session: AppSession
     @State private var following = false
@@ -172,6 +175,7 @@ struct TopicDetailView: View {
         _following = State(initialValue: topic.raw["is_following"].bool)
     }
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 0) {
             if !topic.raw["description"].string.isEmpty { Text(topic.raw["description"].string).font(.subheadline).foregroundStyle(.secondary).padding() }
             if error != nil { ErrorBanner(text: error) }
@@ -203,11 +207,12 @@ struct TopicDetailView: View {
 }
 
 struct FollowedTopicsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<Topic>
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/topics/followed", keys: ["topics", "items"], userID: session.user?.id ?? 0)) }
     var body: some View {
+        let _ = appLocale
         List { ForEach(resource.items) { topic in RouteButton(.topic(topic)) { Text("#\(topic.name)") } }; ResourceFooter(resource: resource) }
             .onReceive(session.$topicRevision.dropFirst()) { _ in Task { await resource.load(reset: true) } }
             .navigationTitle("我的话题").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
@@ -215,7 +220,7 @@ struct FollowedTopicsView: View {
 }
 
 struct NotificationsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<Notice>
@@ -228,6 +233,7 @@ struct NotificationsView: View {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/notifications/", keys: ["notifications", "items"], userID: session.user?.id ?? 0))
     }
     var body: some View {
+        let _ = appLocale
         List {
             ErrorBanner(text: error)
             ForEach(resource.items) { notice in
@@ -282,13 +288,14 @@ struct NotificationsView: View {
 }
 
 struct NoticeDestination: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let notice: Notice
     @EnvironmentObject private var session: AppSession
     @State private var postID: Int?
     @State private var resolved = false
     @State private var error: String?
     var body: some View {
+        let _ = appLocale
         Group {
             if notice.raw["notification_type"].or(notice.raw["type"]).string.hasPrefix("friend_") { FriendsView(session: session) }
             else if !resolved { ProgressView("正在打开通知…") }

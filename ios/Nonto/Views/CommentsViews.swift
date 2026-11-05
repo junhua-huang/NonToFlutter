@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PostDetailView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let postID: Int
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +20,7 @@ struct PostDetailView: View {
         _comments = State(initialValue: CommentsStore(api: session.api, postID: postID, userID: session.user?.id ?? 0))
     }
     var body: some View {
+        let _ = appLocale
         ScrollViewReader { proxy in
             List {
                 if let post {
@@ -139,11 +140,12 @@ struct PostDetailView: View {
 }
 
 private struct CommentComposer: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @Bindable var store: CommentsStore
     var focused: FocusState<Bool>.Binding
     var body: some View {
+        let _ = appLocale
         VStack(alignment: .leading, spacing: 8) {
             if let reply = store.reply {
                 HStack(alignment: .top, spacing: 10) {
@@ -182,7 +184,7 @@ private struct CommentComposer: View {
 }
 
 private struct CommentItemRow: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let comment: Comment
     let nested: Bool
@@ -196,6 +198,7 @@ private struct CommentItemRow: View {
     let onDelete: () -> Void
     let onReport: () -> Void
     var body: some View {
+        let _ = appLocale
         HStack(alignment: .top, spacing: 10) {
             RouteButton(.profile(comment.author.id)) {
                 AvatarView(url: comment.author.avatar, name: comment.author.name, size: nested ? 28 : 36)

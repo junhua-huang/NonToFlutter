@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PushDestinationView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let route: PushRoute
     @EnvironmentObject private var session: AppSession
     @State private var conversation: Conversation?
@@ -9,6 +9,7 @@ struct PushDestinationView: View {
     @State private var error: String?
     @State private var attempt = 0
     var body: some View {
+        let _ = appLocale
         Group {
             if route.recipientID != session.user?.id {
                 ContentUnavailableView("此通知属于其他账号", systemImage: "person.crop.circle.badge.exclamationmark")

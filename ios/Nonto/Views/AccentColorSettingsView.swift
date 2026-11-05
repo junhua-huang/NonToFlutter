@@ -3,12 +3,13 @@ import UIKit
 
 /// Match the theme picker: the system owns presentation, selection and dismissal.
 struct AccentColorMenu: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Binding var selection: AppAccent
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
+        let _ = appLocale
         Picker("强调色", selection: $selection) {
             ForEach(AppAccent.allCases) { option in
                 Label { Text(option.name) } icon: {
@@ -31,13 +32,14 @@ struct AccentColorMenu: View {
 }
 
 struct AccentColorOptions: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Binding var selection: AppAccent
     @Environment(\.dismiss) private var dismiss
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .body) private var swatchSize: CGFloat = 14
 
     var body: some View {
+        let _ = appLocale
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(AppAccent.allCases) { option in
@@ -65,10 +67,11 @@ struct AccentColorOptions: View {
 }
 
 struct AccentColorSettingsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @AppStorage(AppAccent.storageKey) private var selection = AppAccent.blue
 
     var body: some View {
+        let _ = appLocale
         Form {
             Section {
                 AccentColorMenu(selection: $selection)
@@ -84,11 +87,12 @@ struct AccentColorSettingsView: View {
 }
 
 private struct AccentColorPreview: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var dynamicType
     let accent: AppAccent
 
     var body: some View {
+        let _ = appLocale
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "sparkles").font(.title3).foregroundStyle(accent.symbolColor)

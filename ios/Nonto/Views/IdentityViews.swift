@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct IdentityCenterView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var applications: [JSON] = []
@@ -12,6 +12,7 @@ struct IdentityCenterView: View {
     @State private var page = 1
     @State private var more = false
     var body: some View {
+        let _ = appLocale
         List {
             Section { Button("申请认证身份", systemImage: "checkmark.seal") { applying = true } }
             Section("申请记录") {
@@ -39,7 +40,7 @@ struct IdentityCenterView: View {
     }
 }
 struct IdentityApplicationView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
     @State private var roles: [JSON] = []
@@ -52,6 +53,7 @@ struct IdentityApplicationView: View {
     @State private var error: String?
     @State private var busy = false
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             Form {
                 Picker("申请身份", selection: $role) { ForEach(Array(roles.enumerated()), id: \.offset) { _, row in Text(row["label"].string).tag(row["name"].string) } }

@@ -2,12 +2,13 @@ import SwiftUI
 import PhotosUI
 
 struct FeedView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @ObservedObject var session: AppSession
     @Environment(\.openComposer) private var compose
     @State private var filter = 1
     private var path: String { filter == 1 ? "/posts/" : "/posts/related-to-me" }
     var body: some View {
+        let _ = appLocale
         PostList(session: session, path: path).id(filter)
         .safeAreaInset(edge: .top, spacing: 0) {
             TimelineTabs(title: AppLocalization.string("动态范围"), tabs: [(1, AppLocalization.string("最新")), (2, AppLocalization.string("与你相关"))], selection: $filter)
@@ -32,7 +33,7 @@ struct FeedView: View {
 }
 
 struct PostList: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @StateObject private var resource: PagedResource<Post>
     @EnvironmentObject private var session: AppSession
     private let header: AnyView?
@@ -46,6 +47,7 @@ struct PostList: View {
         return resource
     }
     var body: some View {
+        let _ = appLocale
         List {
             if session.contentSafetyError != nil { ErrorBanner(text: session.contentSafetyError) }
             if let header { header.listRowInsets(EdgeInsets()).listRowSeparator(.hidden) }
@@ -59,7 +61,7 @@ struct PostList: View {
 }
 
 struct PostCard: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let post: Post
     var detailed = false
     var onComment: (() -> Void)? = nil
@@ -78,6 +80,7 @@ struct PostCard: View {
         self.post = post; self.detailed = detailed; self.onComment = onComment; _current = State(initialValue: post)
     }
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 let thread = PostThread.items(from: current)

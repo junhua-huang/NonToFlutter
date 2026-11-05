@@ -55,10 +55,11 @@ actor NotoEmojiAnimationCache {
 }
 
 struct NotoEmojiPoster: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: NotoEmoji
     @State private var poster: (id: String, image: UIImage)?
     var body: some View {
+        let _ = appLocale
         Group {
             if let poster, poster.id == item.id {
                 StickerArtwork(image: poster.image)
@@ -78,7 +79,7 @@ struct NotoEmojiPoster: View {
 }
 
 struct NotoEmojiAnimation: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let item: NotoEmoji
     var isActive = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -86,6 +87,7 @@ struct NotoEmojiAnimation: View {
     @AppStorage("nonto.native.animated-emoji") private var enabled = true
     @State private var visible = false
     var body: some View {
+        let _ = appLocale
         Group {
             if isActive && enabled && !reduceMotion && phase == .active && visible {
                 LottieView { () async throws -> LottieAnimation? in

@@ -94,7 +94,7 @@ enum GalleryPosition {
     static func clamped(_ index: Int, count: Int) -> Int { count > 0 ? min(max(0, index), count - 1) : 0 }
 }
 struct ImageGallery: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let images: [String]
     @Environment(\.dismiss) private var dismiss
     @State private var index: Int
@@ -110,6 +110,7 @@ struct ImageGallery: View {
         _index = State(initialValue: GalleryPosition.clamped(initial, count: images.count))
     }
     var body: some View {
+        let _ = appLocale
         ZStack {
             Color.black.ignoresSafeArea()
             if images.isEmpty { ContentUnavailableView("图片不可用", systemImage: "photo").foregroundStyle(.white) }
@@ -182,7 +183,7 @@ struct ImageGallery: View {
 private struct GalleryLoadKey: Hashable { let images: [String]; let index: Int }
 private struct SharedImage: Identifiable { let id = UUID(); let image: UIImage }
 private struct ImageShareSheet: UIViewControllerRepresentable {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let image: UIImage
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: [image], applicationActivities: nil)
@@ -190,10 +191,12 @@ private struct ImageShareSheet: UIViewControllerRepresentable {
         controller.popoverPresentationController?.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.midY, width: 1, height: 1)
         return controller
     }
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {
+        _ = appLocale
+        }
 }
 struct ZoomImage: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let url: String
     var onTap: () -> Void = {}
     var onZoom: (Bool) -> Void = { _ in }
@@ -208,6 +211,7 @@ struct ZoomImage: View {
         _loadedURL = State(initialValue: url)
     }
     var body: some View {
+        let _ = appLocale
         Group {
             if let image { ZoomImageSurface(image: image, onTap: onTap, onZoom: onZoom).id(url) }
             else if failed {
@@ -228,12 +232,13 @@ struct ZoomImage: View {
     }
 }
 struct ZoomImageSurface: UIViewRepresentable {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let image: UIImage
     var onTap: () -> Void = {}
     var onZoom: (Bool) -> Void = { _ in }
     func makeUIView(context: Context) -> ImageScrollView { ImageScrollView() }
     func updateUIView(_ view: ImageScrollView, context: Context) {
+        _ = appLocale
         view.onTap = onTap; view.onZoom = onZoom; view.refreshAccessibility(); view.display(image, preservingViewport: true)
     }
 }

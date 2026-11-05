@@ -13,7 +13,7 @@ private struct ChatTabBarVisibility: ViewModifier {
 }
 
 struct MessagesView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
@@ -29,6 +29,7 @@ struct MessagesView: View {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
     }
     var body: some View {
+        let _ = appLocale
         List {
             ForEach(resource.items) { conversation in
                 RouteButton(.chat(conversation)) {
@@ -68,14 +69,16 @@ struct MessagesView: View {
 }
 
 struct ChatRoomView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let conversation: Conversation
     @EnvironmentObject private var session: AppSession
-    var body: some View { ChatRoomContent(session: session, conversation: conversation) }
+    var body: some View {
+        let _ = appLocale
+        ChatRoomContent(session: session, conversation: conversation) }
 }
 
 struct ChatRoomContent: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let conversation: Conversation
     private let onMessageFrame: ((String, CGRect) -> Void)?
     private let onViewportMetrics: ((ChatViewportMetrics) -> Void)?
@@ -126,6 +129,7 @@ struct ChatRoomContent: View {
         socket = session.socket
     }
     var body: some View {
+        let _ = appLocale
         chatContent.overlayPreferenceValue(ChatAttachmentSourcePreference.self) { anchor in
             if let anchor {
                 GeometryReader { geometry in
@@ -470,7 +474,7 @@ private struct ChatMessageFrameObservation: ViewModifier {
 }
 
 struct SharePostView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let post: Post
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
@@ -483,6 +487,7 @@ struct SharePostView: View {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
     }
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             List {
                 ErrorBanner(text: error)
@@ -523,7 +528,7 @@ private enum ChatComposerDrawer: Identifiable {
 
 /// Only this subtree observes keystrokes and attachment selection.
 struct ChatComposerInput: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     @Bindable var store: ChatStore
     @Bindable var stickerSender: ChatStickerSender
@@ -571,6 +576,7 @@ struct ChatComposerInput: View {
         _stagedSticker = State(initialValue: initialSticker)
     }
     var body: some View {
+        let _ = appLocale
         VStack(alignment: .leading, spacing: 6) {
             composerContent
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }

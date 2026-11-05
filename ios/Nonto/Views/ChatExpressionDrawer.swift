@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ChatExpressionDrawer: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
     let accountID: Int
     let api: APIClient
@@ -50,6 +50,7 @@ struct ChatExpressionDrawer: View {
         notoBrowser.show(.all); _noto = State(initialValue: notoBrowser)
     }
     var body: some View {
+        let _ = appLocale
         VStack(spacing: 0) {
             sourceBar
             if searchOpen {
@@ -284,10 +285,11 @@ private struct RecentSticker: Identifiable {
 }
 
 struct ChatStagedStickerImage: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let sticker: StagedChatSticker
     var animated = true
     var body: some View {
+        let _ = appLocale
         Group {
             if let item = sticker.notoEmoji {
                 if animated { NotoEmojiAnimation(item: item) } else { NotoEmojiPoster(item: item) }

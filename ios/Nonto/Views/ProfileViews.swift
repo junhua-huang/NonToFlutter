@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let userID: Int
     @EnvironmentObject private var session: AppSession
     @State private var person: Person?
@@ -24,6 +24,7 @@ struct ProfileView: View {
     @State private var canRequestAccess = false
     private var isOwn: Bool { session.user?.id == userID }
     var body: some View {
+        let _ = appLocale
         Group {
             if isBlocked {
                 ContentUnavailableView {
@@ -234,7 +235,7 @@ extension Conversation: Hashable {
 }
 
 struct EditProfileView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
@@ -245,6 +246,7 @@ struct EditProfileView: View {
     @State private var busy = false
     @State private var error: String?
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             Form {
                 Section("基本信息") { TextField("显示名称", text: $name); TextField("介绍一下自己", text: $bio, axis: .vertical).lineLimit(3...8) }
@@ -288,7 +290,7 @@ struct FriendRequestRecord: Record {
     }
 }
 struct FriendsView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     @EnvironmentObject private var session: AppSession
     @StateObject private var friends: PagedResource<Person>
     @StateObject private var requests: PagedResource<FriendRequestRecord>
@@ -300,6 +302,7 @@ struct FriendsView: View {
         _requests = StateObject(wrappedValue: FriendRequestRecord.received(api: session.api, userID: uid))
     }
     var body: some View {
+        let _ = appLocale
         List {
             ErrorBanner(text: error)
             Section("好友申请") {
@@ -329,7 +332,7 @@ struct FriendsView: View {
 }
 
 struct ReportView: View {
-    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @Environment(\.locale) private var appLocale
     let kind: String
     let targetID: Int
     @EnvironmentObject private var session: AppSession
@@ -341,6 +344,7 @@ struct ReportView: View {
         self.kind = kind; self.targetID = targetID; _reason = State(initialValue: context)
     }
     var body: some View {
+        let _ = appLocale
         NavigationStack {
             Form {
                 Section("举报原因") {
