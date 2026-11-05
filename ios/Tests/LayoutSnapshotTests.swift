@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import UIKit
+import GameController
 @testable import Nonto
 
 @MainActor private final class ComposerLaunchState: ObservableObject {
@@ -340,7 +341,18 @@ final class LayoutSnapshotTests: XCTestCase {
         // SwiftUI may replace the platform text control when editing ends. Query
         // the mounted composer at every stage instead of measuring a stale view.
         func currentField() -> UIView? {
-            descendants(of: controller.view).first { ($0 is UITextView || $0 is UITextField) && $0.window === window }
+            let fields = descendants(of: controller.view).filter { field in
+                guard (field is UITextView || field is UITextField), field.window === window,
+                      field.bounds.width > 0, field.bounds.height > 0,
+                      field.convert(field.bounds, to: window).intersects(window.bounds) else { return false }
+                var ancestor: UIView? = field
+                while let view = ancestor {
+                    if view.isHidden || view.alpha < 0.01 { return false }
+                    ancestor = view.superview
+                }
+                return true
+            }
+            return fields.first(where: { $0.isFirstResponder }) ?? fields.first
         }
         try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "before-keyboard")
         // Measure the resting baseline after the initial navigation and all six
@@ -349,10 +361,21 @@ final class LayoutSnapshotTests: XCTestCase {
         let unfocusedComposerY = field.convert(field.bounds, to: window).minY
         print("Chat resting composer y=\(unfocusedComposerY), safeArea=\(window.safeAreaInsets)")
         for cycle in 1...2 {
-            XCTAssertTrue(try XCTUnwrap(currentField()).becomeFirstResponder())
-            try await waitForComposer("keyboard presentation resizes the chat viewport") {
-                guard let field = currentField() else { return false }
-                return field.isFirstResponder && field.convert(field.bounds, to: window).minY < unfocusedComposerY - 120
+            // Use the same SwiftUI focus binding as a user activating the input.
+            // Focusing a platform proxy directly can bypass the binding or target
+            // a hidden control that is being replaced by the multiline TextField.
+            try XCTUnwrap(frames.inputActions).focus()
+            var presentationGeometry = "composer missing"
+            do {
+                try await waitForComposer("keyboard presentation resizes the chat viewport") {
+                    guard let field = currentField() else { return false }
+                    let y = field.convert(field.bounds, to: window).minY
+                    presentationGeometry = "\(type(of: field)), focused=\(field.isFirstResponder), y=\(y), baseline=\(unfocusedComposerY)"
+                    return field.isFirstResponder && y < unfocusedComposerY - 120
+                }
+            } catch {
+                print("Chat keyboard presentation \(cycle): \(presentationGeometry), hardwareKeyboard=\(GCKeyboard.coalesced != nil), keyWindow=\(window.isKeyWindow), scene=\(scene.activationState.rawValue)")
+                throw error
             }
             let focusedField = try XCTUnwrap(currentField())
             XCTAssertTrue(focusedField.isFirstResponder)

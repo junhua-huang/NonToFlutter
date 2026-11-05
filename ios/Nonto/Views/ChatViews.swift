@@ -79,6 +79,7 @@ struct ChatRoomView: View {
 
 /// Native interaction fixtures use the same commands as timeline gestures.
 struct ChatInputActions {
+    let focus: () -> Void
     let dismiss: () -> Void
 }
 
@@ -293,7 +294,7 @@ struct ChatRoomContent: View {
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
-        .onAppear { onInputActions?(ChatInputActions(dismiss: dismissInput)) }
+        .onAppear { onInputActions?(ChatInputActions(focus: { composerFocused = true }, dismiss: dismissInput)) }
         .task {
             visible = true
             if phase == .active { await store.activate() }
