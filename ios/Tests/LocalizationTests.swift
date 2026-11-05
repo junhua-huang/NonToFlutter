@@ -86,12 +86,14 @@ final class LocalizationTests: XCTestCase {
 
     func testSelectedLanguageScreensAtNarrowAndLargeTextSizes() async throws {
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
-        StubProtocol.handler = { _ in (200, .object(["blocked_users": .array([]), "has_more": .bool(false)])) }
+        StubProtocol.handler = { _ in (200, .object(["blocks": .array([]), "posts": .array([]), "has_more": .bool(false)])) }
         defer { StubProtocol.handler = nil }
         let api = APIClient(baseURL: URL(string: "https://localization.example.test/api")!, session: URLSession(configuration: config), credentials: MemoryCredentials())
         let session = AppSession(api: api); session.restoring = false
         defer { try? LocalCache.clear(userID: 970091) }
         session.user = Person(.object(["id": .id(970091), "username": .text("原文_Original"), "display_name": .text("原文 Original")]))
+        await session.refreshContentSafety()
+        XCTAssertNil(session.contentSafetyError)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let screens: [(String, AnyView)] = [
