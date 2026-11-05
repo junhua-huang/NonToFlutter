@@ -319,7 +319,9 @@ final class LayoutSnapshotTests: XCTestCase {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 414, height: 896)
+        // Interactive keyboard coordinates belong to the real device scene.
+        // Fixed screenshot dimensions can leave the keyboard safe area stale.
+        window.frame = scene.coordinateSpace.bounds
         window.overrideUserInterfaceStyle = .dark
         let frames = ChatReplayFrames()
         let controller = UIHostingController(rootView: AnyView(ChatKeyboardHarness(session: session, conversation: room, store: store, frames: frames)
