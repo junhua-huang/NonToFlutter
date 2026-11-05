@@ -350,7 +350,10 @@ final class LayoutSnapshotTests: XCTestCase {
         print("Chat resting composer y=\(unfocusedComposerY), safeArea=\(window.safeAreaInsets)")
         for cycle in 1...2 {
             XCTAssertTrue(try XCTUnwrap(currentField()).becomeFirstResponder())
-            try await Task.sleep(for: .milliseconds(400))
+            try await waitForComposer("keyboard presentation resizes the chat viewport") {
+                guard let field = currentField() else { return false }
+                return field.isFirstResponder && field.convert(field.bounds, to: window).minY < unfocusedComposerY - 120
+            }
             let focusedField = try XCTUnwrap(currentField())
             XCTAssertTrue(focusedField.isFirstResponder)
             XCTAssertLessThan(focusedField.convert(focusedField.bounds, to: window).minY, unfocusedComposerY - 120,
