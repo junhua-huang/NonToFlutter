@@ -47,7 +47,7 @@ import Observation
             }
             try Task.checkCancellation()
             guard revision == ticket, isValid() else { return false }
-            guard enqueue(sticker, caption, quoteID) else { error = "无法加入发送队列，贴纸和文字已保留，请重试。"; return false }
+            guard enqueue(sticker, caption, quoteID) else { error = String(localized: "无法加入发送队列，贴纸和文字已保留，请重试。"); return false }
             acceptedID = staged.id
             switch staged.source {
             case .saved(let item): try? ChatStickerLibrary(accountID: accountID, defaults: defaults).recordUse(item.id)

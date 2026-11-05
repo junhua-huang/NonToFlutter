@@ -75,7 +75,7 @@ struct PostBodyText: View {
                         RouteButton(route) { visibleText }.accessibilityLabel("查看动态：\(content)")
                     } else { visibleText.textSelection(.enabled) }
                     if expanded || canExpand {
-                        Button(expanded ? "收起" : "显示更多") { expanded.toggle() }
+                        Button(expanded ? String(localized: "收起") : String(localized: "显示更多")) { expanded.toggle() }
                             .font(.subheadline).foregroundStyle(accent.textColor).buttonStyle(.plain)
                             .frame(minHeight: 28, alignment: .leading)
                     }

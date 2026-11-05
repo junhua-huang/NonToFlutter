@@ -65,7 +65,7 @@ struct ComicDetailView: View {
                     Text(event["ticketInfo"].string)
                     if let url = URL(string: event["website"].string), ["http", "https"].contains(url.scheme ?? "") { Link("活动网站", destination: url) }
                     MediaView(images: event["images"].array.map { $0["imageUrl"].string }.filter { !$0.isEmpty }, video: "")
-                    Button(event["isFollowed"].or(event["is_following"]).bool ? "取消关注" : "关注漫展") { Task { await follow() } }.disabled(busy)
+                    Button(event["isFollowed"].or(event["is_following"]).bool ? String(localized: "取消关注") : String(localized: "关注漫展")) { Task { await follow() } }.disabled(busy)
                 }
                 Section("评论") {
                     ForEach(comments) { c in VStack(alignment: .leading, spacing: 6) { Text(c.author.name).font(.caption.bold()); Text(c.content) } }
@@ -159,7 +159,7 @@ struct ComicEditor: View {
                 ErrorBanner(text: error)
                 if busy { ProgressView("正在保存…") }
             }.environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!)
-            .disabled(busy).navigationTitle(event.isNull ? "发布漫展" : "编辑漫展").toolbar {
+            .disabled(busy).navigationTitle(event.isNull ? String(localized: "发布漫展") : String(localized: "编辑漫展")).toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                 ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(busy || name.isEmpty || venue.isEmpty || cityID == 0) }
             }.interactiveDismissDisabled(busy).task {
@@ -179,7 +179,7 @@ struct ComicEditor: View {
     private func save() async {
         busy = true; defer { busy = false }
         do {
-            if !website.isEmpty { guard let u = URL(string: website), ["https", "http"].contains(u.scheme ?? ""), u.host != nil else { throw APIError(status: 0, message: "活动网站格式不正确") } }
+            if !website.isEmpty { guard let u = URL(string: website), ["https", "http"].contains(u.scheme ?? ""), u.host != nil else { throw APIError(status: 0, message: String(localized: "活动网站格式不正确")) } }
             let date = DateFormatter(); date.locale = Locale(identifier: "en_US_POSIX"); date.timeZone = TimeZone(identifier: "Asia/Shanghai"); date.dateFormat = "yyyy-MM-dd"
             let time = DateFormatter(); time.locale = date.locale; time.timeZone = date.timeZone; time.dateFormat = "HH:mm"
             var urls = event["images"].array.map { $0["imageUrl"].string }.filter { !$0.isEmpty }

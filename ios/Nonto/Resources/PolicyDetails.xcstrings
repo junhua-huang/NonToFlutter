@@ -1,0 +1,144 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    "南图服务端数据存储于中国大陆。系统通知通过 Apple APNs 送达，Apple 会处理送达所需的推送标识及通知路由信息，相关服务说明见本政策第五条。": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "南图服务端数据存储于中国大陆。系统通知通过 Apple APNs 送达，Apple 会处理送达所需的推送标识及通知路由信息，相关服务说明见本政策第五条。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "南圖服務端數據存儲於中國大陸。系統通知通過 Apple APNs 送達，Apple 會處理送達所需的推送標識及通知路由資訊，相關服務說明見本政策第五條。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo server data is stored in mainland China. System notifications are delivered through Apple APNs. Apple processes the push identifiers and notification routing information necessary for delivery. See section 5 of this policy for the relevant service information."
+          }
+        }
+      }
+    },
+    "服务器托管：南图使用阿里云服务器承载后端服务，涉及账号资料、动态、评论、消息及网络请求等数据，用于提供账号、内容、交流和服务安全功能。南图服务端数据存储于中国大陆。阿里云法律声明及隐私权政策：https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html 。\n\n验证码邮件：使用腾讯邮件服务，通过 SMTP 发送注册、登录及密码操作所需的验证码。涉及收件邮箱、验证码邮件内容和投递所需信息，不用于无关营销。腾讯隐私保护平台：https://privacy.qq.com/ 。\n\n媒体存储与审核：南图媒体上传接口使用腾讯云 COS 保存和提供所选图片、视频，涉及文件内容、对象路径和资源访问请求。图片审核通过服务端设置控制；启用时将所选图片交由腾讯云数据万象审核并取得结果。腾讯云隐私政策：https://cloud.tencent.com/document/product/301/11470 。\n\nApple 系统服务：APNs 用于推送，系统照片选择器用于选择文件，分享和外部应用按你的操作处理内容。Apple 隐私政策：https://www.apple.com/legal/privacy/szh/ 。南图客户端不因此取得你的 Apple 账户密码或整个相册。\n\nCDN：南图未使用 CDN 加速服务。": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器托管：南图使用阿里云服务器承载后端服务，涉及账号资料、动态、评论、消息及网络请求等数据，用于提供账号、内容、交流和服务安全功能。南图服务端数据存储于中国大陆。阿里云法律声明及隐私权政策：https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html 。\n\n验证码邮件：使用腾讯邮件服务，通过 SMTP 发送注册、登录及密码操作所需的验证码。涉及收件邮箱、验证码邮件内容和投递所需信息，不用于无关营销。腾讯隐私保护平台：https://privacy.qq.com/ 。\n\n媒体存储与审核：南图媒体上传接口使用腾讯云 COS 保存和提供所选图片、视频，涉及文件内容、对象路径和资源访问请求。图片审核通过服务端设置控制；启用时将所选图片交由腾讯云数据万象审核并取得结果。腾讯云隐私政策：https://cloud.tencent.com/document/product/301/11470 。\n\nApple 系统服务：APNs 用于推送，系统照片选择器用于选择文件，分享和外部应用按你的操作处理内容。Apple 隐私政策：https://www.apple.com/legal/privacy/szh/ 。南图客户端不因此取得你的 Apple 账户密码或整个相册。\n\nCDN：南图未使用 CDN 加速服务。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "伺服器托管：南圖使用阿里雲伺服器承載後端服務，涉及帳號資料、動態、評論、消息及網路請求等數據，用於提供帳號、內容、交流和服務安全功能。南圖服務端數據存儲於中國大陸。阿里雲法律聲明及隱私權政策：https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html 。\n\n驗證碼郵件：使用騰訊郵件服務，通過 SMTP 傳送註冊、登錄及密碼操作所需的驗證碼。涉及收件郵箱、驗證碼郵件內容和投遞所需資訊，不用於無關營銷。騰訊隱私保護平台：https://privacy.qq.com/ 。\n\n媒體存儲與審核：南圖媒體上傳接口使用騰訊雲 COS 保存和提供所選圖片、影片，涉及文件內容、對象路徑和資源訪問請求。圖片審核通過服務端設置控制；啓用時將所選圖片交由騰訊雲數據萬象審核並取得結果。騰訊雲隱私政策：https://cloud.tencent.com/document/product/301/11470 。\n\nApple 系統服務：APNs 用於推送，系統照片選擇器用於選擇文件，分享和外部應用按你的操作處理內容。Apple 隱私政策：https://www.apple.com/legal/privacy/szh/ 。南圖客戶端不因此取得你的 Apple 賬戶密碼或整個相簿。\n\nCDN：南圖未使用 CDN 加速服務。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server hosting: NonTo uses Alibaba Cloud servers for backend services. Data includes account profiles, posts, comments, messages and network requests, to provide account, content, communication and service security features. NonTo server data is stored in mainland China. Alibaba Cloud legal statement and privacy policy: https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html .\n\nVerification emails: Tencent email services send verification codes for registration, sign-in and password operations through SMTP. This involves recipient email addresses, verification email content and delivery information, not unrelated marketing. Tencent Privacy Protection Platform: https://privacy.qq.com/ .\n\nMedia storage and moderation: NonTo’s media upload interface uses Tencent Cloud COS to store and serve selected images and videos, involving file contents, object paths and resource requests. Image moderation is controlled by server settings. When enabled, selected images are submitted to Tencent Cloud Cloud Infinite for review and results. Tencent Cloud privacy policy: https://cloud.tencent.com/document/product/301/11470 .\n\nApple system services: APNs provides push notifications; the system photo picker selects files. Sharing and external apps handle content according to your actions. Apple privacy policy: https://www.apple.com/legal/privacy/szh/ . This does not give the NonTo client your Apple Account password or access to your entire photo library.\n\nCDN: NonTo does not use a CDN acceleration service."
+          }
+        }
+      }
+    },
+    "南图账号与社交服务面向已满14周岁的用户，不向不满14周岁的儿童提供账号与社交服务。已满14周岁但未满18周岁的用户，应与监护人共同阅读服务条款、隐私政策与社区规范，并在监护人同意和指导下使用。\n\n首次使用时，由用户自行选择年龄范围；14至17周岁的用户还需确认已获得监护人同意。这些声明与同意版本保存在本机，用于原生客户端的使用入口，不要求在此填写出生日期或上传身份证件，也不等同于法定实名认证或真实年龄核验。\n\n请勿在公开内容、私信、群聊或认证材料中提交未成年人的无关敏感信息。发现疑似冒用年龄、侵害未成年人权益或不当处理儿童个人信息，可通过应用内举报或 nonto@foxmail.com 联系南图。监护人申请查阅、更正、删除相关信息时，请说明涉及账号、监护关系和具体请求；只提供核对请求所必需的材料，不发送密码、验证码或无关完整证件。发现错误收集不满14周岁儿童信息后，将停止不必要的处理，并核对和处理相应信息及监护人请求。": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "南图账号与社交服务面向已满14周岁的用户，不向不满14周岁的儿童提供账号与社交服务。已满14周岁但未满18周岁的用户，应与监护人共同阅读服务条款、隐私政策与社区规范，并在监护人同意和指导下使用。\n\n首次使用时，由用户自行选择年龄范围；14至17周岁的用户还需确认已获得监护人同意。这些声明与同意版本保存在本机，用于原生客户端的使用入口，不要求在此填写出生日期或上传身份证件，也不等同于法定实名认证或真实年龄核验。\n\n请勿在公开内容、私信、群聊或认证材料中提交未成年人的无关敏感信息。发现疑似冒用年龄、侵害未成年人权益或不当处理儿童个人信息，可通过应用内举报或 nonto@foxmail.com 联系南图。监护人申请查阅、更正、删除相关信息时，请说明涉及账号、监护关系和具体请求；只提供核对请求所必需的材料，不发送密码、验证码或无关完整证件。发现错误收集不满14周岁儿童信息后，将停止不必要的处理，并核对和处理相应信息及监护人请求。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "南圖帳號與社交服務面向已滿14週歲的使用者，不向不滿14週歲的兒童提供帳號與社交服務。已滿14週歲但未滿18週歲的使用者，應與監護人共同閱讀服務條款、隱私政策與社區規範，並在監護人同意和指導下使用。\n\n首次使用時，由使用者自行選擇年齡範圍；14至17週歲的使用者還需確認已獲得監護人同意。這些聲明與同意版本保存在本機，用於原生客戶端的使用入口，不要求在此填寫出生日期或上傳身份證件，也不等同於法定實名認證或真實年齡核驗。\n\n請勿在公開內容、私信、群聊或認證材料中提交未成年人的無關敏感資訊。發現疑似冒用年齡、侵害未成年人權益或不當處理兒童個人資訊，可通過應用內舉報或 nonto@foxmail.com 聯繫南圖。監護人申請查閱、更正、刪除相關資訊時，請說明涉及帳號、監護關係和具體請求；只提供核對請求所必需的材料，不傳送密碼、驗證碼或無關完整證件。發現錯誤收集不滿14週歲兒童資訊後，將停止不必要的處理，並核對和處理相應資訊及監護人請求。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo account and social services are for people aged 14 or older and are not offered to children under 14. People aged 14–17 should read the Terms of Service, Privacy Policy and Community Guidelines with a guardian and use the service with their consent and guidance.\n\nAt first use, users select an age range themselves. Those aged 14–17 must also confirm guardian consent. These declarations and the consent version are saved on this device to control entry to native account services. Date of birth and identity documents are not requested here. This is not statutory real-name or actual age verification.\n\nDo not submit unrelated sensitive information about minors through public content, private messages, group chats or verification materials. Report suspected false age declarations, harm to minors’ rights or improper processing of children’s information in the app or at nonto@foxmail.com. Guardians requesting access, correction or deletion should identify the account, guardianship relationship and specific request. Provide only material needed to verify the request, without passwords, verification codes or unrelated full identity documents. If erroneous collection of information about children under 14 is discovered, unnecessary processing will stop and the relevant information and guardian requests will be checked and handled."
+          }
+        }
+      }
+    },
+    "当前账号注册和登录使用邮箱验证码或密码，不收集身份证件进行法定真实身份认证。角色或创作者认证仅审核相应申请，不等同于法定实名认证。邮箱验证不能替代依法需要的真实身份认证。": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前账号注册和登录使用邮箱验证码或密码，不收集身份证件进行法定真实身份认证。角色或创作者认证仅审核相应申请，不等同于法定实名认证。邮箱验证不能替代依法需要的真实身份认证。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "當前帳號註冊和登錄使用郵箱驗證碼或密碼，不收集身份證件進行法定真實身份認證。角色或創作者認證僅審核相應申請，不等同於法定實名認證。郵箱驗證不能替代依法需要的真實身份認證。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current account registration and sign-in use email verification codes or passwords. Identity documents are not collected for statutory real-name verification. Role or creator verification reviews only the relevant application and is not statutory real-name verification. Email verification cannot replace real-name verification required by law."
+          }
+        }
+      }
+    },
+    "个人信息权利申请由黄君华受理，联系邮箱为 nonto@foxmail.com。请说明账号标识、请求类型及范围；与账号有关的请求需进行与请求相称的账号归属核对，请勿发送密码或验证码。\n\n收到请求后7个工作日内首次答复，说明受理情况及需要补充的必要材料，通常在15个工作日内完成处理并反馈结果。需要补充核验材料或因事项复杂无法在该期限内完成的，会在期限届满前说明原因和预计完成时间；适用法律另有更短要求的，按相应要求处理。\n\n不能满足请求时，会说明理由；对结果有异议，可在原邮件中补充事实和理由申请复核。举报处理记录可在应用内查看。工作日按适用的法定工作安排计算。": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "个人信息权利申请由黄君华受理，联系邮箱为 nonto@foxmail.com。请说明账号标识、请求类型及范围；与账号有关的请求需进行与请求相称的账号归属核对，请勿发送密码或验证码。\n\n收到请求后7个工作日内首次答复，说明受理情况及需要补充的必要材料，通常在15个工作日内完成处理并反馈结果。需要补充核验材料或因事项复杂无法在该期限内完成的，会在期限届满前说明原因和预计完成时间；适用法律另有更短要求的，按相应要求处理。\n\n不能满足请求时，会说明理由；对结果有异议，可在原邮件中补充事实和理由申请复核。举报处理记录可在应用内查看。工作日按适用的法定工作安排计算。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個人資訊權利申請由黃君華受理，聯繫郵箱為 nonto@foxmail.com。請說明帳號標識、請求類型及範圍；與帳號有關的請求需進行與請求相稱的帳號歸屬核對，請勿傳送密碼或驗證碼。\n\n收到請求後7個工作日內首次答復，說明受理情況及需要補充的必要材料，通常在15個工作日內完成處理並反饋結果。需要補充核驗材料或因事項複雜無法在該期限內完成的，會在期限屆滿前說明原因和預計完成時間；適用法律另有更短要求的，按相應要求處理。\n\n不能滿足請求時，會說明理由；對結果有異議，可在原郵件中補充事實和理由申請復核。舉報處理記錄可在應用內查看。工作日按適用的法定工作安排計算。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personal data rights requests are received by 黄君华 at nonto@foxmail.com. State your account identifier, request type and scope. Account-related requests require proportionate checks of account ownership. Do not send passwords or verification codes.\n\nAn initial response will be provided within 7 working days of receipt, explaining acceptance and any necessary additional material. Processing and feedback will normally be completed within 15 working days. If further verification is needed or complexity prevents completion within that period, the reasons and expected completion time will be explained before the deadline. Shorter periods required by applicable law take precedence.\n\nIf a request cannot be met, reasons will be provided. To challenge the result, add facts and reasons in the original email to request review. Report history can be viewed in the app. Working days follow the applicable statutory working schedule."
+          }
+        }
+      }
+    },
+    "各类信息的具体保留期限、依法保留范围及备份删除安排尚未公布。如需查询某项信息或提出删除请求，请通过 nonto@foxmail.com 联系南图；请勿将退出登录、卸载应用或清理缓存视为服务器数据已被删除。": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各类信息的具体保留期限、依法保留范围及备份删除安排尚未公布。如需查询某项信息或提出删除请求，请通过 nonto@foxmail.com 联系南图；请勿将退出登录、卸载应用或清理缓存视为服务器数据已被删除。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各類資訊的具體保留期限、依法保留範圍及備份刪除安排尚未公佈。如需查詢某項資訊或提出刪除請求，請通過 nonto@foxmail.com 聯繫南圖；請勿將退出登錄、卸載應用或清理快取視為伺服器數據已被刪除。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Specific retention periods, statutory retention scope and backup deletion arrangements have not yet been published. To ask about information or request deletion, contact NonTo at nonto@foxmail.com. Do not assume signing out, uninstalling the app or clearing caches deletes server data."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

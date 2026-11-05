@@ -9,12 +9,12 @@ enum AppAccent: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var name: String {
         switch self {
-        case .blue: return "南图蓝"
-        case .purple: return "紫色"
-        case .pink: return "柔粉"
-        case .orange: return "橙色"
-        case .green: return "绿色"
-        case .yellow: return "黄色"
+        case .blue: return String(localized: "南图蓝")
+        case .purple: return String(localized: "紫色")
+        case .pink: return String(localized: "柔粉")
+        case .orange: return String(localized: "橙色")
+        case .green: return String(localized: "绿色")
+        case .yellow: return String(localized: "黄色")
         }
     }
 

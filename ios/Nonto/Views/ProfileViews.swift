@@ -28,7 +28,7 @@ struct ProfileView: View {
                 ContentUnavailableView {
                     Label("你已屏蔽此用户", systemImage: "person.slash")
                 } description: {
-                    Text(blockBusy ? "正在同步屏蔽状态…" : "解除屏蔽后，可以重新查看对方的公开内容。")
+                    Text(blockBusy ? String(localized: "正在同步屏蔽状态…") : String(localized: "解除屏蔽后，可以重新查看对方的公开内容。"))
                 } actions: {
                     Button("解除屏蔽") { Task { await setBlocked(false) } }.disabled(blockBusy)
                     ErrorBanner(text: error)
@@ -46,7 +46,7 @@ struct ProfileView: View {
                 }
             } else { profileTimeline }
         }
-            .navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(person?.name ?? (isOwn ? String(localized: "我的主页") : String(localized: "个人主页"))).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if isOwn { RouteButton(.settings) { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
@@ -90,10 +90,10 @@ struct ProfileView: View {
                 // Only change the material, never the navigation bar's visibility or height.
                 if coverVisible != value { coverVisible = value }
             }
-            .navigationTitle(person?.name ?? (isOwn ? "我的主页" : "个人主页")).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(person?.name ?? (isOwn ? String(localized: "我的主页") : String(localized: "个人主页"))).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(person?.name ?? (isOwn ? session.user?.name ?? "我的主页" : "个人主页"))
+                    Text(person?.name ?? (isOwn ? session.user?.name ?? String(localized: "我的主页") : String(localized: "个人主页")))
                         .font(.headline).lineLimit(1)
                         .foregroundStyle(coverVisible ? Color.white : Color.primary)
                 }
@@ -143,14 +143,14 @@ struct ProfileView: View {
                 if error == nil { ProgressView().padding(32) }
                 ErrorBanner(text: error) { Task { await load() } }.padding(.horizontal)
             }
-            TimelineTabs(title: "主页动态类型", tabs: [(false, "动态"), (true, "赞过")], selection: $liked)
+            TimelineTabs(title: String(localized: "主页动态类型"), tabs: [(false, String(localized: "动态")), (true, String(localized: "赞过"))], selection: $liked)
         }.background(Color.timelineBackground)
     }
     private var friendLabel: String {
         switch friendship["status"].string {
-        case "accepted": return "已是好友"
-        case "pending": return friendship["friendship"]["sender_id"].int == session.user?.id ? "取消申请" : "接受申请"
-        default: return "添加好友"
+        case "accepted": return String(localized: "已是好友")
+        case "pending": return friendship["friendship"]["sender_id"].int == session.user?.id ? String(localized: "取消申请") : String(localized: "接受申请")
+        default: return String(localized: "添加好友")
         }
     }
     private func load() async {
@@ -201,7 +201,7 @@ struct ProfileView: View {
             let j = try await session.api.request("/chat/conversations/\(userID)")
             var value = j["conversation"].or(j)
             if value["other_user"].isNull { value["other_user"] = person?.raw ?? .null }
-            guard value["id"].int > 0 else { throw APIError(status: 0, message: "无法打开会话") }
+            guard value["id"].int > 0 else { throw APIError(status: 0, message: String(localized: "无法打开会话")) }
             navigate(.chat(Conversation(value)))
         } catch { self.error = error.localizedDescription }
     }
@@ -248,8 +248,8 @@ struct EditProfileView: View {
                 Section("基本信息") { TextField("显示名称", text: $name); TextField("介绍一下自己", text: $bio, axis: .vertical).lineLimit(3...8) }
                 Section("照片") {
                     if let user = session.user { AvatarView(url: user.avatar, name: user.name, size: 72) }
-                    PhotosPicker("更换头像", selection: $avatar, matching: .images)
-                    PhotosPicker("更换封面", selection: $cover, matching: .images)
+                    PhotosPicker(String(localized: "更换头像"), selection: $avatar, matching: .images)
+                    PhotosPicker(String(localized: "更换封面"), selection: $cover, matching: .images)
                 }.disabled(busy)
                 if busy { ProgressView("正在保存…") }
                 ErrorBanner(text: error)

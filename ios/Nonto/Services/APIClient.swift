@@ -7,7 +7,7 @@ struct APIError: LocalizedError, Equatable {
     var message: String
     var code: String = ""
     var errorDescription: String? { message }
-    static let sessionChanged = APIError(status: 0, message: "登录状态已变化，请重试")
+    static let sessionChanged = APIError(status: 0, message: String(localized: "登录状态已变化，请重试"))
     static func parse(status: Int, data: Data) -> APIError {
         let j = (try? JSON.decode(data)) ?? .null
         let detail = j["detail"]
@@ -15,15 +15,15 @@ struct APIError: LocalizedError, Equatable {
         let text = detail["message"].or(detail.array.first?["msg"] ?? .null).or(j["message"]).string
         var message = text.isEmpty ? detail.string : text
         switch code {
-        case "CONTENT_REJECTED": message = "内容未通过审核"
-        case "MODERATION_UNAVAILABLE": message = "内容审核服务暂不可用，请稍后重试"
-        case "ACCOUNT_DISABLED": message = "账号已停用"
+        case "CONTENT_REJECTED": message = String(localized: "内容未通过审核")
+        case "MODERATION_UNAVAILABLE": message = String(localized: "内容审核服务暂不可用，请稍后重试")
+        case "ACCOUNT_DISABLED": message = String(localized: "账号已停用")
         default:
             if message.isEmpty || ["traceback", "exception", "stack trace", "threshold", "regex"].contains(where: { message.lowercased().contains($0) }) {
-                message = status == 401 ? "登录已过期，请重新登录" : "请求失败（\(status)），请稍后重试"
+                message = status == 401 ? String(localized: "登录已过期，请重新登录") : String(localized: "请求失败（\(status)），请稍后重试")
             }
         }
-        return APIError(status: status, message: message, code: code)
+        return APIError(status: status, message: AppLocalization.serverError(message), code: code)
     }
 }
 
@@ -59,7 +59,7 @@ struct KeychainStore: CredentialStore {
         guard status == errSecSuccess else { throw keychainError(status) }
     }
     private func keychainError(_ status: OSStatus) -> APIError {
-        APIError(status: Int(status), message: "无法访问安全存储，请解锁设备后重试")
+        APIError(status: Int(status), message: String(localized: "无法访问安全存储，请解锁设备后重试"))
     }
 }
 
@@ -139,7 +139,7 @@ final class APIClient: ObservableObject {
             throw error
         }
         if result.data.isEmpty { return .null }
-        guard let json = try? JSON.decode(result.data) else { throw APIError(status: result.status, message: "服务器返回了无法识别的数据") }
+        guard let json = try? JSON.decode(result.data) else { throw APIError(status: result.status, message: String(localized: "服务器返回了无法识别的数据")) }
         return json
     }
     private func refresh(expectedGeneration epoch: UUID) async throws -> String {
@@ -153,7 +153,7 @@ final class APIClient: ObservableObject {
                 throw APIError.parse(status: result.status, data: result.data)
             }
             let json = try JSON.decode(result.data), next = json["access_token"].string
-            guard !next.isEmpty else { throw APIError(status: 502, message: "登录续期失败，请重新登录") }
+            guard !next.isEmpty else { throw APIError(status: 502, message: String(localized: "登录续期失败，请重新登录")) }
             try credentials.write(next); token = next; onTokenRefreshed?()
             return next
         }
@@ -191,18 +191,19 @@ final class APIClient: ObservableObject {
         guard let url = components.url else { throw URLError(.badURL) }
         var request = URLRequest(url: url); request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(AppLocalization.language, forHTTPHeaderField: "Accept-Language")
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         return request
     }
     func upload(_ data: Data, filename: String, mime: String, type: String = "post",
                 progress: (@MainActor @Sendable (Double) -> Void)? = nil) async throws -> String {
-        guard data.count <= 50 * 1024 * 1024 else { throw APIError(status: 0, message: "文件不能超过 50 MB") }
+        guard data.count <= 50 * 1024 * 1024 else { throw APIError(status: 0, message: String(localized: "文件不能超过 50 MB")) }
         let epoch = generation
         let presign = try await request("/upload/presign", method: "POST", body: .object([
             "filename": .text(filename), "file_type": .text((filename as NSString).pathExtension), "upload_type": .text(type)]))
         let link = presign["upload_url"].or(presign["presigned_url"]).or(presign["url"]).string
         guard let url = URL(string: link), url.scheme == "https", url.host != nil else {
-            throw APIError(status: 0, message: "上传地址不可用")
+            throw APIError(status: 0, message: String(localized: "上传地址不可用"))
         }
         // A new request contains only COS's signed URL and content type; no Nonto credentials.
         var put = URLRequest(url: url); put.httpMethod = "PUT"; put.httpBody = data
@@ -215,7 +216,7 @@ final class APIClient: ObservableObject {
         try Task.checkCancellation()
         guard generation == epoch else { throw APIError.sessionChanged }
         guard let http = result.1 as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw APIError(status: 0, message: "文件上传失败，请重试")
+            throw APIError(status: 0, message: String(localized: "文件上传失败，请重试"))
         }
         var publicURL = presign["public_url"].string
         if !presign["cos_key"].string.isEmpty {

@@ -171,11 +171,11 @@ struct ImageGallery: View {
         guard let image = displayImage, !saving else { return }
         saving = true; defer { saving = false }
         let authorization = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard authorization == .authorized || authorization == .limited else { feedback = "请在系统设置中允许南图添加照片"; return }
+        guard authorization == .authorized || authorization == .limited else { feedback = String(localized: "请在系统设置中允许南图添加照片"); return }
         do {
             try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAsset(from: image) }
-            feedback = "已保存到相册"
-        } catch { feedback = "保存失败，请稍后重试" }
+            feedback = String(localized: "已保存到相册")
+        } catch { feedback = String(localized: "保存失败，请稍后重试") }
     }
 }
 private struct GalleryLoadKey: Hashable { let images: [String]; let index: Int }
@@ -245,7 +245,7 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
         delegate = self; backgroundColor = .clear; bouncesZoom = true
         showsHorizontalScrollIndicator = false; showsVerticalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
-        picture.isAccessibilityElement = true; picture.accessibilityLabel = "图片，可双指缩放或双击放大"
+        picture.isAccessibilityElement = true; picture.accessibilityLabel = String(localized: "图片，可双指缩放或双击放大")
         addSubview(picture)
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleZoom(_:)))
         doubleTap.numberOfTapsRequired = 2; addGestureRecognizer(doubleTap)

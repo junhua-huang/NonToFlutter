@@ -94,7 +94,7 @@ enum ChatMessageReferences {
                 patch = ["is_recalled": .bool(true), "content": .text(""), "text": .text(""),
                          "media_url": .null, "file_url": .null, "quote_preview": .text("")]
             } else if recalled.contains(message.raw["quote_message_id"].int) {
-                patch["quote_preview"] = .text("消息已撤回")
+                patch["quote_preview"] = .text(String(localized: "消息已撤回"))
             }
             return patch.isEmpty ? message : ChatMessage(message.raw.merging(.object(patch)))
         }
@@ -113,8 +113,8 @@ struct Notice: Record {
     var raw: JSON
     init(_ raw: JSON) { self.raw = raw }
     var sender: Person { Person(raw["sender"]) }
-    var title: String { raw["title"].string }
-    var content: String { raw["content"].string }
+    var title: String { isSystemNotification ? Bundle.main.localizedString(forKey: raw["title"].string, value: raw["title"].string, table: nil) : raw["title"].string }
+    var content: String { isSystemNotification ? Bundle.main.localizedString(forKey: raw["content"].string, value: raw["content"].string, table: nil) : raw["content"].string }
     var isRead: Bool { raw["is_read"].bool }
     var notificationType: String { raw["notification_type"].or(raw["type"]).string }
     var isSystemNotification: Bool { raw["sender_id"].int == 0 && raw["sender"].isNull }

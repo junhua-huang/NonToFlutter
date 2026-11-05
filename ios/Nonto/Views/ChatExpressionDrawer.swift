@@ -142,7 +142,7 @@ struct ChatExpressionDrawer: View {
     private var emptySearch: some View {
         VStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.title2).foregroundStyle(.tertiary)
-            Text(query.wrappedValue.isEmpty ? "这里还没有内容" : "没有找到相关内容").font(.subheadline).foregroundStyle(.secondary)
+            Text(query.wrappedValue.isEmpty ? String(localized: "这里还没有内容") : String(localized: "没有找到相关内容")).font(.subheadline).foregroundStyle(.secondary)
             if !query.wrappedValue.isEmpty {
                 Button("清除搜索") { query.wrappedValue = ""; searchFocused = false }
                     .font(.subheadline).foregroundStyle(accent.textColor).frame(minHeight: 44)
@@ -192,11 +192,11 @@ struct ChatExpressionDrawer: View {
                 else { Text("最近使用的表情和贴纸会出现在这里。").font(.subheadline).foregroundStyle(.secondary).padding(24) }
             }
             if !textEmoji.isEmpty {
-                sectionHeading("表情符号")
+                sectionHeading(String(localized: "表情符号"))
                 expressionGrid(textEmoji, systemGlyphs: true)
             }
             if !items.isEmpty {
-                sectionHeading("贴纸")
+                sectionHeading(String(localized: "贴纸"))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
                     ForEach(items) { item in stickerTile(item.source) }
                 }
@@ -212,7 +212,7 @@ struct ChatExpressionDrawer: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 if !systemGlyphs && !browser.favoriteIDs.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        sectionHeading("收藏")
+                        sectionHeading(String(localized: "收藏"))
                         expressionGrid(browser.items.filter { browser.favoriteIDs.contains($0.id) }, systemGlyphs: false)
                     }
                 }
@@ -248,15 +248,15 @@ struct ChatExpressionDrawer: View {
         return Button { searchFocused = false; onStageSticker(item) } label: {
             ChatStagedStickerImage(sticker: item, animated: false).frame(height: 80).padding(4).frame(maxWidth: .infinity)
                 .modifier(ExpressionPickerSelection(selected: selection?.sourceID == item.sourceID))
-        }.buttonStyle(.plain).accessibilityLabel(item.name).accessibilityHint("添加到待发送贴纸")
+        }.buttonStyle(.plain).accessibilityLabel(item.localizedName).accessibilityHint("添加到待发送贴纸")
             .accessibilityAddTraits(selection?.sourceID == item.sourceID ? .isSelected : [])
     }
     private func stageNoto(_ item: NotoEmoji) { searchFocused = false; onStageSticker(.init(source: .noto(item))) }
     private var searchPrompt: String {
         switch tab {
-        case .recent: return "搜索表情或贴纸"
-        case .emoji: return "搜索表情名称或 emoji"
-        case .stickers, .noto: return "搜索贴纸名称"
+        case .recent: return String(localized: "搜索表情或贴纸")
+        case .emoji: return String(localized: "搜索表情名称或 emoji")
+        case .stickers, .noto: return String(localized: "搜索贴纸名称")
         }
     }
     private func toggleSearch() {

@@ -9,7 +9,7 @@ struct PushInstallation: Codable {
     static func load(from store: CredentialStore) throws -> PushInstallation {
         if let value = try store.read(), let data = value.data(using: .utf8), let saved = try? JSONDecoder().decode(Self.self, from: data) { return saved }
         var bytes = [UInt8](repeating: 0, count: 32)
-        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw APIError(status: 0, message: "无法创建设备推送凭据，请重试") }
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw APIError(status: 0, message: String(localized: "无法创建设备推送凭据，请重试")) }
         let value = Self(id: "apns:" + UUID().uuidString.lowercased(), secret: bytes.map { String(format: "%02x", $0) }.joined())
         try store.write(String(decoding: JSONEncoder().encode(value), as: UTF8.self))
         return value
@@ -19,7 +19,7 @@ struct PushInstallation: Codable {
 @MainActor
 final class APNsService: ObservableObject {
     static let shared = APNsService()
-    @Published private(set) var status = "尚未开启系统推送"
+    @Published private(set) var status = String(localized: "尚未开启系统推送")
     @Published private(set) var error: String?
     @Published private(set) var bound = false
     private let identityStore: CredentialStore
@@ -60,25 +60,25 @@ final class APNsService: ObservableObject {
         if oldUser > 0 && (id != oldUser || !enabled) { defaults.set(true, forKey: revokeKey) }
         if id == nil || !enabled {
             unregister(); deviceToken = nil; bound = false
-            status = id == nil ? "登录后可接收系统推送" : "系统推送已关闭"
+            status = id == nil ? String(localized: "登录后可接收系统推送") : String(localized: "系统推送已关闭")
         } else {
-            status = bound ? status : "正在注册系统推送…"
+            status = bound ? status : String(localized: "正在注册系统推送…")
             register()
         }
         schedule()
     }
     func setForeground(_ active: Bool) { foreground = active; if active { bindingKey = nil }; schedule() }
     func didRegister(_ token: Data) {
-        guard !token.isEmpty else { didFail(APIError(status: 0, message: "系统未返回有效的推送令牌")); return }
+        guard !token.isEmpty else { didFail(APIError(status: 0, message: String(localized: "系统未返回有效的推送令牌"))); return }
         deviceToken = token.map { String(format: "%02x", $0) }.joined()
         error = nil; schedule()
     }
-    func didFail(_ error: Error) { self.error = "系统推送注册失败，请检查网络并重试"; status = "系统推送未连接" }
+    func didFail(_ error: Error) { self.error = String(localized: "系统推送注册失败，请检查网络并重试"); status = String(localized: "系统推送未连接") }
     func retry() { error = nil; bindingKey = nil; if enabled && accountID != nil { register() }; schedule() }
     func testRemote() async throws {
-        guard bound, let installation, let api else { throw APIError(status: 0, message: "请先开启系统推送并完成设备连接") }
+        guard bound, let installation, let api else { throw APIError(status: 0, message: String(localized: "请先开启系统推送并完成设备连接")) }
         let result = try await api.request("/push/devices/test", method: "POST", body: .object(["device_id": .text(installation.id)]))
-        guard result["submitted"].bool else { throw APIError(status: 0, message: "远程测试未提交成功，请检查服务器推送配置") }
+        guard result["submitted"].bool else { throw APIError(status: 0, message: String(localized: "远程测试未提交成功，请检查服务器推送配置")) }
     }
     func waitUntilIdle() async { await tail?.value }
     private func schedule() {
@@ -97,7 +97,7 @@ final class APNsService: ObservableObject {
                 let result = try await api.request("/push/devices/revoke", method: "POST", body: .object([
                     "device_id": .text(identity.id), "binding_secret": .text(identity.secret)
                 ]), authenticated: false)
-                guard result["revoked"].bool else { throw APIError(status: 0, message: "设备解绑未确认，请重试") }
+                guard result["revoked"].bool else { throw APIError(status: 0, message: String(localized: "设备解绑未确认，请重试")) }
                 defaults.set(false, forKey: revokeKey); defaults.removeObject(forKey: boundUserKey)
                 bindingKey = nil; bound = false
             }
@@ -112,16 +112,16 @@ final class APNsService: ObservableObject {
                     "apns_token": .text(deviceToken), "apns_environment": .text(environment), "apns_topic": .text(topic),
                     "binding_secret": .text(identity.secret), "app_state": .text(foreground ? "foreground" : "background"),
                     "manufacturer": .text("Apple"), "model": .text(UIDevice.current.model),
-                    "app_version": .text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
+                    "app_version": .text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"))")
                 ]))
                 guard ticket == revision, epoch == api.generation else { return }
                 guard result["registered"].bool, result["apns_supported"].bool,
                       result["device"]["user_id"].int == id,
-                      result["device"]["apns_environment"].string == environment else { throw APIError(status: 0, message: "服务器尚未支持此版本的系统推送") }
+                      result["device"]["apns_environment"].string == environment else { throw APIError(status: 0, message: String(localized: "服务器尚未支持此版本的系统推送")) }
                 bound = true; error = nil
                 let configured = result["apns_configured"].bool
                 bindingKey = key
-                status = configured ? "系统推送已连接" : "设备已绑定，等待服务器启用推送"
+                status = configured ? String(localized: "系统推送已连接") : String(localized: "设备已绑定，等待服务器启用推送")
                 lastState = foreground ? "foreground" : "background"; lastStateAt = Date()
             } else {
                 let state = foreground ? "foreground" : "background"
@@ -135,7 +135,7 @@ final class APNsService: ObservableObject {
             }
         } catch {
             self.error = error.localizedDescription
-            if enabled && accountID != nil { status = "系统推送暂未连接" }
+            if enabled && accountID != nil { status = String(localized: "系统推送暂未连接") }
         }
     }
 }

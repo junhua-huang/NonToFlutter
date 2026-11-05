@@ -17,9 +17,9 @@ struct ComposerAttachments {
             additions.append((item, asset))
         }
         let combined = items + additions.map(\.0)
-        guard combined.count <= 9 else { throw APIError(status: 0, message: "每条动态最多添加 9 张照片") }
+        guard combined.count <= 9 else { throw APIError(status: 0, message: String(localized: "每条动态最多添加 9 张照片")) }
         guard !combined.contains(where: \.isVideo) || combined.count == 1 else {
-            throw APIError(status: 0, message: "视频需要单独发布，请先移除照片或视频")
+            throw APIError(status: 0, message: String(localized: "视频需要单独发布，请先移除照片或视频"))
         }
         items = combined
         for (item, asset) in additions { if let asset { assets[item.id] = asset } }

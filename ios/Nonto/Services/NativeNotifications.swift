@@ -64,7 +64,7 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
         try await requestAuthorization()
         guard authorized else { return }
         let content = UNMutableNotificationContent()
-        content.title = "南图"; content.body = "系统通知已开启"; content.sound = .default
+        content.title = String(localized: "南图"); content.body = String(localized: "系统通知已开启"); content.sound = .default
         let request = UNNotificationRequest(identifier: "nonto.native.test", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false))
         try await center.add(request)
     }
@@ -82,13 +82,13 @@ final class NativeNotifications: NSObject, UNUserNotificationCenterDelegate, Obs
         let conversationID = event == "new_message" ? chat.conversationID : data["conversation_id"].int
         if event == "new_message" && (!messageEnabled || conversationID == activeConversation) { return }
         let content = UNMutableNotificationContent()
-        content.title = data["title"].string.isEmpty ? "南图" : data["title"].string
+        content.title = data["title"].string.isEmpty ? String(localized: "南图") : data["title"].string
         // Avoid exposing private message content in notification previews.
         if event == "new_notification", Notice(data).isReportReceipt {
-            content.title = "举报已收到"
-            content.body = "我们已收到你的举报，将尽快核查。"
+            content.title = String(localized: "举报已收到")
+            content.body = String(localized: "我们已收到你的举报，将尽快核查。")
         } else {
-            content.body = event == "new_message" ? "你收到了一条新消息" : "你有一条新通知"
+            content.body = event == "new_message" ? String(localized: "你收到了一条新消息") : String(localized: "你有一条新通知")
         }
         if soundEnabled { content.sound = .default }
         content.userInfo = ["recipient_id": userID, "dedupe_key": key, "message_id": messageID,

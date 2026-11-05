@@ -92,7 +92,7 @@ final class RealtimeClient: ObservableObject {
             let frame = try JSON.decode(data), payload = frame["payload"].or(frame)
             switch frame["type"].string {
             case "auth_result":
-                guard payload["success"].bool else { throw APIError(status: 401, message: "实时连接认证失败") }
+                guard payload["success"].bool else { throw APIError(status: 401, message: String(localized: "实时连接认证失败")) }
                 connected = true; revision += 1
                 events.send(.object(["event": .text("resync")]))
                 try await send("sync", ["last_received_seq": .id(UserDefaults.standard.integer(forKey: sequenceKey)), "limit": .id(200)], socket: socket, ticket: ticket)

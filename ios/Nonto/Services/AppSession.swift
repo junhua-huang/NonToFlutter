@@ -100,13 +100,13 @@ final class AppSession: ObservableObject {
         }
     }
     func authenticate(email: String, password: String, code: String, username: String? = nil) async throws {
-        guard consent.accepted else { throw APIError(status: 0, message: "请先阅读并决定是否同意隐私说明") }
+        guard consent.accepted else { throw APIError(status: 0, message: String(localized: "请先阅读并决定是否同意隐私说明")) }
         var body: [String: JSON] = ["email": .text(email), "password": .text(password)]
         if !code.isEmpty { body["email_code"] = .text(code) }
         if let username { body["username"] = .text(username) }
         let result = try await api.request(username == nil ? "/auth/login" : "/auth/register", method: "POST", body: .object(body), authenticated: false)
         let token = result["access_token"].string
-        guard !token.isEmpty else { throw APIError(status: 0, message: "登录响应缺少凭据，请重试") }
+        guard !token.isEmpty else { throw APIError(status: 0, message: String(localized: "登录响应缺少凭据，请重试")) }
         try api.setToken(token)
         do { try await refreshProfile() }
         catch {
@@ -119,7 +119,7 @@ final class AppSession: ObservableObject {
     func refreshProfile() async throws {
         let result = try await api.request("/auth/profile")
         let profile = Person(result["user"].or(result))
-        guard profile.id > 0 else { throw APIError(status: 0, message: "用户信息不完整，请重新登录") }
+        guard profile.id > 0 else { throw APIError(status: 0, message: String(localized: "用户信息不完整，请重新登录")) }
         restoreContentSafety(userID: profile.id)
         user = profile
         NativeNotifications.shared.userID = profile.id
@@ -327,7 +327,7 @@ final class PagedResource<T: Record>: ObservableObject {
             guard requestID == ticket, api.generation == epoch else { return }
             let rows = try Self.rows(json, keys: keys)
             let parsed = Records.unique(rows.map(T.init))
-            guard rows.isEmpty || !parsed.isEmpty else { throw APIError(status: 0, message: "服务器返回的列表缺少有效记录，请重试") }
+            guard rows.isEmpty || !parsed.isEmpty else { throw APIError(status: 0, message: String(localized: "服务器返回的列表缺少有效记录，请重试")) }
             let merged = parsed.filter { !pendingRemovals.contains($0.id) }.map { item in
                 T(item.raw.merging(pendingUpdates[item.id] ?? .object([:]))
                     .merging(optimisticUpdates[item.id] ?? .object([:])))
@@ -352,7 +352,7 @@ final class PagedResource<T: Record>: ObservableObject {
             if !reset && next > 1 && ((cursor != nil && cursor == previousCursor) || (cursor == nil && !added && !parsed.isEmpty)) { hasMore = false }
             emptyPageStreak = hasMore && parsed.isEmpty ? (reset ? 1 : emptyPageStreak + 1) : 0
             if emptyPageStreak >= 5 {
-                failedReset = false; error = "这一段暂无可见内容，可重试继续加载。"
+                failedReset = false; error = String(localized: "这一段暂无可见内容，可重试继续加载。")
             }
             persist()
         } catch is CancellationError {} catch {
@@ -369,7 +369,7 @@ final class PagedResource<T: Record>: ObservableObject {
     static func rows(_ json: JSON, keys: [String]) throws -> [JSON] {
         if case .array(let rows) = json { return rows }
         for key in keys { if case .array(let rows) = json[key] { return rows } }
-        throw APIError(status: 0, message: "服务器返回的列表不完整，请重试")
+        throw APIError(status: 0, message: String(localized: "服务器返回的列表不完整，请重试"))
     }
     func apply(id: Int, patch: JSON?, provisional: Bool = false) {
         guard api.generation == accountEpoch else { return }

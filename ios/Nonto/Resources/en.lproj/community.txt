@@ -1,0 +1,53 @@
+NonTo Community Guidelines
+Version: {{policyVersion}}
+Updated: October 22, 2026
+
+1. Scope and contact
+
+These guidelines apply to NonTo avatars, display names, bios, posts, comments, images, videos, private messages, community messages and event information. Operator: {{operatorName}}. Reports, complaints and appeals email: {{contactEmail}}.
+
+Together with the Terms of Service and Privacy Policy, these guidelines explain the rules of use. A single agreement does not expand data use or waive the provider’s statutory duties. Reporting supplies leads about possible violations; it does not mean that a decision has been made. See the Privacy Policy for acceptance and response arrangements.
+
+2. Privacy and personal boundaries
+
+Do not publish other people’s addresses, identity documents, contact details, private photos or chat screenshots without necessary authorization. Public information does not justify doxxing, stalking, threats, extortion or malicious exposure.
+
+Do not repeatedly harass, sexually harass, insult, bully or incite hatred against people or groups. When someone declines communication, removes you as a friend or blocks you, do not circumvent that choice through new accounts, communities or other channels. Reasonable criticism and ordinary disagreement should not automatically be treated as violations.
+
+3. Prohibited content and conduct
+
+Do not publish or distribute information prohibited by applicable laws and regulations, including content involving threats to national security, terrorism, pornography, child sexual exploitation, fraud, gambling, illegal transactions or incitement to violent crime. Do not provide phishing links, malware, account theft instructions or materials for stealing passwords or verification codes.
+
+Do not impersonate others, official bodies or support staff for deception. Do not send spam, fraudulently inflate metrics, manipulate interactions, attack services or bypass access permissions. Do not fabricate facts to harm reputations or use malicious reports or false evidence to exclude other users.
+
+Do not upload works you lack the right to distribute. Check rights and authorization before quoting, reposting or publishing others’ images or event materials. Attribution does not automatically replace permission. These rules apply equally to images, videos and text.
+
+4. Reports, blocking and complaints
+
+Report issues through the relevant post, comment, user profile or chat message tools. Block accounts from user profiles and manage them in Settings → Blocked list. Blocking, deleting or recalling cannot remove copies the other person saved previously or prevent contact outside the service.
+
+Include the subject, content ID or link, time, reasons and necessary evidence. Reports from chat may concern the sender. Keep the relevant message IDs and necessary excerpts in your description. Do not forward unrelated entire conversations or expose others’ private information in order to report them.
+
+For infringement complaints, email the rights holder’s or agent’s contact details, necessary proof of rights, the location of suspected infringement and your specific request. Prepare it in Settings → Contact and complaints, check the recipient and send it yourself. Local drafts are not automatically uploaded. Do not submit passwords, verification codes or unrelated full identity documents.
+
+5. Moderation principles and records
+
+Decisions should be based on facts, law and public rules, considering the nature and impact of content, repeated behavior and risk. Measures such as limiting visibility, removal, feature restrictions or account suspension should be proportionate. Report counts alone do not establish a violation. Records related to investigations or statutory duties may be retained where necessary, with limited access and use.
+
+Urgent risks should be handled promptly. Unless notification is legally prohibited, affected users should receive reasons and appeal channels where appropriate. View server-provided status and feedback in Settings → Personal information and permissions → Report history. Pending does not mean the investigation is finished. Resolved does not guarantee that copies outside the service have been removed.
+
+6. Appeals and review
+
+If you believe content, an account or a report outcome was handled incorrectly, email {{contactEmail}} with the relevant account, content or report ID, original outcome, reasons for review and additional evidence. Choose Appeal a decision in Contact and complaints to prepare the text. Provide only material relevant to review. Necessary identity checks should be proportionate to the request.
+
+Appeals should be reviewed against the facts. Reasonable appeals and exercising personal information rights must not lead to retaliation or expanded action. See the Privacy Policy for acceptance, verification, response and objection handling. Keep original emails and relevant IDs when appealing by email to help further communication.
+
+7. Minors and offline safety
+
+Do not use social features, private messages, works or event information to induce minors to disclose private information, make payments or join inappropriate activities. Report safety or privacy issues involving minors through reporting tools or the contact email. Submit only information needed to locate the issue. See the Privacy Policy for age and guardian protection rules. These guidelines do not replace required safeguards.
+
+Before attending offline events, verify the organizer, location and safety arrangements. Be cautious about paying strangers or providing identity documents. User-posted events do not mean that NonTo guarantees their authenticity or waive the provider’s statutory management duties. For personal danger or other emergencies, contact the appropriate local authorities directly. In-app reporting does not replace emergency assistance.
+
+8. Access and updates
+
+Read these guidelines offline in first-use information, Settings and policy pages, and save them through system sharing. Significant rule changes should be clearly communicated. Where renewed consent is required by law, provide a free choice; silence or continued use must not replace it. Offline reading remains available if you do not agree. Also read the Privacy Policy and Terms of Service for data handling and account deletion rules.

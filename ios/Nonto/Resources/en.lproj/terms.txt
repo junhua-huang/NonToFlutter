@@ -1,0 +1,83 @@
+NonTo Terms of Service
+Version: {{policyVersion}}
+Updated: October 22, 2026
+
+1. Scope and choice
+
+These terms apply to account, publishing, friend, private message, community and event information features in the native NonTo iOS and iPadOS clients. Service provider: {{operatorName}}. Contact, complaints, appeals and data rights email: {{contactEmail}}.
+
+Read these terms and the Privacy Policy before using account services, and decide freely whether to agree. If you do not agree for now, you may read offline information. Agreement does not authorize every system permission or future service. The Privacy Policy explains personal information processing without altering your statutory rights.
+
+2. Accounts and eligibility
+
+Register using an email you are entitled to use. Provide truthful, accurate, lawful information where necessary and correct it promptly. Protect passwords, verification codes, devices and signed-in sessions. Do not impersonate others, register maliciously, sell or rent accounts, or use them for fraud. If you discover account theft or unusual activity, change your password promptly and contact the email above. The provider remains responsible for account security obligations required by law.
+
+Role or creator verification indicates only the outcome of the relevant application review. It does not guarantee works, commercial reputation or transaction safety. Email verification is not statutory real-name verification. Services requiring real-name verification must explain their scope, method and necessary information and comply with the law. These terms do not authorize general collection of identity documents.
+
+Scope and current arrangements for real-name verification:
+{{realNameVerificationSummary}}
+
+Minors should learn about the service and its risks with a guardian and avoid disclosing schools, addresses and telephone numbers. Current age eligibility and protection arrangements:
+{{minorProtectionSummary}}
+
+Ordinary agreement checkboxes, email verification or age declarations cannot replace necessary identity and guardian verification. Services involving minors or identity information must follow the scope and safeguards described in the Privacy Policy.
+
+3. Publishing, chats and interactions
+
+Check content and its audience before publishing. Public content may be saved or forwarded. Friends-only content and private messages can also be captured or redistributed by recipients. Changing visibility, deleting or recalling cannot guarantee removal of copies beyond the service’s control. Do not rely on ordinary chat to send identity documents, passwords, verification codes or other highly sensitive information.
+
+Respect other people’s boundaries. Do not repeatedly harass them or circumvent blocking to contact them. Sending, delivery, read and recall status depend on actual service responses; networks and devices may cause delays. Status indicators do not prove that a recipient understood, accepted or made a commitment.
+
+4. Content and conduct
+
+You must have the right to publish or send the text, images, videos, works and links concerned and are legally responsible for your conduct. Respect intellectual property, image, reputation and privacy rights and obtain necessary authorization when quoting works, publishing others’ photos or sharing chat screenshots. Prior public availability does not authorize unrestricted redistribution.
+
+Do not publish or distribute criminal or unlawful information, incite terrorism, violence or hatred, provide pornographic or child sexual exploitation content, threaten, bully, stalk, harass, discriminate or expose private information, distribute fraud, phishing, malware or spam, infringe lawful rights, impersonate officials or others for deception, or use social and event features for illegal transactions or to induce disclosure of sensitive information.
+
+Do not attack the service, steal credentials, bypass permissions to access others’ content, maliciously manipulate interactions in bulk or disrupt normal operations. These terms do not categorically prohibit legitimate rights requests, reasonable criticism, good-faith security feedback or other lawful activity. Examples, reporting materials and moderation principles can be read offline in Settings → Community Guidelines. The guidelines do not expand authorization or waive statutory responsibilities.
+
+5. Reports, moderation and appeals
+
+Report through the relevant post, comment, user profile and chat message tools. Block accounts from user profiles. View server-provided progress and feedback in Settings → Personal information and permissions → Report history. Blocking does not delete content the other person already received and cannot guarantee prevention of contact through all external channels.
+
+Provide the subject, content ID or link, circumstances and necessary evidence. Intellectual property complaints may be emailed with proof of rights, the location of suspected infringement and contact information. If you believe a decision is wrong, appeal to the same email with additional facts. Settings → Contact and complaints helps prepare a request and open email. It does not automatically submit a report or complete sending. Provide only necessary materials. Do not file malicious reports, fabricate evidence or expose unrelated private information.
+
+The provider should base decisions on facts, law and public rules, applying proportionate measures such as limiting visibility, removing content, suspending features or accounts. Reasons and appeal channels should be provided where appropriate. Urgent risks and circumstances where notification is legally prohibited are handled under the law. Report counts must not replace factual assessment. A report does not establish that a complaint is valid, and status displays do not guarantee removal of all distributed copies.
+
+Reports submit leads about violations. Blocking limits relevant interactions. To challenge an outcome, provide its ID and reasons for review. See the Privacy Policy for acceptance and response arrangements.
+
+6. Content rights and necessary permission
+
+You retain your lawful rights in your content. To provide features you actively choose, you grant the provider a nonexclusive license, only as necessary, to store, copy, convert formats, transmit, display and perform safety review. This is subject to your visibility settings, service purposes and the law. Entrusted providers should process information only as necessary.
+
+This license does not transfer ownership or create permanent, irrevocable or unlimited authorization. It does not automatically permit private messages, works or personal information to be used for unrelated advertising, sale or training general-purpose artificial intelligence models. Uses beyond the original feature purpose require the necessary separate authorization. After deletion or account closure, records may be retained only for the scope and time needed for necessary processing, dispute resolution or statutory duties. See the Privacy Policy.
+
+Rights in software, icons, branding and other materials belong to their respective owners. Open-source and third-party materials are used under their actual licenses. These terms do not replace required repository licenses or restrict lawful fair use and other rights.
+
+7. Events, external services and fees
+
+Event descriptions, community content and links to works may come from users or third parties. Verify organizers, time, location, eligibility and safety arrangements, and be cautious about paying strangers or sharing identity information. An ordinary user’s posting does not make NonTo the organizer, guarantor or counterparty. It does not waive the provider’s statutory duties to manage and respond to known risks.
+
+External websites, other apps and sharing destinations may apply their own rules. Read their information before submitting data. The current native client does not integrate in-app purchases, subscriptions or payment SDKs. This does not guarantee that third-party events will always be free. Future paid features must clearly explain prices, content, renewals and refunds and obtain the relevant confirmation. These terms do not authorize automatic charges. Network use may incur carrier data fees.
+
+8. Sign-out, withdrawal and account deletion
+
+Signing out ends the current device session. It is not account deletion and does not automatically clear drafts, server content or sessions on other devices. Withdraw policy consent in Settings → Personal information and permissions. The client returns to offline information without automatically deleting the server account.
+
+In Settings → Delete account, read the information, enter the confirmation text and confirm again to apply. Success signs you out and clears the account’s local drafts, outbox and caches. On failure, retry as instructed or contact support. Account deletion cannot be undone. First keep material you are legally entitled to retain, without infringing others’ rights.
+
+Server-related records, media, backups and information retained under law are handled under the Privacy Policy. Refer to its specific scope and time frames for account content, media objects, backups and statutory records. Copies independently saved by recipients are not automatically removed by account deletion.
+
+9. Service changes, security and responsibility
+
+Network failures, device status, system restrictions, maintenance and security incidents may affect loading, notifications and message delivery. The provider should take reasonable protection and remedial measures, give advance or timely notice of major changes, interruption or termination where necessary, and handle data under the law. Back up important information appropriately. Do not use NonTo for emergency communication or as your only backup.
+
+You and the provider are each responsible for your respective fault and other obligations imposed by law, as determined by facts and law. Testing, free service, user consent or third-party participation cannot waive non-waivable duties. Users are not required to indemnify the provider without limit for its own fault. Consumer and personal information rights are not excluded.
+
+10. Updates and disputes
+
+Read these terms at first use, on the sign-in page or in Settings → Terms of Service. Navigate using the contents or save them with system sharing. Significant changes to rights and obligations must be clearly communicated, and renewed consent obtained where legally required. The client records the agreed version and time and presents the information again after document or operating configuration updates. Silence or continued use does not replace required consent.
+
+For service, complaint, appeal or terms disputes, first email {{contactEmail}} with your account, the event and the resolution you seek. See the Privacy Policy for verification, response and review arrangements. If no agreement is reached, seek resolution through competent bodies under the law. No unilaterally chosen venue, mandatory arbitration, deprivation of court access or “final interpretation” clause restricts lawful remedies.
+
+If a provision is invalid or unenforceable under the law, the remaining valid provisions are handled accordingly without expanding the provider’s rights. Mandatory law takes precedence.

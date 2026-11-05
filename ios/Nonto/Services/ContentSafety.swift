@@ -83,7 +83,7 @@ extension AppSession {
                 saveContentSafety(); contentSafetyError = nil
             } catch {
                 guard epoch == api.generation, owner == safetyAccountID else { return }
-                contentSafetyError = "帖子屏蔽设置已保存在本机，暂未同步到其他设备。请稍后在屏蔽列表中重试。"
+                contentSafetyError = String(localized: "帖子屏蔽设置已保存在本机，暂未同步到其他设备。请稍后在屏蔽列表中重试。")
                 return
             }
         }
@@ -102,7 +102,7 @@ extension AppSession {
                 let rows = try PagedResource<BlockedRecord>.rows(result, keys: ["blocks", "blocked_users", "users"])
                 blocks.formUnion(rows.map { BlockedRecord($0).id }.filter { $0 > 0 })
                 if rows.count < 100 { break }; page += 1
-                guard page <= 1000 else { throw APIError(status: 0, message: "屏蔽列表过长，请重试") }
+                guard page <= 1000 else { throw APIError(status: 0, message: String(localized: "屏蔽列表过长，请重试")) }
             }
             guard epoch == api.generation, owner == safetyAccountID, revision == safetyRevision, blockingUserIDs.isEmpty else { return }
             var value = contentSafety; value.blockedUsers = blocks
@@ -113,7 +113,7 @@ extension AppSession {
                 let rows = try PagedResource<Post>.rows(result, keys: ["posts", "items"])
                 for row in rows where row["id"].int > 0 { hidden[row["id"].int] = row }
                 if rows.count < 100 { break }; page += 1
-                guard page <= 1000 else { throw APIError(status: 0, message: "屏蔽列表过长，请重试") }
+                guard page <= 1000 else { throw APIError(status: 0, message: String(localized: "屏蔽列表过长，请重试")) }
             }
             guard epoch == api.generation, owner == safetyAccountID, revision == safetyRevision else { return }
             for (id, desired) in pendingPostHides {
@@ -125,7 +125,7 @@ extension AppSession {
             if pendingPostHides.isEmpty { contentSafetyError = nil }
         } catch {
             guard epoch == api.generation, owner == safetyAccountID, revision == safetyRevision else { return }
-            contentSafetyError = "暂时无法刷新屏蔽设置，已保留本机设置。可下拉重试。"
+            contentSafetyError = String(localized: "暂时无法刷新屏蔽设置，已保留本机设置。可下拉重试。")
         }
     }
 
@@ -151,7 +151,7 @@ extension AppSession {
                     ]))
                 } catch {
                     guard epoch == api.generation else { return }
-                    contentSafetyError = "已屏蔽该用户，但审核通知提交失败。请通过举报入口补充提交。"
+                    contentSafetyError = String(localized: "已屏蔽该用户，但审核通知提交失败。请通过举报入口补充提交。")
                 }
             }
             if !blocked { postRevision += 1 }
@@ -160,7 +160,7 @@ extension AppSession {
             var restored = contentSafety
             if previous { restored.blockedUsers.insert(id) } else { restored.blockedUsers.remove(id) }
             safetyRevision += 1; contentSafety = restored; saveContentSafety(); postRevision += 1
-            contentSafetyError = "屏蔽设置未能保存，已恢复原状态。\(error.localizedDescription)"
+            contentSafetyError = String(localized: "屏蔽设置未能保存，已恢复原状态。\(error.localizedDescription)")
             throw error
         }
     }

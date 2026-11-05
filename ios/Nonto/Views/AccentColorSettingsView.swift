@@ -50,7 +50,7 @@ struct AccentColorOptions: View {
                         }.foregroundStyle(.primary).padding(.horizontal, 16).frame(minHeight: rowHeight)
                             .contentShape(Rectangle())
                     }.buttonStyle(.plain).hoverEffect(.highlight)
-                        .accessibilityLabel(option.name).accessibilityValue(selection == option ? "已选择" : "")
+                        .accessibilityLabel(option.name).accessibilityValue(selection == option ? String(localized: "已选择") : "")
                         .accessibilityAddTraits(selection == option ? .isSelected : [])
                         .accessibilityIdentifier("accent.option.\(option.rawValue)")
                 }

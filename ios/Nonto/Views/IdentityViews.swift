@@ -29,7 +29,7 @@ struct IdentityCenterView: View {
             .sheet(isPresented: $applying, onDismiss: { Task { await load() } }) { IdentityApplicationView() }
     }
     private func status(_ s: String) -> String {
-        switch s { case "approved", "verified": return "已认证"; case "rejected": return "未通过"; case "suspended": return "已暂停"; case "needs_more_info": return "需补充材料"; default: return "审核中" }
+        switch s { case "approved", "verified": return String(localized: "已认证"); case "rejected": return String(localized: "未通过"); case "suspended": return String(localized: "已暂停"); case "needs_more_info": return String(localized: "需补充材料"); default: return String(localized: "审核中") }
     }
     private func load(append: Bool = false) async {
         loading = true; defer { loading = false }
@@ -73,7 +73,7 @@ struct IdentityApplicationView: View {
         busy = true; defer { busy = false }
         do {
             let links = portfolio.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-            guard links.allSatisfy({ guard let u = URL(string: $0) else { return false }; return ["https", "http"].contains(u.scheme ?? "") && u.host != nil }) else { throw APIError(status: 0, message: "请填写有效的作品网址") }
+            guard links.allSatisfy({ guard let u = URL(string: $0) else { return false }; return ["https", "http"].contains(u.scheme ?? "") && u.host != nil }) else { throw APIError(status: 0, message: String(localized: "请填写有效的作品网址")) }
             var urls: [String] = []
             for pick in picks { let m = try await MediaLoader.load(pick); urls.append(try await session.api.upload(m.data, filename: m.name, mime: m.mime)) }
             _ = try await session.api.request("/roles/apply", method: "POST", body: .object([

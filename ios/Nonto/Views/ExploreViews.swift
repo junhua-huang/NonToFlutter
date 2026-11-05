@@ -14,7 +14,7 @@ struct ExploreView: View {
         VStack(spacing: 0) {
             if queryError != nil { ErrorBanner(text: queryError).padding(.horizontal) }
             if !submitted.isEmpty {
-                TimelineTabs(title: "搜索类型", tabs: [("posts", "动态"), ("users", "用户"), ("topics", "话题")], selection: $kind)
+                TimelineTabs(title: String(localized: "搜索类型"), tabs: [("posts", String(localized: "动态")), ("users", String(localized: "用户")), ("topics", String(localized: "话题"))], selection: $kind)
                 SearchResultsView(session: session, query: submitted, kind: kind).id(submitted + kind)
             } else {
                 List {
@@ -46,7 +46,7 @@ struct ExploreView: View {
                 }.timelineList().refreshable { await load() }
             }
         }.navigationTitle("发现").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "搜索动态、用户和话题")
+            .searchable(text: $query, prompt: String(localized: "搜索动态、用户和话题"))
             .onSubmit(of: .search, search)
             .onChange(of: query) { _, value in
                 queryError = nil
@@ -56,7 +56,7 @@ struct ExploreView: View {
     }
     private func search() {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.count >= 2 else { queryError = "搜索关键词至少需要 2 个字符"; return }
+        guard text.count >= 2 else { queryError = String(localized: "搜索关键词至少需要 2 个字符"); return }
         queryError = nil; submitted = text
         Task {
             _ = try? await session.api.request("/search/history", method: "POST", body: .object(["query": .text(text), "type": .text(kind)]))
@@ -173,7 +173,7 @@ struct TopicDetailView: View {
             if error != nil { ErrorBanner(text: error) }
             PostList(session: session, path: "/topics/\(topic.id)/posts")
         }.navigationTitle("#\(topic.name)").navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button(following ? "已关注" : "关注") { Task { await toggle() } }.disabled(busy) }
+            .toolbar { Button(following ? String(localized: "已关注") : String(localized: "关注")) { Task { await toggle() } }.disabled(busy) }
             .task {
                 let revision = followRevision, epoch = session.api.generation
                 if let j = try? await session.api.request("/topics/\(topic.id)"),

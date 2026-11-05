@@ -75,7 +75,7 @@ final class ChatStore {
                     // Legacy outboxes did not distinguish unsent items from interrupted HTTP writes.
                     if pending[index].deliveryUncertain == true || (pending[index].deliveryUncertain == nil && (index == 0 || pending[index].failure != nil)) {
                         pending[index].deliveryUncertain = true
-                        if pending[index].failure == nil { pending[index].failure = "上次发送未收到确认，请先检查最新消息" }
+                        if pending[index].failure == nil { pending[index].failure = String(localized: "上次发送未收到确认，请先检查最新消息") }
                     }
                 }
                 persistPending()
@@ -92,7 +92,7 @@ final class ChatStore {
         if let id = sendingID, let index = pending.firstIndex(where: { $0.id == id }) {
             pending[index].deliveryUncertain = true
             pending[index].retryWhenOnline = false
-            pending[index].failure = "发送已中断，结果待确认，请先检查最新消息"
+            pending[index].failure = String(localized: "发送已中断，结果待确认，请先检查最新消息")
             persistPending()
         }
         lifecycleID = UUID()
@@ -318,7 +318,7 @@ final class ChatStore {
                     try Task.checkCancellation()
                     guard active, valid, sendID == ticket else { return }
                     // Do not silently discard an outbox entry on an incomplete success response.
-                    guard let message = ChatMessage.confirmation(json) else { throw APIError(status: 0, message: "未收到发送确认，请先检查最新消息") }
+                    guard let message = ChatMessage.confirmation(json) else { throw APIError(status: 0, message: String(localized: "未收到发送确认，请先检查最新消息")) }
                     localIdentities[message.id] = ChatMessageIdentity(requestID: item.id, createdAt: item.createdAt)
                     if setMessages(Records.messages(messages, [message])) { persistMessages() }
                     pending.removeAll { $0.id == item.id }; persistPending()
@@ -386,13 +386,13 @@ final class ChatStore {
         if setMessages(messages) { persistMessages() }
     }
     func quoteContext(_ targetID: Int) async throws -> [ChatMessage] {
-        guard active, valid, targetID > 0 else { throw APIError(status: 404, message: "原消息已不可用") }
+        guard active, valid, targetID > 0 else { throw APIError(status: 404, message: String(localized: "原消息已不可用")) }
         let contextPath = communityID == nil ? path + "/around" : path + "/messages/around"
         let result = try await api.request(contextPath, query: ["target_id": String(targetID), "before": "10", "after": "10"])
         try Task.checkCancellation()
         guard active, valid else { throw CancellationError() }
         let context = Records.messages([], try PagedResource<ChatMessage>.rows(result, keys: ["messages", "items"]).map(ChatMessage.init))
-        guard context.contains(where: { $0.id == targetID }) else { throw APIError(status: 404, message: "原消息已删除或暂时无法查看") }
+        guard context.contains(where: { $0.id == targetID }) else { throw APIError(status: 404, message: String(localized: "原消息已删除或暂时无法查看")) }
         // A context window must not be merged into the main paginated timeline:
         // doing so would conceal an unloaded gap and move the user's viewport.
         return ChatMessageReferences.redactingRecalls(context, known: recalledIDs)
@@ -401,7 +401,7 @@ final class ChatStore {
 
 @MainActor enum ConversationLookup {
     static func find(_ id: Int, api: APIClient) async throws -> Conversation {
-        guard id > 0 else { throw APIError(status: 404, message: "无效会话") }
+        guard id > 0 else { throw APIError(status: 404, message: String(localized: "无效会话")) }
         for page in 1...20 {
             try Task.checkCancellation()
             let json = try await api.request("/chat/sessions", query: ["page": String(page), "per_page": "50"])
@@ -409,6 +409,6 @@ final class ChatStore {
             if let value = rows.first(where: { $0.id == id }) { return value }
             if json["has_more"] == .bool(false) || rows.count < 50 { break }
         }
-        throw APIError(status: 404, message: "会话已不可访问")
+        throw APIError(status: 404, message: String(localized: "会话已不可访问"))
     }
 }

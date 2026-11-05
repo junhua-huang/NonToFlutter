@@ -6,6 +6,7 @@ struct NotoEmoji: Decodable, Identifiable, Equatable, Sendable {
     let name: String
     let keywords: String
     let category: String
+    var localizedName: String { AppLocalization.emojiName(self) }
     var animationURL: URL? { NotoEmojiCatalog.asset(id, extension: "json") }
     var previewURL: URL? { NotoEmojiCatalog.asset(id, extension: "png") }
     func matches(_ query: String) -> Bool {

@@ -1,0 +1,113 @@
+NonTo Privacy Policy
+Version: {{policyVersion}}
+Updated: October 26, 2026
+
+1. Scope and contact
+
+This policy applies to the native NonTo iOS and iPadOS clients and their connected services. It explains the purposes of processing, permissions, recipients and your choices. You can read this policy and the Terms of Service offline without signing in. If you do not agree for now, offline information remains available and account services do not start.
+
+Service provider and personal information processor: {{operatorName}}
+Privacy, complaints and data rights email: {{contactEmail}}
+App registration number: {{appFilingNumber}}
+
+Please pay particular attention to private messages and public content, optional permissions, third-party services, retention and account deletion, minors and data rights requests. Agreeing to this policy and granting system permissions are separate choices. Agreement does not authorize all optional permissions or future purposes.
+
+2. Information processed by feature
+
+Account and security: Your submitted email, username, password and email verification code are used for registration, sign-in, password recovery and account security. Passwords are sent over the network to the server for verification. The client stores sign-in tokens in the system Keychain. Email verification is not statutory real-name verification. Account features cannot be used without information necessary to register or sign in.
+
+Profile: Your chosen display name, bio, avatar and cover identify you in interactions and appear on your profile. Correct them in Edit profile. In Privacy settings, manage profile visibility, email display, searchability and who can send friend requests. Do not put contact information you wish to keep private in a public profile.
+
+Content and social features: Posts, comments, private and community messages, selected images and videos, and friendship, following, like and interaction records are used to store, transmit and display content, maintain relationships and update unread status. Messaging also processes conversations, senders, recipients, sending times and delivery, read or recall status. Private messages are processed and stored by the server. This version does not provide an end-to-end encryption guarantee.
+
+Search and feeds: Search terms and search type are sent to the server to return results and may be recorded in your account’s search history. Clear search history in Explore; this does not delete necessary security logs. The native Home screen currently offers Latest and For you, without a recommendation feed. Latest orders posts by publication time. For you collects posts related to your notifications, comments and likes, newest first. Switching feeds does not delete existing interaction or viewing records. Contact the email in this policy for an explanation or to make a request concerning processing.
+
+Verification applications: The roles, work links, contact details and supporting materials you choose to submit are used to review applications and display qualifications. Contact details may include a telephone number you provide. Role or creator verification does not automatically constitute statutory real-name verification. Redact unrelated identity numbers and addresses. Do not submit unrelated identity documents, bank cards, medical records or other people’s sensitive information. If sensitive information is necessary, its necessity and impact must be explained separately and the required authorization obtained. A single policy agreement cannot replace this process.
+
+Reports and support: Your report reasons, relevant user, post, comment or message IDs, and explanations, screenshots and contact details you send by email are used to locate issues, investigate, respond and handle data rights requests. Reports may include chat excerpts you choose to submit. Provide only relevant material, and do not send passwords or verification codes.
+
+Service access: Network and resource providers receive the IP address and request information needed for connections. Loading remote images, videos and pages also generates resource requests. Access and security logs are used to connect services, limit abuse, troubleshoot and handle complaints. See section 7 for retention and deletion.
+
+3. System permissions and device capabilities
+
+Photos and videos: You choose items through Apple’s system photo picker. The client reads selected items for preview and upload, without requesting access to your entire photo library. Canceling does not affect text features. Only when you choose Save Image does the client request add-only Photos permission to save the current image. Denying it does not affect viewing images or chatting. Photos are resized and re-encoded as JPEG before upload. Videos are read and uploaded from the selected file. Videos and other files may contain creation time, location or other file properties. Check and remove information you do not wish to share before sending.
+
+Camera: Camera permission is requested only when you choose the camera in the chat attachment menu. Photos are taken through Apple’s system camera interface. The result is resized, re-encoded as JPEG and placed in the sending preview. It is uploaded only after you confirm sending. It is not automatically saved to Photos. Audio is not collected and continuous recording is not performed. Denying or withdrawing camera permission does not affect photo selection or text messages. Manage authorization in iOS Settings.
+
+Notifications: After you agree to this policy, sign in successfully and enter the main app, the client requests notification permission if you have not yet made a system notification choice. Notifications provide message and interaction alerts. You can also enable or test them in Notification preferences. After denial, the app does not repeatedly request system authorization; use the Settings link to change it in iOS Settings. You can still use account and chat services after declining, but will not receive those system alerts. Granting system permission does not override push or alert preferences disabled in your account. Manage permissions, push, message alerts and sounds in iOS Settings → Notifications → NonTo and the app’s Settings → Notification preferences.
+
+Clipboard and sharing: Selected messages are written to the clipboard only when you choose Copy. Existing clipboard contents are not proactively read. You choose the destination in the system share sheet. Recipients may receive the shared content or link; sharing a link does not automatically change the original content’s permissions. External websites and apps process access under their own rules after you open them.
+
+Other capabilities: Network access is used for sign-in, loading, uploads and message synchronization. It does not depend on photo or notification permission.
+
+Age declaration: At first use, the chosen age range and necessary guardian consent confirmation are recorded on this device to control access to native account services. Date of birth and identity documents are not collected here. See section 10 for scope.
+
+The current native version does not request Contacts, location or microphone access and does not integrate advertising tracking, third-party analytics, payment or third-party sign-in SDKs. Manually entering an event location does not read the device’s location. New permissions or purposes require updated information and the authorization required by law first.
+
+4. Messages and push notifications
+
+When push notifications are enabled, the client sends the NonTo server an Apple push token, random installation identifier and binding verification credential, device type, app version and foreground/background state. The server binds these to the current account for message routing, state updates and unbinding. The random installation identifier is neither an advertising identifier nor a hardware serial number.
+
+Remote notifications are delivered through Apple Push Notification service (APNs). Current payloads use generic alerts without private message text or sender display names, but contain routing IDs for the recipient account, notification, message and related content, and deduplication identifiers. Even generic alerts may reveal app use. Adjust previews in system Settings. APNs processes push identifiers and information necessary for delivery. See section 5 for Apple’s processing information and section 7 for regions and related arrangements.
+
+When you disable push or sign out, the client attempts to unbind the device. If the network is unavailable, pending unbinding is saved and retried later. Disable system notifications to stop alerts on this device immediately. Disabling notifications or signing out does not delete delivered messages or the server account.
+
+5. Third-party services and disclosure
+
+Not embedding third-party business SDKs does not mean that no service providers process information. System capabilities, media, email and hosting services process information necessary for their functions, as detailed below.
+
+{{processorSummary}}
+
+Entrusted processing must be limited to its purposes and governed by agreed safeguards. Providing information to independent processors, publicly disclosing it or changing its purposes requires applicable notice, authorization and protection procedures. Statutory circumstances are handled under the law. This agreement is not blanket authorization to provide information to arbitrary third parties.
+
+6. Public content and other people’s information
+
+Other people may view, copy or forward public profiles, posts, comments and community content. Friends-only content and private messages can also be captured or redistributed by recipients. Changing visibility, blocking, deleting or recalling cannot guarantee removal of copies others already obtained.
+
+Obtain necessary authorization before publishing other people’s photos, contact details, works or chat screenshots. Avoid exposing others’ or minors’ privacy. Report exposure or infringement using the report tools or the email in this policy, with links, IDs and necessary details. Investigations and actions must stay within the necessary scope without further exposing the personal information involved.
+
+7. Storage, retention and deletion
+
+On this device: Sign-in tokens and push binding verification credentials are stored in Keychain. Preferences, consent versions and times, account text drafts, the outbox and message synchronization progress are stored locally. Content caches are separated by account in the cache directory and file caches use iOS file protection. The system can reclaim caches, so they must not be your only backup. Post drafts retain text, audience, displayed identity and selected photos or video. Media drafts are stored by account in the application support directory, use iOS file protection and are excluded from system backups. They are uploaded only when you confirm publication. Reopening the same composer can restore them. Relevant drafts are cleared after successful publication, explicit discard or account deletion. Do not use local drafts as your only backup.
+
+Clear local cache clears content and network caches, not drafts, the outbox, Keychain or server data. Signing out is not account deletion, and drafts may return when the same account signs in again. After the server confirms account deletion, the client clears that account’s drafts, queue, sync progress and caches. Installation credentials and pending retries needed for push unbinding may remain. System backups, copies on other devices and Keychain must not be assumed to have been fully deleted by uninstalling or one cleanup operation.
+
+Actual storage locations of server databases, media and backups, and possible cross-border processing:
+{{storageSummary}}
+
+Retention of accounts, content, messages, media and security logs, account deletion time frames, statutory retention and backup deletion:
+{{retentionSummary}}
+
+The NonTo server handles account deletion requests. The scope and timing for accounts, related content, media and backups follow the rules above. Account deletion does not remove copies independently saved by recipients. Contact the email in this policy to ask about specific records or request deletion. Information retained under law is limited to the relevant purpose and duration and is deleted or anonymized when that period ends. Personal information must be handled and users notified as required by law when the service stops.
+
+8. Security and incident response
+
+API and real-time connections use HTTPS/WSS by default. Credentials are transmitted in request headers or connection authentication frames, avoiding direct inclusion in request URLs. The client does not implement end-to-end encryption. Local files use system file protection. Local protection and transport encryption cannot eliminate risks such as device theft, redistribution by recipients or server attacks.
+
+Protect your device unlock credentials and do not share passwords or verification codes. Check drafts and notification settings after signing out on a shared device. If you suspect account theft or information exposure, change your password and contact support by email. Personal information security incidents require remedial measures and notification of affected people and authorities where applicable. This policy does not waive statutory responsibilities.
+
+9. Choices and data rights requests
+
+Access and correction: Manage information on your profile, Edit profile and relevant content pages. Privacy settings control your profile, default post audience, email display, search and friend requests. Check the audience of previously published content separately. Declining photo or notification permissions affects only the corresponding optional features.
+
+Withdraw consent: Choose Settings → Personal information and permissions → Withdraw consent and sign out. The client stops current account services and returns to offline information. Withdrawal is not account deletion and does not affect lawful processing before withdrawal. Any continued retention on another lawful basis must be explained and cannot continue unrelated uses for which authorization was withdrawn.
+
+Delete account: In Settings → Delete account, read the information, enter the displayed confirmation word and confirm again to apply to the server. Success signs you out and clears relevant local data. Failure displays an error. Tapping a button or a network timeout does not mean deletion is complete. Deletion cannot be undone; first save information you are legally entitled to keep. See section 7 for server handling and current limitations.
+
+To access, copy, supplement, correct or delete information, obtain explanations of rules or raise objections, email {{contactEmail}}. Include “Personal data request”, your account email or user ID, the specific request and data scope. In Settings → Contact and complaints, choose a request type, prepare details and open email, or copy the address and send it yourself. This page does not automatically upload drafts, chats or account information. Opening email does not mean sending succeeded. Proportionate identity verification may be necessary, and agents need appropriate authorization. Do not directly provide passwords, verification codes or unrelated full identity documents. If a request cannot be met, reasons and appeal or complaint channels should be provided. This does not affect your right to contact competent authorities under the law.
+
+Specific arrangements for acceptance, verification, response times and review of objections:
+{{rightsResponseSummary}}
+
+10. Protection of minors
+
+Minors should understand this policy with a guardian and be cautious about disclosing schools, addresses, photos and contact details. Processing information about children under 14 requires guardian consent, dedicated rules and necessary safeguards. Ordinary policy agreement, email verification or an age checkbox cannot replace those mechanisms.
+
+Age eligibility, guardian consent, children’s information and guardian data rights requests:
+{{minorProtectionSummary}}
+
+Do not submit unrelated sensitive information about minors through public content, chats or verification materials. Guardians who discover processing without proper authorization can contact the email in this policy for deletion or other rights, providing only the minimum information needed to locate the issue.
+
+11. Updates and access
+
+Read this policy at first use, on the sign-in page or in Settings → Privacy Policy. Use its contents to navigate sections or the system share sheet to save the full text. The policy page also links to the Terms of Service, Community Guidelines and contact tools. The client records consent version and time locally. Changes to policies, terms, community rules or operating configuration prompt another presentation before account services resume. Significant changes must be clearly explained. Declining a new version still allows offline reading. Continued use does not replace renewed consent where required by law.

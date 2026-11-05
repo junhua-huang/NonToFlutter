@@ -103,7 +103,7 @@ struct PostDetailView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 if comments.loadingReplies.contains(thread.id) { ProgressView().controlSize(.small) }
-                                Text(!thread.expanded && thread.replies.count > 2 ? "展开回复（\(max(thread.root.raw["reply_count"].int, thread.replies.count) - 2)）" : "查看更多回复")
+                                Text(!thread.expanded && thread.replies.count > 2 ? String(localized: "展开回复（\(max(thread.root.raw["reply_count"].int, thread.replies.count) - 2)）") : String(localized: "查看更多回复"))
                             }.frame(minHeight: 44)
                         }.disabled(comments.loadingReplies.contains(thread.id))
                             .accessibilityIdentifier("comment-replies-\(thread.id)")
@@ -162,7 +162,7 @@ private struct CommentComposer: View {
                 }.padding(.horizontal, 8)
             } else if let notice = store.notice { Text(notice).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField(store.reply == nil ? "说说你的想法…" : "写下你的回复…", text: $store.text, axis: .vertical)
+                TextField(store.reply == nil ? String(localized: "说说你的想法…") : String(localized: "写下你的回复…"), text: $store.text, axis: .vertical)
                     .lineLimit(1...5).textFieldStyle(.plain).padding(.vertical, 12).padding(.leading, 12)
                     .focused(focused).accessibilityLabel("评论内容").accessibilityIdentifier("comment-input")
                 Button { Task { await store.send() } } label: {
@@ -170,7 +170,7 @@ private struct CommentComposer: View {
                         if store.sending { ProgressView() }
                         else { Image(systemName: "arrow.up.circle.fill").font(.title).foregroundStyle(store.canSend ? accent.symbolColor : Color.secondary) }
                     }.frame(width: 44, height: 44)
-                }.disabled(!store.canSend).accessibilityLabel(store.sending ? "正在发送评论" : "发送评论")
+                }.disabled(!store.canSend).accessibilityLabel(store.sending ? String(localized: "正在发送评论") : String(localized: "发送评论"))
                     .accessibilityIdentifier("comment-send")
             }.floatingGlass()
         }.padding(.horizontal, 12).padding(.vertical, 8)
@@ -213,7 +213,7 @@ private struct CommentItemRow: View {
                     Button(action: onLike) {
                         Label("\(comment.likes)", systemImage: comment.liked ? "heart.fill" : "heart")
                             .foregroundStyle(comment.liked ? Color.brandLike : Color.secondary).monospacedDigit().frame(minHeight: 44)
-                    }.disabled(busy).accessibilityLabel(comment.liked ? "取消赞，\(comment.likes) 个赞" : "赞，\(comment.likes) 个赞")
+                    }.disabled(busy).accessibilityLabel(comment.liked ? String(localized: "取消赞，\(comment.likes) 个赞") : String(localized: "赞，\(comment.likes) 个赞"))
                         .accessibilityIdentifier("comment-like-\(comment.id)")
                     Spacer(minLength: 0)
                     Menu {

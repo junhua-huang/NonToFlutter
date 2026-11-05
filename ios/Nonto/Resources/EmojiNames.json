@@ -1,0 +1,3526 @@
+{
+  "1f600": {
+    "en": "smile",
+    "zh-Hant": "嘿嘿"
+  },
+  "1f603": {
+    "en": "smile with big eyes",
+    "zh-Hant": "哈哈"
+  },
+  "1f604": {
+    "en": "grin",
+    "zh-Hant": "大笑"
+  },
+  "1f601": {
+    "en": "grinning",
+    "zh-Hant": "嘻嘻"
+  },
+  "1f606": {
+    "en": "laughing",
+    "zh-Hant": "斜眼笑"
+  },
+  "1f605": {
+    "en": "grin sweat",
+    "zh-Hant": "苦笑"
+  },
+  "1f602": {
+    "en": "joy",
+    "zh-Hant": "笑哭了"
+  },
+  "1f923": {
+    "en": "rofl",
+    "zh-Hant": "笑得滿地打滾"
+  },
+  "1f62d": {
+    "en": "loudly crying",
+    "zh-Hant": "放聲大哭"
+  },
+  "1f609": {
+    "en": "wink",
+    "zh-Hant": "眨眼"
+  },
+  "1f617": {
+    "en": "kissing",
+    "zh-Hant": "親親"
+  },
+  "1f619": {
+    "en": "kissing smiling eyes",
+    "zh-Hant": "微笑親親"
+  },
+  "1f61a": {
+    "en": "kissing closed eyes",
+    "zh-Hant": "羞澀親親"
+  },
+  "1f618": {
+    "en": "kissing heart",
+    "zh-Hant": "飛吻"
+  },
+  "1f970": {
+    "en": "heart face   3 hearts",
+    "zh-Hant": "喜笑顏開"
+  },
+  "1f60d": {
+    "en": "heart eyes",
+    "zh-Hant": "花痴"
+  },
+  "1f929": {
+    "en": "star struck",
+    "zh-Hant": "好崇拜哦"
+  },
+  "1f973": {
+    "en": "partying face",
+    "zh-Hant": "聚會笑臉"
+  },
+  "1fae0": {
+    "en": "melting",
+    "zh-Hant": "融化"
+  },
+  "1f643": {
+    "en": "upside down face",
+    "zh-Hant": "倒臉"
+  },
+  "1f642": {
+    "en": "slightly happy",
+    "zh-Hant": "呵呵"
+  },
+  "1f972": {
+    "en": "happy cry",
+    "zh-Hant": "含淚的笑臉"
+  },
+  "1f979": {
+    "en": "holding back tears",
+    "zh-Hant": "忍住淚水"
+  },
+  "1f60a": {
+    "en": "blush",
+    "zh-Hant": "羞澀微笑"
+  },
+  "263a_fe0f": {
+    "en": "warm smile",
+    "zh-Hant": "微笑"
+  },
+  "1f60c": {
+    "en": "relieved",
+    "zh-Hant": "松了口氣"
+  },
+  "1f642_200d_2195_fe0f": {
+    "en": "head nod",
+    "zh-Hant": "上下點頭"
+  },
+  "1f642_200d_2194_fe0f": {
+    "en": "head shake",
+    "zh-Hant": "左右搖頭"
+  },
+  "1f60f": {
+    "en": "smirk",
+    "zh-Hant": "得意"
+  },
+  "1f924": {
+    "en": "drool",
+    "zh-Hant": "流口水"
+  },
+  "1f60b": {
+    "en": "yum",
+    "zh-Hant": "好吃"
+  },
+  "1f61b": {
+    "en": "stuck out tongue",
+    "zh-Hant": "吐舌"
+  },
+  "1f61d": {
+    "en": "squinting tongue",
+    "zh-Hant": "眯眼吐舌"
+  },
+  "1f61c": {
+    "en": "winky tongue",
+    "zh-Hant": "眨眼吐舌"
+  },
+  "1f92a": {
+    "en": "zany face",
+    "zh-Hant": "滑稽"
+  },
+  "1faea": {
+    "en": "distorted face",
+    "zh-Hant": "變形的臉"
+  },
+  "1f614": {
+    "en": "pensive",
+    "zh-Hant": "沈思"
+  },
+  "1f97a": {
+    "en": "pleading",
+    "zh-Hant": "懇求的臉"
+  },
+  "1f62c": {
+    "en": "grimacing",
+    "zh-Hant": "齜牙咧嘴"
+  },
+  "1f611": {
+    "en": "expressionless",
+    "zh-Hant": "無語"
+  },
+  "1f610": {
+    "en": "neutral face",
+    "zh-Hant": "冷漠"
+  },
+  "1f636": {
+    "en": "mouth none",
+    "zh-Hant": "沈默"
+  },
+  "1f636_200d_1f32b_fe0f": {
+    "en": "face in clouds   lost",
+    "zh-Hant": "迷茫"
+  },
+  "1fae5": {
+    "en": "dotted line face   invisible",
+    "zh-Hant": "虛線臉"
+  },
+  "1f910": {
+    "en": "zipper face",
+    "zh-Hant": "閉嘴"
+  },
+  "1fae1": {
+    "en": "salute",
+    "zh-Hant": "致敬"
+  },
+  "1f914": {
+    "en": "thinking face",
+    "zh-Hant": "想一想"
+  },
+  "1f92b": {
+    "en": "shushing face",
+    "zh-Hant": "安靜的臉"
+  },
+  "1fae2": {
+    "en": "hand over mouth",
+    "zh-Hant": "睜眼捂嘴"
+  },
+  "1f92d": {
+    "en": "smiling eyes with hand over mouth   chuckling",
+    "zh-Hant": "不說"
+  },
+  "1f971": {
+    "en": "yawn",
+    "zh-Hant": "打呵欠"
+  },
+  "1f917": {
+    "en": "hug face",
+    "zh-Hant": "抱抱"
+  },
+  "1fae3": {
+    "en": "peeking",
+    "zh-Hant": "偷看"
+  },
+  "1f631": {
+    "en": "screaming",
+    "zh-Hant": "嚇死了"
+  },
+  "1f928": {
+    "en": "raised eyebrow",
+    "zh-Hant": "挑眉"
+  },
+  "1f9d0": {
+    "en": "monocle",
+    "zh-Hant": "帶單片眼鏡的臉"
+  },
+  "1f612": {
+    "en": "unamused",
+    "zh-Hant": "不高興"
+  },
+  "1f644": {
+    "en": "rolling eyes",
+    "zh-Hant": "翻白眼"
+  },
+  "1f62e_200d_1f4a8": {
+    "en": "exhale",
+    "zh-Hant": "呼氣"
+  },
+  "1f624": {
+    "en": "triumph",
+    "zh-Hant": "傲慢"
+  },
+  "1f620": {
+    "en": "angry",
+    "zh-Hant": "生氣"
+  },
+  "1f621": {
+    "en": "rage",
+    "zh-Hant": "怒火中燒"
+  },
+  "1f92c": {
+    "en": "cursing",
+    "zh-Hant": "嘴上有符號的臉"
+  },
+  "1f61e": {
+    "en": "sad",
+    "zh-Hant": "失望"
+  },
+  "1f613": {
+    "en": "sweat   downcast",
+    "zh-Hant": "汗"
+  },
+  "1f61f": {
+    "en": "worried",
+    "zh-Hant": "擔心"
+  },
+  "1f625": {
+    "en": "concerned",
+    "zh-Hant": "失望但如釋重負"
+  },
+  "1f622": {
+    "en": "cry",
+    "zh-Hant": "哭"
+  },
+  "2639_fe0f": {
+    "en": "big frown",
+    "zh-Hant": "不滿"
+  },
+  "1f641": {
+    "en": "frown",
+    "zh-Hant": "微微不滿"
+  },
+  "1fae4": {
+    "en": "diagonal mouth",
+    "zh-Hant": "鬱悶"
+  },
+  "1f615": {
+    "en": "slightly frowning",
+    "zh-Hant": "困擾"
+  },
+  "1f630": {
+    "en": "anxious with sweat",
+    "zh-Hant": "冷汗"
+  },
+  "1f628": {
+    "en": "scared",
+    "zh-Hant": "害怕"
+  },
+  "1f627": {
+    "en": "anguished",
+    "zh-Hant": "極度痛苦"
+  },
+  "1f626": {
+    "en": "gasp",
+    "zh-Hant": "啊"
+  },
+  "1f62e": {
+    "en": "mouth open",
+    "zh-Hant": "吃驚"
+  },
+  "1f62f": {
+    "en": "surprised   hushed",
+    "zh-Hant": "緘默"
+  },
+  "1f632": {
+    "en": "astonished",
+    "zh-Hant": "震驚"
+  },
+  "1f633": {
+    "en": "flushed",
+    "zh-Hant": "臉紅"
+  },
+  "1f92f": {
+    "en": "mind blown   exploding head",
+    "zh-Hant": "爆炸頭"
+  },
+  "1f616": {
+    "en": "scrunched mouth   confounded   zigzag mouth",
+    "zh-Hant": "困惑"
+  },
+  "1f623": {
+    "en": "scrunched eyes   persevering",
+    "zh-Hant": "痛苦"
+  },
+  "1f629": {
+    "en": "weary",
+    "zh-Hant": "累死了"
+  },
+  "1f62b": {
+    "en": "distraught",
+    "zh-Hant": "累"
+  },
+  "1f635": {
+    "en": "x eyes",
+    "zh-Hant": "暈頭轉向"
+  },
+  "1f635_200d_1f4ab": {
+    "en": "dizzy face",
+    "zh-Hant": "暈"
+  },
+  "1fae8": {
+    "en": "shaking face",
+    "zh-Hant": "顫抖"
+  },
+  "1f974": {
+    "en": "woozy",
+    "zh-Hant": "頭昏眼花"
+  },
+  "1f975": {
+    "en": "hot face   sweat face",
+    "zh-Hant": "臉發燒"
+  },
+  "1f976": {
+    "en": "cold face",
+    "zh-Hant": "冷臉"
+  },
+  "1f922": {
+    "en": "sick   nauseated",
+    "zh-Hant": "惡心"
+  },
+  "1f92e": {
+    "en": "vomit",
+    "zh-Hant": "嘔吐"
+  },
+  "1fae9": {
+    "en": "tired   bags under eyes",
+    "zh-Hant": "有眼袋"
+  },
+  "1f634": {
+    "en": "sleep",
+    "zh-Hant": "睡著了"
+  },
+  "1f62a": {
+    "en": "sleepy",
+    "zh-Hant": "困"
+  },
+  "1f927": {
+    "en": "sneeze",
+    "zh-Hant": "打噴嚏"
+  },
+  "1f912": {
+    "en": "thermometer face",
+    "zh-Hant": "發燒"
+  },
+  "1f915": {
+    "en": "bandage face",
+    "zh-Hant": "受傷"
+  },
+  "1f637": {
+    "en": "mask",
+    "zh-Hant": "感冒"
+  },
+  "1f925": {
+    "en": "liar",
+    "zh-Hant": "說謊"
+  },
+  "1f607": {
+    "en": "halo   innocent",
+    "zh-Hant": "微笑天使"
+  },
+  "1f920": {
+    "en": "cowboy",
+    "zh-Hant": "牛仔帽臉"
+  },
+  "1f911": {
+    "en": "money face",
+    "zh-Hant": "發財"
+  },
+  "1f913": {
+    "en": "nerd face",
+    "zh-Hant": "書呆子臉"
+  },
+  "1f60e": {
+    "en": "sunglasses face",
+    "zh-Hant": "墨鏡笑臉"
+  },
+  "1f978": {
+    "en": "disguise",
+    "zh-Hant": "偽裝的臉"
+  },
+  "1f921": {
+    "en": "clown",
+    "zh-Hant": "小丑臉"
+  },
+  "1f4a9": {
+    "en": "poop",
+    "zh-Hant": "大便"
+  },
+  "1f608": {
+    "en": "imp smile",
+    "zh-Hant": "惡魔微笑"
+  },
+  "1f47f": {
+    "en": "imp frown",
+    "zh-Hant": "生氣的惡魔"
+  },
+  "1f47b": {
+    "en": "ghost",
+    "zh-Hant": "鬼"
+  },
+  "1f480": {
+    "en": "skull",
+    "zh-Hant": "頭骨"
+  },
+  "1f916": {
+    "en": "robot",
+    "zh-Hant": "機器人"
+  },
+  "1f479": {
+    "en": "ogre",
+    "zh-Hant": "食人魔"
+  },
+  "2603_fe0f": {
+    "en": "snowman with snow",
+    "zh-Hant": "雪與雪人"
+  },
+  "26c4": {
+    "en": "snowman",
+    "zh-Hant": "雪人"
+  },
+  "1f47d": {
+    "en": "alien",
+    "zh-Hant": "外星人"
+  },
+  "1f47e": {
+    "en": "alien monster",
+    "zh-Hant": "外星怪物"
+  },
+  "1f31a": {
+    "en": "moon face new",
+    "zh-Hant": "微笑的朔月"
+  },
+  "1f31d": {
+    "en": "moon face full",
+    "zh-Hant": "微笑的月亮"
+  },
+  "1f31e": {
+    "en": "sun with face",
+    "zh-Hant": "微笑的太陽"
+  },
+  "1f31b": {
+    "en": "moon face first quarter",
+    "zh-Hant": "微笑的上弦月"
+  },
+  "1f31c": {
+    "en": "moon face last quarter",
+    "zh-Hant": "微笑的下弦月"
+  },
+  "1f63a": {
+    "en": "smiley cat",
+    "zh-Hant": "大笑的貓"
+  },
+  "1f638": {
+    "en": "smile cat",
+    "zh-Hant": "微笑的貓"
+  },
+  "1f639": {
+    "en": "joy cat",
+    "zh-Hant": "笑出眼淚的貓"
+  },
+  "1f63b": {
+    "en": "heart eyes cat",
+    "zh-Hant": "花痴的貓"
+  },
+  "1f63c": {
+    "en": "smirk cat",
+    "zh-Hant": "奸笑的貓"
+  },
+  "1f63d": {
+    "en": "kissing cat",
+    "zh-Hant": "親親貓"
+  },
+  "1f640": {
+    "en": "scream cat",
+    "zh-Hant": "疲倦的貓"
+  },
+  "1f63f": {
+    "en": "crying cat face",
+    "zh-Hant": "哭泣的貓"
+  },
+  "1f63e": {
+    "en": "pouting cat",
+    "zh-Hant": "生氣的貓"
+  },
+  "1f648": {
+    "en": "see no evil monkey",
+    "zh-Hant": "非禮勿視"
+  },
+  "1f649": {
+    "en": "hear no evil monkey",
+    "zh-Hant": "非禮勿聽"
+  },
+  "1f64a": {
+    "en": "speak no evil monkey",
+    "zh-Hant": "非禮勿言"
+  },
+  "2b50": {
+    "en": "star",
+    "zh-Hant": "星星"
+  },
+  "1f31f": {
+    "en": "glowing star",
+    "zh-Hant": "閃亮的星星"
+  },
+  "2728": {
+    "en": "sparkles",
+    "zh-Hant": "閃亮"
+  },
+  "26a1": {
+    "en": "electricity   zap   lightning",
+    "zh-Hant": "高壓"
+  },
+  "1f4a5": {
+    "en": "collision",
+    "zh-Hant": "爆炸"
+  },
+  "1faef": {
+    "en": "fight",
+    "zh-Hant": "打鬥雲團"
+  },
+  "1f573_fe0f": {
+    "en": "hole",
+    "zh-Hant": "洞"
+  },
+  "1f525": {
+    "en": "fire   burn   lit",
+    "zh-Hant": "火焰"
+  },
+  "1f4af": {
+    "en": "one hundred   hundred   points",
+    "zh-Hant": "一百分"
+  },
+  "1f389": {
+    "en": "party popper",
+    "zh-Hant": "拉炮彩帶"
+  },
+  "1f38a": {
+    "en": "confetti ball",
+    "zh-Hant": "五彩紙屑球"
+  },
+  "2764_fe0f": {
+    "en": "red heart",
+    "zh-Hant": "紅心"
+  },
+  "1f9e1": {
+    "en": "orange heart",
+    "zh-Hant": "橙心"
+  },
+  "1f49b": {
+    "en": "yellow heart",
+    "zh-Hant": "黃心"
+  },
+  "1f49a": {
+    "en": "green heart",
+    "zh-Hant": "綠心"
+  },
+  "1fa75": {
+    "en": "light blue heart",
+    "zh-Hant": "淺藍色的心"
+  },
+  "1f499": {
+    "en": "blue heart",
+    "zh-Hant": "藍心"
+  },
+  "1f49c": {
+    "en": "purple heart",
+    "zh-Hant": "紫心"
+  },
+  "1f90e": {
+    "en": "brown heart",
+    "zh-Hant": "棕心"
+  },
+  "1f5a4": {
+    "en": "black heart",
+    "zh-Hant": "黑心"
+  },
+  "1fa76": {
+    "en": "grey heart",
+    "zh-Hant": "灰心"
+  },
+  "1f90d": {
+    "en": "white heart",
+    "zh-Hant": "白心"
+  },
+  "1fa77": {
+    "en": "pink heart",
+    "zh-Hant": "粉紅色的心"
+  },
+  "1f498": {
+    "en": "cupid",
+    "zh-Hant": "心中箭了"
+  },
+  "1f49d": {
+    "en": "gift heart",
+    "zh-Hant": "系有緞帶的心"
+  },
+  "1f496": {
+    "en": "sparkling heart",
+    "zh-Hant": "閃亮的心"
+  },
+  "1f497": {
+    "en": "heart grow",
+    "zh-Hant": "搏動的心"
+  },
+  "1f493": {
+    "en": "beating heart",
+    "zh-Hant": "心跳"
+  },
+  "1f49e": {
+    "en": "revolving hearts",
+    "zh-Hant": "舞動的心"
+  },
+  "1f495": {
+    "en": "two hearts",
+    "zh-Hant": "兩顆心"
+  },
+  "1f48c": {
+    "en": "love letter",
+    "zh-Hant": "情書"
+  },
+  "1f49f": {
+    "en": "heart box",
+    "zh-Hant": "心型裝飾"
+  },
+  "2665_fe0f": {
+    "en": "heart",
+    "zh-Hant": "紅桃"
+  },
+  "2763_fe0f": {
+    "en": "heart exclamation point",
+    "zh-Hant": "心嘆號"
+  },
+  "2764_fe0f_200d_1fa79": {
+    "en": "bandaged heart",
+    "zh-Hant": "修復受傷的心靈"
+  },
+  "1f494": {
+    "en": "broken heart",
+    "zh-Hant": "心碎"
+  },
+  "2764_fe0f_200d_1f525": {
+    "en": "fire heart",
+    "zh-Hant": "火上之心"
+  },
+  "1f48b": {
+    "en": "kiss",
+    "zh-Hant": "唇印"
+  },
+  "1fac2": {
+    "en": "hugging",
+    "zh-Hant": "人的擁抱"
+  },
+  "1f5e3_fe0f": {
+    "en": "speaking head",
+    "zh-Hant": "說話"
+  },
+  "1f463": {
+    "en": "footprints",
+    "zh-Hant": "腳印"
+  },
+  "1fac6": {
+    "en": "fingerprint",
+    "zh-Hant": "指紋"
+  },
+  "1f9e0": {
+    "en": "brain",
+    "zh-Hant": "腦"
+  },
+  "1fac0": {
+    "en": "anatomical heart",
+    "zh-Hant": "心臟器官"
+  },
+  "1fa78": {
+    "en": "blood",
+    "zh-Hant": "血滴"
+  },
+  "1f9a0": {
+    "en": "microbe   virus",
+    "zh-Hant": "細菌"
+  },
+  "1f9b4": {
+    "en": "bone",
+    "zh-Hant": "骨頭"
+  },
+  "1f440": {
+    "en": "eyes",
+    "zh-Hant": "雙眼"
+  },
+  "1f441_fe0f": {
+    "en": "eye",
+    "zh-Hant": "眼睛"
+  },
+  "1fae6": {
+    "en": "biting lip",
+    "zh-Hant": "咬住嘴唇"
+  },
+  "1f443": {
+    "en": "nose",
+    "zh-Hant": "鼻子"
+  },
+  "1f443_1f3fb": {
+    "en": "nose",
+    "zh-Hant": "nose"
+  },
+  "1f443_1f3fc": {
+    "en": "nose",
+    "zh-Hant": "nose"
+  },
+  "1f443_1f3fd": {
+    "en": "nose",
+    "zh-Hant": "nose"
+  },
+  "1f443_1f3fe": {
+    "en": "nose",
+    "zh-Hant": "nose"
+  },
+  "1f443_1f3ff": {
+    "en": "nose",
+    "zh-Hant": "nose"
+  },
+  "1f442": {
+    "en": "ear",
+    "zh-Hant": "耳朵"
+  },
+  "1f442_1f3fb": {
+    "en": "ear",
+    "zh-Hant": "ear"
+  },
+  "1f442_1f3fc": {
+    "en": "ear",
+    "zh-Hant": "ear"
+  },
+  "1f442_1f3fd": {
+    "en": "ear",
+    "zh-Hant": "ear"
+  },
+  "1f442_1f3fe": {
+    "en": "ear",
+    "zh-Hant": "ear"
+  },
+  "1f442_1f3ff": {
+    "en": "ear",
+    "zh-Hant": "ear"
+  },
+  "1f9bb": {
+    "en": "hearing aid",
+    "zh-Hant": "戴助聽器的耳朵"
+  },
+  "1f9bb_1f3fb": {
+    "en": "hearing aid",
+    "zh-Hant": "hearing aid"
+  },
+  "1f9bb_1f3fc": {
+    "en": "hearing aid",
+    "zh-Hant": "hearing aid"
+  },
+  "1f9bb_1f3fd": {
+    "en": "hearing aid",
+    "zh-Hant": "hearing aid"
+  },
+  "1f9bb_1f3fe": {
+    "en": "hearing aid",
+    "zh-Hant": "hearing aid"
+  },
+  "1f9bb_1f3ff": {
+    "en": "hearing aid",
+    "zh-Hant": "hearing aid"
+  },
+  "1f9b6": {
+    "en": "foot",
+    "zh-Hant": "腳"
+  },
+  "1f9b6_1f3fb": {
+    "en": "foot",
+    "zh-Hant": "foot"
+  },
+  "1f9b6_1f3fc": {
+    "en": "foot",
+    "zh-Hant": "foot"
+  },
+  "1f9b6_1f3fd": {
+    "en": "foot",
+    "zh-Hant": "foot"
+  },
+  "1f9b6_1f3fe": {
+    "en": "foot",
+    "zh-Hant": "foot"
+  },
+  "1f9b6_1f3ff": {
+    "en": "foot",
+    "zh-Hant": "foot"
+  },
+  "1f9b5": {
+    "en": "leg",
+    "zh-Hant": "腿"
+  },
+  "1f9b5_1f3fb": {
+    "en": "leg",
+    "zh-Hant": "leg"
+  },
+  "1f9b5_1f3fc": {
+    "en": "leg",
+    "zh-Hant": "leg"
+  },
+  "1f9b5_1f3fd": {
+    "en": "leg",
+    "zh-Hant": "leg"
+  },
+  "1f9b5_1f3fe": {
+    "en": "leg",
+    "zh-Hant": "leg"
+  },
+  "1f9b5_1f3ff": {
+    "en": "leg",
+    "zh-Hant": "leg"
+  },
+  "1f9bf": {
+    "en": "leg mechanical",
+    "zh-Hant": "機械腿"
+  },
+  "1f9be": {
+    "en": "arm mechanical",
+    "zh-Hant": "機械手臂"
+  },
+  "1f4aa": {
+    "en": "muscle   flex   bicep   strong",
+    "zh-Hant": "肌肉"
+  },
+  "1f4aa_1f3fb": {
+    "en": "muscle   flex   bicep   strong",
+    "zh-Hant": "muscle   flex   bicep   strong"
+  },
+  "1f4aa_1f3fc": {
+    "en": "muscle   flex   bicep   strong",
+    "zh-Hant": "muscle   flex   bicep   strong"
+  },
+  "1f4aa_1f3fd": {
+    "en": "muscle   flex   bicep   strong",
+    "zh-Hant": "muscle   flex   bicep   strong"
+  },
+  "1f4aa_1f3fe": {
+    "en": "muscle   flex   bicep   strong",
+    "zh-Hant": "muscle   flex   bicep   strong"
+  },
+  "1f4aa_1f3ff": {
+    "en": "muscle   flex   bicep   strong",
+    "zh-Hant": "muscle   flex   bicep   strong"
+  },
+  "1f44f": {
+    "en": "clap",
+    "zh-Hant": "鼓掌"
+  },
+  "1f44f_1f3fb": {
+    "en": "clap",
+    "zh-Hant": "clap"
+  },
+  "1f44f_1f3fc": {
+    "en": "clap",
+    "zh-Hant": "clap"
+  },
+  "1f44f_1f3fd": {
+    "en": "clap",
+    "zh-Hant": "clap"
+  },
+  "1f44f_1f3fe": {
+    "en": "clap",
+    "zh-Hant": "clap"
+  },
+  "1f44f_1f3ff": {
+    "en": "clap",
+    "zh-Hant": "clap"
+  },
+  "1f44d": {
+    "en": "thumbs up   +1",
+    "zh-Hant": "拇指向上"
+  },
+  "1f44d_1f3fb": {
+    "en": "thumbs up   +1",
+    "zh-Hant": "thumbs up   +1"
+  },
+  "1f44d_1f3fc": {
+    "en": "thumbs up   +1",
+    "zh-Hant": "thumbs up   +1"
+  },
+  "1f44d_1f3fd": {
+    "en": "thumbs up   +1",
+    "zh-Hant": "thumbs up   +1"
+  },
+  "1f44d_1f3fe": {
+    "en": "thumbs up   +1",
+    "zh-Hant": "thumbs up   +1"
+  },
+  "1f44d_1f3ff": {
+    "en": "thumbs up   +1",
+    "zh-Hant": "thumbs up   +1"
+  },
+  "1f44e": {
+    "en": "thumbs down",
+    "zh-Hant": "拇指向下"
+  },
+  "1f44e_1f3fb": {
+    "en": "thumbs down",
+    "zh-Hant": "thumbs down"
+  },
+  "1f44e_1f3fc": {
+    "en": "thumbs down",
+    "zh-Hant": "thumbs down"
+  },
+  "1f44e_1f3fd": {
+    "en": "thumbs down",
+    "zh-Hant": "thumbs down"
+  },
+  "1f44e_1f3fe": {
+    "en": "thumbs down",
+    "zh-Hant": "thumbs down"
+  },
+  "1f44e_1f3ff": {
+    "en": "thumbs down",
+    "zh-Hant": "thumbs down"
+  },
+  "1faf6": {
+    "en": "heart hands",
+    "zh-Hant": "做成心形的雙手"
+  },
+  "1faf6_1f3fb": {
+    "en": "heart hands",
+    "zh-Hant": "heart hands"
+  },
+  "1faf6_1f3fc": {
+    "en": "heart hands",
+    "zh-Hant": "heart hands"
+  },
+  "1faf6_1f3fd": {
+    "en": "heart hands",
+    "zh-Hant": "heart hands"
+  },
+  "1faf6_1f3fe": {
+    "en": "heart hands",
+    "zh-Hant": "heart hands"
+  },
+  "1faf6_1f3ff": {
+    "en": "heart hands",
+    "zh-Hant": "heart hands"
+  },
+  "1f64c": {
+    "en": "raising hands   hooray",
+    "zh-Hant": "舉雙手"
+  },
+  "1f64c_1f3fb": {
+    "en": "raising hands   hooray",
+    "zh-Hant": "raising hands   hooray"
+  },
+  "1f64c_1f3fc": {
+    "en": "raising hands   hooray",
+    "zh-Hant": "raising hands   hooray"
+  },
+  "1f64c_1f3fd": {
+    "en": "raising hands   hooray",
+    "zh-Hant": "raising hands   hooray"
+  },
+  "1f64c_1f3fe": {
+    "en": "raising hands   hooray",
+    "zh-Hant": "raising hands   hooray"
+  },
+  "1f64c_1f3ff": {
+    "en": "raising hands   hooray",
+    "zh-Hant": "raising hands   hooray"
+  },
+  "1f450": {
+    "en": "open hands",
+    "zh-Hant": "張開雙手"
+  },
+  "1f450_1f3fb": {
+    "en": "open hands",
+    "zh-Hant": "open hands"
+  },
+  "1f450_1f3fc": {
+    "en": "open hands",
+    "zh-Hant": "open hands"
+  },
+  "1f450_1f3fd": {
+    "en": "open hands",
+    "zh-Hant": "open hands"
+  },
+  "1f450_1f3fe": {
+    "en": "open hands",
+    "zh-Hant": "open hands"
+  },
+  "1f450_1f3ff": {
+    "en": "open hands",
+    "zh-Hant": "open hands"
+  },
+  "1f932": {
+    "en": "palms up",
+    "zh-Hant": "掌心向上托起"
+  },
+  "1f932_1f3fb": {
+    "en": "palms up",
+    "zh-Hant": "palms up"
+  },
+  "1f932_1f3fc": {
+    "en": "palms up",
+    "zh-Hant": "palms up"
+  },
+  "1f932_1f3fd": {
+    "en": "palms up",
+    "zh-Hant": "palms up"
+  },
+  "1f932_1f3fe": {
+    "en": "palms up",
+    "zh-Hant": "palms up"
+  },
+  "1f932_1f3ff": {
+    "en": "palms up",
+    "zh-Hant": "palms up"
+  },
+  "1f91c": {
+    "en": "fist rightwards",
+    "zh-Hant": "朝右的拳頭"
+  },
+  "1f91c_1f3fb": {
+    "en": "fist rightwards",
+    "zh-Hant": "fist rightwards"
+  },
+  "1f91c_1f3fc": {
+    "en": "fist rightwards",
+    "zh-Hant": "fist rightwards"
+  },
+  "1f91c_1f3fd": {
+    "en": "fist rightwards",
+    "zh-Hant": "fist rightwards"
+  },
+  "1f91c_1f3fe": {
+    "en": "fist rightwards",
+    "zh-Hant": "fist rightwards"
+  },
+  "1f91c_1f3ff": {
+    "en": "fist rightwards",
+    "zh-Hant": "fist rightwards"
+  },
+  "1f91b": {
+    "en": "fist leftwards",
+    "zh-Hant": "朝左的拳頭"
+  },
+  "1f91b_1f3fb": {
+    "en": "fist leftwards",
+    "zh-Hant": "fist leftwards"
+  },
+  "1f91b_1f3fc": {
+    "en": "fist leftwards",
+    "zh-Hant": "fist leftwards"
+  },
+  "1f91b_1f3fd": {
+    "en": "fist leftwards",
+    "zh-Hant": "fist leftwards"
+  },
+  "1f91b_1f3fe": {
+    "en": "fist leftwards",
+    "zh-Hant": "fist leftwards"
+  },
+  "1f91b_1f3ff": {
+    "en": "fist leftwards",
+    "zh-Hant": "fist leftwards"
+  },
+  "270a": {
+    "en": "raised fist",
+    "zh-Hant": "舉起拳頭"
+  },
+  "270a_1f3fb": {
+    "en": "raised fist",
+    "zh-Hant": "raised fist"
+  },
+  "270a_1f3fc": {
+    "en": "raised fist",
+    "zh-Hant": "raised fist"
+  },
+  "270a_1f3fd": {
+    "en": "raised fist",
+    "zh-Hant": "raised fist"
+  },
+  "270a_1f3fe": {
+    "en": "raised fist",
+    "zh-Hant": "raised fist"
+  },
+  "270a_1f3ff": {
+    "en": "raised fist",
+    "zh-Hant": "raised fist"
+  },
+  "1f44a": {
+    "en": "fist   bump",
+    "zh-Hant": "出拳"
+  },
+  "1f44a_1f3fb": {
+    "en": "fist   bump",
+    "zh-Hant": "fist   bump"
+  },
+  "1f44a_1f3fc": {
+    "en": "fist   bump",
+    "zh-Hant": "fist   bump"
+  },
+  "1f44a_1f3fd": {
+    "en": "fist   bump",
+    "zh-Hant": "fist   bump"
+  },
+  "1f44a_1f3fe": {
+    "en": "fist   bump",
+    "zh-Hant": "fist   bump"
+  },
+  "1f44a_1f3ff": {
+    "en": "fist   bump",
+    "zh-Hant": "fist   bump"
+  },
+  "1faf3": {
+    "en": "palm down   drop",
+    "zh-Hant": "掌心向下的手"
+  },
+  "1faf3_1f3fb": {
+    "en": "palm down   drop",
+    "zh-Hant": "palm down   drop"
+  },
+  "1faf3_1f3fc": {
+    "en": "palm down   drop",
+    "zh-Hant": "palm down   drop"
+  },
+  "1faf3_1f3fd": {
+    "en": "palm down   drop",
+    "zh-Hant": "palm down   drop"
+  },
+  "1faf3_1f3fe": {
+    "en": "palm down   drop",
+    "zh-Hant": "palm down   drop"
+  },
+  "1faf3_1f3ff": {
+    "en": "palm down   drop",
+    "zh-Hant": "palm down   drop"
+  },
+  "1faf4": {
+    "en": "palm up   throw",
+    "zh-Hant": "掌心向上的手"
+  },
+  "1faf4_1f3fb": {
+    "en": "palm up   throw",
+    "zh-Hant": "palm up   throw"
+  },
+  "1faf4_1f3fc": {
+    "en": "palm up   throw",
+    "zh-Hant": "palm up   throw"
+  },
+  "1faf4_1f3fd": {
+    "en": "palm up   throw",
+    "zh-Hant": "palm up   throw"
+  },
+  "1faf4_1f3fe": {
+    "en": "palm up   throw",
+    "zh-Hant": "palm up   throw"
+  },
+  "1faf4_1f3ff": {
+    "en": "palm up   throw",
+    "zh-Hant": "palm up   throw"
+  },
+  "1faf1": {
+    "en": "rightwards hand",
+    "zh-Hant": "向右的手"
+  },
+  "1faf1_1f3fb": {
+    "en": "rightwards hand",
+    "zh-Hant": "rightwards hand"
+  },
+  "1faf1_1f3fc": {
+    "en": "rightwards hand",
+    "zh-Hant": "rightwards hand"
+  },
+  "1faf1_1f3fd": {
+    "en": "rightwards hand",
+    "zh-Hant": "rightwards hand"
+  },
+  "1faf1_1f3fe": {
+    "en": "rightwards hand",
+    "zh-Hant": "rightwards hand"
+  },
+  "1faf1_1f3ff": {
+    "en": "rightwards hand",
+    "zh-Hant": "rightwards hand"
+  },
+  "1faf2": {
+    "en": "leftwards hand",
+    "zh-Hant": "向左的手"
+  },
+  "1faf2_1f3fb": {
+    "en": "leftwards hand",
+    "zh-Hant": "leftwards hand"
+  },
+  "1faf2_1f3fc": {
+    "en": "leftwards hand",
+    "zh-Hant": "leftwards hand"
+  },
+  "1faf2_1f3fd": {
+    "en": "leftwards hand",
+    "zh-Hant": "leftwards hand"
+  },
+  "1faf2_1f3fe": {
+    "en": "leftwards hand",
+    "zh-Hant": "leftwards hand"
+  },
+  "1faf2_1f3ff": {
+    "en": "leftwards hand",
+    "zh-Hant": "leftwards hand"
+  },
+  "1faf8": {
+    "en": "push rightwards",
+    "zh-Hant": "向右推"
+  },
+  "1faf8_1f3fb": {
+    "en": "push rightwards",
+    "zh-Hant": "push rightwards"
+  },
+  "1faf8_1f3fc": {
+    "en": "push rightwards",
+    "zh-Hant": "push rightwards"
+  },
+  "1faf8_1f3fd": {
+    "en": "push rightwards",
+    "zh-Hant": "push rightwards"
+  },
+  "1faf8_1f3fe": {
+    "en": "push rightwards",
+    "zh-Hant": "push rightwards"
+  },
+  "1faf8_1f3ff": {
+    "en": "push rightwards",
+    "zh-Hant": "push rightwards"
+  },
+  "1faf7": {
+    "en": "push leftwards",
+    "zh-Hant": "向左推"
+  },
+  "1faf7_1f3fb": {
+    "en": "push leftwards",
+    "zh-Hant": "push leftwards"
+  },
+  "1faf7_1f3fc": {
+    "en": "push leftwards",
+    "zh-Hant": "push leftwards"
+  },
+  "1faf7_1f3fd": {
+    "en": "push leftwards",
+    "zh-Hant": "push leftwards"
+  },
+  "1faf7_1f3fe": {
+    "en": "push leftwards",
+    "zh-Hant": "push leftwards"
+  },
+  "1faf7_1f3ff": {
+    "en": "push leftwards",
+    "zh-Hant": "push leftwards"
+  },
+  "1f44b": {
+    "en": "wave",
+    "zh-Hant": "揮手"
+  },
+  "1f44b_1f3fb": {
+    "en": "wave",
+    "zh-Hant": "wave"
+  },
+  "1f44b_1f3fc": {
+    "en": "wave",
+    "zh-Hant": "wave"
+  },
+  "1f44b_1f3fd": {
+    "en": "wave",
+    "zh-Hant": "wave"
+  },
+  "1f44b_1f3fe": {
+    "en": "wave",
+    "zh-Hant": "wave"
+  },
+  "1f44b_1f3ff": {
+    "en": "wave",
+    "zh-Hant": "wave"
+  },
+  "1f91a": {
+    "en": "back hand",
+    "zh-Hant": "立起的手背"
+  },
+  "1f91a_1f3fb": {
+    "en": "back hand",
+    "zh-Hant": "back hand"
+  },
+  "1f91a_1f3fc": {
+    "en": "back hand",
+    "zh-Hant": "back hand"
+  },
+  "1f91a_1f3fd": {
+    "en": "back hand",
+    "zh-Hant": "back hand"
+  },
+  "1f91a_1f3fe": {
+    "en": "back hand",
+    "zh-Hant": "back hand"
+  },
+  "1f91a_1f3ff": {
+    "en": "back hand",
+    "zh-Hant": "back hand"
+  },
+  "1f590_fe0f": {
+    "en": "palm",
+    "zh-Hant": "手掌"
+  },
+  "1f590_1f3fb": {
+    "en": "palm",
+    "zh-Hant": "palm"
+  },
+  "1f590_1f3fc": {
+    "en": "palm",
+    "zh-Hant": "palm"
+  },
+  "1f590_1f3fd": {
+    "en": "palm",
+    "zh-Hant": "palm"
+  },
+  "1f590_1f3fe": {
+    "en": "palm",
+    "zh-Hant": "palm"
+  },
+  "1f590_1f3ff": {
+    "en": "palm",
+    "zh-Hant": "palm"
+  },
+  "270b": {
+    "en": "raised hand",
+    "zh-Hant": "舉起手"
+  },
+  "270b_1f3fb": {
+    "en": "raised hand",
+    "zh-Hant": "raised hand"
+  },
+  "270b_1f3fc": {
+    "en": "raised hand",
+    "zh-Hant": "raised hand"
+  },
+  "270b_1f3fd": {
+    "en": "raised hand",
+    "zh-Hant": "raised hand"
+  },
+  "270b_1f3fe": {
+    "en": "raised hand",
+    "zh-Hant": "raised hand"
+  },
+  "270b_1f3ff": {
+    "en": "raised hand",
+    "zh-Hant": "raised hand"
+  },
+  "1f596": {
+    "en": "vulcan   prosper   spock",
+    "zh-Hant": "瓦肯舉手禮"
+  },
+  "1f596_1f3fb": {
+    "en": "vulcan   prosper   spock",
+    "zh-Hant": "vulcan   prosper   spock"
+  },
+  "1f596_1f3fc": {
+    "en": "vulcan   prosper   spock",
+    "zh-Hant": "vulcan   prosper   spock"
+  },
+  "1f596_1f3fd": {
+    "en": "vulcan   prosper   spock",
+    "zh-Hant": "vulcan   prosper   spock"
+  },
+  "1f596_1f3fe": {
+    "en": "vulcan   prosper   spock",
+    "zh-Hant": "vulcan   prosper   spock"
+  },
+  "1f596_1f3ff": {
+    "en": "vulcan   prosper   spock",
+    "zh-Hant": "vulcan   prosper   spock"
+  },
+  "1f91f": {
+    "en": "love you gesture",
+    "zh-Hant": "愛你的手勢"
+  },
+  "1f91f_1f3fb": {
+    "en": "love you gesture",
+    "zh-Hant": "love you gesture"
+  },
+  "1f91f_1f3fc": {
+    "en": "love you gesture",
+    "zh-Hant": "love you gesture"
+  },
+  "1f91f_1f3fd": {
+    "en": "love you gesture",
+    "zh-Hant": "love you gesture"
+  },
+  "1f91f_1f3fe": {
+    "en": "love you gesture",
+    "zh-Hant": "love you gesture"
+  },
+  "1f91f_1f3ff": {
+    "en": "love you gesture",
+    "zh-Hant": "love you gesture"
+  },
+  "1f918": {
+    "en": "metal   horns",
+    "zh-Hant": "搖滾"
+  },
+  "1f918_1f3fb": {
+    "en": "metal   horns",
+    "zh-Hant": "metal   horns"
+  },
+  "1f918_1f3fc": {
+    "en": "metal   horns",
+    "zh-Hant": "metal   horns"
+  },
+  "1f918_1f3fd": {
+    "en": "metal   horns",
+    "zh-Hant": "metal   horns"
+  },
+  "1f918_1f3fe": {
+    "en": "metal   horns",
+    "zh-Hant": "metal   horns"
+  },
+  "1f918_1f3ff": {
+    "en": "metal   horns",
+    "zh-Hant": "metal   horns"
+  },
+  "270c_fe0f": {
+    "en": "victory   v   peace hand",
+    "zh-Hant": "勝利手勢"
+  },
+  "270c_1f3fb": {
+    "en": "victory   v   peace hand",
+    "zh-Hant": "victory   v   peace hand"
+  },
+  "270c_1f3fc": {
+    "en": "victory   v   peace hand",
+    "zh-Hant": "victory   v   peace hand"
+  },
+  "270c_1f3fd": {
+    "en": "victory   v   peace hand",
+    "zh-Hant": "victory   v   peace hand"
+  },
+  "270c_1f3fe": {
+    "en": "victory   v   peace hand",
+    "zh-Hant": "victory   v   peace hand"
+  },
+  "270c_1f3ff": {
+    "en": "victory   v   peace hand",
+    "zh-Hant": "victory   v   peace hand"
+  },
+  "1f91e": {
+    "en": "crossed fingers",
+    "zh-Hant": "交叉的手指"
+  },
+  "1f91e_1f3fb": {
+    "en": "crossed fingers",
+    "zh-Hant": "crossed fingers"
+  },
+  "1f91e_1f3fc": {
+    "en": "crossed fingers",
+    "zh-Hant": "crossed fingers"
+  },
+  "1f91e_1f3fd": {
+    "en": "crossed fingers",
+    "zh-Hant": "crossed fingers"
+  },
+  "1f91e_1f3fe": {
+    "en": "crossed fingers",
+    "zh-Hant": "crossed fingers"
+  },
+  "1f91e_1f3ff": {
+    "en": "crossed fingers",
+    "zh-Hant": "crossed fingers"
+  },
+  "1faf0": {
+    "en": "hand with index finger and thumb crossed   snap   finger heart",
+    "zh-Hant": "食指與拇指交叉的手"
+  },
+  "1faf0_1f3fb": {
+    "en": "hand with index finger and thumb crossed   snap   finger heart",
+    "zh-Hant": "hand with index finger and thumb crossed   snap   finger heart"
+  },
+  "1faf0_1f3fc": {
+    "en": "hand with index finger and thumb crossed   snap   finger heart",
+    "zh-Hant": "hand with index finger and thumb crossed   snap   finger heart"
+  },
+  "1faf0_1f3fd": {
+    "en": "hand with index finger and thumb crossed   snap   finger heart",
+    "zh-Hant": "hand with index finger and thumb crossed   snap   finger heart"
+  },
+  "1faf0_1f3fe": {
+    "en": "hand with index finger and thumb crossed   snap   finger heart",
+    "zh-Hant": "hand with index finger and thumb crossed   snap   finger heart"
+  },
+  "1faf0_1f3ff": {
+    "en": "hand with index finger and thumb crossed   snap   finger heart",
+    "zh-Hant": "hand with index finger and thumb crossed   snap   finger heart"
+  },
+  "1f919": {
+    "en": "call me hand",
+    "zh-Hant": "給我打電話"
+  },
+  "1f919_1f3fb": {
+    "en": "call me hand",
+    "zh-Hant": "call me hand"
+  },
+  "1f919_1f3fc": {
+    "en": "call me hand",
+    "zh-Hant": "call me hand"
+  },
+  "1f919_1f3fd": {
+    "en": "call me hand",
+    "zh-Hant": "call me hand"
+  },
+  "1f919_1f3fe": {
+    "en": "call me hand",
+    "zh-Hant": "call me hand"
+  },
+  "1f919_1f3ff": {
+    "en": "call me hand",
+    "zh-Hant": "call me hand"
+  },
+  "1f90c": {
+    "en": "pinched fingers",
+    "zh-Hant": "捏手指"
+  },
+  "1f90c_1f3fb": {
+    "en": "pinched fingers",
+    "zh-Hant": "pinched fingers"
+  },
+  "1f90c_1f3fc": {
+    "en": "pinched fingers",
+    "zh-Hant": "pinched fingers"
+  },
+  "1f90c_1f3fd": {
+    "en": "pinched fingers",
+    "zh-Hant": "pinched fingers"
+  },
+  "1f90c_1f3fe": {
+    "en": "pinched fingers",
+    "zh-Hant": "pinched fingers"
+  },
+  "1f90c_1f3ff": {
+    "en": "pinched fingers",
+    "zh-Hant": "pinched fingers"
+  },
+  "1f90f": {
+    "en": "pinch",
+    "zh-Hant": "捏合的手勢"
+  },
+  "1f90f_1f3fb": {
+    "en": "pinch",
+    "zh-Hant": "pinch"
+  },
+  "1f90f_1f3fc": {
+    "en": "pinch",
+    "zh-Hant": "pinch"
+  },
+  "1f90f_1f3fd": {
+    "en": "pinch",
+    "zh-Hant": "pinch"
+  },
+  "1f90f_1f3fe": {
+    "en": "pinch",
+    "zh-Hant": "pinch"
+  },
+  "1f90f_1f3ff": {
+    "en": "pinch",
+    "zh-Hant": "pinch"
+  },
+  "1f44c": {
+    "en": "ok",
+    "zh-Hant": "OK"
+  },
+  "1f44c_1f3fb": {
+    "en": "ok",
+    "zh-Hant": "ok"
+  },
+  "1f44c_1f3fc": {
+    "en": "ok",
+    "zh-Hant": "ok"
+  },
+  "1f44c_1f3fd": {
+    "en": "ok",
+    "zh-Hant": "ok"
+  },
+  "1f44c_1f3fe": {
+    "en": "ok",
+    "zh-Hant": "ok"
+  },
+  "1f44c_1f3ff": {
+    "en": "ok",
+    "zh-Hant": "ok"
+  },
+  "1faf5": {
+    "en": "pointing",
+    "zh-Hant": "指向觀察者的食指"
+  },
+  "1faf5_1f3fb": {
+    "en": "pointing",
+    "zh-Hant": "pointing"
+  },
+  "1faf5_1f3fc": {
+    "en": "pointing",
+    "zh-Hant": "pointing"
+  },
+  "1faf5_1f3fd": {
+    "en": "pointing",
+    "zh-Hant": "pointing"
+  },
+  "1faf5_1f3fe": {
+    "en": "pointing",
+    "zh-Hant": "pointing"
+  },
+  "1faf5_1f3ff": {
+    "en": "pointing",
+    "zh-Hant": "pointing"
+  },
+  "1f449": {
+    "en": "point right",
+    "zh-Hant": "反手食指向右指"
+  },
+  "1f449_1f3fb": {
+    "en": "point right",
+    "zh-Hant": "point right"
+  },
+  "1f449_1f3fc": {
+    "en": "point right",
+    "zh-Hant": "point right"
+  },
+  "1f449_1f3fd": {
+    "en": "point right",
+    "zh-Hant": "point right"
+  },
+  "1f449_1f3fe": {
+    "en": "point right",
+    "zh-Hant": "point right"
+  },
+  "1f449_1f3ff": {
+    "en": "point right",
+    "zh-Hant": "point right"
+  },
+  "1f448": {
+    "en": "point left",
+    "zh-Hant": "反手食指向左指"
+  },
+  "1f448_1f3fb": {
+    "en": "point left",
+    "zh-Hant": "point left"
+  },
+  "1f448_1f3fc": {
+    "en": "point left",
+    "zh-Hant": "point left"
+  },
+  "1f448_1f3fd": {
+    "en": "point left",
+    "zh-Hant": "point left"
+  },
+  "1f448_1f3fe": {
+    "en": "point left",
+    "zh-Hant": "point left"
+  },
+  "1f448_1f3ff": {
+    "en": "point left",
+    "zh-Hant": "point left"
+  },
+  "261d_fe0f": {
+    "en": "index finger",
+    "zh-Hant": "食指向上指"
+  },
+  "261d_1f3fb": {
+    "en": "index finger",
+    "zh-Hant": "index finger"
+  },
+  "261d_1f3fc": {
+    "en": "index finger",
+    "zh-Hant": "index finger"
+  },
+  "261d_1f3fd": {
+    "en": "index finger",
+    "zh-Hant": "index finger"
+  },
+  "261d_1f3fe": {
+    "en": "index finger",
+    "zh-Hant": "index finger"
+  },
+  "261d_1f3ff": {
+    "en": "index finger",
+    "zh-Hant": "index finger"
+  },
+  "1f446": {
+    "en": "point up",
+    "zh-Hant": "反手食指向上指"
+  },
+  "1f446_1f3fb": {
+    "en": "point up",
+    "zh-Hant": "point up"
+  },
+  "1f446_1f3fc": {
+    "en": "point up",
+    "zh-Hant": "point up"
+  },
+  "1f446_1f3fd": {
+    "en": "point up",
+    "zh-Hant": "point up"
+  },
+  "1f446_1f3fe": {
+    "en": "point up",
+    "zh-Hant": "point up"
+  },
+  "1f446_1f3ff": {
+    "en": "point up",
+    "zh-Hant": "point up"
+  },
+  "1f447": {
+    "en": "point down",
+    "zh-Hant": "反手食指向下指"
+  },
+  "1f447_1f3fb": {
+    "en": "point down",
+    "zh-Hant": "point down"
+  },
+  "1f447_1f3fc": {
+    "en": "point down",
+    "zh-Hant": "point down"
+  },
+  "1f447_1f3fd": {
+    "en": "point down",
+    "zh-Hant": "point down"
+  },
+  "1f447_1f3fe": {
+    "en": "point down",
+    "zh-Hant": "point down"
+  },
+  "1f447_1f3ff": {
+    "en": "point down",
+    "zh-Hant": "point down"
+  },
+  "1f595": {
+    "en": "middle finger",
+    "zh-Hant": "竪中指"
+  },
+  "1f595_1f3fb": {
+    "en": "middle finger",
+    "zh-Hant": "middle finger"
+  },
+  "1f595_1f3fc": {
+    "en": "middle finger",
+    "zh-Hant": "middle finger"
+  },
+  "1f595_1f3fd": {
+    "en": "middle finger",
+    "zh-Hant": "middle finger"
+  },
+  "1f595_1f3fe": {
+    "en": "middle finger",
+    "zh-Hant": "middle finger"
+  },
+  "1f595_1f3ff": {
+    "en": "middle finger",
+    "zh-Hant": "middle finger"
+  },
+  "270d_fe0f": {
+    "en": "writing hand",
+    "zh-Hant": "寫字"
+  },
+  "270d_1f3fb": {
+    "en": "writing hand",
+    "zh-Hant": "writing hand"
+  },
+  "270d_1f3fc": {
+    "en": "writing hand",
+    "zh-Hant": "writing hand"
+  },
+  "270d_1f3fd": {
+    "en": "writing hand",
+    "zh-Hant": "writing hand"
+  },
+  "270d_1f3fe": {
+    "en": "writing hand",
+    "zh-Hant": "writing hand"
+  },
+  "270d_1f3ff": {
+    "en": "writing hand",
+    "zh-Hant": "writing hand"
+  },
+  "1f933": {
+    "en": "selfie",
+    "zh-Hant": "自拍"
+  },
+  "1f933_1f3fb": {
+    "en": "selfie",
+    "zh-Hant": "selfie"
+  },
+  "1f933_1f3fc": {
+    "en": "selfie",
+    "zh-Hant": "selfie"
+  },
+  "1f933_1f3fd": {
+    "en": "selfie",
+    "zh-Hant": "selfie"
+  },
+  "1f933_1f3fe": {
+    "en": "selfie",
+    "zh-Hant": "selfie"
+  },
+  "1f933_1f3ff": {
+    "en": "selfie",
+    "zh-Hant": "selfie"
+  },
+  "1f64f": {
+    "en": "folded hands   please   pray   hope   wish   thank you   high five",
+    "zh-Hant": "雙手合十"
+  },
+  "1f64f_1f3fb": {
+    "en": "folded hands   please   pray   hope   wish   thank you   high five",
+    "zh-Hant": "folded hands   please   pray   hope   wish   thank you   high five"
+  },
+  "1f64f_1f3fc": {
+    "en": "folded hands   please   pray   hope   wish   thank you   high five",
+    "zh-Hant": "folded hands   please   pray   hope   wish   thank you   high five"
+  },
+  "1f64f_1f3fd": {
+    "en": "folded hands   please   pray   hope   wish   thank you   high five",
+    "zh-Hant": "folded hands   please   pray   hope   wish   thank you   high five"
+  },
+  "1f64f_1f3fe": {
+    "en": "folded hands   please   pray   hope   wish   thank you   high five",
+    "zh-Hant": "folded hands   please   pray   hope   wish   thank you   high five"
+  },
+  "1f64f_1f3ff": {
+    "en": "folded hands   please   pray   hope   wish   thank you   high five",
+    "zh-Hant": "folded hands   please   pray   hope   wish   thank you   high five"
+  },
+  "1f485": {
+    "en": "nail care",
+    "zh-Hant": "塗指甲油"
+  },
+  "1f485_1f3fb": {
+    "en": "nail care",
+    "zh-Hant": "nail care"
+  },
+  "1f485_1f3fc": {
+    "en": "nail care",
+    "zh-Hant": "nail care"
+  },
+  "1f485_1f3fd": {
+    "en": "nail care",
+    "zh-Hant": "nail care"
+  },
+  "1f485_1f3fe": {
+    "en": "nail care",
+    "zh-Hant": "nail care"
+  },
+  "1f485_1f3ff": {
+    "en": "nail care",
+    "zh-Hant": "nail care"
+  },
+  "1f91d": {
+    "en": "handshake",
+    "zh-Hant": "握手"
+  },
+  "1f91d_1f3fb": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fb_200d_1faf2_1f3fc": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fb_200d_1faf2_1f3fd": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fb_200d_1faf2_1f3fe": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fb_200d_1faf2_1f3ff": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fc_200d_1faf2_1f3fb": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1f91d_1f3fc": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fc_200d_1faf2_1f3fd": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fc_200d_1faf2_1f3fe": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fc_200d_1faf2_1f3ff": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fd_200d_1faf2_1f3fb": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fd_200d_1faf2_1f3fc": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1f91d_1f3fd": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fd_200d_1faf2_1f3fe": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fd_200d_1faf2_1f3ff": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fe_200d_1faf2_1f3fb": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fe_200d_1faf2_1f3fc": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fe_200d_1faf2_1f3fd": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1f91d_1f3fe": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3fe_200d_1faf2_1f3ff": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3ff_200d_1faf2_1f3fb": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3ff_200d_1faf2_1f3fc": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3ff_200d_1faf2_1f3fd": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1faf1_1f3ff_200d_1faf2_1f3fe": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1f91d_1f3ff": {
+    "en": "handshake",
+    "zh-Hant": "handshake"
+  },
+  "1fa82": {
+    "en": "parachute",
+    "zh-Hant": "降落傘"
+  },
+  "1fac8": {
+    "en": "hairy creature",
+    "zh-Hant": "毛怪"
+  },
+  "1f483": {
+    "en": "dancer woman",
+    "zh-Hant": "跳舞的女人"
+  },
+  "1f483_1f3fb": {
+    "en": "dancer woman",
+    "zh-Hant": "dancer woman"
+  },
+  "1f483_1f3fc": {
+    "en": "dancer woman",
+    "zh-Hant": "dancer woman"
+  },
+  "1f483_1f3fd": {
+    "en": "dancer woman",
+    "zh-Hant": "dancer woman"
+  },
+  "1f483_1f3fe": {
+    "en": "dancer woman",
+    "zh-Hant": "dancer woman"
+  },
+  "1f483_1f3ff": {
+    "en": "dancer woman",
+    "zh-Hant": "dancer woman"
+  },
+  "1f490": {
+    "en": "bouquet   flowers",
+    "zh-Hant": "花束"
+  },
+  "1f339": {
+    "en": "rose",
+    "zh-Hant": "玫瑰"
+  },
+  "1f940": {
+    "en": "wilted flower",
+    "zh-Hant": "枯萎的花"
+  },
+  "1f337": {
+    "en": "tulip",
+    "zh-Hant": "鬱金香"
+  },
+  "1fab7": {
+    "en": "lotus",
+    "zh-Hant": "蓮花"
+  },
+  "1f338": {
+    "en": "cherry blossom",
+    "zh-Hant": "櫻花"
+  },
+  "1fabb": {
+    "en": "hyacinth",
+    "zh-Hant": "風信子"
+  },
+  "1f33c": {
+    "en": "blossom",
+    "zh-Hant": "開花"
+  },
+  "1f342": {
+    "en": "fallen leaf",
+    "zh-Hant": "落葉"
+  },
+  "1f341": {
+    "en": "maple leaf",
+    "zh-Hant": "楓葉"
+  },
+  "1f344": {
+    "en": "mushroom",
+    "zh-Hant": "蘑菇"
+  },
+  "1f33f": {
+    "en": "herb",
+    "zh-Hant": "藥草"
+  },
+  "1f331": {
+    "en": "plant   seed",
+    "zh-Hant": "幼苗"
+  },
+  "1f343": {
+    "en": "leaves",
+    "zh-Hant": "風吹葉落"
+  },
+  "1f340": {
+    "en": "luck   four leaf clover",
+    "zh-Hant": "四葉草"
+  },
+  "1f335": {
+    "en": "cactus",
+    "zh-Hant": "仙人掌"
+  },
+  "1fabe": {
+    "en": "leafless tree",
+    "zh-Hant": "無葉樹"
+  },
+  "1f332": {
+    "en": "evergreen tree",
+    "zh-Hant": "松樹"
+  },
+  "1faa8": {
+    "en": "rock",
+    "zh-Hant": "岩石"
+  },
+  "1f6d8": {
+    "en": "debris   landslide",
+    "zh-Hant": "山體滑坡"
+  },
+  "1f30b": {
+    "en": "volcano",
+    "zh-Hant": "火山"
+  },
+  "1f3de_fe0f": {
+    "en": "national park",
+    "zh-Hant": "國家公園"
+  },
+  "1f305": {
+    "en": "sunrise",
+    "zh-Hant": "日出"
+  },
+  "1f304": {
+    "en": "sunrise over mountains",
+    "zh-Hant": "山頂日出"
+  },
+  "1f30a": {
+    "en": "ocean",
+    "zh-Hant": "浪花"
+  },
+  "1f32c_fe0f": {
+    "en": "wind face",
+    "zh-Hant": "大風"
+  },
+  "2744_fe0f": {
+    "en": "snowflake   winter   cold",
+    "zh-Hant": "雪花"
+  },
+  "1f300": {
+    "en": "cyclone",
+    "zh-Hant": "颱風"
+  },
+  "1f32a_fe0f": {
+    "en": "tornado",
+    "zh-Hant": "龍捲風"
+  },
+  "1f308": {
+    "en": "rainbow",
+    "zh-Hant": "彩虹"
+  },
+  "1f4a7": {
+    "en": "droplet",
+    "zh-Hant": "水滴"
+  },
+  "2601_fe0f": {
+    "en": "cloud",
+    "zh-Hant": "雲"
+  },
+  "1f327_fe0f": {
+    "en": "rain cloud",
+    "zh-Hant": "下雨"
+  },
+  "1f329_fe0f": {
+    "en": "cloud with lightning",
+    "zh-Hant": "打雷"
+  },
+  "26c5": {
+    "en": "partly sunny",
+    "zh-Hant": "陰"
+  },
+  "1fa90": {
+    "en": "ringed planet",
+    "zh-Hant": "有環行星"
+  },
+  "1f30d": {
+    "en": "globe showing Europe Africa",
+    "zh-Hant": "地球上的歐洲非洲"
+  },
+  "1f30e": {
+    "en": "globe showing Americas",
+    "zh-Hant": "地球上的美洲"
+  },
+  "1f30f": {
+    "en": "globe showing Asia Australia",
+    "zh-Hant": "地球上的亞洲澳洲"
+  },
+  "1f30c": {
+    "en": "milky way",
+    "zh-Hant": "銀河"
+  },
+  "2604_fe0f": {
+    "en": "comet",
+    "zh-Hant": "彗星"
+  },
+  "1f981": {
+    "en": "lion face",
+    "zh-Hant": "獅子"
+  },
+  "1f43a": {
+    "en": "wolf",
+    "zh-Hant": "狼"
+  },
+  "1f43b": {
+    "en": "bear face",
+    "zh-Hant": "熊"
+  },
+  "1f43c": {
+    "en": "panda",
+    "zh-Hant": "熊貓"
+  },
+  "1f98a": {
+    "en": "fox face",
+    "zh-Hant": "狐狸"
+  },
+  "1f42e": {
+    "en": "cow face",
+    "zh-Hant": "奶牛頭"
+  },
+  "1f984": {
+    "en": "unicorn",
+    "zh-Hant": "獨角獸"
+  },
+  "1f98e": {
+    "en": "lizard",
+    "zh-Hant": "蜥蜴"
+  },
+  "1f409": {
+    "en": "dragon",
+    "zh-Hant": "龍"
+  },
+  "1f996": {
+    "en": "t rex",
+    "zh-Hant": "霸王龍"
+  },
+  "1f995": {
+    "en": "dinosaur",
+    "zh-Hant": "蜥蜴類"
+  },
+  "1f422": {
+    "en": "turtle",
+    "zh-Hant": "龜"
+  },
+  "1f40a": {
+    "en": "crocodile",
+    "zh-Hant": "鰐魚"
+  },
+  "1f40d": {
+    "en": "snake",
+    "zh-Hant": "蛇"
+  },
+  "1f438": {
+    "en": "frog",
+    "zh-Hant": "青蛙"
+  },
+  "1f407": {
+    "en": "rabbit",
+    "zh-Hant": "兔子"
+  },
+  "1f400": {
+    "en": "rat",
+    "zh-Hant": "耗子"
+  },
+  "1f429": {
+    "en": "poodle",
+    "zh-Hant": "貴賓犬"
+  },
+  "1f415": {
+    "en": "dog",
+    "zh-Hant": "狗"
+  },
+  "1f9ae": {
+    "en": "guide dog",
+    "zh-Hant": "導盲犬"
+  },
+  "1f415_200d_1f9ba": {
+    "en": "service dog",
+    "zh-Hant": "服務犬"
+  },
+  "1f416": {
+    "en": "pig",
+    "zh-Hant": "豬"
+  },
+  "1f40e": {
+    "en": "racehorse",
+    "zh-Hant": "馬"
+  },
+  "1facf": {
+    "en": "donkey",
+    "zh-Hant": "驢"
+  },
+  "1f402": {
+    "en": "ox",
+    "zh-Hant": "公牛"
+  },
+  "1f410": {
+    "en": "goat",
+    "zh-Hant": "山羊"
+  },
+  "1f9a5": {
+    "en": "sloth",
+    "zh-Hant": "樹懶"
+  },
+  "1f998": {
+    "en": "kangaroo",
+    "zh-Hant": "袋鼠"
+  },
+  "1f405": {
+    "en": "tiger",
+    "zh-Hant": "老虎"
+  },
+  "1f412": {
+    "en": "monkey",
+    "zh-Hant": "猴子"
+  },
+  "1f98d": {
+    "en": "gorilla",
+    "zh-Hant": "大猩猩"
+  },
+  "1f9a7": {
+    "en": "orangutan",
+    "zh-Hant": "紅毛猩猩"
+  },
+  "1f43f_fe0f": {
+    "en": "chipmunk",
+    "zh-Hant": "松鼠"
+  },
+  "1f99d": {
+    "en": "raccoon",
+    "zh-Hant": "浣熊"
+  },
+  "1f994": {
+    "en": "hedgehog",
+    "zh-Hant": "刺蝟"
+  },
+  "1f9a6": {
+    "en": "otter",
+    "zh-Hant": "水獺"
+  },
+  "1f987": {
+    "en": "bat",
+    "zh-Hant": "蝙蝠"
+  },
+  "1f426": {
+    "en": "bird",
+    "zh-Hant": "鳥"
+  },
+  "1f426_200d_2b1b": {
+    "en": "black bird",
+    "zh-Hant": "黑色的鳥"
+  },
+  "1f413": {
+    "en": "rooster",
+    "zh-Hant": "公雞"
+  },
+  "1f423": {
+    "en": "hatching chick",
+    "zh-Hant": "小雞破殼"
+  },
+  "1f424": {
+    "en": "baby chick",
+    "zh-Hant": "小雞"
+  },
+  "1f425": {
+    "en": "hatched chick",
+    "zh-Hant": "正面朝向的小雞"
+  },
+  "1f985": {
+    "en": "eagle",
+    "zh-Hant": "鷹"
+  },
+  "1f989": {
+    "en": "owl",
+    "zh-Hant": "貓頭鷹"
+  },
+  "1f54a_fe0f": {
+    "en": "peace   dove",
+    "zh-Hant": "鴿"
+  },
+  "1fabf": {
+    "en": "goose",
+    "zh-Hant": "鵝"
+  },
+  "1f9a9": {
+    "en": "flamingo",
+    "zh-Hant": "火烈鳥"
+  },
+  "1f99a": {
+    "en": "peacock",
+    "zh-Hant": "孔雀"
+  },
+  "1f426_200d_1f525": {
+    "en": "phoenix",
+    "zh-Hant": "鳳凰"
+  },
+  "1f427": {
+    "en": "penguin",
+    "zh-Hant": "企鵝"
+  },
+  "1f9ad": {
+    "en": "seal",
+    "zh-Hant": "海豹"
+  },
+  "1f988": {
+    "en": "shark",
+    "zh-Hant": "鯊魚"
+  },
+  "1facd": {
+    "en": "orca",
+    "zh-Hant": "虎鯨"
+  },
+  "1f42c": {
+    "en": "dolphin",
+    "zh-Hant": "海豚"
+  },
+  "1f433": {
+    "en": "whale",
+    "zh-Hant": "噴水的鯨"
+  },
+  "1f41f": {
+    "en": "fish",
+    "zh-Hant": "魚"
+  },
+  "1f421": {
+    "en": "blowfish",
+    "zh-Hant": "河豚"
+  },
+  "1f99e": {
+    "en": "lobster",
+    "zh-Hant": "龍蝦"
+  },
+  "1f980": {
+    "en": "crab",
+    "zh-Hant": "蟹"
+  },
+  "1f419": {
+    "en": "octopus",
+    "zh-Hant": "章魚"
+  },
+  "1fabc": {
+    "en": "jellyfish",
+    "zh-Hant": "水母"
+  },
+  "1fae7": {
+    "en": "bubbles",
+    "zh-Hant": "氣泡"
+  },
+  "1f982": {
+    "en": "scorpion",
+    "zh-Hant": "蠍子"
+  },
+  "1f577_fe0f": {
+    "en": "spider",
+    "zh-Hant": "蜘蛛"
+  },
+  "1f40c": {
+    "en": "snail",
+    "zh-Hant": "蝸牛"
+  },
+  "1f41c": {
+    "en": "ant",
+    "zh-Hant": "螞蟻"
+  },
+  "1f997": {
+    "en": "cricket",
+    "zh-Hant": "蟋蟀"
+  },
+  "1f99f": {
+    "en": "mosquito",
+    "zh-Hant": "蚊子"
+  },
+  "1fab3": {
+    "en": "cockroach",
+    "zh-Hant": "蟑螂"
+  },
+  "1fab0": {
+    "en": "fly",
+    "zh-Hant": "蒼蠅"
+  },
+  "1f41d": {
+    "en": "bee",
+    "zh-Hant": "蜜蜂"
+  },
+  "1f41e": {
+    "en": "lady bug",
+    "zh-Hant": "瓢蟲"
+  },
+  "1f98b": {
+    "en": "butterfly",
+    "zh-Hant": "蝴蝶"
+  },
+  "1f41b": {
+    "en": "bug",
+    "zh-Hant": "毛毛蟲"
+  },
+  "1fab1": {
+    "en": "worm",
+    "zh-Hant": "蠕蟲"
+  },
+  "1f43e": {
+    "en": "paw prints",
+    "zh-Hant": "爪印"
+  },
+  "1f353": {
+    "en": "strawberry",
+    "zh-Hant": "草莓"
+  },
+  "1f352": {
+    "en": "cherries",
+    "zh-Hant": "櫻桃"
+  },
+  "1f34e": {
+    "en": "red apple",
+    "zh-Hant": "紅蘋果"
+  },
+  "1f345": {
+    "en": "tomato",
+    "zh-Hant": "西紅柿"
+  },
+  "1f349": {
+    "en": "watermelon",
+    "zh-Hant": "西瓜"
+  },
+  "1f34a": {
+    "en": "C  tangerine   orange   mandarin",
+    "zh-Hant": "橘子"
+  },
+  "1f955": {
+    "en": "carrot",
+    "zh-Hant": "胡蘿蔔"
+  },
+  "1f96d": {
+    "en": "mango",
+    "zh-Hant": "芒果"
+  },
+  "1f34d": {
+    "en": "pineapple",
+    "zh-Hant": "菠蘿"
+  },
+  "1f33d": {
+    "en": "ear of corn",
+    "zh-Hant": "玉米"
+  },
+  "1f34b": {
+    "en": "lemon",
+    "zh-Hant": "檸檬"
+  },
+  "1f348": {
+    "en": "melon",
+    "zh-Hant": "甜瓜"
+  },
+  "1f350": {
+    "en": "pear",
+    "zh-Hant": "梨"
+  },
+  "1fadb": {
+    "en": "pea pod",
+    "zh-Hant": "豌豆莢"
+  },
+  "1f96c": {
+    "en": "leafy green",
+    "zh-Hant": "綠葉蔬菜"
+  },
+  "1fad1": {
+    "en": "bell pepper",
+    "zh-Hant": "燈籠椒"
+  },
+  "1f95d": {
+    "en": "kiwi fruit",
+    "zh-Hant": "獼猴桃"
+  },
+  "1f951": {
+    "en": "avocado",
+    "zh-Hant": "鰐梨"
+  },
+  "1f966": {
+    "en": "broccoli",
+    "zh-Hant": "西蘭花"
+  },
+  "1f952": {
+    "en": "cucumber",
+    "zh-Hant": "黃瓜"
+  },
+  "1fad0": {
+    "en": "blueberries",
+    "zh-Hant": "藍莓"
+  },
+  "1f347": {
+    "en": "grapes",
+    "zh-Hant": "葡萄"
+  },
+  "1fadc": {
+    "en": "root vegetable   beet   turnip",
+    "zh-Hant": "根菜"
+  },
+  "1f954": {
+    "en": "potato",
+    "zh-Hant": "土豆"
+  },
+  "1f9c5": {
+    "en": "onion",
+    "zh-Hant": "洋蔥"
+  },
+  "1fada": {
+    "en": "ginger",
+    "zh-Hant": "姜"
+  },
+  "1f9c4": {
+    "en": "garlic",
+    "zh-Hant": "蒜"
+  },
+  "1fad8": {
+    "en": "beans",
+    "zh-Hant": "豆"
+  },
+  "1f35e": {
+    "en": "bread",
+    "zh-Hant": "麵包"
+  },
+  "1f95e": {
+    "en": "pancakes",
+    "zh-Hant": "烙餅"
+  },
+  "1f373": {
+    "en": "cooking",
+    "zh-Hant": "煎蛋"
+  },
+  "1f9c0": {
+    "en": "cheese wedge",
+    "zh-Hant": "芝士"
+  },
+  "1f953": {
+    "en": "bacon",
+    "zh-Hant": "培根"
+  },
+  "1f357": {
+    "en": "poultry leg",
+    "zh-Hant": "家禽的腿"
+  },
+  "1f354": {
+    "en": "hamburger",
+    "zh-Hant": "漢堡"
+  },
+  "1f32d": {
+    "en": "hot dog",
+    "zh-Hant": "熱狗"
+  },
+  "1f968": {
+    "en": "pretzel",
+    "zh-Hant": "椒鹽卷餅"
+  },
+  "1f355": {
+    "en": "pizza",
+    "zh-Hant": "披薩"
+  },
+  "1f32e": {
+    "en": "taco",
+    "zh-Hant": "墨西哥卷餅"
+  },
+  "1f32f": {
+    "en": "burrito",
+    "zh-Hant": "墨西哥玉米煎餅"
+  },
+  "1f35d": {
+    "en": "spaghetti",
+    "zh-Hant": "意粉"
+  },
+  "1f957": {
+    "en": "green salad",
+    "zh-Hant": "綠色沙拉"
+  },
+  "1f35c": {
+    "en": "steaming bowl",
+    "zh-Hant": "麵條"
+  },
+  "1f362": {
+    "en": "oden",
+    "zh-Hant": "關東煮"
+  },
+  "1f361": {
+    "en": "dango",
+    "zh-Hant": "團子"
+  },
+  "1f368": {
+    "en": "ice cream",
+    "zh-Hant": "冰淇淋"
+  },
+  "1f366": {
+    "en": "soft ice cream",
+    "zh-Hant": "圓筒冰激凌"
+  },
+  "1f967": {
+    "en": "pie",
+    "zh-Hant": "派"
+  },
+  "1f369": {
+    "en": "doughnut",
+    "zh-Hant": "甜甜圈"
+  },
+  "1f36a": {
+    "en": "cookie",
+    "zh-Hant": "餅乾"
+  },
+  "1f9c2": {
+    "en": "salt",
+    "zh-Hant": "鹽"
+  },
+  "1f37f": {
+    "en": "popcorn",
+    "zh-Hant": "爆米花"
+  },
+  "1f9cb": {
+    "en": "bubble tea   milk tea",
+    "zh-Hant": "珍珠奶茶"
+  },
+  "1f9c3": {
+    "en": "beverage box",
+    "zh-Hant": "飲料盒"
+  },
+  "1f37c": {
+    "en": "baby bottle",
+    "zh-Hant": "奶瓶"
+  },
+  "1f375": {
+    "en": "teacup without handle",
+    "zh-Hant": "熱茶"
+  },
+  "2615": {
+    "en": "hot beverage",
+    "zh-Hant": "熱飲"
+  },
+  "1fad6": {
+    "en": "teapot",
+    "zh-Hant": "茶壺"
+  },
+  "1f9c9": {
+    "en": "mate",
+    "zh-Hant": "馬黛茶"
+  },
+  "1f37b": {
+    "en": "clinking beer mugs",
+    "zh-Hant": "乾杯"
+  },
+  "1f942": {
+    "en": "clinking glasses",
+    "zh-Hant": "碰杯"
+  },
+  "1f37e": {
+    "en": "bottle with popping cork",
+    "zh-Hant": "開香檳"
+  },
+  "1f377": {
+    "en": "wine glass",
+    "zh-Hant": "葡萄酒"
+  },
+  "1fad7": {
+    "en": "pour",
+    "zh-Hant": "傾倒液體"
+  },
+  "1f379": {
+    "en": "tropical drink",
+    "zh-Hant": "熱帶水果飲料"
+  },
+  "1f962": {
+    "en": "chopsticks",
+    "zh-Hant": "筷子"
+  },
+  "1f37d_fe0f": {
+    "en": "fork and knife with plate",
+    "zh-Hant": "餐具"
+  },
+  "1f6d1": {
+    "en": "stop sign",
+    "zh-Hant": "停止標誌"
+  },
+  "1f6a7": {
+    "en": "construction",
+    "zh-Hant": "施工"
+  },
+  "1f6a8": {
+    "en": "police car light",
+    "zh-Hant": "警車燈"
+  },
+  "26fd": {
+    "en": "fuel pump",
+    "zh-Hant": "油泵"
+  },
+  "1f6df": {
+    "en": "ring buoy",
+    "zh-Hant": "救生圈"
+  },
+  "2693": {
+    "en": "anchor",
+    "zh-Hant": "錨"
+  },
+  "1f6a6": {
+    "en": "vertical traffic light",
+    "zh-Hant": "縱向的紅綠燈"
+  },
+  "1f6b2": {
+    "en": "bicycle",
+    "zh-Hant": "自行車"
+  },
+  "1f3cd_fe0f": {
+    "en": "motorcycle",
+    "zh-Hant": "摩托車"
+  },
+  "1f697": {
+    "en": "automobile",
+    "zh-Hant": "汽車"
+  },
+  "1f69a": {
+    "en": "delivery truck",
+    "zh-Hant": "貨車"
+  },
+  "1f69c": {
+    "en": "tractor",
+    "zh-Hant": "拖拉機"
+  },
+  "1f3ce_fe0f": {
+    "en": "racing car",
+    "zh-Hant": "賽車"
+  },
+  "1f695": {
+    "en": "taxi",
+    "zh-Hant": "出租車"
+  },
+  "1f68c": {
+    "en": "bus",
+    "zh-Hant": "公交車"
+  },
+  "1f682": {
+    "en": "locomotive",
+    "zh-Hant": "蒸汽火車"
+  },
+  "26f5": {
+    "en": "sailboat",
+    "zh-Hant": "帆船"
+  },
+  "1f6f6": {
+    "en": "canoe",
+    "zh-Hant": "獨木舟"
+  },
+  "1f6f8": {
+    "en": "flying saucer",
+    "zh-Hant": "飛碟"
+  },
+  "1f680": {
+    "en": "rocket",
+    "zh-Hant": "火箭"
+  },
+  "2708_fe0f": {
+    "en": "airplane",
+    "zh-Hant": "飛機"
+  },
+  "1f6eb": {
+    "en": "airplane departure",
+    "zh-Hant": "航班起飛"
+  },
+  "1f6ec": {
+    "en": "airplane arrival",
+    "zh-Hant": "航班降落"
+  },
+  "1f3a2": {
+    "en": "roller coaster",
+    "zh-Hant": "過山車"
+  },
+  "1f3a1": {
+    "en": "ferris wheel",
+    "zh-Hant": "摩天輪"
+  },
+  "1f3a0": {
+    "en": "carousel horse",
+    "zh-Hant": "旋轉木馬"
+  },
+  "1f5ff": {
+    "en": "moai",
+    "zh-Hant": "摩埃"
+  },
+  "1f3da_fe0f": {
+    "en": "derelict house",
+    "zh-Hant": "廢墟"
+  },
+  "1f3e0": {
+    "en": "house",
+    "zh-Hant": "房子"
+  },
+  "1f3d5_fe0f": {
+    "en": "camping",
+    "zh-Hant": "露營"
+  },
+  "1f307": {
+    "en": "sunset",
+    "zh-Hant": "日落"
+  },
+  "1f388": {
+    "en": "balloon",
+    "zh-Hant": "氣球"
+  },
+  "1f382": {
+    "en": "birthday cake",
+    "zh-Hant": "生日蛋糕"
+  },
+  "1f381": {
+    "en": "wrapped gift",
+    "zh-Hant": "禮物"
+  },
+  "1f386": {
+    "en": "fireworks",
+    "zh-Hant": "焰火"
+  },
+  "1fa94": {
+    "en": "diya lamp",
+    "zh-Hant": "印度油燈"
+  },
+  "1fa85": {
+    "en": "ata",
+    "zh-Hant": "彩罐"
+  },
+  "1faa9": {
+    "en": "mirror ball   disco ball",
+    "zh-Hant": "鏡球"
+  },
+  "1f947": {
+    "en": "gold medal   1st place medal",
+    "zh-Hant": "金牌"
+  },
+  "1f948": {
+    "en": "silver medal   2nd place medal",
+    "zh-Hant": "銀牌"
+  },
+  "1f949": {
+    "en": "bronze medal   3rd place medal",
+    "zh-Hant": "銅牌"
+  },
+  "1f3c6": {
+    "en": "trophy",
+    "zh-Hant": "獎杯"
+  },
+  "26bd": {
+    "en": "soccer ball",
+    "zh-Hant": "足球"
+  },
+  "26be": {
+    "en": "baseball",
+    "zh-Hant": "棒球"
+  },
+  "1f94e": {
+    "en": "softball",
+    "zh-Hant": "壘球"
+  },
+  "1f3c0": {
+    "en": "basketball",
+    "zh-Hant": "籃球"
+  },
+  "1f3c9": {
+    "en": "rugby football",
+    "zh-Hant": "英式橄欖球"
+  },
+  "1f3be": {
+    "en": "tennis",
+    "zh-Hant": "網球"
+  },
+  "1f3f8": {
+    "en": "badminton",
+    "zh-Hant": "羽毛球"
+  },
+  "1f94d": {
+    "en": "lacrosse",
+    "zh-Hant": "袋棍球"
+  },
+  "1f3cf": {
+    "en": "cricket game",
+    "zh-Hant": "板球"
+  },
+  "1f3d1": {
+    "en": "field hockey",
+    "zh-Hant": "曲棍球"
+  },
+  "1f3d2": {
+    "en": "ice hockey",
+    "zh-Hant": "冰球"
+  },
+  "1f3bf": {
+    "en": "skis",
+    "zh-Hant": "滑雪"
+  },
+  "26f8_fe0f": {
+    "en": "ice skate",
+    "zh-Hant": "滑冰"
+  },
+  "1f6fc": {
+    "en": "roller skates",
+    "zh-Hant": "四輪滑冰鞋"
+  },
+  "1fa70": {
+    "en": "ballet shoes",
+    "zh-Hant": "芭蕾舞鞋"
+  },
+  "1f6f9": {
+    "en": "skateboard",
+    "zh-Hant": "滑板"
+  },
+  "26f3": {
+    "en": "flag in hole",
+    "zh-Hant": "高爾夫球洞"
+  },
+  "1f3af": {
+    "en": "direct hit   target",
+    "zh-Hant": "正中靶心的飛鏢"
+  },
+  "1f94f": {
+    "en": "flying disc",
+    "zh-Hant": "飛盤"
+  },
+  "1fa83": {
+    "en": "boomerang",
+    "zh-Hant": "回旋鏢"
+  },
+  "1fa81": {
+    "en": "kite",
+    "zh-Hant": "風箏"
+  },
+  "1f3a3": {
+    "en": "fishing pole",
+    "zh-Hant": "釣魚竿"
+  },
+  "1f94b": {
+    "en": "martial arts uniform",
+    "zh-Hant": "練武服"
+  },
+  "1f3b1": {
+    "en": "ball",
+    "zh-Hant": "台球"
+  },
+  "1f3d3": {
+    "en": "ping pong",
+    "zh-Hant": "乒乓球"
+  },
+  "1f3b3": {
+    "en": "bowling",
+    "zh-Hant": "保齡球"
+  },
+  "265f_fe0f": {
+    "en": "chess pawn",
+    "zh-Hant": "兵"
+  },
+  "1f3b2": {
+    "en": "die",
+    "zh-Hant": "骰子"
+  },
+  "1f3b0": {
+    "en": "slot machine",
+    "zh-Hant": "老虎機"
+  },
+  "1fa84": {
+    "en": "wand",
+    "zh-Hant": "魔棒"
+  },
+  "1f4f7": {
+    "en": "camera",
+    "zh-Hant": "相機"
+  },
+  "1f4f8": {
+    "en": "camera flash",
+    "zh-Hant": "開閃光燈的相機"
+  },
+  "1fadf": {
+    "en": "splatter",
+    "zh-Hant": "潑濺"
+  },
+  "1f3b7": {
+    "en": "saxophone",
+    "zh-Hant": "薩克斯管"
+  },
+  "1f3ba": {
+    "en": "trumpet",
+    "zh-Hant": "小號"
+  },
+  "1fa8a": {
+    "en": "trombone",
+    "zh-Hant": "長號"
+  },
+  "1f3b8": {
+    "en": "guitar",
+    "zh-Hant": "吉他"
+  },
+  "1fa95": {
+    "en": "banjo",
+    "zh-Hant": "班卓琴"
+  },
+  "1f3bb": {
+    "en": "violin",
+    "zh-Hant": "小提琴"
+  },
+  "1fa89": {
+    "en": "harp",
+    "zh-Hant": "竪琴"
+  },
+  "1f941": {
+    "en": "drum",
+    "zh-Hant": "鼓"
+  },
+  "1fa87": {
+    "en": "maracas",
+    "zh-Hant": "沙球"
+  },
+  "1f4fa": {
+    "en": "television",
+    "zh-Hant": "電視機"
+  },
+  "1f39e_fe0f": {
+    "en": "film",
+    "zh-Hant": "影片幀"
+  },
+  "1f3ac": {
+    "en": "clapper",
+    "zh-Hant": "場記板"
+  },
+  "1f3ad": {
+    "en": "performing arts",
+    "zh-Hant": "表演藝術"
+  },
+  "1f39f_fe0f": {
+    "en": "admission tickets",
+    "zh-Hant": "入場券"
+  },
+  "1f4df": {
+    "en": "pager",
+    "zh-Hant": "尋呼機"
+  },
+  "1f50c": {
+    "en": "electric plug",
+    "zh-Hant": "電源插頭"
+  },
+  "1f50b": {
+    "en": "battery full",
+    "zh-Hant": "電池"
+  },
+  "1faab": {
+    "en": "battery low",
+    "zh-Hant": "電池電量不足"
+  },
+  "1f4bf": {
+    "en": "optical disk",
+    "zh-Hant": "光盤"
+  },
+  "1f4bb": {
+    "en": "laptop computer",
+    "zh-Hant": "筆記本電腦"
+  },
+  "1f5a8_fe0f": {
+    "en": "printer",
+    "zh-Hant": "打印機"
+  },
+  "1fa8e": {
+    "en": "treasure",
+    "zh-Hant": "寶箱"
+  },
+  "1fa99": {
+    "en": "coin",
+    "zh-Hant": "硬幣"
+  },
+  "1f48e": {
+    "en": "gem stone",
+    "zh-Hant": "寶石"
+  },
+  "1f4b8": {
+    "en": "money with wings",
+    "zh-Hant": "長翅膀的錢"
+  },
+  "2696_fe0f": {
+    "en": "balance scale",
+    "zh-Hant": "天平"
+  },
+  "1f6d2": {
+    "en": "shopping cart",
+    "zh-Hant": "購物車"
+  },
+  "1f4a1": {
+    "en": "light bulb",
+    "zh-Hant": "燈泡"
+  },
+  "1f9f9": {
+    "en": "broom",
+    "zh-Hant": "掃帚"
+  },
+  "1f9e6": {
+    "en": "socks",
+    "zh-Hant": "襪子"
+  },
+  "1f393": {
+    "en": "graduation cap",
+    "zh-Hant": "畢業帽"
+  },
+  "1f451": {
+    "en": "crown",
+    "zh-Hant": "皇冠"
+  },
+  "1f48d": {
+    "en": "ring",
+    "zh-Hant": "戒指"
+  },
+  "1faad": {
+    "en": "fan",
+    "zh-Hant": "折扇"
+  },
+  "2602_fe0f": {
+    "en": "umbrella",
+    "zh-Hant": "傘"
+  },
+  "1f460": {
+    "en": "high heeled shoe",
+    "zh-Hant": "高跟鞋"
+  },
+  "1f45f": {
+    "en": "running shoe",
+    "zh-Hant": "跑鞋"
+  },
+  "1f321_fe0f": {
+    "en": "thermometer",
+    "zh-Hant": "溫度計"
+  },
+  "1fa7a": {
+    "en": "stethoscope",
+    "zh-Hant": "聽診器"
+  },
+  "1f6e0_fe0f": {
+    "en": "hammer and wrench",
+    "zh-Hant": "錘子與扳手"
+  },
+  "1fa8f": {
+    "en": "shovel   dig",
+    "zh-Hant": "鏟"
+  },
+  "2699_fe0f": {
+    "en": "gear",
+    "zh-Hant": "齒輪"
+  },
+  "26d3_fe0f_200d_1f4a5": {
+    "en": "broken chain",
+    "zh-Hant": "斷鏈"
+  },
+  "26d3_fe0f": {
+    "en": "chains",
+    "zh-Hant": "鏈條"
+  },
+  "1f587_fe0f": {
+    "en": "linked paperclips",
+    "zh-Hant": "連起來的兩個回形針"
+  },
+  "2702_fe0f": {
+    "en": "scissors",
+    "zh-Hant": "剪刀"
+  },
+  "270f_fe0f": {
+    "en": "pencil",
+    "zh-Hant": "鉛筆"
+  },
+  "1f4da": {
+    "en": "books",
+    "zh-Hant": "書"
+  },
+  "1f4ca": {
+    "en": "bar chart",
+    "zh-Hant": "條形圖"
+  },
+  "1f4c8": {
+    "en": "chart increasing",
+    "zh-Hant": "趨勢向上的圖表"
+  },
+  "1f4c9": {
+    "en": "chart decreasing",
+    "zh-Hant": "趨勢向下的圖表"
+  },
+  "1f5d1_fe0f": {
+    "en": "wastebasket",
+    "zh-Hant": "垃圾桶"
+  },
+  "1f4e6": {
+    "en": "package",
+    "zh-Hant": "包裹"
+  },
+  "1f5f3_fe0f": {
+    "en": "ballot box",
+    "zh-Hant": "投票箱"
+  },
+  "23f0": {
+    "en": "alarm clock",
+    "zh-Hant": "鬧鐘"
+  },
+  "231b": {
+    "en": "hourglass done",
+    "zh-Hant": "沙漏"
+  },
+  "23f3": {
+    "en": "hourglass not done",
+    "zh-Hant": "沙正往下流的沙漏"
+  },
+  "1f6ce_fe0f": {
+    "en": "bellhop bell",
+    "zh-Hant": "服務鈴"
+  },
+  "1f514": {
+    "en": "bell",
+    "zh-Hant": "鈴鐺"
+  },
+  "1f4e3": {
+    "en": "megaphone",
+    "zh-Hant": "擴音器"
+  },
+  "1f50e": {
+    "en": "magnifying glass tilted right",
+    "zh-Hant": "右斜的放大鏡"
+  },
+  "1f52e": {
+    "en": "crystal ball",
+    "zh-Hant": "水晶球"
+  },
+  "1f4a3": {
+    "en": "bomb",
+    "zh-Hant": "炸彈"
+  },
+  "1faa4": {
+    "en": "mouse trap",
+    "zh-Hant": "捕鼠器"
+  },
+  "1f512": {
+    "en": "locked",
+    "zh-Hant": "合上的鎖"
+  },
+  "2660_fe0f": {
+    "en": "spade",
+    "zh-Hant": "黑桃"
+  },
+  "2648": {
+    "en": "Aries",
+    "zh-Hant": "白羊座"
+  },
+  "2649": {
+    "en": "Taurus",
+    "zh-Hant": "金牛座"
+  },
+  "264a": {
+    "en": "Gemini",
+    "zh-Hant": "雙子座"
+  },
+  "264b": {
+    "en": "Cancer",
+    "zh-Hant": "巨蟹座"
+  },
+  "264c": {
+    "en": "Leo",
+    "zh-Hant": "獅子座"
+  },
+  "264d": {
+    "en": "Virgo",
+    "zh-Hant": "處女座"
+  },
+  "264e": {
+    "en": "Libra",
+    "zh-Hant": "天秤座"
+  },
+  "264f": {
+    "en": "Scorpio",
+    "zh-Hant": "天蠍座"
+  },
+  "2650": {
+    "en": "Sagittarius",
+    "zh-Hant": "射手座"
+  },
+  "2651": {
+    "en": "Capricorn",
+    "zh-Hant": "摩羯座"
+  },
+  "2652": {
+    "en": "Aquarius",
+    "zh-Hant": "水瓶座"
+  },
+  "2653": {
+    "en": "Pisces",
+    "zh-Hant": "雙魚座"
+  },
+  "26ce": {
+    "en": "Ophiuchus",
+    "zh-Hant": "蛇夫座"
+  },
+  "1f5ef_fe0f": {
+    "en": "anger bubble",
+    "zh-Hant": "憤怒話語氣泡"
+  },
+  "1f4ac": {
+    "en": "speech bubble",
+    "zh-Hant": "話語氣泡"
+  },
+  "2757": {
+    "en": "exclamation   exclamation mark",
+    "zh-Hant": "紅色感嘆號"
+  },
+  "2753": {
+    "en": "question   question mark",
+    "zh-Hant": "紅色問號"
+  },
+  "2049_fe0f": {
+    "en": "exclamation question mark",
+    "zh-Hant": "感嘆疑問號"
+  },
+  "203c_fe0f": {
+    "en": "exclamation double",
+    "zh-Hant": "雙感嘆號"
+  },
+  "274c": {
+    "en": "cross mark   x",
+    "zh-Hant": "叉號"
+  },
+  "1f198": {
+    "en": "sos",
+    "zh-Hant": "SOS按鈕"
+  },
+  "2668_fe0f": {
+    "en": "hot springs",
+    "zh-Hant": "溫泉"
+  },
+  "1f4f4": {
+    "en": "phone off",
+    "zh-Hant": "手機關機"
+  },
+  "2622_fe0f": {
+    "en": "radioactive",
+    "zh-Hant": "輻射"
+  },
+  "2623_fe0f": {
+    "en": "biohazard",
+    "zh-Hant": "生物危害"
+  },
+  "26a0_fe0f": {
+    "en": "warning",
+    "zh-Hant": "警告"
+  },
+  "2705": {
+    "en": "check mark   check mark green",
+    "zh-Hant": "勾號按鈕"
+  },
+  "1f195": {
+    "en": "new",
+    "zh-Hant": "new按鈕"
+  },
+  "1f193": {
+    "en": "free",
+    "zh-Hant": "免費按鈕"
+  },
+  "1f199": {
+    "en": "up",
+    "zh-Hant": "up按鈕"
+  },
+  "1f197": {
+    "en": "ok button",
+    "zh-Hant": "OK按鈕"
+  },
+  "1f192": {
+    "en": "cool",
+    "zh-Hant": "cool按鈕"
+  },
+  "1f6ae": {
+    "en": "litter",
+    "zh-Hant": "倒垃圾"
+  },
+  "262e_fe0f": {
+    "en": "peace symbol",
+    "zh-Hant": "和平符號"
+  },
+  "262f_fe0f": {
+    "en": "yin yang",
+    "zh-Hant": "陰陽"
+  },
+  "267e_fe0f": {
+    "en": "infinity",
+    "zh-Hant": "無窮大"
+  },
+  "1f3b6": {
+    "en": "musical notes",
+    "zh-Hant": "多個音符"
+  },
+  "2795": {
+    "en": "plus sign   +",
+    "zh-Hant": "加"
+  },
+  "a9_fe0f": {
+    "en": "copyright",
+    "zh-Hant": "版權"
+  },
+  "ae_fe0f": {
+    "en": "registered",
+    "zh-Hant": "註冊"
+  },
+  "2122_fe0f": {
+    "en": "trade mark",
+    "zh-Hant": "商標"
+  },
+  "1f3c1": {
+    "en": "chequered flag",
+    "zh-Hant": "黑白方格旗"
+  },
+  "1f6a9": {
+    "en": "triangular flag",
+    "zh-Hant": "三角旗"
+  },
+  "1f3f4": {
+    "en": "black flag",
+    "zh-Hant": "黑旗"
+  },
+  "1f3f3_fe0f": {
+    "en": "white flag",
+    "zh-Hant": "白旗"
+  }
+}

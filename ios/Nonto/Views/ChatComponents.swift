@@ -204,7 +204,7 @@ struct ChatPhotoDrawer: View {
             HStack {
                 Text("相册").font(.headline)
                 Spacer()
-                Button(selection.isEmpty ? "添加" : "添加 \(selection.count)") { onAdd(selection) }
+                Button(selection.isEmpty ? String(localized: "添加") : String(localized: "添加 \(selection.count)")) { onAdd(selection) }
                     .disabled(selection.isEmpty).accessibilityIdentifier("chat.photos.add")
                 Button(action: onClose) {
                     Image(systemName: "xmark").frame(width: 44, height: 44)
@@ -305,23 +305,23 @@ extension ChatMessage {
 
 enum ChatQuoteSummary {
     static func text(_ message: ChatMessage) -> String {
-        if message.isSticker { return ChatSticker.messageContent }
+        if message.isSticker { return ChatSticker.displayContent }
         guard ["image", "video"].contains(message.kind) else { return message.content }
-        let kind = message.kind == "image" ? "[图片]" : "[视频]"
+        let kind = message.kind == "image" ? String(localized: "[图片]") : String(localized: "[视频]")
         let caption = ImageMessageCaption.text(message.content, media: message.media)
         return caption.isEmpty ? kind : kind + " " + caption
     }
     /// Match the server's compact reply preview so acknowledgement doesn't resize it.
     static func preview(_ message: ChatMessage) -> String {
-        if message.recalled { return "消息已撤回" }
-        if message.isSticker { return ChatSticker.messageContent }
+        if message.recalled { return String(localized: "消息已撤回") }
+        if message.isSticker { return ChatSticker.displayContent }
         switch message.kind {
-        case "image": return "[图片]"
-        case "video": return "[视频]"
+        case "image": return String(localized: "[图片]")
+        case "video": return String(localized: "[视频]")
         case "post":
             let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            let head = content.isEmpty ? "帖子 #\(message.id)" : String(content.prefix(30)) + (content.count > 30 ? "..." : "")
-            return "[帖子] " + head
+            let head = content.isEmpty ? String(localized: "帖子 #\(message.id)") : String(content.prefix(30)) + (content.count > 30 ? "..." : "")
+            return String(localized: "[帖子] ") + head
         default:
             let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
             return String(content.prefix(50)) + (content.count > 50 ? "..." : "")
@@ -395,7 +395,7 @@ struct ChatMessageRow: View {
                 }
                 VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
                     if community && !mine && row.startsRun {
-                        Text(sender.name.isEmpty ? "群成员" : sender.name).font(.caption).foregroundStyle(.secondary)
+                        Text(sender.name.isEmpty ? String(localized: "群成员") : sender.name).font(.caption).foregroundStyle(.secondary)
                     }
                     bubble.contextMenu {
                         if !message.recalled {
@@ -424,7 +424,7 @@ struct ChatMessageRow: View {
                                 ChatPendingStatus(item: pending, sending: sending, blocked: blocked,
                                                   retry: retry, remove: remove, checkDelivery: checkDelivery)
                             } else {
-                                Text(message.raw["is_read"].bool ? "已读" : "已发送")
+                                Text(message.raw["is_read"].bool ? String(localized: "已读") : String(localized: "已发送"))
                                     .foregroundStyle(.secondary)
                                     .opacity(showsReceipt && !message.recalled ? 1 : 0)
                                     .accessibilityHidden(!showsReceipt || message.recalled)
@@ -437,7 +437,7 @@ struct ChatMessageRow: View {
         }.padding(.horizontal).padding(.top, row.startsRun ? 6 : 0)
             .background(accent.color.opacity(highlighted ? 0.10 : 0))
             .sheet(isPresented: $reporting) {
-                ReportView(kind: "user", targetID: message.senderID, context: "聊天消息 #\(message.id)：\n")
+                ReportView(kind: "user", targetID: message.senderID, context: String(localized: "聊天消息 #\(message.id)：\n"))
             }
             .alert("贴纸", isPresented: Binding(get: { stickerFeedback != nil }, set: { if !$0 { stickerFeedback = nil } })) {
                 Button("好", role: .cancel) { stickerFeedback = nil }
@@ -476,10 +476,10 @@ struct ChatMessageRow: View {
                           onPresentationChange: onMediaPresentation).frame(maxWidth: 250) }
             else if message.kind == "post", message.raw["related_id"].int > 0 {
                 RouteButton(.post(message.raw["related_id"].int)) {
-                    Label(message.content.isEmpty ? "查看动态" : message.content, systemImage: "doc.richtext").lineLimit(4)
+                    Label(message.content.isEmpty ? String(localized: "查看动态") : message.content, systemImage: "doc.richtext").lineLimit(4)
                 }
             } else if message.kind == "file", let url = URL(string: message.media), url.scheme == "https" {
-                Link(message.content.isEmpty ? "打开文件" : message.content, destination: url)
+                Link(message.content.isEmpty ? String(localized: "打开文件") : message.content, destination: url)
             } else { Text(message.content).textSelection(.enabled) }
             if !message.attachmentCaption.isEmpty {
                 Text(message.attachmentCaption).textSelection(.enabled)
@@ -490,7 +490,7 @@ struct ChatMessageRow: View {
     private func saveSticker() {
         do {
             try ChatStickerLibrary(accountID: session.user?.id ?? 0).add(url: message.media, notoID: message.notoSticker?.id)
-            stickerFeedback = "已添加到贴纸，可在聊天“＋”中找到。"
+            stickerFeedback = String(localized: "已添加到贴纸，可在聊天“＋”中找到。")
         } catch { stickerFeedback = error.localizedDescription }
     }
     private var quotePreview: some View {
@@ -517,7 +517,7 @@ struct ChatSyncNotice: View {
             Button { showingDetails = true } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("聊天提示").font(.caption.weight(.semibold)).lineLimit(1)
-                    Text(typeSize.isAccessibilitySize ? "点按查看详情" : error)
+                    Text(typeSize.isAccessibilitySize ? String(localized: "点按查看详情") : error)
                         .font(.caption2).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? 1 : 2)
                 }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).multilineTextAlignment(.leading)
             }.buttonStyle(.plain).accessibilityLabel("聊天提示，查看详情").accessibilityHint(error)
@@ -585,7 +585,7 @@ struct ChatQuoteContextView: View {
         } catch {
             if !Task.isCancelled {
                 if let error = error as? APIError, [403, 404].contains(error.status) {
-                    self.error = "原消息已删除，或当前账号无权查看"
+                    self.error = String(localized: "原消息已删除，或当前账号无权查看")
                 } else { self.error = error.localizedDescription }
             }
         }
@@ -701,7 +701,7 @@ struct ChatPendingStatus: View {
                 if item.retryWhenOnline == true { Text("连接恢复后自动重试").foregroundStyle(.secondary) }
                 Text(failure).foregroundStyle(.secondary).lineLimit(3)
             } else {
-                Label(sending ? "正在发送…" : (blocked ? "等待上一条消息重试" : "等待发送"),
+                Label(sending ? String(localized: "正在发送…") : (blocked ? String(localized: "等待上一条消息重试") : String(localized: "等待发送")),
                       systemImage: sending ? "arrow.up.circle" : "clock")
                     .foregroundStyle(.secondary)
                     .contextMenu { if !sending { Button("取消发送", role: .destructive, action: remove) } }
@@ -709,11 +709,11 @@ struct ChatPendingStatus: View {
         }
     }
     private var failureLabel: some View {
-        Label(item.deliveryUncertain == true ? "结果待确认" : "未发送", systemImage: "exclamationmark.circle.fill")
+        Label(item.deliveryUncertain == true ? String(localized: "结果待确认") : String(localized: "未发送"), systemImage: "exclamationmark.circle.fill")
             .foregroundStyle(item.deliveryUncertain == true ? Color.orange : Color.red)
     }
     private var retryButton: some View {
-        Button(item.deliveryUncertain == true ? "重新发送" : "重试") {
+        Button(item.deliveryUncertain == true ? String(localized: "重新发送") : String(localized: "重试")) {
             if item.deliveryUncertain == true { confirmResend = true } else { retry() }
         }.frame(minHeight: 44)
     }
@@ -794,7 +794,7 @@ struct ChatAttachmentSheet: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Button { submitting = true } label: {
-                        Label(error == nil ? "发送 \(selection.count) 个附件" : "重试发送", systemImage: "arrow.up")
+                        Label(error == nil ? String(localized: "发送 \(selection.count) 个附件") : String(localized: "重试发送"), systemImage: "arrow.up")
                             .frame(maxWidth: .infinity).padding(.vertical, 6)
                     }.buttonStyle(.glassProminent).disabled(submitting || selection.isEmpty)
                 }.padding()
@@ -816,7 +816,7 @@ struct ChatAttachmentSheet: View {
                                 guard !Task.isCancelled else { try? FileManager.default.removeItem(at: url); return }
                                 videoURLs[item.id] = url
                             }
-                            catch { self.error = "无法预览视频" }
+                            catch { self.error = String(localized: "无法预览视频") }
                         } else if let image = try? await Task.detached(priority: .userInitiated, operation: {
                             try ImageRepository.decode(item.data, maxPixelSize: 960)
                         }).value, !Task.isCancelled { images[item.id] = image }
@@ -858,7 +858,7 @@ struct ChatAttachmentSheet: View {
                             sentBytes += item.data.count; uploadProgress = Double(sentBytes) / Double(totalBytes)
                         }
                         guard store.enqueueMedia(attachments, caption: caption, quoteID: quoteID) else {
-                            throw APIError(status: 0, message: "无法加入发送队列，请重试")
+                            throw APIError(status: 0, message: String(localized: "无法加入发送队列，请重试"))
                         }
                         onSent(); dismiss()
                     } catch {

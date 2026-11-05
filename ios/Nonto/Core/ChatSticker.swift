@@ -10,6 +10,7 @@ struct ChatSticker: Codable, Identifiable, Equatable, Sendable {
     var content: String { notoEmoji.map { Self.messageContent + " " + $0.emoji } ?? Self.messageContent }
 
     static let messageContent = "[贴纸]"
+    static var displayContent: String { String(localized: "[贴纸]") }
     static func validURL(_ text: String) -> Bool {
         guard text.count <= 4096, let url = URL(string: text),
               ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
@@ -22,11 +23,11 @@ enum ChatStickerError: LocalizedError {
     case invalidImage, invalidURL, signedOut, full, saveFailed
     var errorDescription: String? {
         switch self {
-        case .invalidImage: return "无法读取这张图片，请选择不超过 20 MB 的图片。"
-        case .invalidURL: return "这张图片的链接不可用，请重新添加。"
-        case .signedOut: return "请登录后添加贴纸。"
-        case .full: return "最多保存 120 张贴纸，请先删除不需要的贴纸。"
-        case .saveFailed: return "贴纸保存失败，请重试。"
+        case .invalidImage: return String(localized: "无法读取这张图片，请选择不超过 20 MB 的图片。")
+        case .invalidURL: return String(localized: "这张图片的链接不可用，请重新添加。")
+        case .signedOut: return String(localized: "请登录后添加贴纸。")
+        case .full: return String(localized: "最多保存 120 张贴纸，请先删除不需要的贴纸。")
+        case .saveFailed: return String(localized: "贴纸保存失败，请重试。")
         }
     }
 }
@@ -44,14 +45,14 @@ struct ChatStickerLibrary {
         return rows.filter { ChatSticker.validURL($0.url) && ids.insert($0.id).inserted && urls.insert($0.url).inserted }
             .prefix(Self.limit).map { $0 }
     }
-    @discardableResult func add(url: String, name: String = "贴纸", notoID: String? = nil) throws -> ChatSticker {
+    @discardableResult func add(url: String, name: String = String(localized: "贴纸"), notoID: String? = nil) throws -> ChatSticker {
         guard accountID > 0 else { throw ChatStickerError.signedOut }
         guard ChatSticker.validURL(url) else { throw ChatStickerError.invalidURL }
         var rows = items
         if let existing = rows.first(where: { $0.url == url }) { return existing }
         guard rows.count < Self.limit else { throw ChatStickerError.full }
         let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sticker = ChatSticker(id: UUID(), url: url, name: title.isEmpty ? "贴纸" : String(title.prefix(40)),
+        let sticker = ChatSticker(id: UUID(), url: url, name: title.isEmpty ? String(localized: "贴纸") : String(title.prefix(40)),
                                   notoID: notoID.flatMap { NotoEmojiCatalog.item(id: $0)?.id })
         rows.insert(sticker, at: 0); try save(rows)
         return sticker

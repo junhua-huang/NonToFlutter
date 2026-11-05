@@ -18,7 +18,7 @@ struct ChatStickerCreationView: View {
                             .accessibilityLabel("新贴纸预览")
                     }
                     if browser.canToggleBackground {
-                        Button(browser.usingCutout ? "保留原图背景" : "提取主体") { browser.toggleBackground() }
+                        Button(browser.usingCutout ? String(localized: "保留原图背景") : String(localized: "提取主体")) { browser.toggleBackground() }
                             .buttonStyle(.bordered).disabled(browser.busy)
                     }
                     TextField("贴纸名称（可选）", text: $browser.name).textFieldStyle(.roundedBorder).disabled(browser.busy)
@@ -32,7 +32,7 @@ struct ChatStickerCreationView: View {
             }
             .safeAreaBar(edge: .bottom) {
                 Button(action: save) {
-                    HStack { if browser.busy { ProgressView() }; Text(browser.busy ? "正在添加…" : "添加贴纸") }
+                    HStack { if browser.busy { ProgressView() }; Text(browser.busy ? String(localized: "正在添加…") : String(localized: "添加贴纸")) }
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }.buttonStyle(.borderedProminent).tint(accent.color).disabled(!browser.canCommit || saved).padding(16)
                     .accessibilityIdentifier("chat.stickers.save")

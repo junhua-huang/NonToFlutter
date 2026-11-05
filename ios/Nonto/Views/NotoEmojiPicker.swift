@@ -39,7 +39,7 @@ struct NotoEmojiCreditsView: View {
     }
     private func license(_ name: String) -> some View {
         ScrollView {
-            Text(NotoEmojiCatalog.asset(name, extension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "许可文本暂不可用")
+            Text(NotoEmojiCatalog.asset(name, extension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? String(localized: "许可文本暂不可用"))
                 .font(.caption).textSelection(.enabled).padding()
         }.navigationTitle(name)
     }

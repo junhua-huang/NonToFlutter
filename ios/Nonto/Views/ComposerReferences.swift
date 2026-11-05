@@ -112,7 +112,7 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
         let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = 4
         view.typingAttributes = [.font: font, .paragraphStyle: paragraph]
-        view.accessibilityLabel = "动态内容"; view.accessibilityIdentifier = "post.composer.body"
+        view.accessibilityLabel = String(localized: "动态内容"); view.accessibilityIdentifier = "post.composer.body"
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.delegate = context.coordinator
         editor.attach(view); editor.synchronize()
@@ -222,7 +222,7 @@ struct ComposerReferencePicker: View {
     var body: some View {
         NavigationStack {
             List {
-                Section(query.isEmpty ? (kind == .mention ? "我的好友" : "热门话题") : "搜索结果") {
+                Section(query.isEmpty ? (kind == .mention ? String(localized: "我的好友") : String(localized: "热门话题")) : String(localized: "搜索结果")) {
                     ForEach(store.items) { item in
                         Button {
                             onSelect(item.value); dismiss()
@@ -243,15 +243,15 @@ struct ComposerReferencePicker: View {
                 if let error = store.error {
                     ErrorBanner(text: error) { Task { await store.load(query, nextPage: store.hasMore && !store.items.isEmpty) } }
                 } else if !store.loading && store.items.isEmpty {
-                    ContentUnavailableView(query.isEmpty ? (kind == .mention ? "还没有好友" : "暂无热门话题") : "没有找到结果",
+                    ContentUnavailableView(query.isEmpty ? (kind == .mention ? String(localized: "还没有好友") : String(localized: "暂无热门话题")) : String(localized: "没有找到结果"),
                         systemImage: kind == .mention ? "person.2" : "number",
-                        description: Text(query.isEmpty ? "也可以直接在正文输入\(kind.marker)名称。" : "试试其他关键词。"))
+                        description: Text(query.isEmpty ? String(localized: "也可以直接在正文输入\(kind.marker)名称。") : String(localized: "试试其他关键词。")))
                 }
                 if store.hasMore && !store.loading {
                     Button("加载更多话题") { Task { await store.load(query, nextPage: true) } }.frame(minHeight: 44)
                 }
             }.navigationTitle(kind.title).navigationBarTitleDisplayMode(.inline)
-                .searchable(text: $query, prompt: kind == .mention ? "搜索好友昵称或用户名" : "搜索话题")
+                .searchable(text: $query, prompt: kind == .mention ? String(localized: "搜索好友昵称或用户名") : String(localized: "搜索话题"))
                 .scrollDismissesKeyboard(.interactively)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
                 .task(id: query) { await store.load(query) }

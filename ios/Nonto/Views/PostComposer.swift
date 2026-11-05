@@ -75,7 +75,7 @@ struct PostComposer: View {
             }.disabled(busy).scrollDismissesKeyboard(.interactively)
                 .background(Color.timelineBackground)
                 .safeAreaInset(edge: .bottom, spacing: 0) { composerFooter }
-                .navigationTitle(editing == nil ? "" : "编辑动态").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(editing == nil ? "" : String(localized: "编辑动态")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(action: close) { Image(systemName: "xmark") }
@@ -85,7 +85,7 @@ struct PostComposer: View {
                         Button { Task { await publish() } } label: {
                             if busy { ProgressView().accessibilityLabel("正在提交") }
                             else {
-                                Text(editing == nil ? "发布" : "保存").fontWeight(.semibold)
+                                Text(editing == nil ? String(localized: "发布") : String(localized: "保存")).fontWeight(.semibold)
                             }
                         }.disabled(busy || reading || !canPublish)
                             .buttonStyle(.glassProminent).tint(accent.color)
@@ -93,12 +93,12 @@ struct PostComposer: View {
                     }
                 }
                 .interactiveDismissDisabled(busy || reading || !media.isEmpty || (editing != nil && hasChanges))
-                .confirmationDialog(editing == nil ? "关闭发布？" : "放弃尚未保存的修改？", isPresented: $confirmClose, titleVisibility: .visible) {
+                .confirmationDialog(editing == nil ? String(localized: "关闭发布？") : String(localized: "放弃尚未保存的修改？"), isPresented: $confirmClose, titleVisibility: .visible) {
                     if editing == nil { Button("保留草稿并关闭") {
                         draftSaveTask?.cancel()
                         Task { busy = true; defer { busy = false }; if await saveDraft() { dismiss() } }
                     } }
-                    Button(editing == nil ? "放弃本次内容" : "放弃修改", role: .destructive) {
+                    Button(editing == nil ? String(localized: "放弃本次内容") : String(localized: "放弃修改"), role: .destructive) {
                         draftSaveTask?.cancel()
                         Task {
                             busy = true; defer { busy = false }
@@ -141,7 +141,7 @@ struct PostComposer: View {
         HStack(spacing: 10) {
             AvatarView(url: session.user?.avatar ?? "", name: session.user?.name ?? "", size: 42)
             VStack(alignment: .leading, spacing: 4) {
-                Text(session.user?.name ?? "我的动态").font(.subheadline.bold()).lineLimit(1)
+                Text(session.user?.name ?? String(localized: "我的动态")).font(.subheadline.bold()).lineLimit(1)
                 if editing == nil { rolePicker }
             }
             Spacer(minLength: 8)
@@ -206,7 +206,7 @@ struct PostComposer: View {
                     if busy && !media.isEmpty {
                         ProgressView(value: Double(completedUploads), total: Double(media.count))
                     } else { ProgressView().controlSize(.small) }
-                    Text(status.isEmpty ? "正在准备媒体…" : status).font(.caption).foregroundStyle(.secondary)
+                    Text(status.isEmpty ? String(localized: "正在准备媒体…") : status).font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
             }
             if let error {
@@ -218,8 +218,8 @@ struct PostComposer: View {
                         if editing == nil {
                             Button(action: openPhotos) { toolSymbol("photo") }
                                 .disabled(!attachments.canAddPhotos)
-                                .accessibilityLabel(media.isEmpty ? "添加照片或视频" : "继续添加照片")
-                                .accessibilityHint(media.first?.isVideo == true ? "视频需单独发布" : "最多 9 张照片或一段视频")
+                                .accessibilityLabel(media.isEmpty ? String(localized: "添加照片或视频") : String(localized: "继续添加照片"))
+                                .accessibilityHint(media.first?.isVideo == true ? String(localized: "视频需单独发布") : String(localized: "最多 9 张照片或一段视频"))
                                 .accessibilityIdentifier("post.composer.add-media")
                         }
                         Button { editor.beginReference(.mention) } label: { toolSymbol("at") }
@@ -251,11 +251,11 @@ struct PostComposer: View {
             }
         } label: {
             HStack(spacing: 5) {
-                Text(visibility == "public" ? "公开" : "仅好友")
+                Text(visibility == "public" ? String(localized: "公开") : String(localized: "仅好友"))
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
             }.font(.subheadline).frame(minHeight: 44).contentShape(Rectangle())
         }.foregroundStyle(accent.color).accessibilityLabel("谁可以看")
-            .accessibilityValue(visibility == "public" ? "公开" : "仅好友")
+            .accessibilityValue(visibility == "public" ? String(localized: "公开") : String(localized: "仅好友"))
             .accessibilityIdentifier("post.composer.audience")
     }
     private func openPhotos() {
@@ -282,7 +282,7 @@ struct PostComposer: View {
                 }
             } catch {
                 if accountEpoch == session.api.generation, !(error is CancellationError) {
-                    self.error = "部分草稿无法恢复，已保留可读取的文字。请检查附件后再发布。"
+                    self.error = String(localized: "部分草稿无法恢复，已保留可读取的文字。请检查附件后再发布。")
                 }
             }
         }
@@ -295,12 +295,12 @@ struct PostComposer: View {
     private func readSelection() async {
         let selection = picks
         guard !selection.isEmpty else { return }
-        reading = true; error = nil; status = "正在准备媒体…"
+        reading = true; error = nil; status = String(localized: "正在准备媒体…")
         defer { reading = false; if !busy { status = "" } }
         do {
             var result: [SelectedMedia] = []
             for (index, pick) in selection.enumerated() {
-                try checkAccount(); status = "正在准备媒体 \(index + 1)/\(selection.count)…"
+                try checkAccount(); status = String(localized: "正在准备媒体 \(index + 1)/\(selection.count)…")
                 result.append(try await MediaLoader.load(pick))
             }
             try checkAccount()
@@ -331,7 +331,7 @@ struct PostComposer: View {
             return true
         } catch {
             if !Task.isCancelled, accountEpoch == session.api.generation {
-                self.error = "草稿未能保存，请检查本机存储空间后重试。"
+                self.error = String(localized: "草稿未能保存，请检查本机存储空间后重试。")
             }
             return false
         }
@@ -351,7 +351,7 @@ struct PostComposer: View {
         editor.endEditing()
         guard canPublish else { return }
         let content = text, audience = visibility, selected = media, identity = role
-        busy = true; error = nil; completedUploads = 0; status = editing == nil ? "正在发布…" : "正在保存…"
+        busy = true; error = nil; completedUploads = 0; status = editing == nil ? String(localized: "正在发布…") : String(localized: "正在保存…")
         defer { busy = false; status = "" }
         do {
             try checkAccount()
@@ -365,7 +365,7 @@ struct PostComposer: View {
                 var images: [String] = []
                 for (index, item) in selected.enumerated() {
                     try checkAccount()
-                    status = "正在上传\(item.isVideo ? "视频" : "照片") \(index + 1)/\(selected.count)…"
+                    status = String(localized: "正在上传\(item.isVideo ? String(localized: "视频") : String(localized: "照片")) \(index + 1)/\(selected.count)…")
                     let url: String
                     if let existing = uploaded[item.id] { url = existing }
                     else {
@@ -379,7 +379,7 @@ struct PostComposer: View {
                 if !identity.isEmpty { fields["display_role_type"] = identity }
                 if let communityID { fields["community_id"] = String(communityID) }
                 if let quoted { fields["quoted_post_id"] = String(quoted.id) }
-                try checkAccount(); status = "正在发布…"
+                try checkAccount(); status = String(localized: "正在发布…")
                 _ = try await session.api.request("/posts", method: "POST", form: fields)
                 try checkAccount(); published = true; await clearDraft()
             }

@@ -12,7 +12,7 @@ struct PrivacyWelcomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(accent.symbolColor)
-                    Text(declined ? "你可以先了解南图" : "欢迎使用南图").font(.largeTitle.bold())
+                    Text(declined ? String(localized: "你可以先了解南图") : String(localized: "欢迎使用南图")).font(.largeTitle.bold())
                     Text("请先阅读服务条款和隐私政策，再决定是否使用账号与社交服务。")
                     Text("账号服务会处理邮箱、账号资料、你主动发送的内容和服务安全信息。照片与视频仅在你选择时读取；通知在你开启时申请，不影响文字功能。")
                     NavigationLink("阅读隐私政策") { PolicyView(kind: "privacy") }
@@ -219,6 +219,6 @@ struct ReportHistoryView: View {
         }.navigationTitle("举报处理记录").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
     private func status(_ value: String) -> String {
-        switch value { case "pending": return "待处理"; case "resolved": return "已处理"; case "rejected", "dismissed": return "未采纳"; default: return "处理中" }
+        switch value { case "pending": return String(localized: "待处理"); case "resolved": return String(localized: "已处理"); case "rejected", "dismissed": return String(localized: "未采纳"); default: return String(localized: "处理中") }
     }
 }

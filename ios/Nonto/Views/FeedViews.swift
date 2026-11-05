@@ -9,7 +9,7 @@ struct FeedView: View {
     var body: some View {
         PostList(session: session, path: path).id(filter)
         .safeAreaInset(edge: .top, spacing: 0) {
-            TimelineTabs(title: "动态范围", tabs: [(1, "最新"), (2, "与你相关")], selection: $filter)
+            TimelineTabs(title: String(localized: "动态范围"), tabs: [(1, String(localized: "最新")), (2, String(localized: "与你相关"))], selection: $filter)
         }
         .navigationTitle("南图").navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -235,7 +235,7 @@ struct PostCard: View {
             Button { Task { await toggleLike() } } label: {
                 TimelineActionSymbol(symbol: current.liked ? "heart.fill" : "heart", count: current.likes)
                     .foregroundStyle(current.liked ? Color.brandLike : Color.secondary)
-            }.disabled(busy).accessibilityLabel("\(current.liked ? "取消点赞" : "点赞")，\(current.likes) 个赞")
+            }.disabled(busy).accessibilityLabel("\(current.liked ? String(localized: "取消点赞") : String(localized: "点赞"))，\(current.likes) 个赞")
             Button { sharing = true } label: { TimelineActionSymbol(symbol: "square.and.arrow.up") }
                 .accessibilityLabel("分享动态")
         }.foregroundStyle(.secondary).buttonStyle(.plain)
