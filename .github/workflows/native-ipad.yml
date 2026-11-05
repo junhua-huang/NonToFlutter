@@ -58,6 +58,13 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/IPad -resultBundlePath build/IPad.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES -only-testing:NontoTests/IPadLayoutTests -only-testing:NontoTests/CommentsTests -only-testing:NontoTests/FriendsAndMessagesTests -testLanguage zh-Hans -testRegion CN -parallel-testing-enabled NO test | tee ipad-tests.log
+      - name: Verify English and Traditional Chinese on iPadOS 27
+        run: |
+          set -o pipefail
+          for language in en zh-Hant; do
+            xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/IPad -resultBundlePath "build/IPadLocalization-$language.xcresult" CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage "$language" -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test-without-building | tee "ipad-localization-$language.log"
+            xcrun xcresulttool export attachments --path "build/IPadLocalization-$language.xcresult" --output-path "build/IPadScreenshots-$language"
+          done
       - name: Export actual iPad screenshots
         if: always()
         run: xcrun xcresulttool export attachments --path build/IPad.xcresult --output-path build/IPadScreenshots
@@ -67,5 +74,7 @@ jobs:
           name: Nonto-iPad-${{ matrix.version }}
           path: |
             build/IPadScreenshots
+            build/IPadScreenshots-en
+            build/IPadScreenshots-zh-Hant
             ipad-tests.log
           retention-days: 14

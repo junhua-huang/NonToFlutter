@@ -10,7 +10,7 @@ struct NotoEmoji: Decodable, Identifiable, Equatable, Sendable {
     var animationURL: URL? { NotoEmojiCatalog.asset(id, extension: "json") }
     var previewURL: URL? { NotoEmojiCatalog.asset(id, extension: "png") }
     func matches(_ query: String) -> Bool {
-        let searchable = "\(emoji) \(name) \(keywords) \(category)"
+        let searchable = "\(emoji) \(name) \(localizedName) \(keywords) \(category)"
         return query.split(whereSeparator: \.isWhitespace).allSatisfy { searchable.localizedStandardContains(String($0)) }
     }
 }

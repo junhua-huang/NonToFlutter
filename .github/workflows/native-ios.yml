@@ -57,10 +57,10 @@ jobs:
           PY
       - name: Enable software keyboard for interaction checks
         run: defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
-      - name: Build and test native app
+      - name: Build and verify bundled translations
         run: |
           set -o pipefail
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/NontoTests.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -parallel-testing-enabled NO test | tee build-native.log
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/Localization-zh-Hans.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test | tee build-localization-zh-Hans.log
       - name: Verify English and Traditional Chinese on iOS 27
         run: |
           set -o pipefail
@@ -68,6 +68,10 @@ jobs:
             xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath "build/Localization-$language.xcresult" CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage "$language" -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test-without-building | tee "build-localization-$language.log"
             xcrun xcresulttool export attachments --path "build/Localization-$language.xcresult" --output-path "build/LayoutSnapshots-$language"
           done
+      - name: Run complete native regression
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/NontoTests.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -parallel-testing-enabled NO test-without-building | tee build-native.log
       - name: Verify optimized Release startup, interactions and chat
         if: env.NATIVE_CONFIGURATION != 'Release'
         run: |

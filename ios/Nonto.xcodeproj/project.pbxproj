@@ -110,7 +110,7 @@ objects = {
 741A6D48E7D716A831A48A9E = {isa = PBXVariantGroup; children = (F8EB8C3FF60BAB7CFC24CB17, 2A5C63878AC8D0AA84343DDC, E6BA279E625A36D703ED787E,); name = "privacy.txt"; sourceTree = "<group>"; };
 74D8C09CC211705A6255693C = {isa = PBXBuildFile; fileRef = 741A6D48E7D716A831A48A9E; };
 74F4A5F26F443366E90B085B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/InteractionTests.swift"; sourceTree = "<group>"; };
-775D621CFE8B4463EDBCB6C1 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/community.txt"; sourceTree = "<group>"; };
+775D621CFE8B4463EDBCB6C1 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/zh-Hans.lproj/community.txt"; sourceTree = "<group>"; };
 79FE559008770B6E82A6F325 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Services/RealtimeClient.swift"; sourceTree = "<group>"; };
 7A94D5C643C35A0CAB34B31C = {isa = PBXBuildFile; fileRef = 7E8911ABFAD889798A4C47A9; };
 7ADA2C339779AEDBC263E23C = {isa = PBXBuildFile; fileRef = 529B143EE05FCC8205D253BE; };
@@ -220,9 +220,9 @@ F115AF690239BFBFCB7B4DE6 = {isa = PBXFrameworksBuildPhase; buildActionMask = 214
 F61C11C9C8F4556700FDCA7A = {isa = PBXBuildFile; fileRef = 83150C4A3F4115979E66D5E6; };
 F76D3B7E765D16F1DDA64F6F = {isa = PBXBuildFile; fileRef = E14A4E611FB0A1996A3F0E10; };
 F78A73DB0B234E810A7CD022 = {isa = PBXBuildFile; fileRef = BA654BD8544355F07B915C84; };
-F79EB1A4C974354846F4F858 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/terms.txt"; sourceTree = "<group>"; };
+F79EB1A4C974354846F4F858 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/zh-Hans.lproj/terms.txt"; sourceTree = "<group>"; };
 F868C652134E87F1230C4B88 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/CoreTests.swift"; sourceTree = "<group>"; };
-F8EB8C3FF60BAB7CFC24CB17 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/privacy.txt"; sourceTree = "<group>"; };
+F8EB8C3FF60BAB7CFC24CB17 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/zh-Hans.lproj/privacy.txt"; sourceTree = "<group>"; };
 F930F6068E5DC4FF36477E02 = {isa = PBXVariantGroup; children = (F79EB1A4C974354846F4F858, 7406C15E5E8F0DE124F0129E, 7337A8C2E0BE5C4200C621A3,); name = "terms.txt"; sourceTree = "<group>"; };
 FA1744F2A354870764004895 = {isa = PBXBuildFile; fileRef = F930F6068E5DC4FF36477E02; };
 FA856824ACC3C6177D56A198 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/CommentsTests.swift"; sourceTree = "<group>"; };

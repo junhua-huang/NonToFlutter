@@ -61,6 +61,8 @@ def inspect(resources=RESOURCES):
             errors.append(f'Untranslated system permission: {key}')
     for name, minimum in [('privacy', 11), ('terms', 10), ('community', 8)]:
         canonical = (resources / (name + '.txt')).read_text()
+        if (resources / 'zh-Hans.lproj' / (name + '.txt')).read_text() != canonical:
+            errors.append(f'{name}/zh-Hans: generated canonical copy differs')
         placeholders = Counter(re.findall(r'{{(\w+)}}', canonical))
         for language in ['en', 'zh-Hant']:
             text = (resources / (language + '.lproj') / (name + '.txt')).read_text()

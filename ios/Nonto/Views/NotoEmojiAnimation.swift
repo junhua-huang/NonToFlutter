@@ -95,6 +95,6 @@ struct NotoEmojiAnimation: View {
         .onAppear { visible = true }
         .onDisappear { visible = false }
         .onScrollVisibilityChange(threshold: 0.1) { visible = $0 }
-        .accessibilityElement(children: .ignore).accessibilityLabel(item.name)
+        .accessibilityElement(children: .ignore).accessibilityLabel(item.localizedName)
     }
 }

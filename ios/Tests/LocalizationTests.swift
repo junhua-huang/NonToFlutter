@@ -80,6 +80,8 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(item.category, "笑脸与情感")
         XCTAssertEqual(NotoEmojiScope.category(item.category).id, "category/笑脸与情感")
         XCTAssertTrue(NotoEmojiSearchIndex(items: [item]).search(item.localizedName).contains(item))
+        XCTAssertTrue(item.matches(item.localizedName))
+        XCTAssertEqual(StagedChatSticker(source: .noto(item)).name, item.localizedName)
     }
 
     func testSelectedLanguageScreensAtNarrowAndLargeTextSizes() async throws {
@@ -88,7 +90,8 @@ final class LocalizationTests: XCTestCase {
         defer { StubProtocol.handler = nil }
         let api = APIClient(baseURL: URL(string: "https://localization.example.test/api")!, session: URLSession(configuration: config), credentials: MemoryCredentials())
         let session = AppSession(api: api); session.restoring = false
-        session.user = Person(.object(["id": .id(900040), "username": .text("原文_Original"), "display_name": .text("原文 Original")]))
+        defer { try? LocalCache.clear(userID: 970091) }
+        session.user = Person(.object(["id": .id(970091), "username": .text("原文_Original"), "display_name": .text("原文 Original")]))
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let screens: [(String, AnyView)] = [
@@ -104,6 +107,7 @@ final class LocalizationTests: XCTestCase {
                 let controller = UIHostingController(rootView: view.environmentObject(session)
                     .environment(\.dynamicTypeSize, .accessibility1))
                 window.rootViewController = controller; window.makeKeyAndVisible()
+                controller.loadViewIfNeeded(); controller.view.frame = window.bounds
                 defer { window.isHidden = true; window.rootViewController = nil }
                 try await Task.sleep(for: .milliseconds(300))
                 controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()

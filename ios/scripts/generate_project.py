@@ -58,9 +58,13 @@ resources.append('Nonto/Resources/NotoEmoji')
 legal_resources = []
 for document in ['privacy', 'terms', 'community']:
     name = document + '.txt'
+    canonical = ROOT / 'Nonto/Resources' / name
+    translated_source = ROOT / 'Nonto/Resources/zh-Hans.lproj' / name
+    translated_source.parent.mkdir(parents=True, exist_ok=True)
+    translated_source.write_bytes(canonical.read_bytes())
     children = []
     for language in ['zh-Hans', 'zh-Hant', 'en']:
-        path = 'Nonto/Resources/' + ('' if language == 'zh-Hans' else language + '.lproj/') + name
+        path = 'Nonto/Resources/' + (language + '.lproj/') + name
         children.append(add('ref:legal:' + document + ':' + language,
                             '{isa = PBXFileReference; lastKnownFileType = text; name = ' + quote(language) + '; path = ' + quote(path) + '; sourceTree = "<group>"; }'))
     variant = add('variant:legal:' + document, '{isa = PBXVariantGroup; children = ' + array(children) + '; name = ' + quote(name) + '; sourceTree = "<group>"; }')

@@ -34,7 +34,7 @@ struct StagedChatSticker: Identifiable, Equatable {
     enum Source: Equatable { case saved(ChatSticker), noto(NotoEmoji) }
     let id = UUID()
     let source: Source
-    var name: String { switch source { case .saved(let item): return item.name; case .noto(let item): return item.localizedName } }
+    var name: String { switch source { case .saved(let item): return item.notoEmoji?.localizedName ?? item.name; case .noto(let item): return item.localizedName } }
     var notoEmoji: NotoEmoji? { switch source { case .saved(let item): return item.notoEmoji; case .noto(let item): return item } }
     var imageURL: String? { if case .saved(let item) = source { return item.url }; return nil }
     var sourceID: String { switch source { case .saved(let item): return "saved:" + item.id.uuidString; case .noto(let item): return "noto:" + item.id } }
