@@ -35,6 +35,7 @@ extension View {
 
 /// Underlined content navigation stays visually separate from glass controls.
 struct TimelineTabs<Selection: Hashable>: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let title: String
     let tabs: [(value: Selection, title: String)]
@@ -65,6 +66,7 @@ struct TimelineTabs<Selection: Hashable>: View {
 }
 
 struct ComposeButton: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let action: () -> Void
     var body: some View {
@@ -77,6 +79,7 @@ struct ComposeButton: View {
 }
 
 struct TimelineActionSymbol: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let symbol: String
     var count: Int = 0
     var body: some View {
@@ -91,6 +94,7 @@ struct TimelineActionSymbol: View {
 }
 
 private struct ScrollingNavigationBar: UIViewRepresentable {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     func makeUIView(context: Context) -> ScrollChrome { ScrollChrome() }
     // Layout updates must never change toolbar visibility. UIKit owns the swipe
     // gesture and its bar animation, without feeding insets back into SwiftUI.

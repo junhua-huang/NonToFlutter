@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PushDestinationView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let route: PushRoute
     @EnvironmentObject private var session: AppSession
     @State private var conversation: Conversation?
@@ -15,7 +16,7 @@ struct PushDestinationView: View {
                 switch route.destination {
                 case .conversation:
                     if let conversation { ChatRoomView(conversation: conversation) }
-                    else if let error { ContentUnavailableView { Label("暂时无法打开会话", systemImage: "bubble.left") } description: { Text(error) } actions: { Button("重试") { attempt += 1 }.buttonStyle(.glass) } }
+                    else if let error { ContentUnavailableView { Label("暂时无法打开会话", systemImage: "bubble.left") } description: { Text(AppLocalization.relocalizedUI(error)) } actions: { Button("重试") { attempt += 1 }.buttonStyle(.glass) } }
                     else { ProgressView("正在打开会话…") }
                 case .community(let id): CommunityDetailView(communityID: id)
                 case .post(let id): PostDetailView(session: session, postID: id)

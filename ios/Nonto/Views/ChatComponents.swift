@@ -13,6 +13,7 @@ struct ChatAttachmentSourcePreference: PreferenceKey {
 
 /// A single surface grows from the measured button; content keeps its own size.
 struct ChatAttachmentMenuOverlay: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let presented: Bool
     let source: CGRect
     let containerSize: CGSize
@@ -98,6 +99,7 @@ private struct ChatAttachmentReveal: ViewModifier, Animatable {
 
 /// The surface owns its reveal; only the list participates in native bouncing.
 struct ChatAttachmentMenu: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let rowHeight: CGFloat
     let onSelect: (ChatAttachmentAction) -> Void
     let onDismiss: () -> Void
@@ -162,6 +164,7 @@ struct ChatAttachmentMenu: View {
 }
 
 private struct ChatCameraMenuLens: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size.width
@@ -194,6 +197,7 @@ private struct ChatAttachmentRowStyle: ButtonStyle {
 
 /// The system sheet owns dragging and hands scrolling to the embedded library.
 struct ChatPhotoDrawer: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let onAdd: ([PhotosPickerItem]) -> Void
     let onClose: () -> Void
@@ -204,7 +208,7 @@ struct ChatPhotoDrawer: View {
             HStack {
                 Text("相册").font(.headline)
                 Spacer()
-                Button(selection.isEmpty ? String(localized: "添加") : String(localized: "添加 \(selection.count)")) { onAdd(selection) }
+                Button(selection.isEmpty ? AppLocalization.string("添加") : AppLocalization.string("添加 \(selection.count)")) { onAdd(selection) }
                     .disabled(selection.isEmpty).accessibilityIdentifier("chat.photos.add")
                 Button(action: onClose) {
                     Image(systemName: "xmark").frame(width: 44, height: 44)
@@ -244,6 +248,7 @@ private struct StickerMenuShape: Shape {
 
 /// SwiftUI has no system camera picker; keep capture inside Apple's camera UI.
 struct ChatCameraCapture: UIViewControllerRepresentable {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let onCapture: (Data) -> Void
     let onCancel: () -> Void
@@ -307,21 +312,21 @@ enum ChatQuoteSummary {
     static func text(_ message: ChatMessage) -> String {
         if message.isSticker { return ChatSticker.displayContent }
         guard ["image", "video"].contains(message.kind) else { return message.content }
-        let kind = message.kind == "image" ? String(localized: "[图片]") : String(localized: "[视频]")
+        let kind = message.kind == "image" ? AppLocalization.string("[图片]") : AppLocalization.string("[视频]")
         let caption = ImageMessageCaption.text(message.content, media: message.media)
         return caption.isEmpty ? kind : kind + " " + caption
     }
     /// Match the server's compact reply preview so acknowledgement doesn't resize it.
     static func preview(_ message: ChatMessage) -> String {
-        if message.recalled { return String(localized: "消息已撤回") }
+        if message.recalled { return AppLocalization.string("消息已撤回") }
         if message.isSticker { return ChatSticker.displayContent }
         switch message.kind {
-        case "image": return String(localized: "[图片]")
-        case "video": return String(localized: "[视频]")
+        case "image": return AppLocalization.string("[图片]")
+        case "video": return AppLocalization.string("[视频]")
         case "post":
             let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            let head = content.isEmpty ? String(localized: "帖子 #\(message.id)") : String(content.prefix(30)) + (content.count > 30 ? "..." : "")
-            return String(localized: "[帖子] ") + head
+            let head = content.isEmpty ? AppLocalization.string("帖子 #\(message.id)") : String(content.prefix(30)) + (content.count > 30 ? "..." : "")
+            return AppLocalization.string("[帖子] ") + head
         default:
             let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
             return String(content.prefix(50)) + (content.count > 50 ? "..." : "")
@@ -331,6 +336,7 @@ enum ChatQuoteSummary {
 
 /// Status occupies the visible chat viewport, independent of the bottom-anchored message stack.
 struct ChatTimelinePlaceholder: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let loading: Bool
     let error: String?
     let retry: () -> Void
@@ -340,7 +346,7 @@ struct ChatTimelinePlaceholder: View {
             else if let error {
                 ContentUnavailableView {
                     Label("消息加载失败", systemImage: "wifi.exclamationmark")
-                } description: { Text(error) } actions: {
+                } description: { Text(AppLocalization.relocalizedUI(error)) } actions: {
                     Button("重试", action: retry).buttonStyle(.glass)
                 }
             } else {
@@ -352,6 +358,7 @@ struct ChatTimelinePlaceholder: View {
 }
 
 struct ChatMessageRow: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let row: ChatTimeline.Row
     let community: Bool
@@ -395,7 +402,7 @@ struct ChatMessageRow: View {
                 }
                 VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
                     if community && !mine && row.startsRun {
-                        Text(sender.name.isEmpty ? String(localized: "群成员") : sender.name).font(.caption).foregroundStyle(.secondary)
+                        Text(sender.name.isEmpty ? AppLocalization.string("群成员") : sender.name).font(.caption).foregroundStyle(.secondary)
                     }
                     bubble.contextMenu {
                         if !message.recalled {
@@ -424,7 +431,7 @@ struct ChatMessageRow: View {
                                 ChatPendingStatus(item: pending, sending: sending, blocked: blocked,
                                                   retry: retry, remove: remove, checkDelivery: checkDelivery)
                             } else {
-                                Text(message.raw["is_read"].bool ? String(localized: "已读") : String(localized: "已发送"))
+                                Text(message.raw["is_read"].bool ? AppLocalization.string("已读") : AppLocalization.string("已发送"))
                                     .foregroundStyle(.secondary)
                                     .opacity(showsReceipt && !message.recalled ? 1 : 0)
                                     .accessibilityHidden(!showsReceipt || message.recalled)
@@ -437,7 +444,7 @@ struct ChatMessageRow: View {
         }.padding(.horizontal).padding(.top, row.startsRun ? 6 : 0)
             .background(accent.color.opacity(highlighted ? 0.10 : 0))
             .sheet(isPresented: $reporting) {
-                ReportView(kind: "user", targetID: message.senderID, context: String(localized: "聊天消息 #\(message.id)：\n"))
+                ReportView(kind: "user", targetID: message.senderID, context: AppLocalization.string("聊天消息 #\(message.id)：\n"))
             }
             .alert("贴纸", isPresented: Binding(get: { stickerFeedback != nil }, set: { if !$0 { stickerFeedback = nil } })) {
                 Button("好", role: .cancel) { stickerFeedback = nil }
@@ -476,10 +483,10 @@ struct ChatMessageRow: View {
                           onPresentationChange: onMediaPresentation).frame(maxWidth: 250) }
             else if message.kind == "post", message.raw["related_id"].int > 0 {
                 RouteButton(.post(message.raw["related_id"].int)) {
-                    Label(message.content.isEmpty ? String(localized: "查看动态") : message.content, systemImage: "doc.richtext").lineLimit(4)
+                    Label(message.content.isEmpty ? AppLocalization.string("查看动态") : message.content, systemImage: "doc.richtext").lineLimit(4)
                 }
             } else if message.kind == "file", let url = URL(string: message.media), url.scheme == "https" {
-                Link(message.content.isEmpty ? String(localized: "打开文件") : message.content, destination: url)
+                Link(message.content.isEmpty ? AppLocalization.string("打开文件") : message.content, destination: url)
             } else { Text(message.content).textSelection(.enabled) }
             if !message.attachmentCaption.isEmpty {
                 Text(message.attachmentCaption).textSelection(.enabled)
@@ -490,7 +497,7 @@ struct ChatMessageRow: View {
     private func saveSticker() {
         do {
             try ChatStickerLibrary(accountID: session.user?.id ?? 0).add(url: message.media, notoID: message.notoSticker?.id)
-            stickerFeedback = String(localized: "已添加到贴纸，可在聊天“＋”中找到。")
+            stickerFeedback = AppLocalization.string("已添加到贴纸，可在聊天“＋”中找到。")
         } catch { stickerFeedback = error.localizedDescription }
     }
     private var quotePreview: some View {
@@ -506,6 +513,7 @@ struct ChatMessageRow: View {
 
 /// The banner floats above the timeline, so a polling error cannot insert a row.
 struct ChatSyncNotice: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let error: String
     let retry: () -> Void
     let dismiss: () -> Void
@@ -517,7 +525,7 @@ struct ChatSyncNotice: View {
             Button { showingDetails = true } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("聊天提示").font(.caption.weight(.semibold)).lineLimit(1)
-                    Text(typeSize.isAccessibilitySize ? String(localized: "点按查看详情") : error)
+                    Text(typeSize.isAccessibilitySize ? AppLocalization.string("点按查看详情") : error)
                         .font(.caption2).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? 1 : 2)
                 }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).multilineTextAlignment(.leading)
             }.buttonStyle(.plain).accessibilityLabel("聊天提示，查看详情").accessibilityHint(error)
@@ -528,7 +536,7 @@ struct ChatSyncNotice: View {
             .alert("聊天提示", isPresented: $showingDetails) {
                 Button("刷新消息", action: retry)
                 Button("关闭", role: .cancel) { }
-            } message: { Text(error) }
+            } message: { Text(AppLocalization.relocalizedUI(error)) }
     }
 }
 
@@ -536,6 +544,7 @@ struct ChatQuoteTarget: Identifiable { let id: Int }
 
 /// A separately fetched quote window never changes the main chat's loaded pages.
 struct ChatQuoteContextView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let targetID: Int
     let store: ChatStore
     let conversation: Conversation
@@ -585,7 +594,7 @@ struct ChatQuoteContextView: View {
         } catch {
             if !Task.isCancelled {
                 if let error = error as? APIError, [403, 404].contains(error.status) {
-                    self.error = String(localized: "原消息已删除，或当前账号无权查看")
+                    self.error = AppLocalization.string("原消息已删除，或当前账号无权查看")
                 } else { self.error = error.localizedDescription }
             }
         }
@@ -593,6 +602,7 @@ struct ChatQuoteContextView: View {
 }
 
 struct ChatVideoPreview: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let url: URL
     let height: CGFloat
     var onPresentationChange: (Bool) -> Void = { _ in }
@@ -649,6 +659,7 @@ private struct ChatBubbleSurface: ViewModifier {
 
 /// Standalone previews use the same bubble as the unified live timeline.
 struct ChatPendingRow: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let item: PendingMessage
     let sending: Bool
     let blocked: Bool
@@ -668,6 +679,7 @@ struct ChatPendingRow: View {
 }
 
 struct ChatPendingStatus: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let item: PendingMessage
     let sending: Bool
     let blocked: Bool
@@ -701,7 +713,7 @@ struct ChatPendingStatus: View {
                 if item.retryWhenOnline == true { Text("连接恢复后自动重试").foregroundStyle(.secondary) }
                 Text(failure).foregroundStyle(.secondary).lineLimit(3)
             } else {
-                Label(sending ? String(localized: "正在发送…") : (blocked ? String(localized: "等待上一条消息重试") : String(localized: "等待发送")),
+                Label(sending ? AppLocalization.string("正在发送…") : (blocked ? AppLocalization.string("等待上一条消息重试") : AppLocalization.string("等待发送")),
                       systemImage: sending ? "arrow.up.circle" : "clock")
                     .foregroundStyle(.secondary)
                     .contextMenu { if !sending { Button("取消发送", role: .destructive, action: remove) } }
@@ -709,11 +721,11 @@ struct ChatPendingStatus: View {
         }
     }
     private var failureLabel: some View {
-        Label(item.deliveryUncertain == true ? String(localized: "结果待确认") : String(localized: "未发送"), systemImage: "exclamationmark.circle.fill")
+        Label(item.deliveryUncertain == true ? AppLocalization.string("结果待确认") : AppLocalization.string("未发送"), systemImage: "exclamationmark.circle.fill")
             .foregroundStyle(item.deliveryUncertain == true ? Color.orange : Color.red)
     }
     private var retryButton: some View {
-        Button(item.deliveryUncertain == true ? String(localized: "重新发送") : String(localized: "重试")) {
+        Button(item.deliveryUncertain == true ? AppLocalization.string("重新发送") : AppLocalization.string("重试")) {
             if item.deliveryUncertain == true { confirmResend = true } else { retry() }
         }.frame(minHeight: 44)
     }
@@ -727,6 +739,7 @@ struct ChatAttachments: Identifiable {
 
 /// Keep the complete selection local until Send; reuse successful uploads on retry.
 struct ChatAttachmentSheet: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let media: [SelectedMedia]
     let api: APIClient
@@ -794,7 +807,7 @@ struct ChatAttachmentSheet: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Button { submitting = true } label: {
-                        Label(error == nil ? String(localized: "发送 \(selection.count) 个附件") : String(localized: "重试发送"), systemImage: "arrow.up")
+                        Label(error == nil ? AppLocalization.string("发送 \(selection.count) 个附件") : AppLocalization.string("重试发送"), systemImage: "arrow.up")
                             .frame(maxWidth: .infinity).padding(.vertical, 6)
                     }.buttonStyle(.glassProminent).disabled(submitting || selection.isEmpty)
                 }.padding()
@@ -816,7 +829,7 @@ struct ChatAttachmentSheet: View {
                                 guard !Task.isCancelled else { try? FileManager.default.removeItem(at: url); return }
                                 videoURLs[item.id] = url
                             }
-                            catch { self.error = String(localized: "无法预览视频") }
+                            catch { self.error = AppLocalization.string("无法预览视频") }
                         } else if let image = try? await Task.detached(priority: .userInitiated, operation: {
                             try ImageRepository.decode(item.data, maxPixelSize: 960)
                         }).value, !Task.isCancelled { images[item.id] = image }
@@ -858,7 +871,7 @@ struct ChatAttachmentSheet: View {
                             sentBytes += item.data.count; uploadProgress = Double(sentBytes) / Double(totalBytes)
                         }
                         guard store.enqueueMedia(attachments, caption: caption, quoteID: quoteID) else {
-                            throw APIError(status: 0, message: String(localized: "无法加入发送队列，请重试"))
+                            throw APIError(status: 0, message: AppLocalization.string("无法加入发送队列，请重试"))
                         }
                         onSent(); dismiss()
                     } catch {

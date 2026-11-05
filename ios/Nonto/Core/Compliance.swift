@@ -6,13 +6,13 @@ enum LegalDocument: String, CaseIterable, Identifiable {
     case privacy, terms, community
     var id: String { rawValue }
     var title: String {
-        switch self { case .privacy: return String(localized: "隐私政策"); case .terms: return String(localized: "服务条款"); case .community: return String(localized: "社区规范") }
+        switch self { case .privacy: return AppLocalization.string("隐私政策"); case .terms: return AppLocalization.string("服务条款"); case .community: return AppLocalization.string("社区规范") }
     }
     var summary: String {
         switch self {
-        case .privacy: return String(localized: "了解账号、内容和推送信息如何处理，以及如何管理权限和申请删除。")
-        case .terms: return String(localized: "了解账号使用、内容权利、服务边界，以及举报和申诉方式。")
-        case .community: return String(localized: "尊重他人的隐私与交往意愿；发现骚扰、侵权或违法内容时，可以举报或屏蔽。")
+        case .privacy: return AppLocalization.string("了解账号、内容和推送信息如何处理，以及如何管理权限和申请删除。")
+        case .terms: return AppLocalization.string("了解账号使用、内容权利、服务边界，以及举报和申诉方式。")
+        case .community: return AppLocalization.string("尊重他人的隐私与交往意愿；发现骚扰、侵权或违法内容时，可以举报或屏蔽。")
         }
     }
 }
@@ -21,18 +21,18 @@ enum SupportRequestKind: String, CaseIterable, Identifiable {
     case support, report, rights, appeal
     var id: String { rawValue }
     var title: String {
-        switch self { case .support: return String(localized: "使用反馈"); case .report: return String(localized: "举报与侵权投诉"); case .rights: return String(localized: "个人信息权利申请"); case .appeal: return String(localized: "处置申诉") }
+        switch self { case .support: return AppLocalization.string("使用反馈"); case .report: return AppLocalization.string("举报与侵权投诉"); case .rights: return AppLocalization.string("个人信息权利申请"); case .appeal: return AppLocalization.string("处置申诉") }
     }
     var guidance: String {
         switch self {
-        case .support: return String(localized: "请描述遇到的问题、出现步骤和期望结果。截图可在邮件中自行添加。")
-        case .report: return String(localized: "请提供内容链接或编号、涉及账号、发生时间及必要依据。侵权投诉请说明权利归属。")
-        case .rights: return String(localized: "请说明查阅、复制、更正、删除或撤回等具体请求、账号标识及数据范围。")
-        case .appeal: return String(localized: "请提供举报或处置编号、收到的处理结果，以及希望复核的事实和理由。")
+        case .support: return AppLocalization.string("请描述遇到的问题、出现步骤和期望结果。截图可在邮件中自行添加。")
+        case .report: return AppLocalization.string("请提供内容链接或编号、涉及账号、发生时间及必要依据。侵权投诉请说明权利归属。")
+        case .rights: return AppLocalization.string("请说明查阅、复制、更正、删除或撤回等具体请求、账号标识及数据范围。")
+        case .appeal: return AppLocalization.string("请提供举报或处置编号、收到的处理结果，以及希望复核的事实和理由。")
         }
     }
     func message(detail: String) -> String {
-        String(localized: "南图 · \(title)\n\n\(detail.trimmingCharacters(in: .whitespacesAndNewlines))\n\n\(guidance)\n\n请勿发送密码、验证码、无关完整证件或他人的敏感信息。")
+        AppLocalization.string("南图 · \(title)\n\n\(detail.trimmingCharacters(in: .whitespacesAndNewlines))\n\n\(guidance)\n\n请勿发送密码、验证码、无关完整证件或他人的敏感信息。")
     }
 }
 
@@ -57,7 +57,7 @@ struct ComplianceProfile {
     }
     func requestMailURL(kind: SupportRequestKind, detail: String) -> URL? {
         guard let url = contactURL, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        components.queryItems = [URLQueryItem(name: "subject", value: String(localized: "南图 · \(kind.title)")),
+        components.queryItems = [URLQueryItem(name: "subject", value: AppLocalization.string("南图 · \(kind.title)")),
                                  URLQueryItem(name: "body", value: kind.message(detail: detail))]
         return components.url
     }
@@ -66,8 +66,8 @@ struct ComplianceProfile {
         return url
     }
     func document(_ kind: String, bundle: Bundle = .main) -> String {
-        guard LegalDocument(rawValue: kind) != nil, let url = bundle.url(forResource: kind, withExtension: "txt"),
-              let template = try? String(contentsOf: url, encoding: .utf8) else { return String(localized: "暂时无法读取说明，请稍后重试。") }
+        guard LegalDocument(rawValue: kind) != nil, let url = AppLocalization.resourceBundle(in: bundle).url(forResource: kind, withExtension: "txt"),
+              let template = try? String(contentsOf: url, encoding: .utf8) else { return AppLocalization.string("暂时无法读取说明，请稍后重试。") }
         return render(template)
     }
     func render(_ template: String) -> String {
@@ -76,7 +76,7 @@ struct ComplianceProfile {
             let replacement = AppLocalization.configText(value(key), key: key)
             let note = AppLocalization.configText(values["disclosureNotes"]?[key].string ?? "", key: key)
             text = text.replacingOccurrences(of: "{{\(key)}}", with: replacement.isEmpty ?
-                (note.isEmpty ? String(localized: "暂未提供。可通过“联系与投诉”了解相关信息。") : note) : replacement)
+                (note.isEmpty ? AppLocalization.string("暂未提供。可通过“联系与投诉”了解相关信息。") : note) : replacement)
         }
         return text
     }
@@ -102,7 +102,7 @@ struct PolicySection: Identifiable {
             if paragraph.range(of: "^(?:[一二三四五六七八九十百]+、|[0-9]+\\. )[^\\n]+$", options: .regularExpression) != nil {
                 sections.append(Self(id: sections.count, title: paragraph, paragraphs: []))
             } else {
-                if sections.isEmpty { sections.append(Self(id: 0, title: String(localized: "阅读提示"), paragraphs: [])) }
+                if sections.isEmpty { sections.append(Self(id: 0, title: AppLocalization.string("阅读提示"), paragraphs: [])) }
                 sections[sections.count - 1].paragraphs.append(paragraph)
             }
         }
@@ -115,9 +115,9 @@ enum ServiceAgeGroup: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .underFourteen: return String(localized: "未满 14 周岁")
-        case .fourteenToSeventeen: return String(localized: "14 至 17 周岁")
-        case .adult: return String(localized: "已满 18 周岁")
+        case .underFourteen: return AppLocalization.string("未满 14 周岁")
+        case .fourteenToSeventeen: return AppLocalization.string("14 至 17 周岁")
+        case .adult: return AppLocalization.string("已满 18 周岁")
         }
     }
     static func permitsAccountService(_ group: ServiceAgeGroup?, guardianConsent: Bool) -> Bool {

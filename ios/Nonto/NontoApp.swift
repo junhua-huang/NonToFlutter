@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 struct NontoApp: App {
     @UIApplicationDelegateAdaptor(NontoAppDelegate.self) private var appDelegate
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @StateObject private var session = AppSession()
     @StateObject private var consent = PrivacyConsent.shared
     @Environment(\.scenePhase) private var phase
@@ -17,7 +18,7 @@ struct NontoApp: App {
                 else if let error = session.startupError {
                     ContentUnavailableView {
                         Label("暂时无法恢复登录", systemImage: "wifi.exclamationmark")
-                    } description: { Text(error) } actions: {
+                    } description: { Text(AppLocalization.relocalizedUI(error)) } actions: {
                         Button("重试") { Task { await session.bootstrap() } }.buttonStyle(.glassProminent)
                         Button("重新登录") { Task { try? await session.logout() } }
                     }
@@ -25,6 +26,7 @@ struct NontoApp: App {
                 else { AuthView() }
             }
             .environmentObject(session).environmentObject(consent)
+            .environment(\.locale, appLanguage.locale())
             .environment(\.appAccent, accent).tint(accent.color)
             .preferredColorScheme(appearance == "system" ? nil : (appearance == "dark" ? .dark : .light))
             .task(id: consent.accepted) { if consent.accepted { await session.bootstrap() } }
@@ -35,6 +37,7 @@ struct NontoApp: App {
 }
 
 struct MainTabs: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     // The initial tab is a one-time seed, also used by deterministic previews.
@@ -50,21 +53,21 @@ struct MainTabs: View {
     @State private var pendingPush: PushRoute?
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab("首页", systemImage: "house", value: 0) {
+            Tab(value: 0) {
                 AppNavigationStack { FeedView(session: session) }
-            }
-            Tab("发现", systemImage: "magnifyingglass", value: 1) {
+            } label: { Image(systemName: "house").accessibilityLabel(Text("首页")) }
+            Tab(value: 1) {
                 AppNavigationStack { ExploreView() }
-            }
-            Tab("通知", systemImage: "bell", value: 2) {
+            } label: { Image(systemName: "magnifyingglass").accessibilityLabel(Text("发现")) }
+            Tab(value: 2) {
                 AppNavigationStack { NotificationsView(session: session) }
-            }.badge(session.noticeUnread)
-            Tab("私信", systemImage: "envelope", value: 3) {
+            } label: { Image(systemName: "bell").accessibilityLabel(Text("通知")) }.badge(session.noticeUnread)
+            Tab(value: 3) {
                 MessagesNavigationView(session: session, initialConversation: initialConversation)
-            }.badge(session.messageUnread)
-            Tab("我的", systemImage: "person.crop.circle", value: 4) {
+            } label: { Image(systemName: "envelope").accessibilityLabel(Text("私信")) }.badge(session.messageUnread)
+            Tab(value: 4) {
                 AppNavigationStack { ProfileView(userID: session.user?.id ?? 0) }
-            }
+            } label: { Image(systemName: "person.crop.circle").accessibilityLabel(Text("我的")) }
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)

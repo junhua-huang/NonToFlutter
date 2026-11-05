@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ChatExpressionDrawer: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let accountID: Int
     let api: APIClient
@@ -70,7 +71,7 @@ struct ChatExpressionDrawer: View {
             }.contentMargins(.horizontal, 16, for: .scrollContent).scrollDismissesKeyboard(.interactively)
                 .scrollPosition($position)
                 .frame(maxWidth: .infinity, maxHeight: .infinity).accessibilityIdentifier("chat.expressions.grid")
-            if let importError { Text(importError).font(.caption).foregroundStyle(.red).padding(8) }
+            if let importError { Text(AppLocalization.relocalizedUI(importError)).font(.caption).foregroundStyle(.red).padding(8) }
         }
         .padding(.top, 8)
         .disabled(disabled)
@@ -142,7 +143,7 @@ struct ChatExpressionDrawer: View {
     private var emptySearch: some View {
         VStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.title2).foregroundStyle(.tertiary)
-            Text(query.wrappedValue.isEmpty ? String(localized: "这里还没有内容") : String(localized: "没有找到相关内容")).font(.subheadline).foregroundStyle(.secondary)
+            Text(query.wrappedValue.isEmpty ? AppLocalization.string("这里还没有内容") : AppLocalization.string("没有找到相关内容")).font(.subheadline).foregroundStyle(.secondary)
             if !query.wrappedValue.isEmpty {
                 Button("清除搜索") { query.wrappedValue = ""; searchFocused = false }
                     .font(.subheadline).foregroundStyle(accent.textColor).frame(minHeight: 44)
@@ -192,11 +193,11 @@ struct ChatExpressionDrawer: View {
                 else { Text("最近使用的表情和贴纸会出现在这里。").font(.subheadline).foregroundStyle(.secondary).padding(24) }
             }
             if !textEmoji.isEmpty {
-                sectionHeading(String(localized: "表情符号"))
+                sectionHeading(AppLocalization.string("表情符号"))
                 expressionGrid(textEmoji, systemGlyphs: true)
             }
             if !items.isEmpty {
-                sectionHeading(String(localized: "贴纸"))
+                sectionHeading(AppLocalization.string("贴纸"))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
                     ForEach(items) { item in stickerTile(item.source) }
                 }
@@ -212,7 +213,7 @@ struct ChatExpressionDrawer: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 if !systemGlyphs && !browser.favoriteIDs.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        sectionHeading(String(localized: "收藏"))
+                        sectionHeading(AppLocalization.string("收藏"))
                         expressionGrid(browser.items.filter { browser.favoriteIDs.contains($0.id) }, systemGlyphs: false)
                     }
                 }
@@ -254,9 +255,9 @@ struct ChatExpressionDrawer: View {
     private func stageNoto(_ item: NotoEmoji) { searchFocused = false; onStageSticker(.init(source: .noto(item))) }
     private var searchPrompt: String {
         switch tab {
-        case .recent: return String(localized: "搜索表情或贴纸")
-        case .emoji: return String(localized: "搜索表情名称或 emoji")
-        case .stickers, .noto: return String(localized: "搜索贴纸名称")
+        case .recent: return AppLocalization.string("搜索表情或贴纸")
+        case .emoji: return AppLocalization.string("搜索表情名称或 emoji")
+        case .stickers, .noto: return AppLocalization.string("搜索贴纸名称")
         }
     }
     private func toggleSearch() {
@@ -283,6 +284,7 @@ private struct RecentSticker: Identifiable {
 }
 
 struct ChatStagedStickerImage: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let sticker: StagedChatSticker
     var animated = true
     var body: some View {

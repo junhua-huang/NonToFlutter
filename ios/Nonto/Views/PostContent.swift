@@ -37,6 +37,7 @@ enum PostThread {
 }
 
 struct PostBodyText: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let content: String
     let detailed: Bool
@@ -75,7 +76,7 @@ struct PostBodyText: View {
                         RouteButton(route) { visibleText }.accessibilityLabel("查看动态：\(content)")
                     } else { visibleText.textSelection(.enabled) }
                     if expanded || canExpand {
-                        Button(expanded ? String(localized: "收起") : String(localized: "显示更多")) { expanded.toggle() }
+                        Button(expanded ? AppLocalization.string("收起") : AppLocalization.string("显示更多")) { expanded.toggle() }
                             .font(.subheadline).foregroundStyle(accent.textColor).buttonStyle(.plain)
                             .frame(minHeight: 28, alignment: .leading)
                     }

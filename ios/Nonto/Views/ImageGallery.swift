@@ -94,6 +94,7 @@ enum GalleryPosition {
     static func clamped(_ index: Int, count: Int) -> Int { count > 0 ? min(max(0, index), count - 1) : 0 }
 }
 struct ImageGallery: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let images: [String]
     @Environment(\.dismiss) private var dismiss
     @State private var index: Int
@@ -129,7 +130,7 @@ struct ImageGallery: View {
                         }.disabled(displayImage == nil || transitioning).accessibilityLabel("分享图片")
                     }.padding(.horizontal, 10).background(.black.opacity(0.55))
                     Spacer()
-                    if let feedback { Text(feedback).font(.subheadline).padding(10).background(.black.opacity(0.7), in: Capsule()) }
+                    if let feedback { Text(AppLocalization.relocalizedUI(feedback)).font(.subheadline).padding(10).background(.black.opacity(0.7), in: Capsule()) }
                     HStack(spacing: 16) {
                         Button { index = max(0, index - 1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
                             .disabled(index == 0 || transitioning).accessibilityLabel("上一张图片")
@@ -171,16 +172,17 @@ struct ImageGallery: View {
         guard let image = displayImage, !saving else { return }
         saving = true; defer { saving = false }
         let authorization = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard authorization == .authorized || authorization == .limited else { feedback = String(localized: "请在系统设置中允许南图添加照片"); return }
+        guard authorization == .authorized || authorization == .limited else { feedback = AppLocalization.string("请在系统设置中允许南图添加照片"); return }
         do {
             try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAsset(from: image) }
-            feedback = String(localized: "已保存到相册")
-        } catch { feedback = String(localized: "保存失败，请稍后重试") }
+            feedback = AppLocalization.string("已保存到相册")
+        } catch { feedback = AppLocalization.string("保存失败，请稍后重试") }
     }
 }
 private struct GalleryLoadKey: Hashable { let images: [String]; let index: Int }
 private struct SharedImage: Identifiable { let id = UUID(); let image: UIImage }
 private struct ImageShareSheet: UIViewControllerRepresentable {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let image: UIImage
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: [image], applicationActivities: nil)
@@ -191,6 +193,7 @@ private struct ImageShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 struct ZoomImage: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let url: String
     var onTap: () -> Void = {}
     var onZoom: (Bool) -> Void = { _ in }
@@ -225,12 +228,13 @@ struct ZoomImage: View {
     }
 }
 struct ZoomImageSurface: UIViewRepresentable {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let image: UIImage
     var onTap: () -> Void = {}
     var onZoom: (Bool) -> Void = { _ in }
     func makeUIView(context: Context) -> ImageScrollView { ImageScrollView() }
     func updateUIView(_ view: ImageScrollView, context: Context) {
-        view.onTap = onTap; view.onZoom = onZoom; view.display(image, preservingViewport: true)
+        view.onTap = onTap; view.onZoom = onZoom; view.refreshAccessibility(); view.display(image, preservingViewport: true)
     }
 }
 final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
@@ -245,7 +249,7 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
         delegate = self; backgroundColor = .clear; bouncesZoom = true
         showsHorizontalScrollIndicator = false; showsVerticalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
-        picture.isAccessibilityElement = true; picture.accessibilityLabel = String(localized: "图片，可双指缩放或双击放大")
+        picture.isAccessibilityElement = true; picture.accessibilityLabel = AppLocalization.string("图片，可双指缩放或双击放大")
         addSubview(picture)
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleZoom(_:)))
         doubleTap.numberOfTapsRequired = 2; addGestureRecognizer(doubleTap)
@@ -253,6 +257,7 @@ final class ImageScrollView: UIScrollView, UIScrollViewDelegate {
         singleTap.require(toFail: doubleTap); addGestureRecognizer(singleTap)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func refreshAccessibility() { picture.accessibilityLabel = AppLocalization.string("图片，可双指缩放或双击放大") }
     func display(_ image: UIImage, preservingViewport: Bool = false) {
         guard picture.image !== image else { return }
         let previous = picture.image

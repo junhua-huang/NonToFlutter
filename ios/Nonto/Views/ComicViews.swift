@@ -4,6 +4,7 @@ import PhotosUI
 struct ComicRecord: Record { var raw: JSON; init(_ raw: JSON) { self.raw = raw } }
 
 struct ComicListView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @State private var filter = "/comic/events"
     @State private var city = ""
@@ -22,6 +23,7 @@ struct ComicListView: View {
     }
 }
 struct ComicResults: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @StateObject private var resource: PagedResource<ComicRecord>
     init(session: AppSession, path: String, city: String) {
         _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: path, keys: ["records", "events", "items"], query: ["city": city, "size": "20"], userID: session.user?.id ?? 0))
@@ -43,6 +45,7 @@ struct ComicResults: View {
     }
 }
 struct ComicDetailView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let eventID: Int
     @EnvironmentObject private var session: AppSession
     @State private var event: JSON = .null
@@ -65,7 +68,7 @@ struct ComicDetailView: View {
                     Text(event["ticketInfo"].string)
                     if let url = URL(string: event["website"].string), ["http", "https"].contains(url.scheme ?? "") { Link("活动网站", destination: url) }
                     MediaView(images: event["images"].array.map { $0["imageUrl"].string }.filter { !$0.isEmpty }, video: "")
-                    Button(event["isFollowed"].or(event["is_following"]).bool ? String(localized: "取消关注") : String(localized: "关注漫展")) { Task { await follow() } }.disabled(busy)
+                    Button(event["isFollowed"].or(event["is_following"]).bool ? AppLocalization.string("取消关注") : AppLocalization.string("关注漫展")) { Task { await follow() } }.disabled(busy)
                 }
                 Section("评论") {
                     ForEach(comments) { c in VStack(alignment: .leading, spacing: 6) { Text(c.author.name).font(.caption.bold()); Text(c.content) } }
@@ -127,6 +130,7 @@ struct ComicDetailView: View {
     }
 }
 struct ComicEditor: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     var event: JSON = .null
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -159,7 +163,7 @@ struct ComicEditor: View {
                 ErrorBanner(text: error)
                 if busy { ProgressView("正在保存…") }
             }.environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!)
-            .disabled(busy).navigationTitle(event.isNull ? String(localized: "发布漫展") : String(localized: "编辑漫展")).toolbar {
+            .disabled(busy).navigationTitle(event.isNull ? AppLocalization.string("发布漫展") : AppLocalization.string("编辑漫展")).toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                 ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(busy || name.isEmpty || venue.isEmpty || cityID == 0) }
             }.interactiveDismissDisabled(busy).task {
@@ -179,7 +183,7 @@ struct ComicEditor: View {
     private func save() async {
         busy = true; defer { busy = false }
         do {
-            if !website.isEmpty { guard let u = URL(string: website), ["https", "http"].contains(u.scheme ?? ""), u.host != nil else { throw APIError(status: 0, message: String(localized: "活动网站格式不正确")) } }
+            if !website.isEmpty { guard let u = URL(string: website), ["https", "http"].contains(u.scheme ?? ""), u.host != nil else { throw APIError(status: 0, message: AppLocalization.string("活动网站格式不正确")) } }
             let date = DateFormatter(); date.locale = Locale(identifier: "en_US_POSIX"); date.timeZone = TimeZone(identifier: "Asia/Shanghai"); date.dateFormat = "yyyy-MM-dd"
             let time = DateFormatter(); time.locale = date.locale; time.timeZone = date.timeZone; time.dateFormat = "HH:mm"
             var urls = event["images"].array.map { $0["imageUrl"].string }.filter { !$0.isEmpty }

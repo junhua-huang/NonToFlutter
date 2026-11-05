@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(\.locale) private var locale
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @AppStorage("nonto.native.appearance") private var appearance = "system"
     @AppStorage(AppAccent.storageKey) private var accent = AppAccent.blue
@@ -16,11 +16,12 @@ struct SettingsView: View {
                 AccentColorMenu(selection: $accent)
             }
             Section("语言") {
-                LabeledContent("App 语言", value: locale.localizedString(forIdentifier: AppLocalization.language) ?? AppLocalization.language)
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    Link("更改 App 语言", destination: url).accessibilityIdentifier("settings.language")
-                }
-                Text("语言跟随系统，可在系统设置中为南图单独选择。").font(.caption).foregroundStyle(.secondary)
+                Picker("App 语言", selection: $appLanguage) {
+                    Text("跟随系统").tag(AppLanguage.system)
+                    Text(verbatim: "简体中文").tag(AppLanguage.simplifiedChinese)
+                    Text(verbatim: "繁體中文").tag(AppLanguage.traditionalChinese)
+                    Text(verbatim: "English").tag(AppLanguage.english)
+                }.pickerStyle(.menu).accessibilityIdentifier("settings.language")
             }
             Section("账号") {
                 RouteButton(.personalInformation) { Text("个人信息与权限") }
@@ -71,6 +72,7 @@ struct SettingsView: View {
 }
 
 struct PrivacySettingsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var profile = "public"
@@ -118,6 +120,7 @@ struct PrivacySettingsView: View {
     }
 }
 struct NotificationSettingsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @ObservedObject private var push = APNsService.shared
@@ -133,7 +136,7 @@ struct NotificationSettingsView: View {
     var body: some View {
         Form {
             Section("系统通知") {
-                Text(push.status).foregroundStyle(.secondary)
+                Text(AppLocalization.relocalizedUI(push.status)).foregroundStyle(.secondary)
                 Button("重试推送连接") { push.retry() }
                 ErrorBanner(text: push.error)
                 if notifications.authorizationStatus == .denied {
@@ -181,6 +184,7 @@ struct NotificationSettingsView: View {
     }
 }
 struct PasswordView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @State private var old = ""
@@ -207,13 +211,14 @@ struct PasswordView: View {
             let result = try await session.api.request("/auth/change-password", method: "POST", body: .object(["old_password": .text(old), "new_password": .text(new)]))
             old = ""; new = ""; repeatPassword = ""; saved = true
             if result["reauthentication_required"].bool {
-                try await session.logout(message: String(localized: "密码已修改，请使用新密码重新登录。"))
+                try await session.logout(message: AppLocalization.string("密码已修改，请使用新密码重新登录。"))
             }
         }
         catch { self.error = error.localizedDescription }
     }
 }
 struct DeleteAccountView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @State private var confirmation = ""
     @State private var confirm = false
@@ -228,7 +233,7 @@ struct DeleteAccountView: View {
                 TextField("请输入“注销”确认", text: $confirmation)
             }
             ErrorBanner(text: error)
-            Button("永久注销账号", role: .destructive) { confirm = true }.disabled(confirmation != String(localized: "注销") || busy)
+            Button("永久注销账号", role: .destructive) { confirm = true }.disabled(confirmation != AppLocalization.string("注销") || busy)
             if busy { ProgressView("正在处理注销…") }
         }.disabled(busy).navigationTitle("注销账号").confirmationDialog("申请注销账号？此操作无法撤销。", isPresented: $confirm, titleVisibility: .visible) {
             Button("永久注销", role: .destructive) {
@@ -263,12 +268,13 @@ struct BlockedRecord: Record {
         if user.isNull { user = raw["blocked_id"].isNull ? raw : .object([:]) }
         user["id"] = .id(id)
         if user["display_name"].string.isEmpty && user["username"].string.isEmpty {
-            user["display_name"] = .text(String(localized: "账号已不可用"))
+            user["display_name"] = .text(AppLocalization.string("账号已不可用"))
         }
         return Person(user)
     }
 }
 struct BlockedUsersView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<BlockedRecord>
     @State private var error: String?
@@ -290,8 +296,8 @@ struct BlockedUsersView: View {
                 ForEach(session.contentSafety.hiddenPosts.values.sorted { $0["id"].int > $1["id"].int }.map(Post.init)) { post in
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(post.author.name.isEmpty ? String(localized: "已屏蔽的帖子") : post.author.name).font(.headline)
-                            Text(post.content.isEmpty ? String(localized: "动态 #\(post.id)") : post.content).font(.subheadline).lineLimit(3)
+                            Text(post.author.name.isEmpty ? AppLocalization.string("已屏蔽的帖子") : post.author.name).font(.headline)
+                            Text(post.content.isEmpty ? AppLocalization.string("动态 #\(post.id)") : post.content).font(.subheadline).lineLimit(3)
                         }
                         Spacer()
                         Button("恢复显示") { Task { await session.setPostHidden(post, hidden: false) } }
@@ -331,11 +337,12 @@ struct BlockedUsersView: View {
             // Removing a row shifts the server's page offsets.
             if resource.hasMore { await resource.load(reset: true) }
         } catch {
-            if epoch == session.api.generation { self.error = String(localized: "解除屏蔽失败，已恢复列表。\(error.localizedDescription)") }
+            if epoch == session.api.generation { self.error = AppLocalization.string("解除屏蔽失败，已恢复列表。\(error.localizedDescription)") }
         }
     }
 }
 struct PolicyView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let kind: String
     var body: some View {
         let text = ComplianceProfile.current.document(kind)
@@ -375,6 +382,6 @@ struct PolicyView: View {
                     ShareLink(item: text) { Label("分享全文", systemImage: "square.and.arrow.up") }
                 }
             }
-        }.navigationTitle(LegalDocument(rawValue: kind)?.title ?? String(localized: "说明")).navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(LegalDocument(rawValue: kind)?.title ?? AppLocalization.string("说明")).navigationBarTitleDisplayMode(.inline)
     }
 }

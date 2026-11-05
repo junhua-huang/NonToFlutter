@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct NotoEmojiPickerContent: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Bindable var browser: NotoEmojiBrowser
     let onSend: (NotoEmoji) -> Bool
     @Environment(\.dismiss) private var dismiss
@@ -99,9 +100,10 @@ struct NotoEmojiPickerContent: View {
 }
 
 struct NotoEmojiSearchField: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Binding var text: String
     let focus: FocusState<Bool>.Binding
-    var prompt = String(localized: "搜索名称、关键词或 emoji")
+    var prompt = AppLocalization.string("搜索名称、关键词或 emoji")
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
@@ -121,6 +123,7 @@ struct NotoEmojiSearchField: View {
 }
 
 struct NotoEmojiScopeStrip: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let scopes: [NotoEmojiScope]
     let active: NotoEmojiScope?
@@ -177,6 +180,7 @@ struct ExpressionPickerSelection: ViewModifier {
 }
 
 struct NotoEmojiGrid: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let items: [NotoEmoji]
     let selectedID: String?
     let favorites: Set<String>
@@ -199,6 +203,7 @@ struct NotoEmojiGrid: View {
 }
 
 private struct NotoEmojiTile: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let item: NotoEmoji
     let selected: Bool
     let favorite: Bool
@@ -221,12 +226,12 @@ private struct NotoEmojiTile: View {
                 }
         }
         .buttonStyle(.plain).hoverEffect(.highlight)
-        .accessibilityLabel(item.localizedName).accessibilityValue(favorite ? String(localized: "已收藏") : "")
-        .accessibilityHint(systemGlyphs ? String(localized: "插入文字，长按可用作贴纸") : String(localized: "添加为待发送的贴纸"))
+        .accessibilityLabel(item.localizedName).accessibilityValue(favorite ? AppLocalization.string("已收藏") : "")
+        .accessibilityHint(systemGlyphs ? AppLocalization.string("插入文字，长按可用作贴纸") : AppLocalization.string("添加为待发送的贴纸"))
         .accessibilityIdentifier("noto.emoji.\(item.id)")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityActions {
-            if canFavorite { Button(favorite ? String(localized: "取消收藏") : String(localized: "收藏"), action: onFavorite) }
+            if canFavorite { Button(favorite ? AppLocalization.string("取消收藏") : AppLocalization.string("收藏"), action: onFavorite) }
             if let onUseAsSticker { Button("用作贴纸", action: onUseAsSticker) }
         }
         .contextMenu {
@@ -234,13 +239,14 @@ private struct NotoEmojiTile: View {
                 Button("用作贴纸", systemImage: "square.on.circle", action: onUseAsSticker)
             }
             if canFavorite {
-                Button(action: onFavorite) { Label(favorite ? String(localized: "取消收藏") : String(localized: "收藏"), systemImage: favorite ? "star.slash" : "star") }
+                Button(action: onFavorite) { Label(favorite ? AppLocalization.string("取消收藏") : AppLocalization.string("收藏"), systemImage: favorite ? "star.slash" : "star") }
             }
         }
     }
 }
 
 private struct NotoEmojiSelectionBar: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let item: NotoEmoji
     let favorite: Bool
     let canFavorite: Bool
@@ -258,7 +264,7 @@ private struct NotoEmojiSelectionBar: View {
             } else {
                 HStack(spacing: 8) { image; name; favoriteButton; sendButton }
             }
-            if let error { Text(error).font(.caption).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading) }
+            if let error { Text(AppLocalization.relocalizedUI(error)).font(.caption).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading) }
         }.padding(12).background(.bar).accessibilityIdentifier("noto.selection")
     }
     private var image: some View { NotoEmojiAnimation(item: item, isActive: isActive).id(item.id).frame(width: 56, height: 56) }
@@ -271,7 +277,7 @@ private struct NotoEmojiSelectionBar: View {
             Image(systemName: favorite ? "star.fill" : "star").foregroundStyle(favorite ? Color.orange : .secondary)
                 .frame(width: 44, height: 44)
         }.buttonStyle(.plain).disabled(!canFavorite)
-            .accessibilityLabel(favorite ? String(localized: "取消收藏此表情") : String(localized: "收藏此表情")).accessibilityIdentifier("noto.favorite.toggle")
+            .accessibilityLabel(favorite ? AppLocalization.string("取消收藏此表情") : AppLocalization.string("收藏此表情")).accessibilityIdentifier("noto.favorite.toggle")
     }
     private var sendButton: some View {
         Button(action: onSend) {

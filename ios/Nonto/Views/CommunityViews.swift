@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct CommunityListView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     var mine: Bool
     @StateObject private var resource: PagedResource<Community>
     @State private var creating = false
@@ -24,7 +25,7 @@ struct CommunityListView: View {
                 }
             }
             ResourceFooter(resource: resource, emptyTitle: mine ? "还没有加入社群" : "还没有可见的社群", emptyDescription: "找到感兴趣的社群，或创建自己的社群。", emptyIcon: "person.3")
-        }.buttonStyle(.plain).navigationTitle(mine ? String(localized: "我的社群") : String(localized: "发现社群"))
+        }.buttonStyle(.plain).navigationTitle(mine ? AppLocalization.string("我的社群") : AppLocalization.string("发现社群"))
             .toolbar { Button { creating = true } label: { Image(systemName: "plus") }.accessibilityLabel("创建社群") }
             .sheet(isPresented: $creating, onDismiss: { Task { await resource.load(reset: true) } }) { CommunityEditor() }
             .task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
@@ -32,6 +33,7 @@ struct CommunityListView: View {
 }
 
 struct CommunityDetailView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let communityID: Int
     @EnvironmentObject private var session: AppSession
     @State private var community: Community?
@@ -48,12 +50,12 @@ struct CommunityDetailView: View {
                         AvatarView(url: community.avatar, name: community.name, size: 56)
                         VStack(alignment: .leading) { Text(community.name).font(.title2.bold()); Text("\(community.raw["member_count"].int) 位成员").font(.caption).foregroundStyle(.secondary) }
                         Spacer()
-                        if !community.isMember { Button(community.raw["my_status"].string == "pending" ? String(localized: "审核中") : String(localized: "加入")) { Task { await join() } }.buttonStyle(.glassProminent).disabled(busy || community.raw["my_status"].string == "pending") }
+                        if !community.isMember { Button(community.raw["my_status"].string == "pending" ? AppLocalization.string("审核中") : AppLocalization.string("加入")) { Task { await join() } }.buttonStyle(.glassProminent).disabled(busy || community.raw["my_status"].string == "pending") }
                     }
                     Text(community.description).font(.subheadline).lineLimit(4)
                     if !community.raw["rules"].string.isEmpty { Text("群规：\(community.raw["rules"].string)").font(.caption).foregroundStyle(.secondary).lineLimit(4) }
                     HStack {
-                        RouteButton(.communityManage(community)) { Label(community.isManager ? String(localized: "管理社群") : String(localized: "成员和公告"), systemImage: "person.3") }
+                        RouteButton(.communityManage(community)) { Label(community.isManager ? AppLocalization.string("管理社群") : AppLocalization.string("成员和公告"), systemImage: "person.3") }
                         Spacer()
                         if community.isMember {
                             RouteButton(.chat(Conversation(.object(["id": .id(0), "type": .text("community"), "community_id": .id(communityID), "community_name": .text(community.name), "community_avatar": .text(community.avatar)])))) { Label("群聊", systemImage: "bubble.left.and.bubble.right") }
@@ -97,6 +99,7 @@ struct CommunityDetailView: View {
 }
 
 struct CommunityEditor: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     var community: Community? = nil
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -118,13 +121,13 @@ struct CommunityEditor: View {
                 TextField("社群介绍", text: $description, axis: .vertical).lineLimit(3...8)
                 TextField("群规", text: $rules, axis: .vertical).lineLimit(3...8)
                 Picker("加入方式", selection: $policy) { Text("需要审核").tag("approval"); Text("自由加入").tag("open") }
-                PhotosPicker(String(localized: "设置头像"), selection: $avatar, matching: .images)
+                PhotosPicker(AppLocalization.string("设置头像"), selection: $avatar, matching: .images)
                 if !avatarURL.isEmpty { AvatarView(url: avatarURL, name: name, size: 60) }
-                PhotosPicker(String(localized: "设置封面"), selection: $banner, matching: .images)
+                PhotosPicker(AppLocalization.string("设置封面"), selection: $banner, matching: .images)
                 if !bannerURL.isEmpty { Label("已设置封面", systemImage: "checkmark") }
                 ErrorBanner(text: error)
                 if busy { ProgressView() }
-            }.disabled(busy).navigationTitle(community == nil ? String(localized: "创建社群") : String(localized: "编辑社群")).navigationBarTitleDisplayMode(.inline)
+            }.disabled(busy).navigationTitle(community == nil ? AppLocalization.string("创建社群") : AppLocalization.string("编辑社群")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(busy) }
                     ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -150,6 +153,7 @@ struct CommunityEditor: View {
 }
 
 struct CommunityManageView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let community: Community
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -191,8 +195,8 @@ struct CommunityManageView: View {
                                     Button("拒绝", role: .destructive) { prepare(base + "/join-requests/\(row["id"].int)/reject", method: "POST") }
                                 } else if tab == "bans" { Button("解除封禁") { prepare(base + "/bans/\(row["user_id"].or(.id(user.id)).int)") } }
                                 else if row["role"].string != "owner", user.id != session.user?.id {
-                                    Menu(String(localized: "管理成员")) {
-                                        if community.raw["my_role"].string == "owner" { Button(row["role"].string == "admin" ? String(localized: "撤销管理员") : String(localized: "设为管理员")) { prepare(base + "/members/\(user.id)", method: "PUT", body: .object(["role": .text(row["role"].string == "admin" ? "member" : "admin")])) } }
+                                    Menu(AppLocalization.string("管理成员")) {
+                                        if community.raw["my_role"].string == "owner" { Button(row["role"].string == "admin" ? AppLocalization.string("撤销管理员") : AppLocalization.string("设为管理员")) { prepare(base + "/members/\(user.id)", method: "PUT", body: .object(["role": .text(row["role"].string == "admin" ? "member" : "admin")])) } }
                                         Button("移出社群", role: .destructive) { prepare(base + "/members/\(user.id)") }
                                         Button("封禁", role: .destructive) { prepare(base + "/bans", method: "POST", body: .object(["user_id": .id(user.id)])) }
                                     }

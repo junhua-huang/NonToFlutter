@@ -65,6 +65,7 @@ extension EnvironmentValues {
     }
 }
 struct RouteButton<Label: View>: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let route: AppRoute
     let label: () -> Label
     @Environment(\.navigate) private var navigate
@@ -75,6 +76,7 @@ struct RouteButton<Label: View>: View {
     }
 }
 struct AppNavigationStack<Root: View>: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @StateObject private var navigation = AppNavigation()
     @EnvironmentObject private var session: AppSession
     let root: () -> Root
@@ -87,6 +89,7 @@ struct AppNavigationStack<Root: View>: View {
 }
 
 struct AppRouteDestination: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let route: AppRoute
     @EnvironmentObject private var session: AppSession
     var body: some View { destination(route) }

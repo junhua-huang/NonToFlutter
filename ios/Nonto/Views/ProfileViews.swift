@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let userID: Int
     @EnvironmentObject private var session: AppSession
     @State private var person: Person?
@@ -28,7 +29,7 @@ struct ProfileView: View {
                 ContentUnavailableView {
                     Label("你已屏蔽此用户", systemImage: "person.slash")
                 } description: {
-                    Text(blockBusy ? String(localized: "正在同步屏蔽状态…") : String(localized: "解除屏蔽后，可以重新查看对方的公开内容。"))
+                    Text(blockBusy ? AppLocalization.string("正在同步屏蔽状态…") : AppLocalization.string("解除屏蔽后，可以重新查看对方的公开内容。"))
                 } actions: {
                     Button("解除屏蔽") { Task { await setBlocked(false) } }.disabled(blockBusy)
                     ErrorBanner(text: error)
@@ -46,7 +47,7 @@ struct ProfileView: View {
                 }
             } else { profileTimeline }
         }
-            .navigationTitle(person?.name ?? (isOwn ? String(localized: "我的主页") : String(localized: "个人主页"))).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(person?.name ?? (isOwn ? AppLocalization.string("我的主页") : AppLocalization.string("个人主页"))).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if isOwn { RouteButton(.settings) { Image(systemName: "gearshape") }.accessibilityLabel("设置") }
@@ -90,10 +91,10 @@ struct ProfileView: View {
                 // Only change the material, never the navigation bar's visibility or height.
                 if coverVisible != value { coverVisible = value }
             }
-            .navigationTitle(person?.name ?? (isOwn ? String(localized: "我的主页") : String(localized: "个人主页"))).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(person?.name ?? (isOwn ? AppLocalization.string("我的主页") : AppLocalization.string("个人主页"))).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(person?.name ?? (isOwn ? session.user?.name ?? String(localized: "我的主页") : String(localized: "个人主页")))
+                    Text(person?.name ?? (isOwn ? session.user?.name ?? AppLocalization.string("我的主页") : AppLocalization.string("个人主页")))
                         .font(.headline).lineLimit(1)
                         .foregroundStyle(coverVisible ? Color.white : Color.primary)
                 }
@@ -143,14 +144,14 @@ struct ProfileView: View {
                 if error == nil { ProgressView().padding(32) }
                 ErrorBanner(text: error) { Task { await load() } }.padding(.horizontal)
             }
-            TimelineTabs(title: String(localized: "主页动态类型"), tabs: [(false, String(localized: "动态")), (true, String(localized: "赞过"))], selection: $liked)
+            TimelineTabs(title: AppLocalization.string("主页动态类型"), tabs: [(false, AppLocalization.string("动态")), (true, AppLocalization.string("赞过"))], selection: $liked)
         }.background(Color.timelineBackground)
     }
     private var friendLabel: String {
         switch friendship["status"].string {
-        case "accepted": return String(localized: "已是好友")
-        case "pending": return friendship["friendship"]["sender_id"].int == session.user?.id ? String(localized: "取消申请") : String(localized: "接受申请")
-        default: return String(localized: "添加好友")
+        case "accepted": return AppLocalization.string("已是好友")
+        case "pending": return friendship["friendship"]["sender_id"].int == session.user?.id ? AppLocalization.string("取消申请") : AppLocalization.string("接受申请")
+        default: return AppLocalization.string("添加好友")
         }
     }
     private func load() async {
@@ -201,7 +202,7 @@ struct ProfileView: View {
             let j = try await session.api.request("/chat/conversations/\(userID)")
             var value = j["conversation"].or(j)
             if value["other_user"].isNull { value["other_user"] = person?.raw ?? .null }
-            guard value["id"].int > 0 else { throw APIError(status: 0, message: String(localized: "无法打开会话")) }
+            guard value["id"].int > 0 else { throw APIError(status: 0, message: AppLocalization.string("无法打开会话")) }
             navigate(.chat(Conversation(value)))
         } catch { self.error = error.localizedDescription }
     }
@@ -233,6 +234,7 @@ extension Conversation: Hashable {
 }
 
 struct EditProfileView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
@@ -248,8 +250,8 @@ struct EditProfileView: View {
                 Section("基本信息") { TextField("显示名称", text: $name); TextField("介绍一下自己", text: $bio, axis: .vertical).lineLimit(3...8) }
                 Section("照片") {
                     if let user = session.user { AvatarView(url: user.avatar, name: user.name, size: 72) }
-                    PhotosPicker(String(localized: "更换头像"), selection: $avatar, matching: .images)
-                    PhotosPicker(String(localized: "更换封面"), selection: $cover, matching: .images)
+                    PhotosPicker(AppLocalization.string("更换头像"), selection: $avatar, matching: .images)
+                    PhotosPicker(AppLocalization.string("更换封面"), selection: $cover, matching: .images)
                 }.disabled(busy)
                 if busy { ProgressView("正在保存…") }
                 ErrorBanner(text: error)
@@ -286,6 +288,7 @@ struct FriendRequestRecord: Record {
     }
 }
 struct FriendsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @StateObject private var friends: PagedResource<Person>
     @StateObject private var requests: PagedResource<FriendRequestRecord>
@@ -326,6 +329,7 @@ struct FriendsView: View {
 }
 
 struct ReportView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let kind: String
     let targetID: Int
     @EnvironmentObject private var session: AppSession

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ChatStickerCreationView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @Bindable var browser: ChatStickerBrowser
     let api: APIClient
@@ -18,13 +19,13 @@ struct ChatStickerCreationView: View {
                             .accessibilityLabel("新贴纸预览")
                     }
                     if browser.canToggleBackground {
-                        Button(browser.usingCutout ? String(localized: "保留原图背景") : String(localized: "提取主体")) { browser.toggleBackground() }
+                        Button(browser.usingCutout ? AppLocalization.string("保留原图背景") : AppLocalization.string("提取主体")) { browser.toggleBackground() }
                             .buttonStyle(.bordered).disabled(browser.busy)
                     }
                     TextField("贴纸名称（可选）", text: $browser.name).textFieldStyle(.roundedBorder).disabled(browser.busy)
                         .onChange(of: browser.name) { _, value in if value.count > 40 { browser.name = String(value.prefix(40)) } }
                         .accessibilityIdentifier("chat.stickers.name")
-                    if let notice = browser.preparationNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+                    if let notice = browser.preparationNotice { Text(AppLocalization.relocalizedUI(notice)).font(.caption).foregroundStyle(.secondary) }
                     if let error = browser.error { ErrorBanner(text: error) }
                     Text("添加后可在贴纸面板中选择，放入聊天输入区发送。")
                         .font(.caption).foregroundStyle(.secondary)
@@ -32,7 +33,7 @@ struct ChatStickerCreationView: View {
             }
             .safeAreaBar(edge: .bottom) {
                 Button(action: save) {
-                    HStack { if browser.busy { ProgressView() }; Text(browser.busy ? String(localized: "正在添加…") : String(localized: "添加贴纸")) }
+                    HStack { if browser.busy { ProgressView() }; Text(browser.busy ? AppLocalization.string("正在添加…") : AppLocalization.string("添加贴纸")) }
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }.buttonStyle(.borderedProminent).tint(accent.color).disabled(!browser.canCommit || saved).padding(16)
                     .accessibilityIdentifier("chat.stickers.save")

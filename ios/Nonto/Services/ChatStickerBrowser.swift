@@ -99,7 +99,7 @@ final class ChatStickerBrowser {
                 do { foreground = try await ChatStickerPreparer.shared.liftSubject(value) }
                 catch {
                     if error is CancellationError { throw error }
-                    notice = String(localized: "暂时未能提取主体，已保留原图。你仍然可以添加这张贴纸。")
+                    notice = AppLocalization.string("暂时未能提取主体，已保留原图。你仍然可以添加这张贴纸。")
                 }
             }
             try Task.checkCancellation()
@@ -134,7 +134,7 @@ final class ChatStickerBrowser {
             try Task.checkCancellation()
             guard revision == ticket, isValid(), let sticker else { return false }
             if send {
-                guard enqueue(sticker) else { error = String(localized: "无法加入发送队列，贴纸已保留，请重试。"); return false }
+                guard enqueue(sticker) else { error = AppLocalization.string("无法加入发送队列，贴纸已保留，请重试。"); return false }
                 hasSent = true
                 // The outbox has accepted the message even if preferences cannot update.
                 try? library.recordUse(sticker.id); items = library.items

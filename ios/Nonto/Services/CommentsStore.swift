@@ -95,7 +95,7 @@ struct CommentThread: Identifiable {
             let rows = try PagedResource<Comment>.rows(json, keys: ["comments", "items"])
             let incoming = Records.unique(rows.map(Comment.init)).filter { !deletedIDs.contains($0.id) }
             guard rows.isEmpty || !incoming.isEmpty || rows.allSatisfy({ deletedIDs.contains($0["id"].int) }) else {
-                throw APIError(status: 502, message: String(localized: "评论数据不完整，请重试"))
+                throw APIError(status: 502, message: AppLocalization.string("评论数据不完整，请重试"))
             }
             let old = Dictionary(uniqueKeysWithValues: threads.map { ($0.id, $0) })
             let merged = incoming.map { root -> CommentThread in
@@ -200,7 +200,7 @@ struct CommentThread: Identifiable {
                 scrollTarget = confirmed.id
             }
             if !result["comment_count"].isNull { commentCount = max(0, result["comment_count"].int) }
-            notice = String(localized: "已发送")
+            notice = AppLocalization.string("已发送")
             // Do not treat a successful write with an older response envelope as a failure
             // that invites duplicate sending. Recover the list separately instead.
             if confirmed.id <= 0 { await load(reset: true) }

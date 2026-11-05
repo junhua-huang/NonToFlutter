@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ExploreView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @State private var query = ""
     @State private var submitted = ""
@@ -14,7 +15,7 @@ struct ExploreView: View {
         VStack(spacing: 0) {
             if queryError != nil { ErrorBanner(text: queryError).padding(.horizontal) }
             if !submitted.isEmpty {
-                TimelineTabs(title: String(localized: "搜索类型"), tabs: [("posts", String(localized: "动态")), ("users", String(localized: "用户")), ("topics", String(localized: "话题"))], selection: $kind)
+                TimelineTabs(title: AppLocalization.string("搜索类型"), tabs: [("posts", AppLocalization.string("动态")), ("users", AppLocalization.string("用户")), ("topics", AppLocalization.string("话题"))], selection: $kind)
                 SearchResultsView(session: session, query: submitted, kind: kind).id(submitted + kind)
             } else {
                 List {
@@ -46,7 +47,7 @@ struct ExploreView: View {
                 }.timelineList().refreshable { await load() }
             }
         }.navigationTitle("发现").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: String(localized: "搜索动态、用户和话题"))
+            .searchable(text: $query, prompt: AppLocalization.string("搜索动态、用户和话题"))
             .onSubmit(of: .search, search)
             .onChange(of: query) { _, value in
                 queryError = nil
@@ -56,7 +57,7 @@ struct ExploreView: View {
     }
     private func search() {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.count >= 2 else { queryError = String(localized: "搜索关键词至少需要 2 个字符"); return }
+        guard text.count >= 2 else { queryError = AppLocalization.string("搜索关键词至少需要 2 个字符"); return }
         queryError = nil; submitted = text
         Task {
             _ = try? await session.api.request("/search/history", method: "POST", body: .object(["query": .text(text), "type": .text(kind)]))
@@ -83,6 +84,7 @@ struct ExploreView: View {
 
 
 struct SearchHistorySection: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let history: [String]
     let clearing: Bool
@@ -119,6 +121,7 @@ struct SearchHistorySection: View {
 }
 
 struct SearchResultsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     let kind: String
     @StateObject private var posts: PagedResource<Post>
@@ -156,6 +159,7 @@ struct SearchResultsView: View {
 }
 
 struct TopicDetailView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let topic: Topic
     @EnvironmentObject private var session: AppSession
     @State private var following = false
@@ -173,7 +177,7 @@ struct TopicDetailView: View {
             if error != nil { ErrorBanner(text: error) }
             PostList(session: session, path: "/topics/\(topic.id)/posts")
         }.navigationTitle("#\(topic.name)").navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button(following ? String(localized: "已关注") : String(localized: "关注")) { Task { await toggle() } }.disabled(busy) }
+            .toolbar { Button(following ? AppLocalization.string("已关注") : AppLocalization.string("关注")) { Task { await toggle() } }.disabled(busy) }
             .task {
                 let revision = followRevision, epoch = session.api.generation
                 if let j = try? await session.api.request("/topics/\(topic.id)"),
@@ -199,6 +203,7 @@ struct TopicDetailView: View {
 }
 
 struct FollowedTopicsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<Topic>
     init(session: AppSession) { _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/topics/followed", keys: ["topics", "items"], userID: session.user?.id ?? 0)) }
@@ -210,6 +215,7 @@ struct FollowedTopicsView: View {
 }
 
 struct NotificationsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var session: AppSession
     @StateObject private var resource: PagedResource<Notice>
@@ -276,6 +282,7 @@ struct NotificationsView: View {
 }
 
 struct NoticeDestination: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let notice: Notice
     @EnvironmentObject private var session: AppSession
     @State private var postID: Int?

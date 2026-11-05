@@ -4,7 +4,7 @@ enum ComposerReferenceKind: String, Identifiable {
     case mention, topic
     var id: String { rawValue }
     var marker: String { self == .mention ? "@" : "#" }
-    var title: String { self == .mention ? String(localized: "艾特好友") : String(localized: "引用话题") }
+    var title: String { self == .mention ? AppLocalization.string("艾特好友") : AppLocalization.string("引用话题") }
 }
 
 enum ComposerReferenceInsertion {

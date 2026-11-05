@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AuthView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     enum Mode: String, CaseIterable {
         case login, register, reset
@@ -53,7 +54,7 @@ struct AuthView: View {
                                 .onSubmit { focusedField = .password }
                         }
                         field(mode == .reset ? "新密码" : "密码") {
-                            SecureField(mode == .login ? String(localized: "输入密码") : String(localized: "至少 8 位"), text: $password)
+                            SecureField(mode == .login ? AppLocalization.string("输入密码") : AppLocalization.string("至少 8 位"), text: $password)
                                 .textContentType(mode == .login ? .password : .newPassword)
                                 .focused($focusedField, equals: .password)
                                 .submitLabel(mode == .login && !showsLoginCode ? .go : .next)
@@ -77,7 +78,7 @@ struct AuthView: View {
                         NavigationLink("隐私政策") { PolicyView(kind: "privacy") }
                     }.font(.footnote)
                     ErrorBanner(text: error)
-                    if let message { Text(message).font(.subheadline).foregroundStyle(accent.textColor) }
+                    if let message { Text(AppLocalization.relocalizedUI(message)).font(.subheadline).foregroundStyle(accent.textColor) }
                     Button { Task { await submit() } } label: {
                         HStack(spacing: 8) { if busy { ProgressView() }; Text(mode == .reset ? "重设密码" : mode.title) }
                             .frame(maxWidth: .infinity, minHeight: 24)
@@ -113,7 +114,7 @@ struct AuthView: View {
             Button { Task { await sendOTP() } } label: {
                 HStack(spacing: 4) {
                     if sendingCode { ProgressView() }
-                    Text(cooldown > 0 ? String(localized: "\(cooldown) 秒") : String(localized: "发送验证码"))
+                    Text(cooldown > 0 ? AppLocalization.string("\(cooldown) 秒") : AppLocalization.string("发送验证码"))
                 }.font(.subheadline).frame(minHeight: 32)
             }.buttonStyle(.glass).controlSize(.regular).fixedSize(horizontal: true, vertical: false)
                 .disabled(sendingCode || cooldown > 0 || !email.contains("@") || busy)
@@ -123,7 +124,7 @@ struct AuthView: View {
         sendingCode = true; error = nil; defer { sendingCode = false }
         do {
             _ = try await session.api.request("/auth/send-otp", method: "POST", body: .object(["email": .text(email.trimmingCharacters(in: .whitespaces)), "purpose": .text(purpose)]), authenticated: false)
-            cooldown = 60; message = String(localized: "验证码已发送，请查收邮箱。")
+            cooldown = 60; message = AppLocalization.string("验证码已发送，请查收邮箱。")
         } catch { self.error = error.localizedDescription }
     }
     private func submit() async {
@@ -131,11 +132,11 @@ struct AuthView: View {
         focusedField = nil
         busy = true; error = nil; message = nil; defer { busy = false }
         do {
-            if mode != .login && password.count < 8 { throw APIError(status: 0, message: String(localized: "密码至少需要 8 位")) }
+            if mode != .login && password.count < 8 { throw APIError(status: 0, message: AppLocalization.string("密码至少需要 8 位")) }
             let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
             if mode == .reset {
                 _ = try await session.api.request("/auth/reset-password", method: "POST", body: .object(["email": .text(address), "code": .text(code), "new_password": .text(password)]), authenticated: false)
-                mode = .login; password = ""; code = ""; message = String(localized: "密码已重设，请使用新密码登录。")
+                mode = .login; password = ""; code = ""; message = AppLocalization.string("密码已重设，请使用新密码登录。")
             } else {
                 try await session.authenticate(email: address, password: password, code: code,
                                                username: mode == .register ? username.trimmingCharacters(in: .whitespacesAndNewlines) : nil)

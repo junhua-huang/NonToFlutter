@@ -13,6 +13,7 @@ private struct ChatTabBarVisibility: ViewModifier {
 }
 
 struct MessagesView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
@@ -35,7 +36,7 @@ struct MessagesView: View {
                         AvatarView(url: conversation.avatar, name: conversation.name, size: 50)
                         VStack(alignment: .leading, spacing: 5) {
                             HStack { Text(conversation.name).font(.headline); Spacer(); if let d = conversation.last.date { Text(d, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).font(.caption2).foregroundStyle(.secondary) } }
-                            Text(conversation.last.recalled ? String(localized: "消息已撤回") : preview(conversation.last))
+                            Text(conversation.last.recalled ? AppLocalization.string("消息已撤回") : preview(conversation.last))
                                 .font(.subheadline.weight(conversation.unread > 0 ? .medium : .regular))
                                 .foregroundStyle(conversation.unread > 0 ? Color.primary : Color.secondary).lineLimit(2)
                         }
@@ -62,17 +63,19 @@ struct MessagesView: View {
     }
     private func preview(_ message: ChatMessage) -> String {
         if message.isSticker { return ChatSticker.displayContent }
-        switch message.kind { case "image": return String(localized: "[图片]"); case "video": return String(localized: "[视频]"); case "post": return String(localized: "[动态]"); case "file": return String(localized: "[文件]"); default: return message.content }
+        switch message.kind { case "image": return AppLocalization.string("[图片]"); case "video": return AppLocalization.string("[视频]"); case "post": return AppLocalization.string("[动态]"); case "file": return AppLocalization.string("[文件]"); default: return message.content }
     }
 }
 
 struct ChatRoomView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let conversation: Conversation
     @EnvironmentObject private var session: AppSession
     var body: some View { ChatRoomContent(session: session, conversation: conversation) }
 }
 
 struct ChatRoomContent: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let conversation: Conversation
     private let onMessageFrame: ((String, CGRect) -> Void)?
     private let onViewportMetrics: ((ChatViewportMetrics) -> Void)?
@@ -246,7 +249,7 @@ struct ChatRoomContent: View {
                     if !store.nearBottom && (farFromLatest || store.unread > 0)
                         && !store.messages.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
                         Button { store.jumpToLatest() } label: {
-                            Label(store.unread > 0 ? String(localized: "\(store.unread) 条新消息") : String(localized: "回到最新"), systemImage: "arrow.down")
+                            Label(store.unread > 0 ? AppLocalization.string("\(store.unread) 条新消息") : AppLocalization.string("回到最新"), systemImage: "arrow.down")
                         }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
                     }
                 }.padding()
@@ -322,7 +325,7 @@ struct ChatRoomContent: View {
                     let media = try await MediaLoader.load(pick)
                     try Task.checkCancellation()
                     guard prepared.reduce(0, { $0 + $1.data.count }) + media.data.count <= 80 * 1024 * 1024 else {
-                        throw APIError(status: 0, message: String(localized: "一次选择的附件总大小不能超过 80 MB，请减少视频数量"))
+                        throw APIError(status: 0, message: AppLocalization.string("一次选择的附件总大小不能超过 80 MB，请减少视频数量"))
                     }
                     prepared.append(media)
                 }
@@ -370,7 +373,7 @@ struct ChatRoomContent: View {
     }
     private func openCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            cameraError = String(localized: "当前设备无法使用相机。"); return
+            cameraError = AppLocalization.string("当前设备无法使用相机。"); return
         }
         guard cameraTask == nil else { return }
         cameraTask = Task {
@@ -383,12 +386,12 @@ struct ChatRoomContent: View {
             }
             guard !Task.isCancelled, composerEpoch == session.api.generation, visible else { return }
             if allowed { showingCamera = true }
-            else { cameraError = String(localized: "请在系统设置中允许南图访问相机后再拍照。") }
+            else { cameraError = AppLocalization.string("请在系统设置中允许南图访问相机后再拍照。") }
         }
     }
     private func prepareCapturedPhoto() {
         if captureFailed {
-            captureFailed = false; cameraError = String(localized: "无法读取拍摄的照片，请重试。"); return
+            captureFailed = false; cameraError = AppLocalization.string("无法读取拍摄的照片，请重试。"); return
         }
         guard let data = capturedPhoto else { return }
         capturedPhoto = nil
@@ -467,6 +470,7 @@ private struct ChatMessageFrameObservation: ViewModifier {
 }
 
 struct SharePostView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let post: Post
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
@@ -499,7 +503,7 @@ struct SharePostView: View {
             let result = try await session.api.request(path, method: "POST", body: .object([
                 "content": .text(post.content), "message_type": .text("post"), "related_id": .id(post.id),
                 conv.isCommunity ? "client_msg_id" : "request_id": .text(requestID)]))
-            guard ChatMessage.confirmation(result) != nil else { throw APIError(status: 0, message: String(localized: "未收到分享确认，请先检查会话中的消息")) }
+            guard ChatMessage.confirmation(result) != nil else { throw APIError(status: 0, message: AppLocalization.string("未收到分享确认，请先检查会话中的消息")) }
             dismiss()
         } catch { self.error = error.localizedDescription }
     }
@@ -519,6 +523,7 @@ private enum ChatComposerDrawer: Identifiable {
 
 /// Only this subtree observes keystrokes and attachment selection.
 struct ChatComposerInput: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @Bindable var store: ChatStore
     @Bindable var stickerSender: ChatStickerSender
@@ -653,7 +658,7 @@ struct ChatComposerInput: View {
             if let quote {
                 HStack(spacing: 8) {
                     Image(systemName: "quote.bubble").foregroundStyle(accent.textColor)
-                    Text(ChatQuoteSummary.text(quote).isEmpty ? String(localized: "引用消息") : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption)
+                    Text(ChatQuoteSummary.text(quote).isEmpty ? AppLocalization.string("引用消息") : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption)
                     Spacer()
                     Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }
                         .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44).disabled(stickerSender.busy)
@@ -691,7 +696,7 @@ struct ChatComposerInput: View {
     }
     private var composerRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField(stagedSticker == nil ? String(localized: "发送消息…") : String(localized: "添加文字或发送"), text: $store.draft, selection: textSelection, axis: .vertical)
+            TextField(stagedSticker == nil ? AppLocalization.string("发送消息…") : AppLocalization.string("添加文字或发送"), text: $store.draft, selection: textSelection, axis: .vertical)
                 .textFieldStyle(.plain).lineLimit(1...5).padding(.vertical, 12).focused(focus)
                 .frame(minHeight: inputControlHeight)
                 .disabled(stickerSender.busy).accessibilityLabel("消息内容")

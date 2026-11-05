@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct NotoEmojiPicker: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     // A picker owns one account's browser for the lifetime of its presentation.
     @State private var browser: NotoEmojiBrowser
     private let onSend: (NotoEmoji) -> Bool
@@ -12,6 +13,7 @@ struct NotoEmojiPicker: View {
 }
 
 struct NotoEmojiCreditsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.dismiss) private var dismiss
     @AppStorage("nonto.native.animated-emoji") private var animations = true
     var body: some View {
@@ -39,7 +41,7 @@ struct NotoEmojiCreditsView: View {
     }
     private func license(_ name: String) -> some View {
         ScrollView {
-            Text(NotoEmojiCatalog.asset(name, extension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? String(localized: "许可文本暂不可用"))
+            Text(NotoEmojiCatalog.asset(name, extension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? AppLocalization.string("许可文本暂不可用"))
                 .font(.caption).textSelection(.enabled).padding()
         }.navigationTitle(name)
     }

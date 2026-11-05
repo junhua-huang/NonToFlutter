@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct FeedView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @ObservedObject var session: AppSession
     @Environment(\.openComposer) private var compose
     @State private var filter = 1
@@ -9,7 +10,7 @@ struct FeedView: View {
     var body: some View {
         PostList(session: session, path: path).id(filter)
         .safeAreaInset(edge: .top, spacing: 0) {
-            TimelineTabs(title: String(localized: "动态范围"), tabs: [(1, String(localized: "最新")), (2, String(localized: "与你相关"))], selection: $filter)
+            TimelineTabs(title: AppLocalization.string("动态范围"), tabs: [(1, AppLocalization.string("最新")), (2, AppLocalization.string("与你相关"))], selection: $filter)
         }
         .navigationTitle("南图").navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -31,6 +32,7 @@ struct FeedView: View {
 }
 
 struct PostList: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @StateObject private var resource: PagedResource<Post>
     @EnvironmentObject private var session: AppSession
     private let header: AnyView?
@@ -57,6 +59,7 @@ struct PostList: View {
 }
 
 struct PostCard: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let post: Post
     var detailed = false
     var onComment: (() -> Void)? = nil
@@ -235,7 +238,7 @@ struct PostCard: View {
             Button { Task { await toggleLike() } } label: {
                 TimelineActionSymbol(symbol: current.liked ? "heart.fill" : "heart", count: current.likes)
                     .foregroundStyle(current.liked ? Color.brandLike : Color.secondary)
-            }.disabled(busy).accessibilityLabel("\(current.liked ? String(localized: "取消点赞") : String(localized: "点赞"))，\(current.likes) 个赞")
+            }.disabled(busy).accessibilityLabel("\(current.liked ? AppLocalization.string("取消点赞") : AppLocalization.string("点赞"))，\(current.likes) 个赞")
             Button { sharing = true } label: { TimelineActionSymbol(symbol: "square.and.arrow.up") }
                 .accessibilityLabel("分享动态")
         }.foregroundStyle(.secondary).buttonStyle(.plain)

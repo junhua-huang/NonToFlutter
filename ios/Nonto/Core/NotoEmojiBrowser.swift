@@ -13,9 +13,9 @@ enum NotoEmojiScope: Hashable, Identifiable, Sendable {
     }
     var title: String {
         switch self {
-        case .recent: return String(localized: "最近使用")
-        case .favorites: return String(localized: "收藏")
-        case .all: return String(localized: "全部表情")
+        case .recent: return AppLocalization.string("最近使用")
+        case .favorites: return AppLocalization.string("收藏")
+        case .all: return AppLocalization.string("全部表情")
         case .category(let name): return AppLocalization.emojiCategory(name)
         }
     }
@@ -66,8 +66,8 @@ struct NotoEmojiSearchIndex: Sendable {
         all = items
         categories = Dictionary(grouping: items, by: \.category)
         entries = items.map { item in
-            Entry(item: item, text: Self.normalize("\(item.emoji) \(item.name) \(item.localizedName) \(item.keywords) \(item.category)"),
-                  keywords: Set(Self.normalize("\(item.name) \(item.localizedName) \(item.keywords)").lowercased().split(separator: " ").map(String.init)))
+            Entry(item: item, text: Self.normalize("\(item.emoji) \(AppLocalization.emojiSearchNames(item)) \(item.keywords) \(item.category)"),
+                  keywords: Set(Self.normalize("\(AppLocalization.emojiSearchNames(item)) \(item.keywords)").lowercased().split(separator: " ").map(String.init)))
         }
     }
     static func normalize(_ value: String) -> String {
@@ -125,7 +125,7 @@ struct NotoEmojiSearchIndex: Sendable {
     }
     var isSearching: Bool { !NotoEmojiSearchIndex.normalize(query).isEmpty }
     var filter: NotoEmojiFilter { NotoEmojiFilter(scope: scope, query: NotoEmojiSearchIndex.normalize(query)) }
-    var title: String { isSearching ? String(localized: "搜索结果") : scope.title }
+    var title: String { isSearching ? AppLocalization.string("搜索结果") : scope.title }
     func show(_ value: NotoEmojiScope) {
         guard !hasSent, scopes.contains(value), scope != value || isSearching else { return }
         scope = value; selection = nil; error = nil
@@ -150,7 +150,7 @@ struct NotoEmojiSearchIndex: Sendable {
         guard let selection, !hasSent else { return false }
         hasSent = true
         guard accept(selection) else {
-            hasSent = false; error = String(localized: "暂时无法发送，请返回聊天检查登录状态")
+            hasSent = false; error = AppLocalization.string("暂时无法发送，请返回聊天检查登录状态")
             return false
         }
         recents.record(selection); error = nil

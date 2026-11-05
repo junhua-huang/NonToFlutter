@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ChatStickerPicker: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     // Account and credentials are one-time seeds for this presentation.
     @State private var browser: ChatStickerBrowser
     private let api: APIClient
@@ -25,6 +26,7 @@ struct ChatStickerPicker: View {
 }
 
 struct ChatStickerPickerContent: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @Bindable var browser: ChatStickerBrowser
     let upload: (Data) async throws -> String
@@ -57,7 +59,7 @@ struct ChatStickerPickerContent: View {
                 } else {
                     ScrollView {
                         if browser.results.isEmpty {
-                            ContentUnavailableView(browser.query.isEmpty ? String(localized: "还没有最近使用的贴纸") : String(localized: "没有找到贴纸"),
+                            ContentUnavailableView(browser.query.isEmpty ? AppLocalization.string("还没有最近使用的贴纸") : AppLocalization.string("没有找到贴纸"),
                                                    systemImage: browser.query.isEmpty ? "clock" : "magnifyingglass")
                                 .padding(.vertical, 24)
                         } else {
@@ -69,7 +71,7 @@ struct ChatStickerPickerContent: View {
                             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.vertical, 12)
                     }.contentMargins(.horizontal, 16, for: .scrollContent).scrollDismissesKeyboard(.interactively)
                 }
-                if busy { ProgressView(readingPhoto ? String(localized: "正在读取图片…") : String(localized: "正在处理贴纸…")).font(.caption).padding(8) }
+                if busy { ProgressView(readingPhoto ? AppLocalization.string("正在读取图片…") : AppLocalization.string("正在处理贴纸…")).font(.caption).padding(8) }
                 if let error = browser.error { ErrorBanner(text: error).padding(.horizontal, 16).padding(.bottom, 8) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -77,7 +79,7 @@ struct ChatStickerPickerContent: View {
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 if browser.prepared != nil || browser.selection != nil { selectionBar }
             }
-            .searchable(text: $browser.query, prompt: String(localized: "搜索贴纸名称"))
+            .searchable(text: $browser.query, prompt: AppLocalization.string("搜索贴纸名称"))
             .navigationTitle("贴纸").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭", action: close) }
@@ -140,7 +142,7 @@ struct ChatStickerPickerContent: View {
                         .submitLabel(.done).onSubmit { nameFocused = false }
                         .onChange(of: browser.name) { _, value in if value.count > 40 { browser.name = String(value.prefix(40)) } }
                         .disabled(busy).accessibilityIdentifier("chat.stickers.name")
-                } else { Text(browser.selection?.name ?? String(localized: "贴纸")).font(.headline).frame(maxWidth: .infinity, alignment: .leading) }
+                } else { Text(browser.selection?.name ?? AppLocalization.string("贴纸")).font(.headline).frame(maxWidth: .infinity, alignment: .leading) }
                 Button { nameFocused = false; browser.clearSelection() } label: { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }
                     .buttonStyle(.plain).foregroundStyle(.secondary).disabled(busy).accessibilityLabel("取消选择贴纸")
             }
@@ -159,7 +161,7 @@ struct ChatStickerPickerContent: View {
     }
     private var sendButton: some View {
         Button { commit(send: true) } label: {
-            Text(browser.prepared == nil ? String(localized: "发送贴纸") : String(localized: "添加并发送")).frame(maxWidth: .infinity)
+            Text(browser.prepared == nil ? AppLocalization.string("发送贴纸") : AppLocalization.string("添加并发送")).frame(maxWidth: .infinity)
         }.buttonStyle(.glassProminent).tint(accent.color).disabled(!browser.canCommit || readingPhoto)
             .accessibilityIdentifier("chat.stickers.send")
     }

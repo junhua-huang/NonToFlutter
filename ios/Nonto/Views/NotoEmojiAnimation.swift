@@ -55,6 +55,7 @@ actor NotoEmojiAnimationCache {
 }
 
 struct NotoEmojiPoster: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let item: NotoEmoji
     @State private var poster: (id: String, image: UIImage)?
     var body: some View {
@@ -77,6 +78,7 @@ struct NotoEmojiPoster: View {
 }
 
 struct NotoEmojiAnimation: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let item: NotoEmoji
     var isActive = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

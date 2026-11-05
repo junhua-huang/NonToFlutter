@@ -3,6 +3,7 @@ import UIKit
 
 /// Match the theme picker: the system owns presentation, selection and dismissal.
 struct AccentColorMenu: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Binding var selection: AppAccent
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
@@ -30,6 +31,7 @@ struct AccentColorMenu: View {
 }
 
 struct AccentColorOptions: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Binding var selection: AppAccent
     @Environment(\.dismiss) private var dismiss
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 44
@@ -50,7 +52,7 @@ struct AccentColorOptions: View {
                         }.foregroundStyle(.primary).padding(.horizontal, 16).frame(minHeight: rowHeight)
                             .contentShape(Rectangle())
                     }.buttonStyle(.plain).hoverEffect(.highlight)
-                        .accessibilityLabel(option.name).accessibilityValue(selection == option ? String(localized: "已选择") : "")
+                        .accessibilityLabel(option.name).accessibilityValue(selection == option ? AppLocalization.string("已选择") : "")
                         .accessibilityAddTraits(selection == option ? .isSelected : [])
                         .accessibilityIdentifier("accent.option.\(option.rawValue)")
                 }
@@ -63,6 +65,7 @@ struct AccentColorOptions: View {
 }
 
 struct AccentColorSettingsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @AppStorage(AppAccent.storageKey) private var selection = AppAccent.blue
 
     var body: some View {
@@ -81,6 +84,7 @@ struct AccentColorSettingsView: View {
 }
 
 private struct AccentColorPreview: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.dynamicTypeSize) private var dynamicType
     let accent: AppAccent
 

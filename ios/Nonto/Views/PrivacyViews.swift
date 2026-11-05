@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct PrivacyWelcomeView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @EnvironmentObject private var consent: PrivacyConsent
     @State private var declined = false
@@ -12,7 +13,7 @@ struct PrivacyWelcomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Image(systemName: "hand.raised.circle").font(.system(size: 48)).foregroundStyle(accent.symbolColor)
-                    Text(declined ? String(localized: "你可以先了解南图") : String(localized: "欢迎使用南图")).font(.largeTitle.bold())
+                    Text(declined ? AppLocalization.string("你可以先了解南图") : AppLocalization.string("欢迎使用南图")).font(.largeTitle.bold())
                     Text("请先阅读服务条款和隐私政策，再决定是否使用账号与社交服务。")
                     Text("账号服务会处理邮箱、账号资料、你主动发送的内容和服务安全信息。照片与视频仅在你选择时读取；通知在你开启时申请，不影响文字功能。")
                     NavigationLink("阅读隐私政策") { PolicyView(kind: "privacy") }
@@ -49,6 +50,7 @@ struct PrivacyWelcomeView: View {
 }
 
 struct PersonalInformationView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @EnvironmentObject private var session: AppSession
     @EnvironmentObject private var consent: PrivacyConsent
     @State private var confirmWithdrawal = false
@@ -109,6 +111,7 @@ struct PersonalInformationView: View {
 }
 
 struct ContactAndComplaintsView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @State private var kind = SupportRequestKind.support
     @State private var detail = ""
     @State private var copiedEmail = false
@@ -157,6 +160,7 @@ struct ContactAndComplaintsView: View {
 
 /// APP and website registrations have distinct labels and query links.
 struct FilingDisclosureSection: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     private let profile = ComplianceProfile.current
     var body: some View {
         Section {
@@ -194,6 +198,7 @@ struct ReportRecord: Record {
     }
 }
 struct ReportHistoryView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @StateObject private var resource: PagedResource<ReportRecord>
     init(session: AppSession) {
@@ -219,6 +224,6 @@ struct ReportHistoryView: View {
         }.navigationTitle("举报处理记录").task { await resource.loadIfNeeded() }.refreshable { await resource.load(reset: true) }
     }
     private func status(_ value: String) -> String {
-        switch value { case "pending": return String(localized: "待处理"); case "resolved": return String(localized: "已处理"); case "rejected", "dismissed": return String(localized: "未采纳"); default: return String(localized: "处理中") }
+        switch value { case "pending": return AppLocalization.string("待处理"); case "resolved": return AppLocalization.string("已处理"); case "rejected", "dismissed": return AppLocalization.string("未采纳"); default: return AppLocalization.string("处理中") }
     }
 }

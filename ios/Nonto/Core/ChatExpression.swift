@@ -5,10 +5,10 @@ enum ChatAttachmentAction: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .camera: return String(localized: "相机")
-        case .photos: return String(localized: "照片")
-        case .emoji: return String(localized: "表情")
-        case .stickers: return String(localized: "贴纸")
+        case .camera: return AppLocalization.string("相机")
+        case .photos: return AppLocalization.string("照片")
+        case .emoji: return AppLocalization.string("表情")
+        case .stickers: return AppLocalization.string("贴纸")
         }
     }
 }
@@ -22,7 +22,7 @@ enum ChatExpressionTab: String, CaseIterable, Identifiable, Hashable {
     case recent, stickers, emoji, noto
     var id: String { rawValue }
     var title: String {
-        switch self { case .recent: return String(localized: "最近"); case .stickers: return String(localized: "贴纸"); case .emoji: return String(localized: "表情"); case .noto: return String(localized: "动态贴纸") }
+        switch self { case .recent: return AppLocalization.string("最近"); case .stickers: return AppLocalization.string("贴纸"); case .emoji: return AppLocalization.string("表情"); case .noto: return AppLocalization.string("动态贴纸") }
     }
     var symbol: String {
         switch self { case .recent: return "clock"; case .stickers: return "square.on.circle"; case .emoji: return "face.smiling"; case .noto: return "sparkles" }

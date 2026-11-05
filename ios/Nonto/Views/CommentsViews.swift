@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PostDetailView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let postID: Int
     @Environment(\.dismiss) private var dismiss
@@ -103,7 +104,7 @@ struct PostDetailView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 if comments.loadingReplies.contains(thread.id) { ProgressView().controlSize(.small) }
-                                Text(!thread.expanded && thread.replies.count > 2 ? String(localized: "展开回复（\(max(thread.root.raw["reply_count"].int, thread.replies.count) - 2)）") : String(localized: "查看更多回复"))
+                                Text(!thread.expanded && thread.replies.count > 2 ? AppLocalization.string("展开回复（\(max(thread.root.raw["reply_count"].int, thread.replies.count) - 2)）") : AppLocalization.string("查看更多回复"))
                             }.frame(minHeight: 44)
                         }.disabled(comments.loadingReplies.contains(thread.id))
                             .accessibilityIdentifier("comment-replies-\(thread.id)")
@@ -112,7 +113,7 @@ struct PostDetailView: View {
                         Button("收起") { comments.collapseReplies(thread.id) }.frame(minHeight: 44)
                     }
                 }.font(.caption).buttonStyle(.plain).foregroundStyle(accent.textColor)
-                if let error = comments.replyErrors[thread.id] { Text(error).font(.caption).foregroundStyle(.red) }
+                if let error = comments.replyErrors[thread.id] { Text(AppLocalization.relocalizedUI(error)).font(.caption).foregroundStyle(.red) }
             }.padding(.leading, 52)
         }
     }
@@ -138,6 +139,7 @@ struct PostDetailView: View {
 }
 
 private struct CommentComposer: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     @Bindable var store: CommentsStore
     var focused: FocusState<Bool>.Binding
@@ -156,13 +158,13 @@ private struct CommentComposer: View {
             }
             if let error = store.sendError {
                 HStack {
-                    Text(error).font(.caption).foregroundStyle(.red)
+                    Text(AppLocalization.relocalizedUI(error)).font(.caption).foregroundStyle(.red)
                     Spacer(minLength: 8)
                     Button("重试") { Task { await store.send() } }.disabled(!store.canSend)
                 }.padding(.horizontal, 8)
-            } else if let notice = store.notice { Text(notice).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) }
+            } else if let notice = store.notice { Text(AppLocalization.relocalizedUI(notice)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField(store.reply == nil ? String(localized: "说说你的想法…") : String(localized: "写下你的回复…"), text: $store.text, axis: .vertical)
+                TextField(store.reply == nil ? AppLocalization.string("说说你的想法…") : AppLocalization.string("写下你的回复…"), text: $store.text, axis: .vertical)
                     .lineLimit(1...5).textFieldStyle(.plain).padding(.vertical, 12).padding(.leading, 12)
                     .focused(focused).accessibilityLabel("评论内容").accessibilityIdentifier("comment-input")
                 Button { Task { await store.send() } } label: {
@@ -170,7 +172,7 @@ private struct CommentComposer: View {
                         if store.sending { ProgressView() }
                         else { Image(systemName: "arrow.up.circle.fill").font(.title).foregroundStyle(store.canSend ? accent.symbolColor : Color.secondary) }
                     }.frame(width: 44, height: 44)
-                }.disabled(!store.canSend).accessibilityLabel(store.sending ? String(localized: "正在发送评论") : String(localized: "发送评论"))
+                }.disabled(!store.canSend).accessibilityLabel(store.sending ? AppLocalization.string("正在发送评论") : AppLocalization.string("发送评论"))
                     .accessibilityIdentifier("comment-send")
             }.floatingGlass()
         }.padding(.horizontal, 12).padding(.vertical, 8)
@@ -180,6 +182,7 @@ private struct CommentComposer: View {
 }
 
 private struct CommentItemRow: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let comment: Comment
     let nested: Bool
@@ -213,7 +216,7 @@ private struct CommentItemRow: View {
                     Button(action: onLike) {
                         Label("\(comment.likes)", systemImage: comment.liked ? "heart.fill" : "heart")
                             .foregroundStyle(comment.liked ? Color.brandLike : Color.secondary).monospacedDigit().frame(minHeight: 44)
-                    }.disabled(busy).accessibilityLabel(comment.liked ? String(localized: "取消赞，\(comment.likes) 个赞") : String(localized: "赞，\(comment.likes) 个赞"))
+                    }.disabled(busy).accessibilityLabel(comment.liked ? AppLocalization.string("取消赞，\(comment.likes) 个赞") : AppLocalization.string("赞，\(comment.likes) 个赞"))
                         .accessibilityIdentifier("comment-like-\(comment.id)")
                     Spacer(minLength: 0)
                     Menu {
@@ -223,7 +226,7 @@ private struct CommentItemRow: View {
                     } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
                         .disabled(busy).accessibilityLabel("评论操作").accessibilityIdentifier("comment-menu-\(comment.id)")
                 }.font(.caption).foregroundStyle(.secondary).buttonStyle(.plain)
-                if let error { Text(error).font(.caption).foregroundStyle(.red) }
+                if let error { Text(AppLocalization.relocalizedUI(error)).font(.caption).foregroundStyle(.red) }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.padding(.leading, nested ? 36 : 0).padding(.vertical, nested ? 3 : 8)
             .buttonStyle(.plain).accessibilityIdentifier("comment-row-\(comment.id)")

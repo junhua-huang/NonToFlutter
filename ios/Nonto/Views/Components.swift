@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 import ImageIO
 
 struct AvatarView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     var url: String
     var name: String
@@ -24,6 +25,7 @@ struct AvatarView: View {
 }
 
 struct ProfileCover: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let url: String
     var height: CGFloat? = 144
@@ -42,12 +44,13 @@ struct ProfileCover: View {
     }
 }
 struct ErrorBanner: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     var text: String?
     var retry: (() -> Void)? = nil
     var body: some View {
         if let text {
             VStack(alignment: .leading, spacing: 8) {
-                Label(text, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red)
+                Label(AppLocalization.relocalizedUI(text), systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red)
                 if let retry { Button("重试", action: retry) }
             }.padding().frame(maxWidth: .infinity, alignment: .leading)
                 .background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
@@ -55,6 +58,7 @@ struct ErrorBanner: View {
     }
 }
 struct ResourceFooter<T: Record>: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @ObservedObject var resource: PagedResource<T>
     var emptyTitle: LocalizedStringKey = "这里还没有内容"
     var emptyDescription: LocalizedStringKey = "稍后再来看看，或下拉刷新。"
@@ -68,7 +72,7 @@ struct ResourceFooter<T: Record>: View {
                     ErrorBanner(text: error) { Task { await resource.retry() } }
                 }
             } else if resource.loading || (resource.page == 0 && resource.items.isEmpty) {
-                ProgressView(resource.items.isEmpty ? String(localized: "正在加载…") : String(localized: "正在更新…")).frame(maxWidth: .infinity).padding()
+                ProgressView(resource.items.isEmpty ? AppLocalization.string("正在加载…") : AppLocalization.string("正在更新…")).frame(maxWidth: .infinity).padding()
             } else if resource.hasMore {
                 Button("加载更多") { Task { await resource.load() } }.frame(maxWidth: .infinity).padding()
                     .task(id: resource.page) {
@@ -89,6 +93,7 @@ struct ResourceFooter<T: Record>: View {
     }
 }
 struct PersonRow: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     var person: Person
     var body: some View {
         HStack(spacing: 12) {
@@ -102,6 +107,7 @@ struct PersonRow: View {
     }
 }
 struct MediaView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let images: [String]
     let video: String
     var thumbnailHeight: CGFloat? = nil
@@ -119,7 +125,7 @@ struct MediaView: View {
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: images.count == 1 ? 1 : (images.count <= 4 ? 2 : 3)), spacing: 3) {
                     ForEach(Array(images.enumerated()), id: \.offset) { index, link in
-                        MediaThumbnail(url: link, height: thumbnailHeight ?? (images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110)), label: String(localized: "查看图片 \(index + 1)"), fitImage: fitImage) {
+                        MediaThumbnail(url: link, height: thumbnailHeight ?? (images.count == 1 ? 280 : (images.count <= 4 ? 150 : 110)), label: AppLocalization.string("查看图片 \(index + 1)"), fitImage: fitImage) {
                             open(galleryIndex ?? index)
                         }
                     }
@@ -140,6 +146,7 @@ struct MediaView: View {
     }
 }
 private struct PostImageGrid: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let images: [String]
     let open: (Int) -> Void
     private let spacing: CGFloat = 3
@@ -170,12 +177,13 @@ private struct PostImageGrid: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
     }
     private func tile(_ item: PostMediaLayout.Item, height: CGFloat) -> some View {
-        MediaThumbnail(url: item.url, height: max(1, height), label: String(localized: "查看图片 \(item.index + 1)，共 \(images.count) 张")) {
+        MediaThumbnail(url: item.url, height: max(1, height), label: AppLocalization.string("查看图片 \(item.index + 1)，共 \(images.count) 张")) {
             open(item.index)
         }
     }
 }
 private struct MediaThumbnail: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let url: String
     let height: CGFloat
     let label: String
@@ -202,7 +210,7 @@ private struct MediaThumbnail: View {
                 }.frame(width: geometry.size.width, height: height).contentShape(Rectangle()).clipped()
             }.frame(height: height).frame(maxWidth: .infinity).contentShape(Rectangle()).clipped()
             }
-        }.buttonStyle(.plain).contentShape(Rectangle()).accessibilityLabel(failed ? String(localized: "图片加载失败，点按重试") : label)
+        }.buttonStyle(.plain).contentShape(Rectangle()).accessibilityLabel(failed ? AppLocalization.string("图片加载失败，点按重试") : label)
             .task(id: "\(url)#\(attempt)") {
                 image = nil; failed = false
                 do {
@@ -214,6 +222,7 @@ private struct MediaThumbnail: View {
 }
 private struct MediaSelection: Identifiable { let id = UUID(); var index: Int }
 struct NativeVideo: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let url: URL
     var autoplay = false
     @State private var player: AVPlayer?
@@ -242,11 +251,11 @@ struct SelectedMedia: Identifiable, Sendable {
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: 1920
-              ] as CFDictionary) else { throw APIError(status: 0, message: String(localized: "无法读取这张照片")) }
+              ] as CFDictionary) else { throw APIError(status: 0, message: AppLocalization.string("无法读取这张照片")) }
         let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil) else { throw APIError(status: 0, message: String(localized: "图片转换失败")) }
+        guard let destination = CGImageDestinationCreateWithData(output as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil) else { throw APIError(status: 0, message: AppLocalization.string("图片转换失败")) }
         CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { throw APIError(status: 0, message: String(localized: "图片转换失败")) }
+        guard CGImageDestinationFinalize(destination) else { throw APIError(status: 0, message: AppLocalization.string("图片转换失败")) }
         return SelectedMedia(data: output as Data, name: "photo-\(UUID().uuidString).jpg", mime: "image/jpeg")
     }
 }
@@ -265,15 +274,15 @@ struct MovieTransfer: Transferable {
 enum MediaLoader {
     static func load(_ item: PhotosPickerItem) async throws -> SelectedMedia {
         if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
-            guard let movie = try await item.loadTransferable(type: MovieTransfer.self) else { throw APIError(status: 0, message: String(localized: "无法读取视频")) }
+            guard let movie = try await item.loadTransferable(type: MovieTransfer.self) else { throw APIError(status: 0, message: AppLocalization.string("无法读取视频")) }
             defer { try? FileManager.default.removeItem(at: movie.url) }
             let size = (try movie.url.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0
-            guard size <= 50 * 1024 * 1024 else { throw APIError(status: 0, message: String(localized: "视频不能超过 50 MB")) }
+            guard size <= 50 * 1024 * 1024 else { throw APIError(status: 0, message: AppLocalization.string("视频不能超过 50 MB")) }
             let ext = movie.url.pathExtension.lowercased()
             return SelectedMedia(data: try Data(contentsOf: movie.url), name: movie.url.lastPathComponent,
                                  mime: ext == "mp4" ? "video/mp4" : "video/quicktime")
         }
-        guard let data = try await item.loadTransferable(type: Data.self) else { throw APIError(status: 0, message: String(localized: "无法读取照片")) }
+        guard let data = try await item.loadTransferable(type: Data.self) else { throw APIError(status: 0, message: AppLocalization.string("无法读取照片")) }
         let result = try await Task.detached(priority: .userInitiated) { try SelectedMedia.image(data) }.value
         try Task.checkCancellation()
         return result

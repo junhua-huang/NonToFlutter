@@ -124,4 +124,167 @@ final class LocalizationTests: XCTestCase {
         }
         previous?.makeKeyAndVisible()
     }
+
+    func testInAppPreferencePersistsAndOverridesOnlyAppLanguage() throws {
+        let suite = "language-preference-\(UUID())"
+        let isolated = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { isolated.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(AppLanguage.stored(in: isolated), .system)
+        isolated.set(AppLanguage.traditionalChinese.rawValue, forKey: AppLanguage.storageKey)
+        XCTAssertEqual(AppLanguage.stored(in: isolated), .traditionalChinese)
+        isolated.set("unknown", forKey: AppLanguage.storageKey)
+        XCTAssertEqual(AppLanguage.stored(in: isolated), .system)
+        XCTAssertEqual(AppLanguage.system.resolvedLanguage(preferences: ["en-GB"]), "en")
+        XCTAssertEqual(AppLanguage.system.resolvedLanguage(preferences: ["zh-Hant-TW"]), "zh-Hant")
+        let base = Locale(identifier: "zh_CN@calendar=buddhist")
+        let english = AppLanguage.english.locale(base: base)
+        XCTAssertEqual(english.language.languageCode?.identifier, "en")
+        XCTAssertEqual(english.region, base.region)
+        XCTAssertEqual(english.calendar.identifier, base.calendar.identifier)
+    }
+
+    func testRuntimePreferenceChangesImperativeCopyPoliciesAndCachedStatus() throws {
+        let defaults = UserDefaults.standard
+        let original = defaults.object(forKey: AppLanguage.storageKey)
+        defer { if let original { defaults.set(original, forKey: AppLanguage.storageKey) } else { defaults.removeObject(forKey: AppLanguage.storageKey) } }
+        let revision = ComplianceProfile.revision
+        let wire = ChatSticker.messageContent
+        let push = APNsService(register: {}, unregister: {})
+        defaults.set(AppLanguage.simplifiedChinese.rawValue, forKey: AppLanguage.storageKey)
+        let oldError = APIError(status: 0, message: AppLocalization.string("无法读取照片"))
+        for (choice, title, policy) in [(AppLanguage.english, "NonTo Blue", "NonTo Privacy Policy"),
+                                        (.traditionalChinese, "南圖藍", "南圖隱私政策"),
+                                        (.simplifiedChinese, "南图蓝", "南图隐私政策")] {
+            defaults.set(choice.rawValue, forKey: AppLanguage.storageKey)
+            XCTAssertEqual(AppAccent.blue.name, title)
+            XCTAssertTrue(ComplianceProfile.current.document("privacy").hasPrefix(policy))
+            XCTAssertEqual(push.status, AppLocalization.string("尚未开启系统推送"))
+            XCTAssertEqual(oldError.localizedDescription, AppLocalization.string("无法读取照片"))
+            XCTAssertEqual(ComplianceProfile.revision, revision)
+            XCTAssertEqual(ChatSticker.messageContent, wire)
+        }
+        defaults.set(AppLanguage.english.rawValue, forKey: AppLanguage.storageKey)
+        let count = 1
+        XCTAssertEqual(AppLocalization.string("\(count) 条新消息"), "1 new message")
+        XCTAssertEqual(AppLocalization.serverError("验证码无效或已过期"), "The verification code is invalid or has expired.")
+        XCTAssertEqual(AppLocalization.relocalizedUI("user-owned unknown status 原文"), "user-owned unknown status 原文")
+    }
+
+    func testLiveLanguageSwitchKeepsSettingsNavigationAndDraft() async throws {
+        let defaults = UserDefaults.standard
+        let original = defaults.object(forKey: AppLanguage.storageKey)
+        defer { if let original { defaults.set(original, forKey: AppLanguage.storageKey) } else { defaults.removeObject(forKey: AppLanguage.storageKey) } }
+        defaults.set(AppLanguage.simplifiedChinese.rawValue, forKey: AppLanguage.storageKey)
+        let probe = LiveLanguageProbe()
+        let session = AppSession(); session.restoring = false
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let controller = UIHostingController(rootView: LiveLanguageHarness(probe: probe).environmentObject(session))
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        controller.loadViewIfNeeded(); controller.view.frame = window.bounds
+        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
+        try await waitForLanguageUI { probe.editDraft != nil && probe.path == ["settings"] }
+        let stateIdentity = try XCTUnwrap(probe.identity)
+        probe.editDraft?("未发送的草稿 · draft %@")
+        try await waitForLanguageUI { probe.draft == "未发送的草稿 · draft %@" }
+        for (choice, title, accent) in [(AppLanguage.english, "Settings", "NonTo Blue"),
+                                       (.traditionalChinese, "設置", "南圖藍"),
+                                       (.simplifiedChinese, "设置", "南图蓝")] {
+            defaults.set(choice.rawValue, forKey: AppLanguage.storageKey)
+            try await waitForLanguageUI {
+                probe.accent == accent && self.views(window).compactMap { $0 as? UINavigationBar }.contains { $0.topItem?.title == title }
+            }
+            XCTAssertEqual(probe.path, ["settings"])
+            XCTAssertEqual(probe.identity, stateIdentity, "Changing language must not replace the active screen")
+            XCTAssertEqual(probe.draft, "未发送的草稿 · draft %@")
+            let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) })
+            attachment.name = "live-language-menu-\(choice.rawValue)"; attachment.lifetime = .keepAlways; add(attachment)
+        }
+    }
+
+    func testMainTabsHaveImagesWithoutVisibleTitlesAndKeepBadges() async throws {
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
+        let user: JSON = .object(["id": .id(970092), "username": .text("tabs-fixture")])
+        StubProtocol.handler = { request in
+            if request.url?.path.contains("unread-count") == true { return (200, .object(["unread_count": .id(3), "total_unread": .id(3)])) }
+            return (200, .object(["user": user, "posts": .array([]), "blocks": .array([]), "has_more": .bool(false)]))
+        }
+        defer { StubProtocol.handler = nil; try? LocalCache.clear(userID: 970092) }
+        let api = APIClient(baseURL: URL(string: "https://tabs.example.test/api")!, session: URLSession(configuration: config), credentials: MemoryCredentials())
+        let session = AppSession(api: api); session.user = Person(user); session.restoring = false
+        session.messageUnread = 3; session.noticeUnread = 3
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let controller = UIHostingController(rootView: MainTabs(initialTab: 4).environmentObject(session).environment(\.locale, AppLocalization.locale))
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        controller.loadViewIfNeeded(); controller.view.frame = window.bounds
+        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
+        try await waitForLanguageUI { self.controllers(controller).contains { $0 is UITabBarController } }
+        let tabController = try XCTUnwrap(controllers(controller).compactMap { $0 as? UITabBarController }.first)
+        try await waitForLanguageUI { tabController.tabBar.items?.count == 5 }
+        let items = try XCTUnwrap(tabController.tabBar.items)
+        guard items.count == 5 else { XCTFail("Expected five tabs"); return }
+        XCTAssertTrue(items.allSatisfy { ($0.title ?? "").isEmpty }, "Visible tab labels must be absent")
+        XCTAssertTrue(items.allSatisfy { $0.image != nil })
+        try await waitForLanguageUI {
+            guard let current = tabController.tabBar.items, current.count == 5 else { return false }
+            return current[2].badgeValue == "3" && current[3].badgeValue == "3"
+        }
+        let names = ["首页", "发现", "通知", "私信", "我的"].map { AppLocalization.lookup($0) }
+        let accessibility = items.compactMap(\.accessibilityLabel) + views(tabController.tabBar).compactMap(\.accessibilityLabel)
+        print("Icon-only tab accessibility: \(accessibility)")
+        for name in names { XCTAssertTrue(accessibility.contains(where: { $0.localizedStandardContains(name) }), "Missing accessible tab name: \(name)") }
+        let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) })
+        attachment.name = "icon-only-tabs-\(AppLocalization.language)"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    private func waitForLanguageUI(_ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition(), Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(condition(), "The mounted UI did not update")
+    }
+    private func views(_ root: UIView) -> [UIView] { [root] + root.subviews.flatMap(views) }
+    private func controllers(_ root: UIViewController) -> [UIViewController] { [root] + root.children.flatMap(controllers) }
+
+}
+
+@MainActor private final class LiveLanguageProbe {
+    var accent = ""
+    var draft = ""
+    var identity: UUID?
+    var path: [String] = []
+    var editDraft: ((String) -> Void)?
+}
+
+private struct LiveLanguageStateView: View {
+    // Deliberately unused in body: AppStorage must invalidate imperative labels
+    // just as it does throughout the real screens, without replacing State.
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @State private var draft = ""
+    @State private var identity = UUID()
+    let probe: LiveLanguageProbe
+    var body: some View {
+        let _ = record()
+        TextField("消息内容", text: $draft).accessibilityIdentifier("language.test.draft")
+            .onAppear { probe.editDraft = { draft = $0 } }
+    }
+    private func record() { probe.accent = AppAccent.blue.name; probe.draft = draft; probe.identity = identity }
+}
+
+private struct LiveLanguageHarness: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
+    @State private var path = ["settings"]
+    let probe: LiveLanguageProbe
+    var body: some View {
+        let _ = { probe.path = path }()
+        NavigationStack(path: $path) {
+            Text("root").navigationDestination(for: String.self) { _ in
+                VStack(spacing: 0) { SettingsView(); LiveLanguageStateView(probe: probe) }
+            }
+        }.environment(\.locale, appLanguage.locale())
+    }
 }

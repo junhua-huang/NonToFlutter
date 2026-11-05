@@ -82,6 +82,7 @@ final class ComposerEditor {
 }
 
 struct ComposerTextEditor: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let editor: ComposerEditor
     var body: some View {
         ComposerNativeTextView(editor: editor).frame(maxWidth: .infinity, alignment: .leading)
@@ -95,6 +96,7 @@ struct ComposerTextEditor: View {
 }
 
 private struct ComposerNativeTextView: UIViewRepresentable {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let editor: ComposerEditor
     @Environment(\.isEnabled) private var isEnabled
@@ -112,7 +114,7 @@ private struct ComposerNativeTextView: UIViewRepresentable {
         view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
         let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = 4
         view.typingAttributes = [.font: font, .paragraphStyle: paragraph]
-        view.accessibilityLabel = String(localized: "动态内容"); view.accessibilityIdentifier = "post.composer.body"
+        view.accessibilityLabel = AppLocalization.string("动态内容"); view.accessibilityIdentifier = "post.composer.body"
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.delegate = context.coordinator
         editor.attach(view); editor.synchronize()
@@ -209,6 +211,7 @@ final class ComposerReferenceStore {
 }
 
 struct ComposerReferencePicker: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     @Environment(\.appAccent) private var accent
     let kind: ComposerReferenceKind
     let onSelect: (String) -> Void
@@ -222,7 +225,7 @@ struct ComposerReferencePicker: View {
     var body: some View {
         NavigationStack {
             List {
-                Section(query.isEmpty ? (kind == .mention ? String(localized: "我的好友") : String(localized: "热门话题")) : String(localized: "搜索结果")) {
+                Section(query.isEmpty ? (kind == .mention ? AppLocalization.string("我的好友") : AppLocalization.string("热门话题")) : AppLocalization.string("搜索结果")) {
                     ForEach(store.items) { item in
                         Button {
                             onSelect(item.value); dismiss()
@@ -243,15 +246,15 @@ struct ComposerReferencePicker: View {
                 if let error = store.error {
                     ErrorBanner(text: error) { Task { await store.load(query, nextPage: store.hasMore && !store.items.isEmpty) } }
                 } else if !store.loading && store.items.isEmpty {
-                    ContentUnavailableView(query.isEmpty ? (kind == .mention ? String(localized: "还没有好友") : String(localized: "暂无热门话题")) : String(localized: "没有找到结果"),
+                    ContentUnavailableView(query.isEmpty ? (kind == .mention ? AppLocalization.string("还没有好友") : AppLocalization.string("暂无热门话题")) : AppLocalization.string("没有找到结果"),
                         systemImage: kind == .mention ? "person.2" : "number",
-                        description: Text(query.isEmpty ? String(localized: "也可以直接在正文输入\(kind.marker)名称。") : String(localized: "试试其他关键词。")))
+                        description: Text(query.isEmpty ? AppLocalization.string("也可以直接在正文输入\(kind.marker)名称。") : AppLocalization.string("试试其他关键词。")))
                 }
                 if store.hasMore && !store.loading {
                     Button("加载更多话题") { Task { await store.load(query, nextPage: true) } }.frame(minHeight: 44)
                 }
             }.navigationTitle(kind.title).navigationBarTitleDisplayMode(.inline)
-                .searchable(text: $query, prompt: kind == .mention ? String(localized: "搜索好友昵称或用户名") : String(localized: "搜索话题"))
+                .searchable(text: $query, prompt: kind == .mention ? AppLocalization.string("搜索好友昵称或用户名") : AppLocalization.string("搜索话题"))
                 .scrollDismissesKeyboard(.interactively)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
                 .task(id: query) { await store.load(query) }
@@ -261,6 +264,7 @@ struct ComposerReferencePicker: View {
 }
 
 struct ComposerMediaThumbnail: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
     let item: SelectedMedia
     var side: CGFloat = 72
     var aspect: CGFloat = 1
