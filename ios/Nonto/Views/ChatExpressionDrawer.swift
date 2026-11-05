@@ -218,7 +218,7 @@ struct ChatExpressionDrawer: View {
                 }
                 ForEach(NotoEmojiCatalog.categories.filter { groups[$0]?.isEmpty == false }, id: \.self) { category in
                     VStack(alignment: .leading, spacing: 8) {
-                        sectionHeading(category)
+                        sectionHeading(AppLocalization.emojiCategory(category))
                         expressionGrid(groups[category] ?? [], systemGlyphs: systemGlyphs)
                     }
                 }
@@ -248,7 +248,7 @@ struct ChatExpressionDrawer: View {
         return Button { searchFocused = false; onStageSticker(item) } label: {
             ChatStagedStickerImage(sticker: item, animated: false).frame(height: 80).padding(4).frame(maxWidth: .infinity)
                 .modifier(ExpressionPickerSelection(selected: selection?.sourceID == item.sourceID))
-        }.buttonStyle(.plain).accessibilityLabel(item.localizedName).accessibilityHint("添加到待发送贴纸")
+        }.buttonStyle(.plain).accessibilityLabel(item.name).accessibilityHint("添加到待发送贴纸")
             .accessibilityAddTraits(selection?.sourceID == item.sourceID ? .isSelected : [])
     }
     private func stageNoto(_ item: NotoEmoji) { searchFocused = false; onStageSticker(.init(source: .noto(item))) }
