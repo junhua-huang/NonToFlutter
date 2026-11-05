@@ -77,11 +77,17 @@ struct ChatRoomView: View {
         ChatRoomContent(session: session, conversation: conversation) }
 }
 
+/// Native interaction fixtures use the same commands as timeline gestures.
+struct ChatInputActions {
+    let dismiss: () -> Void
+}
+
 struct ChatRoomContent: View {
     @Environment(\.locale) private var appLocale
     let conversation: Conversation
     private let onMessageFrame: ((String, CGRect) -> Void)?
     private let onViewportMetrics: ((ChatViewportMetrics) -> Void)?
+    private let onInputActions: ((ChatInputActions) -> Void)?
     @EnvironmentObject private var session: AppSession
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -119,10 +125,12 @@ struct ChatRoomContent: View {
     private var communityID: Int? { conversation.isCommunity ? conversation.communityID : nil }
     init(session: AppSession, conversation: Conversation, store: ChatStore? = nil,
          onMessageFrame: ((String, CGRect) -> Void)? = nil,
-         onViewportMetrics: ((ChatViewportMetrics) -> Void)? = nil) {
+         onViewportMetrics: ((ChatViewportMetrics) -> Void)? = nil,
+         onInputActions: ((ChatInputActions) -> Void)? = nil) {
         self.conversation = conversation
         self.onMessageFrame = onMessageFrame
         self.onViewportMetrics = onViewportMetrics
+        self.onInputActions = onInputActions
         _store = State(initialValue: store ?? ChatStore(api: session.api, conversation: conversation, userID: session.user?.id ?? 0, socket: session.socket))
         _stickerSender = State(initialValue: ChatStickerSender(accountID: session.user?.id ?? 0))
         composerEpoch = session.api.generation
@@ -285,6 +293,7 @@ struct ChatRoomContent: View {
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
+        .onAppear { onInputActions?(ChatInputActions(dismiss: dismissInput)) }
         .task {
             visible = true
             if phase == .active { await store.activate() }

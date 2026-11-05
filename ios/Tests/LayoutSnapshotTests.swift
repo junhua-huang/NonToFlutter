@@ -20,6 +20,7 @@ private struct ComposerCrashHarness: View {
 private final class ChatReplayFrames {
     var values: [String: CGRect] = [:]
     var viewport: ChatViewportMetrics?
+    var inputActions: ChatInputActions?
 }
 
 private struct ChatKeyboardHarness: View {
@@ -35,7 +36,8 @@ private struct ChatKeyboardHarness: View {
                     .navigationDestination(for: Int.self) { _ in
                         ChatRoomContent(session: session, conversation: conversation, store: store,
                                         onMessageFrame: { frames.values[$0] = $1 },
-                                        onViewportMetrics: { frames.viewport = $0 })
+                                        onViewportMetrics: { frames.viewport = $0 },
+                                        onInputActions: { [weak frames] in frames?.inputActions = $0 })
                     }
                     .task { if path.isEmpty { path = [1] } }
             }.tabItem { Label("私信", systemImage: "envelope") }
@@ -329,7 +331,8 @@ final class LayoutSnapshotTests: XCTestCase {
             window.rootViewController = nil; window.windowScene = nil; previous?.makeKey()
         }
         try await waitForComposer {
-            store.messages.count == 7 && self.descendants(of: controller.view).contains { $0 is UITextView || $0 is UITextField }
+            store.messages.count == 7 && frames.inputActions != nil
+                && self.descendants(of: controller.view).contains { $0 is UITextView || $0 is UITextField }
         }
         try await Task.sleep(for: .milliseconds(500))
         // SwiftUI may replace the platform text control when editing ends. Query
@@ -356,7 +359,10 @@ final class LayoutSnapshotTests: XCTestCase {
                 try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "send-\(cycle)-\(send)")
                 XCTAssertTrue(store.pending.isEmpty, "The fixture must acknowledge the real outbox request")
             }
-            window.endEditing(true)
+            // Match a timeline tap: clear SwiftUI's focus and native input panels
+            // together. UIKit endEditing alone can leave FocusState set to true
+            // and re-focus the composer during a subsequent acknowledgement.
+            try XCTUnwrap(frames.inputActions).dismiss()
             try await waitForComposer("keyboard dismissal restores the chat viewport") {
                 guard let field = currentField() else { return false }
                 return !field.isFirstResponder && abs(field.convert(field.bounds, to: window).minY - unfocusedComposerY) <= 5
