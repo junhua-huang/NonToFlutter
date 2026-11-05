@@ -340,9 +340,12 @@ final class LayoutSnapshotTests: XCTestCase {
         func currentField() -> UIView? {
             descendants(of: controller.view).first { ($0 is UITextView || $0 is UITextField) && $0.window === window }
         }
+        try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "before-keyboard")
+        // Measure the resting baseline after the initial navigation and all six
+        // rendered viewport samples, rather than during the first push layout.
         let field = try XCTUnwrap(currentField())
         let unfocusedComposerY = field.convert(field.bounds, to: window).minY
-        try await assertChatBubblesStayVisible(window: window, field: currentField, store: store, frames: frames, stage: "before-keyboard")
+        print("Chat resting composer y=\(unfocusedComposerY), safeArea=\(window.safeAreaInsets)")
         for cycle in 1...2 {
             XCTAssertTrue(try XCTUnwrap(currentField()).becomeFirstResponder())
             try await Task.sleep(for: .milliseconds(400))
@@ -363,9 +366,17 @@ final class LayoutSnapshotTests: XCTestCase {
             // together. UIKit endEditing alone can leave FocusState set to true
             // and re-focus the composer during a subsequent acknowledgement.
             try XCTUnwrap(frames.inputActions).dismiss()
-            try await waitForComposer("keyboard dismissal restores the chat viewport") {
-                guard let field = currentField() else { return false }
-                return !field.isFirstResponder && abs(field.convert(field.bounds, to: window).minY - unfocusedComposerY) <= 5
+            var dismissalGeometry = "composer missing"
+            do {
+                try await waitForComposer("keyboard dismissal restores the chat viewport") {
+                    guard let field = currentField() else { return false }
+                    let y = field.convert(field.bounds, to: window).minY
+                    dismissalGeometry = "focused=\(field.isFirstResponder), y=\(y), baseline=\(unfocusedComposerY)"
+                    return !field.isFirstResponder && abs(y - unfocusedComposerY) <= 5
+                }
+            } catch {
+                print("Chat keyboard dismissal \(cycle): \(dismissalGeometry)")
+                throw error
             }
             let restoredField = try XCTUnwrap(currentField())
             XCTAssertEqual(restoredField.convert(restoredField.bounds, to: window).minY, unfocusedComposerY, accuracy: 5,
