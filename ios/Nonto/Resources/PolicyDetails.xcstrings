@@ -21,6 +21,30 @@
             "state": "translated",
             "value": "NonTo server data is stored in mainland China. System notifications are delivered through Apple APNs. Apple processes the push identifiers and notification routing information necessary for delivery. See section 5 of this policy for the relevant service information."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les données du serveur NonTo sont stockées en Chine continentale. Les notifications système sont envoyées via les APN Apple. Apple traite les identifiants push et les informations de routage des notifications nécessaires à la livraison. Voir la section 5 de cette politique pour les informations de service pertinentes."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные сервера NonTo хранятся в материковом Китае. Системные уведомления доставляются через точки доступа Apple APN. Apple обрабатывает идентификаторы push-уведомлений и информацию о маршрутизации уведомлений, необходимую для доставки. Дополнительную информацию об услугах см. в разделе 5 настоящей политики."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los datos del servidor NonTo se almacenan en China continental. Las notificaciones del sistema se envían a través de APN de Apple. Apple procesa los identificadores push y la información de enrutamiento de notificaciones necesarios para la entrega. Consulte la sección 5 de esta política para obtener información relevante sobre el servicio."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo サーバーのデータは中国本土に保存されています。システム通知は Apple APN を通じて配信されます。 Apple は、配信に必要なプッシュ識別子と通知ルーティング情報を処理します。関連するサービス情報については、このポリシーのセクション 5 を参照してください。"
+          }
         }
       }
     },
@@ -43,6 +67,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Server hosting: NonTo uses Alibaba Cloud servers for backend services. Data includes account profiles, posts, comments, messages and network requests, to provide account, content, communication and service security features. NonTo server data is stored in mainland China. Alibaba Cloud legal statement and privacy policy: https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html .\n\nVerification emails: Tencent email services send verification codes for registration, sign-in and password operations through SMTP. This involves recipient email addresses, verification email content and delivery information, not unrelated marketing. Tencent Privacy Protection Platform: https://privacy.qq.com/ .\n\nMedia storage and moderation: NonTo’s media upload interface uses Tencent Cloud COS to store and serve selected images and videos, involving file contents, object paths and resource requests. Image moderation is controlled by server settings. When enabled, selected images are submitted to Tencent Cloud Cloud Infinite for review and results. Tencent Cloud privacy policy: https://cloud.tencent.com/document/product/301/11470 .\n\nApple system services: APNs provides push notifications; the system photo picker selects files. Sharing and external apps handle content according to your actions. Apple privacy policy: https://www.apple.com/legal/privacy/szh/ . This does not give the NonTo client your Apple Account password or access to your entire photo library.\n\nCDN: NonTo does not use a CDN acceleration service."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hébergement de serveur : NonTo utilise les serveurs Alibaba Cloud pour les services backend. Les données comprennent les profils de compte, les publications, les commentaires, les messages et les demandes de réseau, pour fournir des fonctionnalités de sécurité de compte, de contenu, de communication et de service. Les données du serveur NonTo sont stockées en Chine continentale. Déclaration juridique et politique de confidentialité d'Alibaba Cloud : https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html .\n\nE-mails de vérification : les services de messagerie Tencent envoient des codes de vérification pour les opérations d'enregistrement, de connexion et de mot de passe via SMTP. Cela implique les adresses e-mail des destinataires, le contenu des e-mails de vérification et les informations de livraison, et non du marketing sans rapport. Plateforme de protection de la vie privée Tencent : https://privacy.qq.com/ .\n\nStockage et modération des médias : l'interface de téléchargement multimédia de NonTo utilise Tencent Cloud COS pour stocker et servir des images et des vidéos sélectionnées, impliquant le contenu des fichiers, les chemins d'objet et les demandes de ressources. La modération des images est contrôlée par les paramètres du serveur. Lorsqu'elles sont activées, les images sélectionnées sont soumises à Tencent Cloud Cloud Infinite pour examen et résultats. Politique de confidentialité de Tencent Cloud : https://cloud.tencent.com/document/product/301/11470 .\n\nServices système Apple : les APN fournissent des notifications push ; le sélecteur de photos du système sélectionne les fichiers. Le partage et les applications externes gèrent le contenu en fonction de vos actions. Politique de confidentialité Apple : https://www.apple.com/legal/privacy/szh/ . Cela ne donne pas au client NonTo le mot de passe de votre compte Apple ni l'accès à l'intégralité de votre photothèque. \n\nCDN : NonTo n'utilise pas de service d'accélération CDN."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хостинг серверов: NonTo использует облачные серверы Alibaba для серверных услуг. Данные включают профили учетных записей, публикации, комментарии, сообщения и сетевые запросы для обеспечения функций безопасности учетной записи, контента, связи и услуг. Данные сервера NonTo хранятся в материковом Китае. Юридическое заявление Alibaba Cloud и политика конфиденциальности: https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html .\n\nПисьма для подтверждения: службы электронной почты Tencent отправляют коды подтверждения для регистрации, входа и ввода пароля через SMTP. Сюда входят адреса электронной почты получателей, содержимое электронной почты для проверки и информация о доставке, а не посторонний маркетинг. Платформа защиты конфиденциальности Tencent: https://privacy.qq.com/ .\n\nХранение и модерация мультимедиа: интерфейс загрузки мультимедиа NonTo использует Tencent Cloud COS для хранения и обслуживания выбранных изображений и видео, включая содержимое файлов, пути к объектам и запросы ресурсов. Модерация изображений контролируется настройками сервера. Если этот параметр включен, выбранные изображения отправляются в Tencent Cloud Cloud Infinite для проверки и получения результатов. Политика конфиденциальности Tencent Cloud: https://cloud.tencent.com/document/product/301/11470 .\n\nСистемные службы Apple: APNs предоставляет push-уведомления; система выбора фотографий выбирает файлы. Совместное использование и внешние приложения обрабатывают контент в соответствии с вашими действиями. Политика конфиденциальности Apple: https://www.apple.com/legal/privacy/szh/. Это не дает клиенту NonTo пароль вашей учетной записи Apple или доступ ко всей вашей библиотеке фотографий. \n\nCDN: NonTo не использует службу ускорения CDN."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alojamiento de servidor: NonTo utiliza servidores Alibaba Cloud para servicios backend. Los datos incluyen perfiles de cuentas, publicaciones, comentarios, mensajes y solicitudes de red, para proporcionar características de seguridad de la cuenta, el contenido, la comunicación y el servicio. Los datos del servidor NonTo se almacenan en China continental. Declaración legal y política de privacidad de Alibaba Cloud: https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html .\n\nCorreos electrónicos de verificación: los servicios de correo electrónico de Tencent envían códigos de verificación para operaciones de registro, inicio de sesión y contraseña a través de SMTP. Esto implica direcciones de correo electrónico de los destinatarios, contenido del correo electrónico de verificación e información de entrega, no marketing no relacionado. Plataforma de protección de privacidad de Tencent: https://privacy.qq.com/ .\n\nAlmacenamiento y moderación de medios: la interfaz de carga de medios de NonTo utiliza Tencent Cloud COS para almacenar y servir imágenes y videos seleccionados, que involucran contenidos de archivos, rutas de objetos y solicitudes de recursos. La moderación de imágenes está controlada por la configuración del servidor. Cuando está habilitado, las imágenes seleccionadas se envían a Tencent Cloud Cloud Infinite para su revisión y resultados. Política de privacidad de Tencent Cloud: https://cloud.tencent.com/document/product/301/11470 .\n\nServicios del sistema Apple: APN proporciona notificaciones automáticas; el selector de fotos del sistema selecciona archivos. Las aplicaciones externas y para compartir manejan el contenido de acuerdo con sus acciones. Política de privacidad de Apple: https://www.apple.com/legal/privacy/szh/. Esto no le da al cliente NonTo la contraseña de su cuenta Apple ni acceso a toda su biblioteca de fotos. \n\nCDN: NonTo no utiliza un servicio de aceleración CDN."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバーホスティング: NonTo はバックエンドサービスに Alibaba Cloud サーバーを使用します。データには、アカウント、コンテンツ、通信、サービスのセキュリティ機能を提供するためのアカウント プロファイル、投稿、コメント、メッセージ、ネットワーク リクエストが含まれます。 NonTo サーバーのデータは中国本土に保存されています。 Alibaba Cloud の法的声明およびプライバシー ポリシー: https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html .\n\n確認メール: Tencent 電子メール サービスは、登録、サインイン、およびパスワード操作のための確認コードを SMTP 経由で送信します。これには、無関係なマーケティングではなく、受信者の電子メール アドレス、確認電子メールの内容、配信情報が含まれます。 Tencent プライバシー保護プラットフォーム: https://privacy.qq.com/ .\n\nメディア ストレージとモデレーション: NonTo のメディア アップロード インターフェイスは、Tencent Cloud COS を使用して、ファイル コンテンツ、オブジェクト パス、リソース リクエストを含む、選択された画像とビデオを保存および提供します。画像のモデレーションはサーバー設定によって制御されます。有効にすると、選択した画像が Tencent Cloud Cloud Infinite に送信され、レビューと結果が得られます。 Tencent Cloud プライバシー ポリシー: https://cloud.tencent.com/document/product/301/11470 .\n\nApple システム サービス: APN はプッシュ通知を提供します。システムのフォト ピッカーがファイルを選択します。共有アプリと外部アプリは、ユーザーのアクションに応じてコンテンツを処理します。 Apple プライバシー ポリシー: https://www.apple.com/legal/privacy/szh/ 。これにより、NonTo クライアントに Apple アカウントのパスワードや写真ライブラリ全体へのアクセスが与えられるわけではありません。\n\nCDN: NonTo は CDN アクセラレーション サービスを使用しません。"
           }
         }
       }
@@ -67,6 +115,30 @@
             "state": "translated",
             "value": "NonTo account and social services are for people aged 14 or older and are not offered to children under 14. People aged 14–17 should read the Terms of Service, Privacy Policy and Community Guidelines with a guardian and use the service with their consent and guidance.\n\nAt first use, users select an age range themselves. Those aged 14–17 must also confirm guardian consent. These declarations and the consent version are saved on this device to control entry to native account services. Date of birth and identity documents are not requested here. This is not statutory real-name or actual age verification.\n\nDo not submit unrelated sensitive information about minors through public content, private messages, group chats or verification materials. Report suspected false age declarations, harm to minors’ rights or improper processing of children’s information in the app or at nonto@foxmail.com. Guardians requesting access, correction or deletion should identify the account, guardianship relationship and specific request. Provide only material needed to verify the request, without passwords, verification codes or unrelated full identity documents. If erroneous collection of information about children under 14 is discovered, unnecessary processing will stop and the relevant information and guardian requests will be checked and handled."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le compte NonTo et les services sociaux sont destinés aux personnes âgées de 14 ans ou plus et ne sont pas proposés aux enfants de moins de 14 ans. Les personnes âgées de 14 à 17 ans doivent lire les conditions d'utilisation, la politique de confidentialité et les directives de la communauté avec un tuteur et utiliser le service avec son consentement et ses conseils.\n\nLors de la première utilisation, les utilisateurs sélectionnent eux-mêmes une tranche d'âge. Les personnes âgées de 14 à 17 ans doivent également confirmer le consentement du tuteur. Ces déclarations et la version du consentement sont enregistrées sur cet appareil pour contrôler l'accès aux services de compte natifs. La date de naissance et les documents d’identité ne sont pas demandés ici. Il ne s'agit pas d'une vérification légale du nom réel ou de l'âge réel.\n\nNe soumettez pas d'informations sensibles sans rapport sur les mineurs via du contenu public, des messages privés, des discussions de groupe ou des documents de vérification. Signalez les fausses déclarations d’âge, les atteintes aux droits des mineurs ou le traitement inapproprié des informations sur les enfants dans l’application ou à nonto@foxmail.com. Les tuteurs demandant l'accès, la correction ou la suppression doivent identifier le compte, la relation de tutelle et la demande spécifique. Fournissez uniquement le matériel nécessaire à la vérification de la demande, sans mots de passe, codes de vérification ou documents d'identité complets sans rapport. Si une collecte erronée d'informations sur des enfants de moins de 14 ans est découverte, le traitement inutile sera interrompu et les informations pertinentes ainsi que les demandes du tuteur seront vérifiées et traitées."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Учетная запись NonTo и социальные услуги предназначены для людей в возрасте 14 лет и старше и не предлагаются детям до 14 лет. Людям в возрасте 14–17 лет следует прочитать Условия обслуживания, Политику конфиденциальности и Правила сообщества вместе с опекуном и использовать службу с их согласия и под руководством. \n\nПри первом использовании пользователи сами выбирают возрастной диапазон. Лица в возрасте 14–17 лет также должны подтвердить согласие опекуна. Эти заявления и версия согласия сохраняются на этом устройстве для контроля доступа к собственным службам учетной записи. Дата рождения и документы, удостоверяющие личность, здесь не запрашиваются. Это не предусмотренная законом проверка настоящего имени или фактического возраста. \n\nНе отправляйте несвязанную конфиденциальную информацию о несовершеннолетних через общедоступный контент, личные сообщения, групповые чаты или материалы проверки. Сообщайте о подозрениях в ложном заявлении возраста, нарушении прав несовершеннолетних или неправильной обработке информации о детях в приложении или по адресу nonto@foxmail.com. Опекуны, запрашивающие доступ, исправление или удаление, должны указать учетную запись, отношения опеки и конкретный запрос. Предоставляйте только материалы, необходимые для проверки запроса, без паролей, кодов проверки или несвязанных полных документов, удостоверяющих личность. В случае обнаружения ошибочного сбора информации о детях до 14 лет ненужная обработка будет прекращена, а соответствующая информация и запросы опекунов будут проверены и обработаны."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La cuenta NonTo y los servicios sociales son para personas de 14 años o más y no se ofrecen a niños menores de 14 años. Las personas de 14 a 17 años deben leer los Términos de servicio, la Política de privacidad y las Pautas de la comunidad con un tutor y utilizar el servicio con su consentimiento y orientación. \n\nEn el primer uso, los usuarios seleccionan un rango de edad ellos mismos. Las personas entre 14 y 17 años también deben confirmar el consentimiento del tutor. Estas declaraciones y la versión de consentimiento se guardan en este dispositivo para controlar el acceso a los servicios de cuentas nativas. Aquí no se solicitan fecha de nacimiento ni documentos de identidad. Esta no es una verificación legal de nombre real o edad real. \n\nNo envíe información confidencial no relacionada sobre menores a través de contenido público, mensajes privados, chats grupales o materiales de verificación. Informe sospechas de declaraciones de edad falsas, daños a los derechos de los menores o procesamiento inadecuado de la información de los niños en la aplicación o en nonto@foxmail.com. Los tutores que soliciten acceso, corrección o eliminación deben identificar la cuenta, la relación de tutela y la solicitud específica. Proporcione únicamente el material necesario para verificar la solicitud, sin contraseñas, códigos de verificación ni documentos de identidad completos no relacionados. Si se descubre una recopilación errónea de información sobre niños menores de 14 años, se detendrá el procesamiento innecesario y se verificará y manejará la información relevante y las solicitudes de los tutores."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo アカウントとソーシャル サービスは 14 歳以上のユーザーを対象としており、14 歳未満の子供には提供されません。14 ～ 17 歳のユーザーは、保護者と一緒にサービス利用規約、プライバシー ポリシー、コミュニティ ガイドラインを読み、同意と指導の下でサービスを使用する必要があります。\n\n初めて使用するとき、ユーザーは自分で年齢範囲を選択します。 14 ～ 17 歳の方は保護者の同意も確認する必要があります。これらの宣言と同意バージョンは、ネイティブ アカウント サービスへのアクセスを制御するためにこのデバイスに保存されます。ここでは生年月日と身分証明書は要求されません。これは、法定の実名や実年齢の確認ではありません。\n\n公開コンテンツ、プライベート メッセージ、グループ チャット、または確認資料を通じて、未成年者に関する無関係の機密情報を送信しないでください。年齢の虚偽申告、未成年者の権利の侵害、または子供の情報の不適切な処理の疑いがある場合は、アプリまたはnonto@foxmail.comで報告してください。アクセス、修正、または削除を要求する後見人は、アカウント、後見関係、および具体的な要求を特定する必要があります。パスワード、確認コード、または無関係な完全な身分証明書を含めずに、リクエストを確認するために必要な資料のみを提供してください。 14歳未満のお子様に関する情報の誤った収集が判明した場合は、不要な処理を停止し、関連する情報と保護者の要求を確認して対応します。"
+          }
         }
       }
     },
@@ -89,6 +161,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Current account registration and sign-in use email verification codes or passwords. Identity documents are not collected for statutory real-name verification. Role or creator verification reviews only the relevant application and is not statutory real-name verification. Email verification cannot replace real-name verification required by law."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'enregistrement et la connexion du compte actuel utilisent des codes de vérification de courrier électronique ou des mots de passe. Les documents d'identité ne sont pas collectés pour la vérification légale du nom réel. La vérification du rôle ou du créateur examine uniquement la candidature concernée et ne constitue pas une vérification légale du nom réel. La vérification par e-mail ne peut pas remplacer la vérification du nom réel requise par la loi."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для регистрации текущей учетной записи и входа в систему используются коды подтверждения электронной почты или пароли. Документы, удостоверяющие личность, не собираются для обязательной проверки настоящего имени. Проверка роли или автора проверяет только соответствующее приложение и не является обязательной проверкой настоящего имени. Проверка электронной почты не может заменить проверку настоящего имени, требуемую законом."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El registro de cuenta actual y el inicio de sesión utilizan códigos de verificación de correo electrónico o contraseñas. Los documentos de identidad no se recopilan para la verificación legal del nombre real. La verificación de rol o creador revisa solo la aplicación relevante y no es una verificación legal del nombre real. La verificación por correo electrónico no puede reemplazar la verificación del nombre real requerida por la ley."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在のアカウントの登録とサインインには、電子メール確認コードまたはパスワードを使用します。法定の実名確認のために身分証明書は収集されません。役割または作成者の検証は、関連するアプリケーションのみをレビューし、法定の実名検証ではありません。電子メール認証は、法律で義務付けられている実名認証に代わるものではありません。"
           }
         }
       }
@@ -113,6 +209,30 @@
             "state": "translated",
             "value": "Personal data rights requests are received by 黄君华 at nonto@foxmail.com. State your account identifier, request type and scope. Account-related requests require proportionate checks of account ownership. Do not send passwords or verification codes.\n\nAn initial response will be provided within 7 working days of receipt, explaining acceptance and any necessary additional material. Processing and feedback will normally be completed within 15 working days. If further verification is needed or complexity prevents completion within that period, the reasons and expected completion time will be explained before the deadline. Shorter periods required by applicable law take precedence.\n\nIf a request cannot be met, reasons will be provided. To challenge the result, add facts and reasons in the original email to request review. Report history can be viewed in the app. Working days follow the applicable statutory working schedule."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les demandes de droits sur les données personnelles sont reçues par 黄君华 à nonto@foxmail.com. Indiquez votre identifiant de compte, le type et la portée de la demande. Les demandes liées aux comptes nécessitent des contrôles proportionnés de la propriété du compte. N'envoyez pas de mots de passe ni de codes de vérification.\n\nUne première réponse sera fournie dans les 7 jours ouvrables suivant la réception, expliquant l'acceptation et tout matériel supplémentaire nécessaire. Le traitement et les commentaires seront normalement terminés dans un délai de 15 jours ouvrables. Si une vérification plus approfondie est nécessaire ou si la complexité empêche l'achèvement dans ce délai, les raisons et le délai d'achèvement prévu seront expliqués avant la date limite. Les délais plus courts requis par la loi applicable ont préséance.\n\nSi une demande ne peut être satisfaite, les raisons seront fournies. Pour contester le résultat, ajoutez des faits et des raisons dans l'e-mail d'origine pour demander un examen. L'historique des rapports peut être consulté dans l'application. Les jours ouvrables suivent l’horaire de travail légal en vigueur."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запросы о правах на персональные данные принимаются 黄君华 по адресу notto@foxmail.com. Укажите идентификатор своей учетной записи, тип и объем запроса. Запросы, связанные с учетной записью, требуют соразмерной проверки владения учетной записью. Не отправляйте пароли или коды подтверждения.\n\nПервоначальный ответ будет предоставлен в течение 7 рабочих дней с момента получения с объяснением принятия и любыми необходимыми дополнительными материалами. Обработка и обратная связь обычно завершаются в течение 15 рабочих дней. Если необходима дополнительная проверка или сложность препятствует завершению в течение этого периода, причины и ожидаемое время завершения будут объяснены до истечения крайнего срока. Более короткие сроки, предусмотренные применимым законодательством, имеют приоритет. \n\nЕсли запрос не может быть удовлетворен, будут указаны причины. Чтобы оспорить результат, добавьте факты и причины в исходное письмо с просьбой о пересмотре. Историю отчетов можно просмотреть в приложении. Рабочие дни соответствуют установленному законом графику работы."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las solicitudes de derechos de datos personales las recibe 黄君华 en nonto@foxmail.com. Indique el identificador de su cuenta, el tipo de solicitud y el alcance. Las solicitudes relacionadas con cuentas requieren controles proporcionados de la propiedad de la cuenta. No envíe contraseñas ni códigos de verificación.\n\nSe proporcionará una respuesta inicial dentro de los 7 días hábiles posteriores a la recepción, explicando la aceptación y cualquier material adicional necesario. El procesamiento y los comentarios normalmente se completarán dentro de los 15 días hábiles. Si se necesita una verificación adicional o la complejidad impide la finalización dentro de ese período, se explicarán los motivos y el tiempo previsto de finalización antes de la fecha límite. Los períodos más cortos requeridos por la ley aplicable tienen prioridad.\n\nSi no se puede cumplir con una solicitud, se proporcionarán los motivos. Para cuestionar el resultado, agregue hechos y motivos en el correo electrónico original para solicitar una revisión. El historial de informes se puede ver en la aplicación. Los días laborables siguen el horario de trabajo legal aplicable."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個人データの権利リクエストは、黄君华 (nonto@foxmail.com) で受け付けます。アカウント識別子、リクエストのタイプ、スコープを指定します。アカウント関連のリクエストでは、アカウントの所有権を適切に確認する必要があります。パスワードや確認コードは送信しないでください。\n\n受領後 7 営業日以内に最初の応答が提供され、承諾および必要な追加資料が説明されます。処理とフィードバックは通常 15 営業日以内に完了します。さらなる検証が必要な場合、または複雑さによりその期間内に完了できない場合は、期限前にその理由と完了予定時間が説明されます。適用法により要求される短い期間が優先されます。\n\nご要望に応じられない場合は、その理由が示されます。結果に異議を唱えるには、元の電子メールに事実と理由を追加してレビューを要求します。レポート履歴はアプリで確認できます。労働日は、適用される法定労働スケジュールに従います。"
+          }
         }
       }
     },
@@ -135,6 +255,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Specific retention periods, statutory retention scope and backup deletion arrangements have not yet been published. To ask about information or request deletion, contact NonTo at nonto@foxmail.com. Do not assume signing out, uninstalling the app or clearing caches deletes server data."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les durées de conservation spécifiques, la portée légale de la conservation et les modalités de suppression des sauvegardes n'ont pas encore été publiées. Pour demander des informations ou demander la suppression, contactez NonTo à nonto@foxmail.com. Ne présumez pas que la déconnexion, la désinstallation de l'application ou l'effacement des caches suppriment les données du serveur."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Конкретные сроки хранения, установленный законом объем хранения и порядок удаления резервных копий еще не опубликованы. Чтобы узнать информацию или запросить удаление, свяжитесь с NonTo по адресу nonto@foxmail.com. Не думайте, что выход из системы, удаление приложения или очистка кеша приведет к удалению данных сервера."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no se han publicado los períodos de retención específicos, el alcance legal de la retención y los acuerdos de eliminación de copias de seguridad. Para solicitar información o solicitar la eliminación, comuníquese con NonTo en nonto@foxmail.com. No asuma que cerrar sesión, desinstalar la aplicación o borrar el caché elimina los datos del servidor."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "具体的な保存期間、法定保存範囲、バックアップ削除の取り決めはまだ公表されていない。情報について問い合わせたり、削除をリクエストするには、NonTo (nonto@foxmail.com) までご連絡ください。サインアウト、アプリのアンインストール、キャッシュのクリアによってサーバー データが削除されるとは考えないでください。"
           }
         }
       }

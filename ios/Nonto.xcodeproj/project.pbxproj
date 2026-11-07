@@ -6,6 +6,7 @@ objectVersion = 56;
 objects = {
 0014D5810B027657C68CBCD5 = {isa = PBXBuildFile; fileRef = ABA0ABE524670BC64A89D1D9; };
 01371748B8549E373AAFCB57 = {isa = PBXBuildFile; fileRef = 5A63C5C7E5D096D30C2C3E27; };
+03404D421B115EC5BEFD19AA = {isa = PBXFileReference; lastKnownFileType = text; name = "ru"; path = "Nonto/Resources/ru.lproj/community.txt"; sourceTree = "<group>"; };
 03E7668BACF62B3F64C5836E = {isa = PBXBuildFile; fileRef = 55DBC6A518B6CFF52719988B; };
 045ACAD5770D37532F157FDA = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Core/ComposerAttachments.swift"; sourceTree = "<group>"; };
 0890E20E954776318D9ED741 = {isa = PBXBuildFile; fileRef = 218223AE3A0E19E726A93095; };
@@ -18,6 +19,7 @@ objects = {
 156052F04525D0F710673CF0 = {isa = PBXGroup; name = "Tests"; children = (339F185589ADF1C06880185A, E48E5FD9C9A1A0862ED97FF6, 80C1A754EBA6B8B4A88D894E, 9A4BA1063DD7CC4342A59126, 1EC2969F74F05B8F6629BB24, FA856824ACC3C6177D56A198, 287C21C1BD147813A3E1A2BC, 9CB5BC4CE8FF8E98CCA82D02, 3F35E7E074DB89765D341DA4, F868C652134E87F1230C4B88, 1F542780F9C9176AE906ECA7, 9CE26C990A12B158F6A873BB, 7E8911ABFAD889798A4C47A9, 74F4A5F26F443366E90B085B, AC30BE198C76D9985598F5D6, 2D6897DED0BE4F10A77275F1, 2D1B018237325A706AEBBE0D, A20AED7A03BC2CA8AEADCAC4, 670C6E333BC7974495E9C712, 207A8AB513ACD481892762C2, CE855BCAC3D7A1BD899C7736,); sourceTree = "<group>"; };
 16A9186D49C6724845AB6B95 = {isa = PBXBuildFile; fileRef = E8960046BC0254BC231E422B; };
 176A74E7B893E2CB8FB489C0 = {isa = PBXBuildFile; fileRef = 2D6897DED0BE4F10A77275F1; };
+17D98DD78DFE54EFF629DFEB = {isa = PBXFileReference; lastKnownFileType = text; name = "es"; path = "Nonto/Resources/es.lproj/privacy.txt"; sourceTree = "<group>"; };
 18B6D1D7A21ADD37511234E2 = {isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = ("$(SRCROOT)/scripts/check_compliance.py", "$(SRCROOT)/Nonto/Resources/Compliance.json", "$(SRCROOT)/Nonto/Resources/PrivacyInfo.xcprivacy", "$(SRCROOT)/Nonto/Resources/privacy.txt", "$(SRCROOT)/Nonto/Resources/terms.txt", "$(SRCROOT)/Nonto/Resources/community.txt",); outputPaths = (); name = "Check release disclosures"; runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "if [ \"$ACTION\" = \"install\" ]; then\n  if [ \"$NONTO_DISTRIBUTION_CHANNEL\" = \"testflight-internal\" ] || [ \"$NONTO_DISTRIBUTION_CHANNEL\" = \"app-store-upload\" ]; then\n    echo \"Draft/test upload only: outstanding release disclosures remain unresolved; not approved for submission.\"\n    /usr/bin/env python3 \"$SRCROOT/scripts/check_compliance.py\"\n  else\n    /usr/bin/env python3 \"$SRCROOT/scripts/check_compliance.py\" --release\n  fi\nfi"; alwaysOutOfDate = 1; };
 191BC8EF459AA76B30DF0E06 = {isa = PBXBuildFile; fileRef = 30C4C185D93462F9F086BDB4; };
 1C9E4EE625FCD8F7BA16AC16 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hant"; path = "Nonto/Resources/zh-Hant.lproj/community.txt"; sourceTree = "<group>"; };
@@ -40,6 +42,7 @@ objects = {
 2A441EEB28F43C6188A63A1D = {isa = PBXBuildFile; fileRef = 664A01631AB94F15EE1F0013; };
 2A5C63878AC8D0AA84343DDC = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hant"; path = "Nonto/Resources/zh-Hant.lproj/privacy.txt"; sourceTree = "<group>"; };
 2A8F55AE518A8ED6BA44E652 = {isa = PBXBuildFile; fileRef = 4528222DA9898DCADEAD5407; };
+2B06470D94B8E76F7FD7EAD6 = {isa = PBXFileReference; lastKnownFileType = text; name = "ja"; path = "Nonto/Resources/ja.lproj/privacy.txt"; sourceTree = "<group>"; };
 2B0DB036992A52FFA6F29ADF = {isa = PBXBuildFile; fileRef = 97D3AE93DE6886262CB7FFDA; };
 2B3E672155D2B167DC8520DE = {isa = PBXFileReference; lastKnownFileType = text; path = "Nonto/Resources/Compliance.json"; sourceTree = "<group>"; };
 2BD6B9B82414E6AB1198F133 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
@@ -52,6 +55,7 @@ objects = {
 2FF3EA12106BEA905C9D5BAB = {isa = PBXBuildFile; fileRef = 90DBF179B6F3677B73A27594; };
 30C4C185D93462F9F086BDB4 = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = "Nonto/Resources/Localizable.xcstrings"; sourceTree = "<group>"; };
 32995943DE67267A65D32CA9 = {isa = XCConfigurationList; buildConfigurations = (3CF6A4F2E05B3AAE7E2CBFEE, 23FB2CAEB38545C3793097DD,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+329B6B8FF464413FC9B1AEE8 = {isa = PBXFileReference; lastKnownFileType = text; name = "fr"; path = "Nonto/Resources/fr.lproj/community.txt"; sourceTree = "<group>"; };
 33765F539F08A292E8243A2B = {isa = PBXBuildFile; fileRef = F868C652134E87F1230C4B88; };
 339F185589ADF1C06880185A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/APIClientTests.swift"; sourceTree = "<group>"; };
 358860E6F28E3FBA49B510ED = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = "Nonto/Resources/ServerErrors.xcstrings"; sourceTree = "<group>"; };
@@ -73,12 +77,14 @@ objects = {
 47852831EF22151942784191 = {isa = PBXBuildFile; fileRef = CE855BCAC3D7A1BD899C7736; };
 496E8D09A07F8781CBACE4CF = {isa = PBXBuildFile; fileRef = 6ADC3EA0343FA66098A28BD0; };
 4B0C59E0DF90A21D99C43493 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Nonto/Resources/Assets.xcassets"; sourceTree = "<group>"; };
+4DE316D33D04FC6BEC2A9D7A = {isa = PBXFileReference; lastKnownFileType = text; name = "fr"; path = "Nonto/Resources/fr.lproj/privacy.txt"; sourceTree = "<group>"; };
 4F115F10257BB93F1350A826 = {isa = PBXBuildFile; fileRef = 3E185194B7E7E3E5AAFAA6EF; };
 4F39645DF6C9CB582A55A166 = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = "Nonto/Resources/PolicyDetails.xcstrings"; sourceTree = "<group>"; };
 4F3E624E0859ED3DBA6EEC17 = {isa = PBXBuildFile; fileRef = E6702B271B51DFA6DC3E9935; };
 4F887C6FAC4DF291C259EF45 = {isa = PBXBuildFile; fileRef = 5762906E8289C4A3A3F97F7F; };
 4F8D52C7F79C3A99078DFED9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/NotoEmojiPicker.swift"; sourceTree = "<group>"; };
 4FC9411AA4A79F290725CF1F = {isa = PBXBuildFile; productRef = DC6AB6788BC246DF24C7C786; };
+5123F089354DF5D45DEA046B = {isa = PBXFileReference; lastKnownFileType = text; name = "ru"; path = "Nonto/Resources/ru.lproj/terms.txt"; sourceTree = "<group>"; };
 5151B46607EBC8890D8DFCC2 = {isa = PBXGroup; name = "Products"; children = (B6CDB6E5D160E013280D3C68, E02A90D9643568EA39115CFB,); sourceTree = "<group>"; };
 529B143EE05FCC8205D253BE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Services/NativeNotifications.swift"; sourceTree = "<group>"; };
 532CC7C2AF890384E5DF7998 = {isa = PBXBuildFile; fileRef = 358860E6F28E3FBA49B510ED; };
@@ -96,6 +102,7 @@ objects = {
 5C9A604B34F79FF047D1B0AD = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Core/Compliance.swift"; sourceTree = "<group>"; };
 5E1F1385329C55E95922DEAC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/FeedViews.swift"; sourceTree = "<group>"; };
 6137A6F58D979B3DA500C290 = {isa = XCConfigurationList; buildConfigurations = (E2657B9FA91DD4A55652006F, B4343C19535B18410503AED7,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+61C1DE51AF8745A137B731D7 = {isa = PBXFileReference; lastKnownFileType = text; name = "es"; path = "Nonto/Resources/es.lproj/community.txt"; sourceTree = "<group>"; };
 632EE71EF7399FB33BCE71C2 = {isa = PBXBuildFile; fileRef = 986CE1D116A3C6F3834EE46D; };
 64A49F091A5590B1DB8B299A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Services/AppSession.swift"; sourceTree = "<group>"; };
 664A01631AB94F15EE1F0013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Services/APIClient.swift"; sourceTree = "<group>"; };
@@ -109,7 +116,7 @@ objects = {
 710D8C04721437619DBDCADE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Core/AppLanguage.swift"; sourceTree = "<group>"; };
 7337A8C2E0BE5C4200C621A3 = {isa = PBXFileReference; lastKnownFileType = text; name = "en"; path = "Nonto/Resources/en.lproj/terms.txt"; sourceTree = "<group>"; };
 7406C15E5E8F0DE124F0129E = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hant"; path = "Nonto/Resources/zh-Hant.lproj/terms.txt"; sourceTree = "<group>"; };
-741A6D48E7D716A831A48A9E = {isa = PBXVariantGroup; children = (F8EB8C3FF60BAB7CFC24CB17, 2A5C63878AC8D0AA84343DDC, E6BA279E625A36D703ED787E,); name = "privacy.txt"; sourceTree = "<group>"; };
+741A6D48E7D716A831A48A9E = {isa = PBXVariantGroup; children = (F8EB8C3FF60BAB7CFC24CB17, 2A5C63878AC8D0AA84343DDC, E6BA279E625A36D703ED787E, 4DE316D33D04FC6BEC2A9D7A, F3DF0C1ABD942D3262394493, 17D98DD78DFE54EFF629DFEB, 2B06470D94B8E76F7FD7EAD6,); name = "privacy.txt"; sourceTree = "<group>"; };
 74D8C09CC211705A6255693C = {isa = PBXBuildFile; fileRef = 741A6D48E7D716A831A48A9E; };
 74F4A5F26F443366E90B085B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/InteractionTests.swift"; sourceTree = "<group>"; };
 775D621CFE8B4463EDBCB6C1 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/zh-Hans.lproj/community.txt"; sourceTree = "<group>"; };
@@ -136,7 +143,7 @@ objects = {
 8A4AA1DB8E9E84795C1981AF = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Services/APNsService.swift"; sourceTree = "<group>"; };
 8F104D9B4531D3D1FF2C467F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Core/NotoEmojiBrowser.swift"; sourceTree = "<group>"; };
 8FD83978A02C959D5BB45DF7 = {isa = PBXBuildFile; fileRef = EE53CEB8773D0E2276551BA7; };
-90131E718D10A1898A39D522 = {isa = PBXVariantGroup; children = (775D621CFE8B4463EDBCB6C1, 1C9E4EE625FCD8F7BA16AC16, 1348D9F1D9249B965F79B254,); name = "community.txt"; sourceTree = "<group>"; };
+90131E718D10A1898A39D522 = {isa = PBXVariantGroup; children = (775D621CFE8B4463EDBCB6C1, 1C9E4EE625FCD8F7BA16AC16, 1348D9F1D9249B965F79B254, 329B6B8FF464413FC9B1AEE8, 03404D421B115EC5BEFD19AA, 61C1DE51AF8745A137B731D7, B6281509B2331AC4141A821F,); name = "community.txt"; sourceTree = "<group>"; };
 90B0BEC5EAC6745C6278B7EE = {isa = PBXBuildFile; fileRef = 9DD824F88D8A77D1C02CEBBC; };
 90DBF179B6F3677B73A27594 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/PostContent.swift"; sourceTree = "<group>"; };
 9174C52BE1DABD5DE6D093B0 = {isa = PBXBuildFile; fileRef = 27ABB2AD4DB553DBC2CDCC0E; };
@@ -149,7 +156,7 @@ objects = {
 971BD8F51E9F5787F8215EBC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Core/PostDraft.swift"; sourceTree = "<group>"; };
 97D3AE93DE6886262CB7FFDA = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/NotoEmojiAnimation.swift"; sourceTree = "<group>"; };
 986CE1D116A3C6F3834EE46D = {isa = PBXFileReference; lastKnownFileType = folder; path = NotoEmoji; sourceTree = DERIVED_FILE_DIR; };
-98F54143AB4E86B28C3AFEE0 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {29C7B681C8D62CBAC94D51C0 = {CreatedOnToolsVersion = 16.0; SystemCapabilities = {com.apple.Push = {enabled = 1; }; }; }; 7EC8F98B7A265120217712DE = {CreatedOnToolsVersion = 16.0; TestTargetID = 29C7B681C8D62CBAC94D51C0; }; }; }; buildConfigurationList = 12D04D787E90C9B967248BFD; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", "zh-Hant", en, Base); mainGroup = BB71755FD3C9161CB39AEB71; packageReferences = (B58130E5EB1889C6509C9C52,); productRefGroup = 5151B46607EBC8890D8DFCC2; projectDirPath = ""; projectRoot = ""; targets = (29C7B681C8D62CBAC94D51C0, 7EC8F98B7A265120217712DE,); };
+98F54143AB4E86B28C3AFEE0 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {29C7B681C8D62CBAC94D51C0 = {CreatedOnToolsVersion = 16.0; SystemCapabilities = {com.apple.Push = {enabled = 1; }; }; }; 7EC8F98B7A265120217712DE = {CreatedOnToolsVersion = 16.0; TestTargetID = 29C7B681C8D62CBAC94D51C0; }; }; }; buildConfigurationList = 12D04D787E90C9B967248BFD; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", "zh-Hant", en, fr, ru, es, ja, Base); mainGroup = BB71755FD3C9161CB39AEB71; packageReferences = (B58130E5EB1889C6509C9C52,); productRefGroup = 5151B46607EBC8890D8DFCC2; projectDirPath = ""; projectRoot = ""; targets = (29C7B681C8D62CBAC94D51C0, 7EC8F98B7A265120217712DE,); };
 9A4BA1063DD7CC4342A59126 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ChatExpressionTests.swift"; sourceTree = "<group>"; };
 9CB5BC4CE8FF8E98CCA82D02 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ComposerTests.swift"; sourceTree = "<group>"; };
 9CE26C990A12B158F6A873BB = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/GalleryTests.swift"; sourceTree = "<group>"; };
@@ -158,6 +165,7 @@ objects = {
 A024F06580C79B7582C3806A = {isa = PBXGroup; name = "Resources"; children = (4B0C59E0DF90A21D99C43493, EE53CEB8773D0E2276551BA7, 2B3E672155D2B167DC8520DE, 30C4C185D93462F9F086BDB4, 218223AE3A0E19E726A93095, 4F39645DF6C9CB582A55A166, 358860E6F28E3FBA49B510ED, EB97C4B4E3CB398436013E5C, 986CE1D116A3C6F3834EE46D, 741A6D48E7D716A831A48A9E, F930F6068E5DC4FF36477E02, 90131E718D10A1898A39D522, 6E7E80AC2C1A9CC8CBF3D7CD, BDE53D6B77273584A6FE6625,); sourceTree = "<group>"; };
 A20AED7A03BC2CA8AEADCAC4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/NotoEmojiTests.swift"; sourceTree = "<group>"; };
 A2F92F45F68E63300DF98106 = {isa = PBXBuildFile; fileRef = 971BD8F51E9F5787F8215EBC; };
+A42323678A2E13AF75BA7EBF = {isa = PBXFileReference; lastKnownFileType = text; name = "es"; path = "Nonto/Resources/es.lproj/terms.txt"; sourceTree = "<group>"; };
 A5435AB28C78CD56609E63FE = {isa = PBXBuildFile; fileRef = 39DA7DBFCE683231040B77A6; };
 A9978EC4A5E8E3F2FD76DA11 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/ChatStickerImage.swift"; sourceTree = "<group>"; };
 ABA0ABE524670BC64A89D1D9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/CommunityViews.swift"; sourceTree = "<group>"; };
@@ -168,6 +176,7 @@ B0A616E0591AB30A089162A3 = {isa = PBXFileReference; lastKnownFileType = sourceco
 B2AE51CE5B928B47A2C8D8B4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/PushDestinationView.swift"; sourceTree = "<group>"; };
 B4343C19535B18410503AED7 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CLANG_ENABLE_MODULES = "YES"; CODE_SIGN_STYLE = "Automatic"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; GENERATE_INFOPLIST_FILE = "YES"; IPHONEOS_DEPLOYMENT_TARGET = "26.0"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; PRODUCT_BUNDLE_IDENTIFIER = "online.nonto.native.tests"; PRODUCT_NAME = "NontoTests"; SDKROOT = "iphoneos"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = "NO"; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = "5.0"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nonto.app/Nonto"; TEST_TARGET_NAME = "Nonto";}; name = Release; };
 B58130E5EB1889C6509C9C52 = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/airbnb/lottie-spm.git"; requirement = {kind = exactVersion; version = 4.6.1; }; };
+B6281509B2331AC4141A821F = {isa = PBXFileReference; lastKnownFileType = text; name = "ja"; path = "Nonto/Resources/ja.lproj/community.txt"; sourceTree = "<group>"; };
 B6CDB6E5D160E013280D3C68 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nonto.app; sourceTree = BUILT_PRODUCTS_DIR; };
 B6EA626CBBB4DD6D9AA5445D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Core/ChatSticker.swift"; sourceTree = "<group>"; };
 B6F43314D0693B2B792DAE17 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (FD82AB5DD1BF6AE39AE85460, CB86F6C2D39B16BE218E2075, CE720FCEE2BE140C651BE473, D38A6CB188B32080AD70069D, BBD23C98FCB7974897EF9D0C, C0739244D3AB06C247D82706, 2D85D4561FDAA4FDCED893BE, BBE7866CB8EA8B3D8CAE067F, 85C7141818C92F333D507CE6, 33765F539F08A292E8243A2B, 9E743F2BA7078C1E50833609, 0A53696B9CA0A6E3654CCE3F, 7A94D5C643C35A0CAB34B31C, 2DED28024B3EF0CAACA7CAA0, 2E127305AEE3CDA9E5B171F1, 176A74E7B893E2CB8FB489C0, BF16B6E19AC514DE355542C2, FCFB76EC12810E0A8B94FD4F, 879FEE2D34DE09493EF470C1, 2DA720A20D66388CCF73020E, 47852831EF22151942784191,); runOnlyForDeploymentPostprocessing = 0; };
@@ -191,6 +200,7 @@ CBE98149240DFF2342EB5B03 = {isa = PBXBuildFile; fileRef = 93276CF115EF78CECCB43F
 CD439384BA24FCF7C1C5B9C1 = {isa = PBXBuildFile; fileRef = 54DE7954D41F08D50B0ADB9E; };
 CE720FCEE2BE140C651BE473 = {isa = PBXBuildFile; fileRef = 80C1A754EBA6B8B4A88D894E; };
 CE855BCAC3D7A1BD899C7736 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/UserExperienceTests.swift"; sourceTree = "<group>"; };
+CEE8CB8581BACD19056FA30E = {isa = PBXFileReference; lastKnownFileType = text; name = "fr"; path = "Nonto/Resources/fr.lproj/terms.txt"; sourceTree = "<group>"; };
 D04B4CF204AA208DE8D89D99 = {isa = PBXBuildFile; fileRef = A9978EC4A5E8E3F2FD76DA11; };
 D2F9C6ACC3CFD758A2AF1D96 = {isa = PBXTargetDependency; target = 29C7B681C8D62CBAC94D51C0; targetProxy = D36D33020B6BB89396BD1B34; };
 D36D33020B6BB89396BD1B34 = {isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 29C7B681C8D62CBAC94D51C0; remoteInfo = Nonto; };
@@ -210,6 +220,7 @@ E14A4E611FB0A1996A3F0E10 = {isa = PBXFileReference; lastKnownFileType = sourceco
 E2657B9FA91DD4A55652006F = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CLANG_ENABLE_MODULES = "YES"; CODE_SIGN_STYLE = "Automatic"; DEBUG_INFORMATION_FORMAT = "dwarf"; ENABLE_TESTABILITY = "YES"; GCC_PREPROCESSOR_DEFINITIONS = "DEBUG=1 $(inherited)"; GENERATE_INFOPLIST_FILE = "YES"; IPHONEOS_DEPLOYMENT_TARGET = "26.0"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; PRODUCT_BUNDLE_IDENTIFIER = "online.nonto.native.tests"; PRODUCT_NAME = "NontoTests"; SDKROOT = "iphoneos"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = "NO"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = "5.0"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nonto.app/Nonto"; TEST_TARGET_NAME = "Nonto";}; name = Debug; };
 E28FAD8F60ECDED9B4AD087A = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (882EDD5C0B0D4F026B2B5627, 8FD83978A02C959D5BB45DF7, 3BA13A3826CA68313F1F073B, 191BC8EF459AA76B30DF0E06, 0890E20E954776318D9ED741, AD4686CFFC1DD4470A1BEA11, 532CC7C2AF890384E5DF7998, 85B2B508ABCB02CF957EF242, 632EE71EF7399FB33BCE71C2, 74D8C09CC211705A6255693C, FA1744F2A354870764004895, 3EAD302B3C14DE6B56D8B0CA,); runOnlyForDeploymentPostprocessing = 0; };
 E48E5FD9C9A1A0862ED97FF6 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/AccentColorTests.swift"; sourceTree = "<group>"; };
+E4DD487C038C72ED37B0B662 = {isa = PBXFileReference; lastKnownFileType = text; name = "ja"; path = "Nonto/Resources/ja.lproj/terms.txt"; sourceTree = "<group>"; };
 E6702B271B51DFA6DC3E9935 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Services/ChatStickerBrowser.swift"; sourceTree = "<group>"; };
 E6BA279E625A36D703ED787E = {isa = PBXFileReference; lastKnownFileType = text; name = "en"; path = "Nonto/Resources/en.lproj/privacy.txt"; sourceTree = "<group>"; };
 E891630015A74CAA211E096F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Services/ChatStickerSender.swift"; sourceTree = "<group>"; };
@@ -219,13 +230,14 @@ EBAC7DA6E19F5F245F607934 = {isa = PBXFileReference; lastKnownFileType = sourceco
 EE53CEB8773D0E2276551BA7 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Nonto/Resources/PrivacyInfo.xcprivacy"; sourceTree = "<group>"; };
 F001BC2AF9EB5498B3360756 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C0AAFE27990BE86B010DBE4E,); runOnlyForDeploymentPostprocessing = 0; };
 F115AF690239BFBFCB7B4DE6 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (4FC9411AA4A79F290725CF1F,); runOnlyForDeploymentPostprocessing = 0; };
+F3DF0C1ABD942D3262394493 = {isa = PBXFileReference; lastKnownFileType = text; name = "ru"; path = "Nonto/Resources/ru.lproj/privacy.txt"; sourceTree = "<group>"; };
 F61C11C9C8F4556700FDCA7A = {isa = PBXBuildFile; fileRef = 83150C4A3F4115979E66D5E6; };
 F76D3B7E765D16F1DDA64F6F = {isa = PBXBuildFile; fileRef = E14A4E611FB0A1996A3F0E10; };
 F78A73DB0B234E810A7CD022 = {isa = PBXBuildFile; fileRef = BA654BD8544355F07B915C84; };
 F79EB1A4C974354846F4F858 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/zh-Hans.lproj/terms.txt"; sourceTree = "<group>"; };
 F868C652134E87F1230C4B88 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/CoreTests.swift"; sourceTree = "<group>"; };
 F8EB8C3FF60BAB7CFC24CB17 = {isa = PBXFileReference; lastKnownFileType = text; name = "zh-Hans"; path = "Nonto/Resources/zh-Hans.lproj/privacy.txt"; sourceTree = "<group>"; };
-F930F6068E5DC4FF36477E02 = {isa = PBXVariantGroup; children = (F79EB1A4C974354846F4F858, 7406C15E5E8F0DE124F0129E, 7337A8C2E0BE5C4200C621A3,); name = "terms.txt"; sourceTree = "<group>"; };
+F930F6068E5DC4FF36477E02 = {isa = PBXVariantGroup; children = (F79EB1A4C974354846F4F858, 7406C15E5E8F0DE124F0129E, 7337A8C2E0BE5C4200C621A3, CEE8CB8581BACD19056FA30E, 5123F089354DF5D45DEA046B, A42323678A2E13AF75BA7EBF, E4DD487C038C72ED37B0B662,); name = "terms.txt"; sourceTree = "<group>"; };
 FA1744F2A354870764004895 = {isa = PBXBuildFile; fileRef = F930F6068E5DC4FF36477E02; };
 FA856824ACC3C6177D56A198 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/CommentsTests.swift"; sourceTree = "<group>"; };
 FBF045C049D186289640D1ED = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nonto/Views/MessagesNavigationView.swift"; sourceTree = "<group>"; };

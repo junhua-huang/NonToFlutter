@@ -63,7 +63,7 @@ for document in ['privacy', 'terms', 'community']:
     translated_source.parent.mkdir(parents=True, exist_ok=True)
     translated_source.write_bytes(canonical.read_bytes())
     children = []
-    for language in ['zh-Hans', 'zh-Hant', 'en']:
+    for language in ['zh-Hans', 'zh-Hant', 'en', 'fr', 'ru', 'es', 'ja']:
         path = 'Nonto/Resources/' + (language + '.lproj/') + name
         children.append(add('ref:legal:' + document + ':' + language,
                             '{isa = PBXFileReference; lastKnownFileType = text; name = ' + quote(language) + '; path = ' + quote(path) + '; sourceTree = "<group>"; }'))
@@ -108,7 +108,7 @@ dependency = add('dependency:app', f'{{isa = PBXTargetDependency; target = {app_
 add('target:app', f'{{isa = PBXNativeTarget; buildConfigurationList = {app_config}; buildPhases = {array(app_phases)}; buildRules = (); dependencies = (); packageProductDependencies = ({lottie_product},); name = Nonto; productName = Nonto; productReference = {app_product}; productType = "com.apple.product-type.application"; }}')
 test_id = add('target:tests', f'{{isa = PBXNativeTarget; buildConfigurationList = {test_config}; buildPhases = {array(test_phases)}; buildRules = (); dependencies = ({dependency},); packageProductDependencies = ({lottie_product},); name = NontoTests; productName = NontoTests; productReference = {test_product}; productType = "com.apple.product-type.bundle.unit-test"; }}')
 project_config = configs('project', {'CLANG_ENABLE_OBJC_ARC': 'YES', 'CLANG_WARN_DOCUMENTATION_COMMENTS': 'YES', 'GCC_C_LANGUAGE_STANDARD': 'gnu17', 'SWIFT_STRICT_CONCURRENCY': 'targeted'})
-add('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {{{app_id} = {{CreatedOnToolsVersion = 16.0; SystemCapabilities = {{com.apple.Push = {{enabled = 1; }}; }}; }}; {test_id} = {{CreatedOnToolsVersion = 16.0; TestTargetID = {app_id}; }}; }}; }}; buildConfigurationList = {project_config}; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", "zh-Hant", en, Base); mainGroup = {main_group}; packageReferences = ({lottie_package},); productRefGroup = {ident("group:Products")}; projectDirPath = ""; projectRoot = ""; targets = ({app_id}, {test_id},); }}')
+add('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {{{app_id} = {{CreatedOnToolsVersion = 16.0; SystemCapabilities = {{com.apple.Push = {{enabled = 1; }}; }}; }}; {test_id} = {{CreatedOnToolsVersion = 16.0; TestTargetID = {app_id}; }}; }}; }}; buildConfigurationList = {project_config}; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", "zh-Hant", en, fr, ru, es, ja, Base); mainGroup = {main_group}; packageReferences = ({lottie_package},); productRefGroup = {ident("group:Products")}; projectDirPath = ""; projectRoot = ""; targets = ({app_id}, {test_id},); }}')
 PROJECT.mkdir(exist_ok=True)
 (PROJECT / 'project.pbxproj').write_text('// !$*UTF8*$!\n{\narchiveVersion = 1;\nclasses = {};\nobjectVersion = 56;\nobjects = {\n' + '\n'.join(f'{key} = {value};' for key, value in sorted(objects.items())) + f'\n}};\nrootObject = {project_id};\n}}\n')
 scheme_dir = PROJECT / 'xcshareddata/xcschemes'

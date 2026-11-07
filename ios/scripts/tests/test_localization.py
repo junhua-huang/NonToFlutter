@@ -36,3 +36,17 @@ class LocalizationValidationTests(unittest.TestCase):
         self.assertEqual(checker.arguments('%@ %lld'), checker.arguments('%2$lld %1$@'))
         self.assertNotEqual(checker.arguments('%@ %lld'), checker.arguments('%1$lld %2$@'))
         self.assertEqual(checker.arguments('25%%'), {})
+
+    def test_incomplete_russian_plurals_and_missing_japanese_policy_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            resources = Path(temporary) / 'Resources'
+            shutil.copytree(checker.RESOURCES, resources,
+                            ignore=shutil.ignore_patterns('NotoEmoji*', 'Assets.xcassets'))
+            path = resources / 'Localizable.xcstrings'
+            catalog = json.loads(path.read_text())
+            catalog['strings']['%lld 条新消息']['localizations']['ru']['variations']['plural'].pop('few')
+            path.write_text(json.dumps(catalog))
+            (resources / 'ja.lproj/privacy.txt').unlink()
+            errors = checker.inspect(resources)
+            self.assertTrue(any('ru: incomplete plural forms' in error for error in errors))
+            self.assertIn('privacy/ja: missing legal translation', errors)

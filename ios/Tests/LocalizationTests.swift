@@ -14,7 +14,11 @@ final class LocalizationTests: XCTestCase {
     func testCompiledResourcesIncludeAllLanguagesAndSystemPermissions() throws {
         for (language, hidden, block) in [("zh-Hans", "屏蔽此帖", "屏蔽此用户"),
                                           ("zh-Hant", "隱藏這則貼文", "封鎖此使用者"),
-                                          ("en", "Hide this post", "Block this user")] {
+                                          ("en", "Hide this post", "Block this user"),
+                                          ("fr", "Masquer cette publication", "Bloquer cet utilisateur"),
+                                          ("ru", "Скрыть эту публикацию", "Заблокировать этого пользователя"),
+                                          ("es", "Ocultar esta publicación", "Bloquear a este usuario"),
+                                          ("ja", "この投稿を非表示", "このユーザーをブロック")] {
             let bundle = try languageBundle(language)
             XCTAssertEqual(bundle.localizedString(forKey: "屏蔽此帖", value: nil, table: nil), hidden)
             XCTAssertEqual(bundle.localizedString(forKey: "屏蔽此用户", value: nil, table: nil), block)
@@ -22,7 +26,7 @@ final class LocalizationTests: XCTestCase {
                 let value = bundle.localizedString(forKey: key, value: nil, table: "InfoPlist")
                 XCTAssertNotEqual(value, key)
                 XCTAssertFalse(value.isEmpty)
-                if language == "en" { XCTAssertNil(value.range(of: #"\p{Han}"#, options: .regularExpression)) }
+                if ["en", "fr", "ru", "es"].contains(language) { XCTAssertNil(value.range(of: #"\p{Han}"#, options: .regularExpression)) }
             }
         }
     }
@@ -42,7 +46,7 @@ final class LocalizationTests: XCTestCase {
 
     func testPolicyTranslationAndLanguageSelectionDoNotChangeConsentRevision() throws {
         let profile = ComplianceProfile.current
-        for language in ["zh-Hans", "zh-Hant", "en"] {
+        for language in AppLanguage.supported {
             for kind in LegalDocument.allCases {
                 let url = try XCTUnwrap(Bundle.main.url(forResource: kind.rawValue, withExtension: "txt", subdirectory: nil, localization: language))
                 let template = try String(contentsOf: url, encoding: .utf8)
@@ -136,11 +140,46 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(AppLanguage.stored(in: isolated), .system)
         XCTAssertEqual(AppLanguage.system.resolvedLanguage(preferences: ["en-GB"]), "en")
         XCTAssertEqual(AppLanguage.system.resolvedLanguage(preferences: ["zh-Hant-TW"]), "zh-Hant")
+        for (preference, expected) in [("fr-CA", "fr"), ("ru-RU", "ru"), ("es-MX", "es"), ("ja-JP", "ja")] {
+            XCTAssertEqual(AppLanguage.system.resolvedLanguage(preferences: [preference]), expected)
+            let choice = try XCTUnwrap(AppLanguage(rawValue: expected))
+            isolated.set(choice.rawValue, forKey: AppLanguage.storageKey)
+            XCTAssertEqual(AppLanguage.stored(in: isolated), choice)
+            XCTAssertEqual(choice.resolvedLanguage(preferences: ["en-US"]), expected)
+        }
+        XCTAssertFalse(AppLanguage.supported.contains("ar"))
+        XCTAssertEqual(Set(AppLanguage.supported), ["zh-Hans", "zh-Hant", "en", "fr", "ru", "es", "ja"])
         let base = Locale(identifier: "zh_CN@calendar=buddhist")
         let english = AppLanguage.english.locale(base: base)
         XCTAssertEqual(english.language.languageCode?.identifier, "en")
         XCTAssertEqual(english.region, base.region)
         XCTAssertEqual(english.calendar.identifier, base.calendar.identifier)
+    }
+
+    func testNewLanguagePluralRulesAndEmojiLabels() throws {
+        let expected = [
+            "fr": ["1 nouveau message", "2 nouveaux messages", "5 nouveaux messages", "21 nouveaux messages"],
+            "ru": ["1 новое сообщение", "2 новых сообщения", "5 новых сообщений", "21 новое сообщение"],
+            "es": ["1 mensaje nuevo", "2 mensajes nuevos", "5 mensajes nuevos", "21 mensajes nuevos"],
+            "ja": ["新しいメッセージ1件", "新しいメッセージ2件", "新しいメッセージ5件", "新しいメッセージ21件"]
+        ]
+        for language in ["fr", "ru", "es", "ja"] {
+            let bundle = try languageBundle(language)
+            for (index, count) in [1, 2, 5, 21].enumerated() {
+                XCTAssertEqual(String(localized: "\(count) 条新消息", bundle: bundle, locale: Locale(identifier: language)), expected[language]?[index])
+            }
+        }
+        let defaults = UserDefaults.standard
+        let original = defaults.object(forKey: AppLanguage.storageKey)
+        defer { if let original { defaults.set(original, forKey: AppLanguage.storageKey) } else { defaults.removeObject(forKey: AppLanguage.storageKey) } }
+        let item = try XCTUnwrap(NotoEmojiCatalog.item(id: "1f600"))
+        for language in ["fr", "ru", "es", "ja"] {
+            defaults.set(language, forKey: AppLanguage.storageKey)
+            XCTAssertNotEqual(item.localizedName, item.name)
+            XCTAssertTrue(item.matches(item.localizedName))
+            XCTAssertEqual(item.id, "1f600")
+            XCTAssertNotEqual(AppLocalization.serverError("验证码无效或已过期"), "验证码无效或已过期")
+        }
     }
 
     func testRuntimePreferenceChangesImperativeCopyPoliciesAndCachedStatus() throws {
@@ -154,6 +193,10 @@ final class LocalizationTests: XCTestCase {
         let oldError = APIError(status: 0, message: AppLocalization.string("无法读取照片"))
         for (choice, title, policy) in [(AppLanguage.english, "NonTo Blue", "NonTo Privacy Policy"),
                                         (.traditionalChinese, "南圖藍", "南圖隱私政策"),
+                                        (.french, "Bleu NonTo", "Politique de confidentialité de NonTo"),
+                                        (.russian, "Синий NonTo", "Политика конфиденциальности NonTo"),
+                                        (.spanish, "Azul NonTo", "Política de privacidad de NonTo"),
+                                        (.japanese, "NonToブルー", "NonToプライバシーポリシー"),
                                         (.simplifiedChinese, "南图蓝", "南图隐私政策")] {
             defaults.set(choice.rawValue, forKey: AppLanguage.storageKey)
             XCTAssertEqual(AppAccent.blue.name, title)
@@ -191,6 +234,10 @@ final class LocalizationTests: XCTestCase {
         try await waitForLanguageUI { probe.draft == "未发送的草稿 · draft %@" }
         for (choice, title, accent) in [(AppLanguage.english, "Settings", "NonTo Blue"),
                                        (.traditionalChinese, "設置", "南圖藍"),
+                                       (.french, "Paramètres", "Bleu NonTo"),
+                                       (.russian, "Настройки", "Синий NonTo"),
+                                       (.spanish, "Ajustes", "Azul NonTo"),
+                                       (.japanese, "設定", "NonToブルー"),
                                        (.simplifiedChinese, "设置", "南图蓝")] {
             defaults.set(choice.rawValue, forKey: AppLanguage.storageKey)
             try await waitForLanguageUI {

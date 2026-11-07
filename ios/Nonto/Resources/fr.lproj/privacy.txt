@@ -1,0 +1,113 @@
+Politique de confidentialité de NonTo
+Version : {{policyVersion}}
+Mise à jour : 26 octobre 2026
+
+1. Portée et contact
+
+Cette politique s'applique aux clients iOS et iPadOS natifs NonTo et à leurs services connectés. Elle explique les finalités du traitement, les autorisations, les destinataires et vos choix. Vous pouvez lire cette politique et les conditions d'utilisation hors ligne sans vous connecter. Si vous n'acceptez pas pour l'instant, les informations hors ligne restent disponibles et les services du compte ne démarrent pas.
+
+Fournisseur de services et sous-traitant des informations personnelles : {{operatorName}}
+E-mail relatif à la confidentialité, aux réclamations et aux droits en matière de données : {{contactEmail}}
+Numéro d'enregistrement de l'application : {{appFilingNumber}}
+
+Veuillez prêter une attention particulière aux messages privés et au contenu public, aux autorisations facultatives, aux services tiers, à la conservation et à la suppression de compte, aux mineurs et aux demandes de droits sur les données. Accepter cette politique et accorder des autorisations système sont des choix distincts. L’accord n’autorise pas toutes les autorisations facultatives ou fins futures.
+
+2. Informations traitées par fonctionnalité
+
+Compte et sécurité : votre adresse e-mail, votre nom d'utilisateur, votre mot de passe et votre code de vérification d'adresse e-mail sont utilisés pour l'inscription, la connexion, la récupération du mot de passe et la sécurité du compte. Les mots de passe sont envoyés sur le réseau au serveur pour vérification. Le client stocke les jetons de connexion dans le trousseau du système. La vérification par e-mail n'est pas une vérification légale du nom réel. Les fonctionnalités du compte ne peuvent pas être utilisées sans les informations nécessaires pour s'inscrire ou se connecter.
+
+Profil : le nom d'affichage, la biographie, l'avatar et la couverture que vous avez choisis vous identifient dans les interactions et apparaissent sur votre profil. Corrigez-les dans Modifier le profil. Dans les paramètres de confidentialité, gérez la visibilité du profil, l'affichage des e-mails, la possibilité de recherche et qui peut envoyer des demandes d'amis. Ne mettez pas les informations de contact que vous souhaitez garder privées dans un profil public.
+
+Contenu et fonctionnalités sociales : les publications, les commentaires, les messages privés et communautaires, les images et vidéos sélectionnées, ainsi que les enregistrements d'amitié, de suivi, de like et d'interaction sont utilisés pour stocker, transmettre et afficher du contenu, entretenir des relations et mettre à jour le statut non lu. La messagerie traite également les conversations, les expéditeurs, les destinataires, les heures d'envoi et de livraison, l'état de lecture ou de rappel. Les messages privés sont traités et stockés par le serveur. Cette version ne fournit pas de garantie de chiffrement de bout en bout.
+
+Recherche et flux : les termes de recherche et le type de recherche sont envoyés au serveur pour renvoyer les résultats et peuvent être enregistrés dans l'historique de recherche de votre compte. Effacer l’historique de recherche dans Explore ; cela ne supprime pas les journaux de sécurité nécessaires. L'écran d'accueil natif propose actuellement Dernières et Pour vous, sans flux de recommandations. Dernières commandes publiées par heure de publication. Pour vous, collecte les publications liées à vos notifications, commentaires et likes, les plus récentes en premier. Le changement de flux ne supprime pas les interactions existantes ni les enregistrements de visualisation. Contactez l'e-mail dans cette politique pour une explication ou pour faire une demande concernant le traitement.
+
+Demandes de vérification : les rôles, les liens professionnels, les coordonnées et les documents justificatifs que vous choisissez de soumettre sont utilisés pour examiner les candidatures et afficher les qualifications. Les coordonnées peuvent inclure un numéro de téléphone que vous fournissez. La vérification du rôle ou du créateur ne constitue pas automatiquement une vérification légale du nom réel. Expurgez les numéros d’identité et les adresses sans rapport. Ne soumettez pas de documents d’identité, de cartes bancaires, de dossiers médicaux ou d’informations sensibles d’autrui sans rapport. Si des informations sensibles sont nécessaires, leur nécessité et leur impact doivent être expliqués séparément et l'autorisation requise doit être obtenue. Un seul accord politique ne peut pas remplacer ce processus.
+
+Rapports et assistance : les raisons de votre rapport, les identifiants d'utilisateur, de publication, de commentaire ou de message pertinents, ainsi que les explications, captures d'écran et coordonnées que vous envoyez par e-mail sont utilisés pour localiser les problèmes, enquêter, répondre et traiter les demandes de droits sur les données. Les rapports peuvent inclure des extraits de chat que vous choisissez de soumettre. Fournissez uniquement du matériel pertinent et n’envoyez pas de mots de passe ou de codes de vérification.
+
+Accès au service : les fournisseurs de réseau et de ressources reçoivent l'adresse IP et demandent les informations nécessaires aux connexions. Le chargement d'images, de vidéos et de pages distantes génère également des demandes de ressources. Les journaux d'accès et de sécurité sont utilisés pour connecter les services, limiter les abus, dépanner et traiter les plaintes. Voir la section 7 pour la conservation et la suppression.
+
+3. Autorisations du système et capacités du périphérique
+
+Photos et vidéos : vous choisissez les éléments via le sélecteur de photos du système Apple. Le client lit les éléments sélectionnés pour les prévisualiser et les télécharger, sans demander l'accès à l'intégralité de votre photothèque. L'annulation n'affecte pas les fonctionnalités du texte. Ce n'est que lorsque vous choisissez Enregistrer l'image que le client demande l'autorisation d'ajouter uniquement des photos pour enregistrer l'image actuelle. Le refuser n’affecte pas la visualisation des images ou le chat. Les photos sont redimensionnées et réencodées au format JPEG avant le téléchargement. Les vidéos sont lues et téléchargées à partir du fichier sélectionné. Les vidéos et autres fichiers peuvent contenir l'heure de création, l'emplacement ou d'autres propriétés de fichier. Vérifiez et supprimez les informations que vous ne souhaitez pas partager avant de les envoyer.
+
+Caméra : l'autorisation de la caméra est demandée uniquement lorsque vous choisissez la caméra dans le menu des pièces jointes du chat. Les photos sont prises via l’interface de l’appareil photo du système Apple. Le résultat est redimensionné, réencodé au format JPEG et placé dans l'aperçu d'envoi. Il n'est téléchargé qu'après confirmation de l'envoi. Il n’est pas automatiquement enregistré dans Photos. L'audio n'est pas collecté et l'enregistrement continu n'est pas effectué. Refuser ou retirer l'autorisation de l'appareil photo n'affecte pas la sélection de photos ou les messages texte. Gérez l'autorisation dans les paramètres iOS.
+
+Notifications : après avoir accepté cette politique, connectez-vous avec succès et accédez à l'application principale. Le client demande l'autorisation de notification si vous n'avez pas encore fait de choix de notification système. Les notifications fournissent des alertes de message et d'interaction. Vous pouvez également les activer ou les tester dans les préférences de notification. Après le refus, l'application ne demande pas à plusieurs reprises l'autorisation du système ; utilisez le lien Paramètres pour le modifier dans les paramètres iOS. Vous pouvez toujours utiliser votre compte et vos services de chat après avoir refusé, mais vous ne recevrez pas ces alertes système. L'octroi de l'autorisation système ne remplace pas les préférences push ou d'alerte désactivées dans votre compte. Gérez les autorisations, les push, les alertes de message et les sons dans Paramètres iOS → Notifications → NonTo et Paramètres → Préférences de notification de l'application.
+
+Presse-papiers et partage : Les messages sélectionnés sont écrits dans le presse-papiers uniquement lorsque vous choisissez Copier. Le contenu existant du presse-papiers n’est pas lu de manière proactive. Vous choisissez la destination dans la feuille de partage système. Les destinataires peuvent recevoir le contenu ou le lien partagé ; le partage d'un lien ne modifie pas automatiquement les autorisations du contenu original. Les sites Web et applications externes traitent l’accès selon leurs propres règles après leur ouverture.
+
+Autres fonctionnalités : l'accès au réseau est utilisé pour la connexion, le chargement, les téléchargements et la synchronisation des messages. Cela ne dépend pas de l'autorisation de photo ou de notification.
+
+Déclaration d'âge : Lors de la première utilisation, la tranche d'âge choisie et la confirmation nécessaire du consentement du tuteur sont enregistrées sur cet appareil pour contrôler l'accès aux services de compte natifs. La date de naissance et les documents d'identité ne sont pas collectés ici. Voir la section 10 pour connaître la portée.
+
+La version native actuelle ne demande pas d'accès aux contacts, à la localisation ou au microphone et n'intègre pas de suivi publicitaire, d'analyse tierce, de paiement ou de SDK de connexion tiers. La saisie manuelle d'un emplacement d'événement ne lit pas l'emplacement de l'appareil. Les nouvelles autorisations ou objectifs nécessitent d’abord des informations mises à jour et l’autorisation requise par la loi.
+
+4. Messages et notifications push
+
+Lorsque les notifications push sont activées, le client envoie au serveur NonTo un jeton push Apple, un identifiant d'installation aléatoire et des informations d'identification de vérification de liaison, le type d'appareil, la version de l'application et l'état de premier plan/arrière-plan. Le serveur les lie au compte actuel pour le routage des messages, les mises à jour d'état et la dissociation. L'identifiant d'installation aléatoire n'est ni un identifiant publicitaire ni un numéro de série matériel.
+
+Les notifications à distance sont envoyées via le service Apple Push Notification (APN). Les charges utiles actuelles utilisent des alertes génériques sans texte de message privé ni nom d'affichage de l'expéditeur, mais contiennent des ID de routage pour le compte du destinataire, la notification, le message et le contenu associé, ainsi que les identifiants de déduplication. Même des alertes génériques peuvent révéler l’utilisation d’une application. Ajustez les aperçus dans les paramètres du système. Les APN traitent les identifiants push et les informations nécessaires à la livraison. Voir la section 5 pour les informations de traitement par Apple et la section 7 pour les régions et les accords associés.
+
+Lorsque vous désactivez le push ou la déconnexion, le client tente de dissocier l'appareil. Si le réseau n'est pas disponible, la dissociation en attente est enregistrée et réessayée ultérieurement. Désactivez les notifications système pour arrêter immédiatement les alertes sur cet appareil. La désactivation des notifications ou la déconnexion ne supprime pas les messages envoyés ni le compte du serveur.
+
+5. Services tiers et divulgation
+
+Ne pas intégrer de SDK professionnels tiers ne signifie pas qu’aucun fournisseur de services ne traite les informations. Les capacités du système, les médias, les services de messagerie et d'hébergement traitent les informations nécessaires à leurs fonctions, comme détaillé ci-dessous.
+
+{{processorSummary}}
+
+Le traitement confié doit être limité à ses finalités et régi par des garanties convenues. La fourniture d’informations à des sous-traitants indépendants, leur divulgation publique ou la modification de leurs objectifs nécessitent des procédures de notification, d’autorisation et de protection applicables. Les circonstances statutaires sont régies par la loi. Cet accord ne constitue pas une autorisation générale de fournir des informations à des tiers arbitraires.
+
+6. Contenu public et informations d’autrui
+
+D'autres personnes peuvent consulter, copier ou transférer des profils publics, des publications, des commentaires et du contenu de la communauté. Le contenu réservé aux amis et les messages privés peuvent également être capturés ou redistribués par les destinataires. La modification de la visibilité, le blocage, la suppression ou le rappel ne peuvent garantir la suppression des copies déjà obtenues.
+
+Obtenez l’autorisation nécessaire avant de publier les photos, les coordonnées, les œuvres ou les captures d’écran de discussions d’autres personnes. Évitez d’exposer la vie privée des autres ou des mineurs. Signalez une exposition ou une infraction à l'aide des outils de rapport ou de l'e-mail contenu dans cette politique, avec les liens, les identifiants et les détails nécessaires. Les enquêtes et les actions doivent rester dans la portée nécessaire sans exposer davantage les informations personnelles impliquées.
+
+7. Stockage, conservation et suppression
+
+Sur cet appareil : les jetons de connexion et les informations d'identification de vérification de liaison push sont stockés dans le trousseau. Les préférences, les versions et heures de consentement, les brouillons de texte du compte, la boîte d'envoi et la progression de la synchronisation des messages sont stockés localement. Les caches de contenu sont séparés par compte dans le répertoire de cache et les caches de fichiers utilisent la protection des fichiers iOS. Le système peut récupérer les caches, ils ne doivent donc pas constituer votre seule sauvegarde. Les brouillons de publication conservent le texte, l’audience, l’identité affichée et les photos ou vidéos sélectionnées. Les brouillons multimédias sont stockés par compte dans le répertoire de support de l'application, utilisent la protection des fichiers iOS et sont exclus des sauvegardes du système. Ils ne sont téléchargés que lorsque vous confirmez la publication. La réouverture du même compositeur peut les restaurer. Les brouillons pertinents sont effacés après une publication réussie, une suppression explicite ou une suppression de compte. N'utilisez pas les brouillons locaux comme seule sauvegarde.
+
+Effacer le cache local efface le contenu et les caches réseau, pas les brouillons, la boîte d'envoi, le trousseau ou les données du serveur. La déconnexion n'entraîne pas la suppression du compte, et les brouillons peuvent revenir lorsque le même compte se reconnecte. Une fois que le serveur a confirmé la suppression du compte, le client efface les brouillons, la file d'attente, la progression de la synchronisation et les caches de ce compte. Les informations d’identification d’installation et les tentatives en attente nécessaires à la dissociation push peuvent rester. Les sauvegardes du système, les copies sur d'autres appareils et le trousseau ne doivent pas être supposés avoir été entièrement supprimés par la désinstallation ou une opération de nettoyage.
+
+Emplacements de stockage réels des bases de données du serveur, des supports et des sauvegardes, et éventuels traitements transfrontaliers :
+{{storageSummary}}
+
+Conservation des comptes, contenus, messages, journaux multimédias et de sécurité, délais de suppression des comptes, conservation légale et suppression des sauvegardes :
+{{retentionSummary}}
+
+Le serveur NonTo gère les demandes de suppression de compte. La portée et le calendrier des comptes, du contenu associé, des médias et des sauvegardes suivent les règles ci-dessus. La suppression du compte ne supprime pas les copies enregistrées indépendamment par les destinataires. Contactez l'e-mail dans cette politique pour poser des questions sur des enregistrements spécifiques ou demander la suppression. Les informations conservées en vertu de la loi sont limitées à la finalité et à la durée pertinentes et sont supprimées ou anonymisées à la fin de cette période. Les informations personnelles doivent être traitées et les utilisateurs informés comme l'exige la loi lorsque le service s'arrête.
+
+8. Sécurité et réponse aux incidents
+
+Les connexions API et temps réel utilisent HTTPS/WSS par défaut. Les informations d'identification sont transmises dans les en-têtes de requête ou dans les trames d'authentification de connexion, évitant ainsi leur inclusion directe dans les URL de requête. Le client n'implémente pas de chiffrement de bout en bout. Les fichiers locaux utilisent la protection des fichiers système. La protection locale et le chiffrement du transport ne peuvent pas éliminer les risques tels que le vol d'appareils, la redistribution par les destinataires ou les attaques de serveur.
+
+Protégez les informations de déverrouillage de votre appareil et ne partagez pas de mots de passe ou de codes de vérification. Vérifiez les brouillons et les paramètres de notification après vous être déconnecté sur un appareil partagé. Si vous soupçonnez un vol de compte ou une exposition d'informations, modifiez votre mot de passe et contactez l'assistance par e-mail. Les incidents de sécurité des informations personnelles nécessitent des mesures correctives et une notification aux personnes et autorités concernées, le cas échéant. Cette politique ne dispense pas des responsabilités statutaires.
+
+9. Choix et demandes de droits sur les données
+
+Accès et correction : gérez les informations de votre profil, modifiez votre profil et les pages de contenu pertinentes. Les paramètres de confidentialité contrôlent votre profil, l'audience des publications par défaut, l'affichage des e-mails, la recherche et les demandes d'amis. Vérifiez séparément l’audience du contenu précédemment publié. Le refus des autorisations de photo ou de notification affecte uniquement les fonctionnalités facultatives correspondantes.
+
+Retirer le consentement : choisissez Paramètres → Informations personnelles et autorisations → Retirer le consentement et vous déconnecter. Le client arrête les services de compte courant et revient aux informations hors ligne. Le retrait ne constitue pas une suppression de compte et n’affecte pas le traitement licite avant le retrait. Toute conservation continue sur une autre base légale doit être motivée et ne peut pas poursuivre des utilisations indépendantes pour lesquelles l'autorisation a été retirée.
+
+Supprimer le compte : Dans Paramètres → Supprimer le compte, lisez les informations, saisissez le mot de confirmation affiché et confirmez à nouveau pour postuler au serveur. Success vous déconnecte et efface les données locales pertinentes. Un échec affiche une erreur. Appuyer sur un bouton ou sur un délai d'expiration du réseau ne signifie pas que la suppression est terminée. La suppression ne peut pas être annulée ; enregistrez d’abord les informations que vous êtes légalement autorisé à conserver. Voir la section 7 pour la gestion du serveur et les limitations actuelles.
+
+Pour accéder, copier, compléter, corriger ou supprimer des informations, obtenir des explications sur les règles ou soulever des objections, envoyez un e-mail à {{contactEmail}}. Incluez « Demande de données personnelles », l'adresse e-mail de votre compte ou votre identifiant utilisateur, la demande spécifique et la portée des données. Dans Paramètres → Contact et réclamations, choisissez un type de demande, préparez les détails et ouvrez l'e-mail, ou copiez l'adresse et envoyez-la vous-même. Cette page ne télécharge pas automatiquement les brouillons, les discussions ou les informations de compte. L'ouverture d'un email ne signifie pas que l'envoi a réussi. Une vérification d’identité proportionnée peut être nécessaire et les agents doivent obtenir une autorisation appropriée. Ne fournissez pas directement des mots de passe, des codes de vérification ou des documents d’identité complets sans rapport. Si une demande ne peut être satisfaite, les raisons et les voies d’appel ou de plainte doivent être fournies. Cela n'affecte pas votre droit de contacter les autorités compétentes en vertu de la loi.
+
+Modalités particulières d'acceptation, de vérification, de délais de réponse et d'examen des objections :
+{{rightsResponseSummary}}
+
+10. Protection des mineurs
+
+Les mineurs doivent comprendre cette politique avec un tuteur et être prudents quant à la divulgation des écoles, des adresses, des photos et des coordonnées. Le traitement des informations sur les enfants de moins de 14 ans nécessite le consentement du tuteur, des règles dédiées et les garanties nécessaires. Un accord de politique ordinaire, une vérification par courrier électronique ou une case à cocher concernant l'âge ne peuvent pas remplacer ces mécanismes.
+
+Demandes d’éligibilité en matière d’âge, de consentement du tuteur, d’informations sur les enfants et de droits en matière de données du tuteur : 
+{{minorProtectionSummary}}
+
+Ne soumettez pas d’informations sensibles sans rapport sur des mineurs via du contenu public, des chats ou des documents de vérification. Les tuteurs qui découvrent un traitement sans autorisation appropriée peuvent contacter l'adresse e-mail contenue dans cette politique pour obtenir des droits de suppression ou d'autres droits, en fournissant uniquement le minimum d'informations nécessaires pour localiser le problème.
+
+11. Mises à jour et accès
+
+Lisez cette politique lors de la première utilisation, sur la page de connexion ou dans Paramètres → Politique de confidentialité. Utilisez son contenu pour parcourir les sections ou la feuille de partage système pour enregistrer le texte intégral. La page de politique renvoie également aux conditions d'utilisation, aux directives de la communauté et aux outils de contact. Le client enregistre la version et l’heure du consentement localement. Les modifications apportées aux politiques, aux conditions, aux règles de communauté ou à la configuration de fonctionnement entraînent une autre présentation avant la reprise des services de compte. Les changements importants doivent être clairement expliqués. Refuser une nouvelle version permet toujours la lecture hors ligne. L'utilisation continue ne remplace pas le renouvellement du consentement lorsque la loi l'exige.

@@ -1,0 +1,53 @@
+Normas de la comunidad de NonTo
+Versión: {{policyVersion}}
+Actualizado: 22 de octubre de 2026
+
+1. Alcance y contacto
+
+Estas pautas se aplican a los avatares, nombres para mostrar, biografías, publicaciones, comentarios, imágenes, videos, mensajes privados, mensajes de la comunidad e información de eventos de NonTo. Operador: {{operatorName}}. Informes, quejas y apelaciones correo electrónico: {{contactEmail}}.
+
+Junto con los Términos de servicio y la Política de privacidad, estas pautas explican las reglas de uso. Un acuerdo único no amplía el uso de datos ni renuncia a las obligaciones legales del proveedor. La denuncia de suministros conduce a posibles infracciones; no significa que se haya tomado una decisión. Consulte la Política de Privacidad para conocer las disposiciones de aceptación y respuesta.
+
+2. Privacidad y límites personales
+
+No publique direcciones, documentos de identidad, datos de contacto, fotografías privadas o capturas de pantalla del chat de otras personas sin la autorización necesaria. La información pública no justifica el doxxing, el acoso, las amenazas, la extorsión o la exposición maliciosa.
+
+No acosar, acosar sexualmente, insultar, intimidar o incitar al odio repetidamente contra personas o grupos. Cuando alguien rechaza comunicarse, lo elimina como amigo o lo bloquea, no eluda esa elección a través de nuevas cuentas, comunidades u otros canales. Las críticas razonables y los desacuerdos comunes no deben considerarse automáticamente violaciones.
+
+3. Contenidos y conductas prohibidos
+
+No publique ni distribuya información prohibida por las leyes y regulaciones aplicables, incluido contenido que involucre amenazas a la seguridad nacional, terrorismo, pornografía, explotación sexual infantil, fraude, juegos de azar, transacciones ilegales o incitación a delitos violentos. No proporcione enlaces de phishing, malware, instrucciones de robo de cuentas o materiales para robar contraseñas o códigos de verificación.
+
+No se haga pasar por otros, organismos oficiales o personal de apoyo para engañar. No envíe spam, infle métricas de manera fraudulenta, manipule interacciones, ataque servicios ni eluda permisos de acceso. No invente hechos para dañar la reputación ni utilice informes maliciosos o pruebas falsas para excluir a otros usuarios.
+
+No cargues obras que no tengas derecho a distribuir. Verifique los derechos y la autorización antes de citar, volver a publicar o publicar imágenes o materiales de eventos de otros. La atribución no reemplaza automáticamente el permiso. Estas reglas se aplican igualmente a imágenes, vídeos y texto.
+
+4. Denuncias, bloqueos y quejas
+
+Informe problemas a través de las herramientas de publicación, comentario, perfil de usuario o mensajes de chat relevantes. Bloquee cuentas de perfiles de usuario y adminístrelas en Configuración → Lista de bloqueados. Bloquear, eliminar o recuperar no puede eliminar copias que la otra persona guardó previamente ni evitar el contacto fuera del servicio.
+
+Incluya el asunto, ID del contenido o enlace, hora, motivos y evidencia necesaria. Los informes del chat pueden afectar al remitente. Mantenga los ID de mensajes relevantes y los extractos necesarios en su descripción. No reenvíe conversaciones enteras no relacionadas ni exponga información privada de otras personas para denunciarlas.
+
+Para quejas por infracción, envíe un correo electrónico con los datos de contacto del titular de los derechos o del agente, la prueba necesaria de derechos, la ubicación de la presunta infracción y su solicitud específica. Prepáralo en Ajustes → Contacto y quejas, consulta el destinatario y envíalo tú mismo. Los borradores locales no se cargan automáticamente. No envíe contraseñas, códigos de verificación ni documentos de identidad completos no relacionados.
+
+5. Principios y registros de moderación
+
+Las decisiones deben basarse en hechos, leyes y reglas públicas, considerando la naturaleza y el impacto del contenido, el comportamiento repetido y el riesgo. Medidas como limitar la visibilidad, eliminar, restringir funciones o suspender cuentas deben ser proporcionadas. Los recuentos de informes por sí solos no establecen una infracción. Los registros relacionados con investigaciones o deberes estatutarios podrán conservarse cuando sea necesario, con acceso y uso limitados.
+
+Los riesgos urgentes deben abordarse con prontitud. A menos que la notificación esté legalmente prohibida, los usuarios afectados deben recibir los motivos y los canales de apelación cuando corresponda. Vea el estado y los comentarios proporcionados por el servidor en Configuración → Información personal y permisos → Historial de informes. Pendiente no significa que la investigación esté terminada. Resuelto no garantiza que se hayan eliminado las copias fuera del servicio.
+
+6. Apelaciones y revisión
+
+Si cree que el contenido, una cuenta o el resultado de un informe se manejaron incorrectamente, envíe un correo electrónico a {{contactEmail}} con la cuenta, el contenido o el ID del informe correspondiente, el resultado original, los motivos de la revisión y evidencia adicional. Elija Recurrir una decisión en Contacto y quejas para preparar el texto. Proporcione sólo material relevante para revisar. Los controles de identidad necesarios deben ser proporcionales a la solicitud.
+
+Las apelaciones deben revisarse en función de los hechos. Las apelaciones razonables y el ejercicio de los derechos de información personal no deben dar lugar a represalias o medidas ampliadas. Consulte la Política de Privacidad para aceptación, verificación, respuesta y manejo de objeciones. Conserve los correos electrónicos originales y las identificaciones relevantes cuando apele por correo electrónico para ayudar a una mayor comunicación.
+
+7. Menores y seguridad fuera de línea
+
+No utilice funciones sociales, mensajes privados, información de trabajos o eventos para inducir a menores a revelar información privada, realizar pagos o unirse a actividades inapropiadas. Informar problemas de seguridad o privacidad que involucren a menores a través de herramientas de informes o el correo electrónico de contacto. Envíe sólo la información necesaria para localizar el problema. Consulte la Política de privacidad para conocer las reglas de protección de edad y tutores. Estas pautas no reemplazan las salvaguardas requeridas.
+
+Antes de asistir a eventos fuera de línea, verifique el organizador, la ubicación y las medidas de seguridad. Tenga cuidado al pagar a extraños o proporcionar documentos de identidad. Los eventos publicados por el usuario no significan que NonTo garantice su autenticidad ni exima de las obligaciones legales de gestión del proveedor. En caso de peligro personal u otras emergencias, comuníquese directamente con las autoridades locales correspondientes. Los informes dentro de la aplicación no reemplazan la asistencia de emergencia.
+
+8. Acceso y actualizaciones
+
+Lea estas pautas sin conexión en las páginas de información de primer uso, Configuración y políticas, y guárdelas compartiendo el sistema. Los cambios significativos en las reglas deben comunicarse claramente. Cuando la ley exija renovar el consentimiento, ofrecer la libre elección; el silencio o el uso continuado no deben sustituirlo. La lectura sin conexión permanece disponible si no está de acuerdo. Lea también la Política de privacidad y los Términos de servicio para conocer las reglas de manejo de datos y eliminación de cuentas.

@@ -15,7 +15,7 @@ jobs:
   build-and-test:
     if: ${{ !contains(github.event.head_commit.message, '[skip-tests]') }}
     runs-on: xcode-27
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       NATIVE_CONFIGURATION: ${{ (contains(github.event.head_commit.message, '[appstore-upload]') || contains(github.event.head_commit.message, '[appstore-release]')) && 'Release' || 'Debug' }}
     steps:
@@ -61,10 +61,10 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/Localization-zh-Hans.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test | tee build-localization-zh-Hans.log
-      - name: Verify English and Traditional Chinese on iOS 27
+      - name: Verify all additional languages on iOS 27
         run: |
           set -o pipefail
-          for language in en zh-Hant; do
+          for language in en zh-Hant fr ru es ja; do
             xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath "build/Localization-$language.xcresult" CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage "$language" -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test-without-building | tee "build-localization-$language.log"
             xcrun xcresulttool export attachments --path "build/Localization-$language.xcresult" --output-path "build/LayoutSnapshots-$language"
           done
@@ -91,6 +91,10 @@ jobs:
             build/LayoutSnapshots
             build/LayoutSnapshots-en
             build/LayoutSnapshots-zh-Hant
+            build/LayoutSnapshots-fr
+            build/LayoutSnapshots-ru
+            build/LayoutSnapshots-es
+            build/LayoutSnapshots-ja
           if-no-files-found: warn
           retention-days: 7
       - name: Capture native login screen
