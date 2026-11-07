@@ -1514,25 +1514,25 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "14-17"
+            "value": "14–17 ans"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "14–17"
+            "value": "14–17 лет"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "14-17"
+            "value": "De 14 a 17 años"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "14–17"
+            "value": "14～17歳"
           }
         }
       }
@@ -1754,7 +1754,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Smileys et émotion"
+            "value": "Smileys et émotions"
           }
         },
         "ru": {
@@ -1766,13 +1766,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Emoticonos y emoción"
+            "value": "Caras y emociones"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "スマイリーと感情"
+            "value": "表情と感情"
           }
         }
       }
@@ -1802,7 +1802,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les gens et les gestes"
+            "value": "Personnes et gestes"
           }
         },
         "ru": {
@@ -1820,7 +1820,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "人々とジェスチャー"
+            "value": "人物とジェスチャー"
           }
         }
       }
@@ -1862,7 +1862,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "animales y naturaleza"
+            "value": "Animales y naturaleza"
           }
         },
         "ja": {
@@ -1898,7 +1898,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nourriture et boisson"
+            "value": "Nourriture et boissons"
           }
         },
         "ru": {
@@ -1910,13 +1910,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "comida y bebida"
+            "value": "Comida y bebida"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "飲食"
+            "value": "食べ物と飲み物"
           }
         }
       }
@@ -1946,7 +1946,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activités et célébrations"
+            "value": "Activités et fêtes"
           }
         },
         "ru": {
@@ -1964,7 +1964,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アクティビティとお祝い"
+            "value": "活動とお祝い"
           }
         }
       }
@@ -2048,7 +2048,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Объекты"
+            "value": "Предметы"
           }
         },
         "es": {
@@ -2060,7 +2060,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "オブジェクト"
+            "value": "物"
           }
         }
       }
@@ -2156,7 +2156,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "フラグ"
+            "value": "旗"
           }
         }
       }
@@ -2186,25 +2186,25 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Récemment utilisé"
+            "value": "Récemment utilisés"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Недавно использовано"
+            "value": "Недавно использованные"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usado recientemente"
+            "value": "Usados recientemente"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "最近使用した"
+            "value": "最近使った項目"
           }
         }
       }
@@ -7568,13 +7568,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Добавлять"
+            "value": "Добавить"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Agregar"
+            "value": "Añadir"
           }
         },
         "ja": {
@@ -21614,25 +21614,25 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Personnes"
+            "value": "Utilisateurs"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Люди"
+            "value": "Пользователи"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gente"
+            "value": "Usuarios"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "人々"
+            "value": "ユーザー"
           }
         }
       }
@@ -28124,13 +28124,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publique"
+            "value": "Public"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Общественный"
+            "value": "Открыто"
           }
         },
         "es": {
@@ -28142,7 +28142,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "公共"
+            "value": "公開"
           }
         }
       }
@@ -28172,19 +28172,19 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Amis seulement"
+            "value": "Amis uniquement"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Только друзья"
+            "value": "Только друзьям"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "solo amigos"
+            "value": "Solo amigos"
           }
         },
         "ja": {
@@ -34844,25 +34844,25 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seulement moi"
+            "value": "Moi uniquement"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Только я"
+            "value": "Только мне"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "solo yo"
+            "value": "Solo yo"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "私だけ"
+            "value": "自分のみ"
           }
         }
       }
@@ -35042,7 +35042,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Каждый"
+            "value": "Все"
           }
         },
         "es": {
@@ -35054,7 +35054,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "みんな"
+            "value": "全員"
           }
         }
       }
@@ -35138,7 +35138,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Никто"
+            "value": "Никому"
           }
         },
         "es": {
@@ -35150,7 +35150,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "誰も"
+            "value": "許可しない"
           }
         }
       }
@@ -36668,13 +36668,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messages"
+            "value": "Publications"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сообщения"
+            "value": "Публикации"
           }
         },
         "es": {
