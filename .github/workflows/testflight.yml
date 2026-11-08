@@ -94,7 +94,7 @@ jobs:
     needs: verify
     if: needs.verify.outputs.configured == 'true'
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 80
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

@@ -40,7 +40,7 @@ def main():
     request = Request('https://api.github.com/repos/' + repository + '/actions/runs?head_sha=' + commit + '&per_page=100',
                       headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
     opener = build_opener(NoRedirect())
-    deadline, previous = time.monotonic() + 1200, None
+    deadline, previous = time.monotonic() + 2700, None
     while time.monotonic() < deadline:
         try:
             with opener.open(request, timeout=20) as response:
