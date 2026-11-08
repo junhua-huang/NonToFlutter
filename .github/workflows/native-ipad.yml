@@ -21,7 +21,7 @@ jobs:
           - version: '27'
             runner: xcode-27
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 50
     env:
       IPAD_OS: ${{ matrix.version }}
     steps:
@@ -54,6 +54,8 @@ jobs:
         run: |
           python3 ios/scripts/generate_project.py
           git diff --exit-code -- ios/Nonto.xcodeproj
+      - name: Prepare the simulator input environment
+        run: python3 .github/scripts/prepare_simulator.py
       - name: Verify iPad Release layouts, resizing and keyboard
         run: |
           set -o pipefail

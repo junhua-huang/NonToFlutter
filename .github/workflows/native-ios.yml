@@ -15,7 +15,7 @@ jobs:
   build-and-test:
     if: ${{ !contains(github.event.head_commit.message, '[skip-tests]') }}
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 55
     env:
       NATIVE_CONFIGURATION: ${{ (contains(github.event.head_commit.message, '[appstore-upload]') || contains(github.event.head_commit.message, '[appstore-release]')) && 'Release' || 'Debug' }}
     steps:
@@ -55,19 +55,12 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write('SIMULATOR_UDID=' + phones[0]['udid'] + '\n')
           PY
-      - name: Enable software keyboard for interaction checks
-        run: defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
+      - name: Prepare the simulator input environment
+        run: python3 .github/scripts/prepare_simulator.py
       - name: Build and verify bundled translations
         run: |
           set -o pipefail
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/Localization-zh-Hans.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test | tee build-localization-zh-Hans.log
-      - name: Verify all additional languages on iOS 27
-        run: |
-          set -o pipefail
-          for language in en zh-Hant fr ru es ja; do
-            xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath "build/Localization-$language.xcresult" CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage "$language" -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test-without-building | tee "build-localization-$language.log"
-            xcrun xcresulttool export attachments --path "build/Localization-$language.xcresult" --output-path "build/LayoutSnapshots-$language"
-          done
       - name: Run complete native regression
         run: |
           set -o pipefail
@@ -79,6 +72,15 @@ jobs:
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/ReleaseStartup -resultBundlePath build/ReleaseStartup.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -only-testing:NontoTests/LayoutSnapshotTests -only-testing:NontoTests/InteractionTests -only-testing:NontoTests/ChatExperienceTests -only-testing:NontoTests/StateTests -only-testing:NontoTests/CommentsTests -only-testing:NontoTests/FriendsAndMessagesTests -testLanguage zh-Hans -testRegion CN -parallel-testing-enabled NO test | tee build-release-startup.log
       - name: Build for iPhone
         run: xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/Device CODE_SIGNING_ALLOWED=NO build
+      # Run input-dependent regressions before repeatedly relaunching the app in
+      # different languages, which can leave the simulator keyboard service stale.
+      - name: Verify all additional languages on iOS 27
+        run: |
+          set -o pipefail
+          for language in en zh-Hant fr ru es ja; do
+            xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath "build/Localization-$language.xcresult" CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage "$language" -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test-without-building | tee "build-localization-$language.log"
+            xcrun xcresulttool export attachments --path "build/Localization-$language.xcresult" --output-path "build/LayoutSnapshots-$language"
+          done
       - name: Export layout review screenshots
         if: always()
         run: xcrun xcresulttool export attachments --path build/NontoTests.xcresult --output-path build/LayoutSnapshots
