@@ -155,7 +155,7 @@ jobs:
           security list-keychains -d user -s "$TF_KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
       - name: Archive production-APNs distribution build
         run: |
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Nonto.xcarchive" DEVELOPMENT_TEAM=B2Y3564MKK CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$TF_SIGNING_IDENTITY" PROVISIONING_PROFILE_SPECIFIER="$TF_PROFILE_UUID" CURRENT_PROJECT_VERSION="$TF_BUILD_NUMBER" APNS_ENVIRONMENT=production NONTO_DISTRIBUTION_CHANNEL="$NONTO_RELEASE_CHANNEL" archive
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Nonto.xcarchive" DEVELOPMENT_TEAM=B2Y3564MKK CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$TF_SIGNING_IDENTITY" NONTO_PROVISIONING_PROFILE_SPECIFIER="$TF_PROFILE_UUID" CURRENT_PROJECT_VERSION="$TF_BUILD_NUMBER" APNS_ENVIRONMENT=production NONTO_DISTRIBUTION_CHANNEL="$NONTO_RELEASE_CHANNEL" archive
           python3 ios/scripts/testflight.py verify --archive "$RUNNER_TEMP/Nonto.xcarchive" --channel "$NONTO_RELEASE_CHANNEL"
       - name: Upload the selected distribution audience to App Store Connect
         run: |

@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
+import shlex
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -25,6 +27,25 @@ spec.loader.exec_module(tf)
 
 
 class TestFlightChecks(unittest.TestCase):
+    def test_archive_profile_is_scoped_to_app_not_swift_package_bundles(self):
+        root = Path(__file__).resolve().parents[3]
+        project = (root / 'ios/Nonto.xcodeproj/project.pbxproj').read_text()
+        configs = re.findall(r'isa = XCBuildConfiguration; buildSettings = \{(.*?)\}; name =', project)
+        app_configs = [config for config in configs if 'online.nonto.native"' in config]
+        self.assertEqual(len(app_configs), 2)
+        profile = 'PROVISIONING_PROFILE_SPECIFIER = "$(NONTO_PROVISIONING_PROFILE_SPECIFIER)";'
+        for config in app_configs:
+            self.assertIn(profile, config)
+        for config in configs:
+            if config not in app_configs:
+                self.assertNotIn('PROVISIONING_PROFILE_SPECIFIER', config)
+        workflow = (root / '.github/workflows/testflight.yml').read_text()
+        signed_archive = next(line.strip() for line in workflow.splitlines()
+                              if line.strip().startswith('xcodebuild ') and 'CODE_SIGN_STYLE=Manual' in line)
+        arguments = shlex.split(signed_archive)
+        self.assertIn('NONTO_PROVISIONING_PROFILE_SPECIFIER=$TF_PROFILE_UUID', arguments)
+        self.assertFalse(any(argument.startswith('PROVISIONING_PROFILE_SPECIFIER=') for argument in arguments))
+
     def profile(self):
         return {'UUID': '11111111-2222-3333-4444-555555555555', 'TeamIdentifier': [tf.TEAM],
                 'DeveloperCertificates': [b'certificate'], 'ExpirationDate': datetime.now() + timedelta(days=1),
