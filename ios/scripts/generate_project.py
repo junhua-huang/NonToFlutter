@@ -72,7 +72,7 @@ for document in ['privacy', 'terms', 'community']:
 source_refs = [ref(p, 'sourcecode.swift') for p in sources]
 test_refs = [ref(p, 'sourcecode.swift') for p in tests]
 resource_refs = [add('ref:noto-bundle', '{isa = PBXFileReference; lastKnownFileType = folder; path = NotoEmoji; sourceTree = DERIVED_FILE_DIR; }') if p.endswith('/NotoEmoji') else ref(p, 'folder.assetcatalog' if p.endswith('.xcassets') else ('text.json.xcstrings' if p.endswith('.xcstrings') else ('text.plist.xml' if p.endswith('.xcprivacy') else 'text'))) for p in resources]
-lottie_package = add('package:lottie', '{isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/airbnb/lottie-spm.git"; requirement = {kind = exactVersion; version = 4.6.1; }; }')
+lottie_package = add('package:lottie', '{isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/airbnb/lottie-ios.git"; requirement = {kind = exactVersion; version = 4.6.1; }; }')
 lottie_product = add('package-product:lottie', f'{{isa = XCSwiftPackageProductDependency; package = {lottie_package}; productName = Lottie; }}')
 lottie_framework = add('build:lottie', f'{{isa = PBXBuildFile; productRef = {lottie_product}; }}')
 lottie_test_framework = add('build:tests:lottie', f'{{isa = PBXBuildFile; productRef = {lottie_product}; }}')
