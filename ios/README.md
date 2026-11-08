@@ -108,4 +108,4 @@ xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto \
 
 离线原始 Lottie JSON 和缩放的静态 PNG 预览保存为 `Nonto/Resources/NotoEmoji.zip.001`、`.002`，构建时拼接并通过系统 unzip 解压至派生资源目录。运行时不访问 Google。离屏/后台/关闭播放/系统减弱动态效果时显示静态预览。设置中的“表情资源与许可”提供 Google/CC BY 4.0、Unicode CLDR、Lottie/Apache 2.0 的署名及许可全文。
 
-Swift Package 精确固定为 Airbnb 官方 lottie-ios 4.6.1，并从源码构建，避免依赖 lottie-spm 的发布页二进制下载；Package.resolved 固定源码提交及传递依赖。测试仅使用 iOS 27/iPadOS 27。资源脚本检查完整目录、原始哈希、预览、外部依赖和许可证；原生测试检查全部动画解码、Unicode 兼容、搜索、账号隔离，并输出选择器截图。
+Swift Package 精确固定为 Airbnb 官方 lottie-ios 4.6.1，并从源码构建，避免依赖 lottie-spm 的发布页二进制下载；Package.resolved 固定实际使用的源码提交。模拟器按当前运行设备架构构建，与源码包的模块架构一致。测试仅使用 iOS 27/iPadOS 27。资源脚本检查完整目录、原始哈希、预览、外部依赖和许可证；原生测试检查全部动画解码、Unicode 兼容、搜索、账号隔离，并输出选择器截图。
