@@ -21,6 +21,30 @@
             "state": "translated",
             "value": "Avatar and cover links must use https://."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les liens d'avatar et de couverture doivent utiliser https://."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ссылки на аватар и обложку должны использовать https://.."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los enlaces de avatar y portada deben usar https://."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アバターとカバーのリンクは https://. を使用する必要があります"
+          }
         }
       }
     },
@@ -43,6 +67,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "This avatar or cover domain is not allowed."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet avatar ou domaine de couverture n'est pas autorisé."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот аватар или домен обложки запрещен."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este avatar o dominio de portada no está permitido."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このアバターまたはカバー ドメインは許可されていません。"
           }
         }
       }
@@ -67,6 +115,30 @@
             "state": "translated",
             "value": "Registration currently supports QQ email addresses only."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'inscription prend actuellement en charge uniquement les adresses e-mail QQ."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В настоящее время регистрация поддерживает только адреса электронной почты QQ."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualmente, el registro solo admite direcciones de correo electrónico QQ."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在、登録では QQ 電子メール アドレスのみがサポートされています。"
+          }
         }
       }
     },
@@ -89,6 +161,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "This email address is already registered."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette adresse email est déjà enregistrée."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот адрес электронной почты уже зарегистрирован."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta dirección de correo electrónico ya está registrada."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このメールアドレスはすでに登録されています。"
           }
         }
       }
@@ -113,6 +209,30 @@
             "state": "translated",
             "value": "The verification code is invalid or has expired."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le code de vérification n'est pas valide ou a expiré."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код подтверждения недействителен или срок его действия истек."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El código de verificación no es válido o ha caducado."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認コードが無効であるか、有効期限が切れています。"
+          }
         }
       }
     },
@@ -135,6 +255,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Too many failed sign-in attempts. Continue using an email verification code."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop de tentatives de connexion ont échoué. Continuez à utiliser un code de vérification par e-mail."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Слишком много неудачных попыток входа. Продолжайте использовать код подтверждения электронной почты."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiados intentos fallidos de inicio de sesión. Continúe usando un código de verificación por correo electrónico."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失敗したサインイン試行が多すぎます。引き続き電子メール確認コードを使用してください。"
           }
         }
       }
@@ -159,6 +303,30 @@
             "state": "translated",
             "value": "Your session has expired. Sign in again."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre session a expiré. Connectez-vous à nouveau."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Срок вашей сессии истек. Войдите снова."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu sesión ha caducado. Inicia sesión nuevamente."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セッションの有効期限が切れました。再度サインインします。"
+          }
         }
       }
     },
@@ -181,6 +349,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Your new password must have at least 8 characters."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre nouveau mot de passe doit comporter au moins 8 caractères."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваш новый пароль должен содержать не менее 8 символов."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su nueva contraseña debe tener al menos 8 caracteres."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいパスワードは 8 文字以上である必要があります。"
           }
         }
       }
@@ -205,6 +397,30 @@
             "state": "translated",
             "value": "Unable to reset your password. Try again later."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de réinitialiser votre mot de passe. Réessayez plus tard."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Невозможно сбросить пароль. Повторите попытку позже."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede restablecer su contraseña. Vuelve a intentarlo más tarde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パスワードをリセットできません。後でもう一度試してください。"
+          }
         }
       }
     },
@@ -227,6 +443,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "This username is already taken."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce nom d'utilisateur est déjà pris."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это имя пользователя уже занято."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este nombre de usuario ya está en uso."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このユーザー名はすでに使用されています。"
           }
         }
       }
@@ -251,6 +491,30 @@
             "state": "translated",
             "value": "This email address is already registered."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette adresse email est déjà enregistrée."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот адрес электронной почты уже зарегистрирован."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta dirección de correo electrónico ya está registrada."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このメールアドレスはすでに登録されています。"
+          }
         }
       }
     },
@@ -273,6 +537,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Incorrect username, email or password."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom d'utilisateur, email ou mot de passe incorrect."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неверное имя пользователя, адрес электронной почты или пароль."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre de usuario, correo electrónico o contraseña incorrectos."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ユーザー名、電子メール、またはパスワードが間違っています。"
           }
         }
       }
@@ -297,6 +585,30 @@
             "state": "translated",
             "value": "The current password is incorrect."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le mot de passe actuel est incorrect."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текущий пароль неверен."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La contraseña actual es incorrecta."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在のパスワードが間違っています。"
+          }
         }
       }
     },
@@ -319,6 +631,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Account not found."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compte introuvable."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Аккаунт не найден."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuenta no encontrada."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アカウントが見つかりません。"
           }
         }
       }
@@ -343,6 +679,30 @@
             "state": "translated",
             "value": "Unable to update your profile. Try again later."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de mettre à jour votre profil. Réessayez plus tard."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Невозможно обновить профиль. Повторите попытку позже."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede actualizar su perfil. Vuelve a intentarlo más tarde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロフィールを更新できません。後でもう一度試してください。"
+          }
         }
       }
     },
@@ -365,6 +725,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unable to change your password. Try again later."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de changer votre mot de passe. Réessayez plus tard."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Невозможно изменить пароль. Повторите попытку позже."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede cambiar su contraseña. Vuelve a intentarlo más tarde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パスワードを変更できません。後でもう一度試してください。"
           }
         }
       }
@@ -389,6 +773,30 @@
             "state": "translated",
             "value": "Unable to delete your account. Try again later."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de supprimer votre compte. Réessayez plus tard."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Невозможно удалить вашу учетную запись. Повторите попытку позже."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede eliminar tu cuenta. Vuelve a intentarlo más tarde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アカウントを削除できません。後でもう一度試してください。"
+          }
         }
       }
     },
@@ -411,6 +819,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unable to update privacy settings. Try again later."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de mettre à jour les paramètres de confidentialité. Réessayez plus tard."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Невозможно обновить настройки конфиденциальности. Повторите попытку позже."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede actualizar la configuración de privacidad. Vuelve a intentarlo más tarde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プライバシー設定を更新できません。後でもう一度試してください。"
           }
         }
       }
@@ -435,6 +867,30 @@
             "state": "translated",
             "value": "There are no valid changes to save."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il n’y a aucune modification valide à enregistrer."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет действительных изменений для сохранения."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay cambios válidos para guardar."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存する有効な変更はありません。"
+          }
         }
       }
     },
@@ -457,6 +913,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enter your email address or username."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrez votre adresse e-mail ou votre nom d'utilisateur."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите свой адрес электронной почты или имя пользователя."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingrese su dirección de correo electrónico o nombre de usuario."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メールアドレスまたはユーザー名を入力してください。"
           }
         }
       }
@@ -481,6 +961,30 @@
             "state": "translated",
             "value": "This community does not exist."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette communauté n'existe pas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этого сообщества не существует."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta comunidad no existe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコミュニティは存在しません。"
+          }
         }
       }
     },
@@ -503,6 +1007,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "This community does not exist or has been dissolved."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette communauté n'existe pas ou a été dissoute."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это сообщество не существует или было распущено."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta comunidad no existe o ha sido disuelta."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコミュニティは存在しないか、解散しました。"
           }
         }
       }
@@ -527,6 +1055,30 @@
             "state": "translated",
             "value": "Join this community before posting."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoignez cette communauté avant de poster."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Присоединяйтесь к этому сообществу, прежде чем публиковать сообщения."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Únase a esta comunidad antes de publicar."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "投稿する前にこのコミュニティに参加してください。"
+          }
         }
       }
     },
@@ -549,6 +1101,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "You are not a member of this community."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous n'êtes pas membre de cette communauté."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы не являетесь членом этого сообщества."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No eres miembro de esta comunidad."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなたはこのコミュニティのメンバーではありません。"
           }
         }
       }
@@ -573,6 +1149,30 @@
             "state": "translated",
             "value": "This group conversation does not exist."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation de groupe n'existe pas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этого группового разговора не существует."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación grupal no existe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このグループ会話は存在しません。"
+          }
         }
       }
     },
@@ -595,6 +1195,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "This message does not exist."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce message n'existe pas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этого сообщения не существует."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este mensaje no existe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このメッセージは存在しません。"
           }
         }
       }
@@ -619,6 +1243,30 @@
             "state": "translated",
             "value": "This message does not belong to this community."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce message n'appartient pas à cette communauté."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это сообщение не принадлежит этому сообществу."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este mensaje no pertenece a esta comunidad."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このメッセージはこのコミュニティに属していません。"
+          }
         }
       }
     },
@@ -641,6 +1289,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Messages can only be recalled within 2 minutes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les messages ne peuvent être rappelés que dans les 2 minutes."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сообщения можно отозвать только в течение 2 минут."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los mensajes sólo se pueden recuperar en 2 minutos."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージは 2 分以内にのみ呼び出すことができます。"
           }
         }
       }
@@ -665,6 +1337,30 @@
             "state": "translated",
             "value": "You cannot recall this message."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous ne pouvez pas vous souvenir de ce message."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы не можете вспомнить это сообщение."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No puedes recordar este mensaje."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このメッセージを取り消すことはできません。"
+          }
         }
       }
     },
@@ -687,6 +1383,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "This event does not exist."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet événement n'existe pas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этого события не существует."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este evento no existe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このイベントは存在しません。"
           }
         }
       }
@@ -711,6 +1431,30 @@
             "state": "translated",
             "value": "Enter an event name."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez un nom d'événement."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите название события."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduzca un nombre de evento."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イベント名を入力します。"
+          }
         }
       }
     },
@@ -733,6 +1477,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose a city."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez une ville."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите город."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige una ciudad."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "都市を選択してください。"
           }
         }
       }
@@ -757,6 +1525,30 @@
             "state": "translated",
             "value": "You cannot edit this content."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous ne pouvez pas modifier ce contenu."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы не можете редактировать этот контент."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No puedes editar este contenido."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンテンツは編集できません。"
+          }
         }
       }
     },
@@ -779,6 +1571,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Comments must contain between 1 and 2,000 characters."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les commentaires doivent contenir entre 1 et 2 000 caractères."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Комментарии должны содержать от 1 до 2000 символов."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los comentarios deben contener entre 1 y 2000 caracteres."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コメントには 1 ～ 2,000 文字を含める必要があります。"
           }
         }
       }
@@ -803,6 +1619,30 @@
             "state": "translated",
             "value": "The original comment does not exist."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le commentaire original n'existe pas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Исходного комментария не существует."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El comentario original no existe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "元のコメントは存在しません。"
+          }
         }
       }
     },
@@ -825,6 +1665,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "This comment does not exist."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce commentaire n'existe pas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этого комментария не существует."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este comentario no existe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコメントは存在しません。"
           }
         }
       }
@@ -849,6 +1713,30 @@
             "state": "translated",
             "value": "You do not have permission for this action."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous n'avez pas l'autorisation pour cette action."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У вас нет разрешения на это действие."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No tienes permiso para esta acción."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このアクションに対する権限がありません。"
+          }
         }
       }
     },
@@ -872,6 +1760,30 @@
             "state": "translated",
             "value": "Unable to prepare the upload. Try again later."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de préparer le téléchargement. Réessayez plus tard."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось подготовить загрузку. Повторите попытку позже."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede preparar la carga. Vuelve a intentarlo más tarde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップロードを準備できません。後でもう一度試してください。"
+          }
         }
       }
     },
@@ -894,6 +1806,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "The upload address is unavailable. Try again later."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'adresse de téléchargement n'est pas disponible. Réessayez plus tard."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Адрес загрузки недоступен. Повторите попытку позже."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La dirección de carga no está disponible. Vuelve a intentarlo más tarde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップロード アドレスが利用できません。後でもう一度試してください。"
           }
         }
       }

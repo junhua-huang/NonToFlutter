@@ -1,0 +1,113 @@
+Política de privacidad de NonTo
+Versión: {{policyVersion}}
+Actualizado: 26 de octubre de 2026
+
+1. Alcance y contacto
+
+Esta política se aplica a los clientes nativos NonTo iOS y iPadOS y sus servicios conectados. Explica los fines del procesamiento, los permisos, los destinatarios y sus elecciones. Puede leer esta política y los Términos de servicio sin conexión sin iniciar sesión. Si no está de acuerdo por ahora, la información sin conexión permanecerá disponible y los servicios de la cuenta no se iniciarán.
+
+Proveedor de servicios y procesador de información personal: {{operatorName}}
+Correo electrónico de privacidad, quejas y derechos de datos: {{contactEmail}}
+Número de registro de la aplicación: {{appFilingNumber}}
+
+Preste especial atención a los mensajes privados y al contenido público, los permisos opcionales, los servicios de terceros, la retención y eliminación de cuentas, los menores y las solicitudes de derechos de datos. Aceptar esta política y otorgar permisos del sistema son opciones independientes. El acuerdo no autoriza todos los permisos opcionales o propósitos futuros.
+
+2. Información procesada por característica
+
+Cuenta y seguridad: el correo electrónico, el nombre de usuario, la contraseña y el código de verificación del correo electrónico enviados se utilizan para el registro, el inicio de sesión, la recuperación de la contraseña y la seguridad de la cuenta. Las contraseñas se envían a través de la red al servidor para su verificación. El cliente almacena tokens de inicio de sesión en el llavero del sistema. La verificación por correo electrónico no es una verificación legal del nombre real. Las funciones de la cuenta no se pueden utilizar sin la información necesaria para registrarse o iniciar sesión.
+
+Perfil: el nombre para mostrar, la biografía, el avatar y la portada elegidos lo identifican en las interacciones y aparecen en su perfil. Corrígelos en Editar perfil. En la configuración de Privacidad, administre la visibilidad del perfil, la visualización del correo electrónico, la capacidad de búsqueda y quién puede enviar solicitudes de amistad. No coloque información de contacto que desee mantener privada en un perfil público.
+
+Contenido y características sociales: publicaciones, comentarios, mensajes privados y comunitarios, imágenes y videos seleccionados, y registros de amistad, seguimiento, me gusta e interacción se utilizan para almacenar, transmitir y mostrar contenido, mantener relaciones y actualizar el estado no leído. La mensajería también procesa conversaciones, remitentes, destinatarios, tiempos de envío y estado de entrega, lectura o recuperación. Los mensajes privados son procesados ​​y almacenados por el servidor. Esta versión no proporciona una garantía de cifrado de extremo a extremo.
+
+Búsqueda y feeds: los términos de búsqueda y el tipo de búsqueda se envían al servidor para devolver resultados y pueden registrarse en el historial de búsqueda de su cuenta. Borrar el historial de búsqueda en Explorar; esto no elimina los registros de seguridad necesarios. La pantalla de inicio nativa actualmente ofrece Lo último y Para usted, sin un canal de recomendaciones. Últimas publicaciones de pedidos por hora de publicación. Para usted recopila publicaciones relacionadas con sus notificaciones, comentarios y me gusta, las más recientes primero. Cambiar de feed no elimina los registros de interacción o visualización existentes. Comuníquese con el correo electrónico que figura en esta política para obtener una explicación o realizar una solicitud sobre el procesamiento.
+
+Solicitudes de verificación: los roles, vínculos laborales, detalles de contacto y materiales de respaldo que elija enviar se utilizan para revisar las solicitudes y mostrar las calificaciones. Los datos de contacto pueden incluir un número de teléfono que usted proporcione. La verificación del rol o del creador no constituye automáticamente una verificación legal del nombre real. Redactar números de identidad y direcciones no relacionados. No envíe documentos de identidad, tarjetas bancarias, registros médicos o información confidencial de otras personas que no estén relacionados. Si es necesaria información sensible, se debe explicar por separado su necesidad e impacto y obtener la autorización requerida. Un acuerdo político único no puede reemplazar este proceso.
+
+Informes y soporte: los motivos de su informe, los ID de usuarios, publicaciones, comentarios o mensajes relevantes, y las explicaciones, capturas de pantalla y detalles de contacto que envía por correo electrónico se utilizan para localizar problemas, investigar, responder y manejar solicitudes de derechos de datos. Los informes pueden incluir extractos de chat que usted elija enviar. Proporcione únicamente material relevante y no envíe contraseñas ni códigos de verificación.
+
+Acceso al servicio: los proveedores de redes y recursos reciben la dirección IP y solicitan la información necesaria para las conexiones. La carga de imágenes, vídeos y páginas remotas también genera solicitudes de recursos. Los registros de acceso y seguridad se utilizan para conectar servicios, limitar el abuso, solucionar problemas y gestionar quejas. Consulte la sección 7 para conservación y eliminación.
+
+3. Permisos del sistema y capacidades del dispositivo.
+
+Fotos y vídeos: eliges elementos a través del selector de fotos del sistema de Apple. El cliente lee los elementos seleccionados para obtener una vista previa y cargarlos, sin solicitar acceso a toda su biblioteca de fotografías. La cancelación no afecta las características del texto. Solo cuando elige Guardar imagen el cliente solicita permiso para agregar solo fotos para guardar la imagen actual. Negarlo no afecta la visualización de imágenes ni el chat. Las fotos cambian de tamaño y se vuelven a codificar como JPEG antes de cargarlas. Los videos se leen y cargan desde el archivo seleccionado. Los videos y otros archivos pueden contener la hora de creación, la ubicación u otras propiedades del archivo. Verifique y elimine la información que no desea compartir antes de enviarla.
+
+Cámara: el permiso de la cámara se solicita solo cuando elige la cámara en el menú de archivos adjuntos del chat. Las fotos se toman a través de la interfaz de la cámara del sistema de Apple. El resultado cambia de tamaño, se vuelve a codificar como JPEG y se coloca en la vista previa de envío. Se carga solo después de confirmar el envío. No se guarda automáticamente en Fotos. No se recopila audio y no se realiza grabación continua. Negar o retirar el permiso de la cámara no afecta la selección de fotos ni los mensajes de texto. Administre la autorización en la configuración de iOS.
+
+Notificaciones: después de aceptar esta política, iniciar sesión correctamente e ingresar a la aplicación principal, el cliente solicita permiso de notificación si aún no ha elegido una notificación del sistema. Las notificaciones proporcionan alertas de mensajes e interacción. También puedes habilitarlos o probarlos en las preferencias de Notificación. Después del rechazo, la aplicación no solicita repetidamente la autorización del sistema; use el enlace Configuración para cambiarlo en Configuración de iOS. Aún puede utilizar la cuenta y los servicios de chat después de rechazarlos, pero no recibirá esas alertas del sistema. Otorgar permiso al sistema no anula las preferencias de inserción o alerta deshabilitadas en su cuenta. Administre permisos, notificaciones push, alertas de mensajes y sonidos en Configuración de iOS → Notificaciones → NonTo y en Configuración de la aplicación → Preferencias de notificación.
+
+Portapapeles y uso compartido: los mensajes seleccionados se escriben en el portapapeles solo cuando elige Copiar. Los contenidos existentes del portapapeles no se leen de forma proactiva. Tú eliges el destino en la hoja compartida del sistema. Los destinatarios pueden recibir el contenido o enlace compartido; compartir un enlace no cambia automáticamente los permisos del contenido original. Los sitios web y aplicaciones externos procesan el acceso según sus propias reglas después de abrirlos.
+
+Otras capacidades: el acceso a la red se utiliza para iniciar sesión, cargar, cargar y sincronizar mensajes. No depende del permiso de fotografía o notificación.
+
+Declaración de edad: en el primer uso, el rango de edad elegido y la confirmación necesaria del consentimiento del tutor se registran en este dispositivo para controlar el acceso a los servicios de la cuenta nativa. Aquí no se recogen la fecha de nacimiento ni los documentos de identidad. Consulte la sección 10 para conocer el alcance.
+
+La versión nativa actual no solicita contactos, ubicación o acceso al micrófono y no integra seguimiento de publicidad, análisis de terceros, pago o SDK de inicio de sesión de terceros. Al ingresar manualmente la ubicación de un evento, no se lee la ubicación del dispositivo. Los nuevos permisos o finalidades requieren en primer lugar información actualizada y la autorización exigida por la ley.
+
+4. Mensajes y notificaciones push
+
+Cuando las notificaciones push están habilitadas, el cliente envía al servidor NonTo un token push de Apple, un identificador de instalación aleatorio y una credencial de verificación vinculante, el tipo de dispositivo, la versión de la aplicación y el estado de primer plano/fondo. El servidor los vincula a la cuenta actual para enrutar mensajes, actualizar el estado y desvincularlos. El identificador de instalación aleatorio no es un identificador publicitario ni un número de serie de hardware.
+
+Las notificaciones remotas se envían a través del servicio de notificaciones push (APN) de Apple. Las cargas útiles actuales utilizan alertas genéricas sin texto de mensaje privado ni nombres para mostrar del remitente, pero contienen ID de enrutamiento para la cuenta del destinatario, notificación, mensaje y contenido relacionado, e identificadores de deduplicación. Incluso las alertas genéricas pueden revelar el uso de la aplicación. Ajuste las vistas previas en la configuración del sistema. Los procesos de APN envían identificadores e información necesaria para la entrega. Consulte la sección 5 para obtener información sobre el procesamiento de Apple y la sección 7 para conocer las regiones y acuerdos relacionados.
+
+Cuando desactiva la inserción o cierra sesión, el cliente intenta desvincular el dispositivo. Si la red no está disponible, la desvinculación pendiente se guarda y se vuelve a intentar más tarde. Desactive las notificaciones del sistema para detener las alertas en este dispositivo de inmediato. Deshabilitar las notificaciones o cerrar sesión no elimina los mensajes entregados ni la cuenta del servidor.
+
+5. Servicios de terceros y divulgación
+
+No incorporar SDK comerciales de terceros no significa que ningún proveedor de servicios procese información. Las capacidades del sistema, los medios, el correo electrónico y los servicios de alojamiento procesan la información necesaria para sus funciones, como se detalla a continuación.
+
+{{processorSummary}}
+
+El procesamiento confiado debe limitarse a sus fines y regirse por salvaguardias acordadas. Proporcionar información a procesadores independientes, divulgarla públicamente o cambiar sus propósitos requiere notificación, autorización y procedimientos de protección aplicables. Las circunstancias estatutarias se rigen por la ley. Este acuerdo no es una autorización general para proporcionar información a terceros arbitrarios.
+
+6. Contenido público e información de otras personas.
+
+Otras personas pueden ver, copiar o reenviar perfiles públicos, publicaciones, comentarios y contenido de la comunidad. Los destinatarios también pueden capturar o redistribuir el contenido exclusivo para amigos y los mensajes privados. Cambiar la visibilidad, bloquear, eliminar o recuperar no puede garantizar la eliminación de copias que otros ya obtuvieron.
+
+Obtenga la autorización necesaria antes de publicar fotos, datos de contacto, trabajos o capturas de pantalla de chat de otras personas. Evite exponer la privacidad de otras personas o de menores. Reporte exposición o infracción utilizando las herramientas de reporte o el correo electrónico en esta política, con enlaces, identificaciones y detalles necesarios. Las investigaciones y acciones deben mantenerse dentro del alcance necesario sin exponer más la información personal involucrada.
+
+7. Almacenamiento, retención y eliminación
+
+En este dispositivo: los tokens de inicio de sesión y las credenciales de verificación de enlace push se almacenan en Keychain. Las preferencias, las versiones y tiempos de consentimiento, los borradores de texto de la cuenta, la bandeja de salida y el progreso de la sincronización de mensajes se almacenan localmente. Los cachés de contenido están separados por cuenta en el directorio de caché y los cachés de archivos utilizan la protección de archivos de iOS. El sistema puede recuperar cachés, por lo que no deben ser su única copia de seguridad. Los borradores de las publicaciones conservan el texto, la audiencia, la identidad mostrada y las fotografías o videos seleccionados. Los borradores de medios se almacenan por cuenta en el directorio de soporte de la aplicación, utilizan la protección de archivos de iOS y están excluidos de las copias de seguridad del sistema. Se cargan únicamente cuando confirmas la publicación. Reabrir el mismo compositor puede restaurarlos. Los borradores relevantes se borran después de una publicación exitosa, un descarte explícito o la eliminación de la cuenta. No utilice borradores locales como única copia de seguridad.
+
+Borrar caché local borra el contenido y los cachés de red, no los borradores, la bandeja de salida, el llavero o los datos del servidor. Cerrar sesión no significa eliminar la cuenta y los giros pueden regresar cuando la misma cuenta vuelve a iniciar sesión. Después de que el servidor confirma la eliminación de la cuenta, el cliente borra los borradores, la cola, el progreso de sincronización y los cachés de esa cuenta. Es posible que permanezcan las credenciales de instalación y los reintentos pendientes necesarios para desvincular la inserción. No se debe asumir que las copias de seguridad del sistema, las copias en otros dispositivos y el llavero se hayan eliminado por completo mediante la desinstalación o una operación de limpieza.
+
+Ubicaciones de almacenamiento reales de bases de datos, medios y copias de seguridad del servidor, y posible procesamiento transfronterizo:
+{{storageSummary}}
+
+Retención de cuentas, contenido, mensajes, registros multimedia y de seguridad, plazos de eliminación de cuentas, retención legal y eliminación de copias de seguridad:
+{{retentionSummary}}
+
+El servidor NonTo maneja las solicitudes de eliminación de cuentas. El alcance y los plazos para las cuentas, el contenido relacionado, los medios y las copias de seguridad siguen las reglas anteriores. La eliminación de la cuenta no elimina las copias guardadas de forma independiente por los destinatarios. Comuníquese con el correo electrónico que figura en esta política para preguntar sobre registros específicos o solicitar su eliminación. La información retenida conforme a la ley se limita al propósito y la duración relevantes y se elimina o se anonimiza cuando finaliza ese período. La información personal debe ser manejada y notificada a los usuarios según lo exige la ley cuando el servicio se detiene.
+
+8. Seguridad y respuesta a incidentes
+
+Las conexiones API y en tiempo real utilizan HTTPS/WSS de forma predeterminada. Las credenciales se transmiten en encabezados de solicitud o marcos de autenticación de conexión, evitando la inclusión directa en las URL de solicitud. El cliente no implementa cifrado de extremo a extremo. Los archivos locales utilizan la protección de archivos del sistema. La protección local y el cifrado de transporte no pueden eliminar riesgos como el robo de dispositivos, la redistribución por parte de los destinatarios o los ataques al servidor.
+
+Proteja las credenciales de desbloqueo de su dispositivo y no comparta contraseñas ni códigos de verificación. Verifique los borradores y la configuración de notificaciones después de cerrar sesión en un dispositivo compartido. Si sospecha de robo de cuenta o exposición de información, cambie su contraseña y comuníquese con el soporte por correo electrónico. Los incidentes de seguridad de la información personal requieren medidas correctivas y notificación a las personas y autoridades afectadas, cuando corresponda. Esta política no renuncia a las responsabilidades legales.
+
+9. Opciones y solicitudes de derechos de datos
+
+Acceso y corrección: Administrar información de tu perfil, Editar perfil y páginas de contenido relevantes. La configuración de privacidad controla su perfil, audiencia de publicación predeterminada, visualización de correo electrónico, búsqueda y solicitudes de amistad. Verifique la audiencia del contenido publicado anteriormente por separado. Rechazar permisos de fotos o notificaciones afecta solo a las funciones opcionales correspondientes.
+
+Retirar el consentimiento: elija Configuración → Información personal y permisos → Retirar el consentimiento y cerrar sesión. El cliente detiene los servicios de cuenta corriente y vuelve a la información fuera de línea. El retiro no es la eliminación de la cuenta y no afecta el procesamiento legal antes del retiro. Cualquier retención continua sobre otra base legal debe explicarse y no puede continuar con usos no relacionados para los cuales se retiró la autorización.
+
+Eliminar cuenta: En Configuración → Eliminar cuenta, lea la información, ingrese la palabra de confirmación que se muestra y confirme nuevamente para aplicar al servidor. El éxito cierra la sesión y borra los datos locales relevantes. Fallo muestra un error. Tocar un botón o un tiempo de espera de la red no significa que la eliminación esté completa. La eliminación no se puede deshacer; Primero guarde la información que tiene derecho legal a conservar. Consulte la sección 7 para conocer el manejo del servidor y las limitaciones actuales.
+
+Para acceder, copiar, complementar, corregir o eliminar información, obtener explicaciones de reglas o presentar objeciones, envíe un correo electrónico a {{contactEmail}}. Incluya la “Solicitud de datos personales”, el correo electrónico de su cuenta o ID de usuario, la solicitud específica y el alcance de los datos. En Configuración → Contacto y quejas, elija un tipo de solicitud, prepare los detalles y abra el correo electrónico, o copie la dirección y envíela usted mismo. Esta página no carga automáticamente borradores, chats o información de cuenta. Abrir el correo electrónico no significa que el envío se haya realizado correctamente. Puede ser necesaria una verificación de identidad proporcionada y los agentes necesitan la autorización adecuada. No proporcione directamente contraseñas, códigos de verificación o documentos de identidad completos no relacionados. Si no se puede atender una solicitud, se deben proporcionar los motivos y los canales de apelación o queja. Esto no afecta su derecho a contactar a las autoridades competentes según la ley.
+
+Régimen específico de aceptación, verificación, tiempos de respuesta y revisión de objeciones:
+{{rightsResponseSummary}}
+
+10. Protección de menores
+
+Los menores deben entender esta política con un tutor y tener cuidado al revelar escuelas, direcciones, fotografías y datos de contacto. El procesamiento de información sobre niños menores de 14 años requiere el consentimiento del tutor, reglas específicas y las salvaguardias necesarias. El acuerdo de política ordinario, la verificación por correo electrónico o una casilla de verificación de edad no pueden reemplazar esos mecanismos.
+
+Elegibilidad de edad, consentimiento del tutor, información de los niños y solicitudes de derechos de datos del tutor:
+{{minorProtectionSummary}}
+
+No envíe información sensible no relacionada sobre menores a través de contenido público, chats o materiales de verificación. Los tutores que descubran un procesamiento sin la autorización adecuada pueden comunicarse con el correo electrónico en esta política para su eliminación u otros derechos, proporcionando solo la información mínima necesaria para localizar el problema.
+
+11. Actualizaciones y acceso
+
+Lea esta política la primera vez que la use, en la página de inicio de sesión o en Configuración → Política de privacidad. Utilice su contenido para navegar por las secciones o la hoja compartida del sistema para guardar el texto completo. La página de política también enlaza con los Términos de servicio, las Pautas de la comunidad y las herramientas de contacto. El cliente registra la versión del consentimiento y la hora localmente. Los cambios en las políticas, los términos, las reglas de la comunidad o la configuración operativa provocan otra presentación antes de que se reanuden los servicios de la cuenta. Los cambios significativos deben explicarse claramente. Rechazar una nueva versión aún permite la lectura sin conexión. El uso continuado no reemplaza el consentimiento renovado cuando lo exija la ley.

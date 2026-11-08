@@ -1,0 +1,83 @@
+Términos del servicio de NonTo
+Versión: {{policyVersion}}
+Actualizado: 22 de octubre de 2026
+
+1. Alcance y elección
+
+Estos términos se aplican a las funciones de cuenta, publicación, amigos, mensajes privados, comunidad e información de eventos en los clientes nativos NonTo iOS y iPadOS. Proveedor de servicios: {{operatorName}}. Correo electrónico de contacto, quejas, recursos y derechos de datos: {{contactEmail}}.
+
+Lea estos términos y la Política de Privacidad antes de utilizar los servicios de la cuenta y decida libremente si los acepta. Si no está de acuerdo por ahora, puede leer la información sin conexión. El acuerdo no autoriza todos los permisos del sistema o servicios futuros. La Política de Privacidad explica el procesamiento de información personal sin alterar sus derechos legales.
+
+2. Cuentas y elegibilidad
+
+Regístrese utilizando un correo electrónico que tenga derecho a utilizar. Proporcionar información veraz, exacta y lícita cuando sea necesario y corregirla con prontitud. Proteja contraseñas, códigos de verificación, dispositivos y sesiones iniciadas. No se haga pasar por otros, no se registre maliciosamente, no venda o alquile cuentas, ni las utilice para fraude. Si descubre un robo de cuenta o una actividad inusual, cambie su contraseña de inmediato y comuníquese con el correo electrónico anterior. El proveedor sigue siendo responsable de las obligaciones de seguridad de la cuenta exigidas por la ley.
+
+La verificación de rol o creador indica solo el resultado de la revisión de la solicitud relevante. No garantiza obras, reputación comercial ni seguridad de las transacciones. La verificación por correo electrónico no es una verificación legal del nombre real. Los servicios que requieren verificación de nombre real deben explicar su alcance, método e información necesaria y cumplir con la ley. Estos términos no autorizan la recolección general de documentos de identidad.
+
+Alcance y disposiciones actuales para la verificación del nombre real:
+{{realNameVerificationSummary}}
+
+Los menores deben informarse sobre el servicio y sus riesgos con un tutor y evitar revelar escuelas, direcciones y números de teléfono. Disposiciones de protección y elegibilidad por edad actual:
+{{minorProtectionSummary}}
+
+Las casillas de verificación de acuerdo ordinarias, la verificación por correo electrónico o las declaraciones de edad no pueden reemplazar la verificación necesaria de identidad y tutoría. Los servicios que involucran a menores o información de identidad deben seguir el alcance y las salvaguardas descritas en la Política de Privacidad.
+
+3. Publicación, chats e interacciones
+
+Verifique el contenido y su audiencia antes de publicarlo. El contenido público se puede guardar o reenviar. Los destinatarios también pueden capturar o redistribuir el contenido exclusivo para amigos y los mensajes privados. Cambiar la visibilidad, eliminar o recuperar no puede garantizar la eliminación de copias fuera del control del servicio. No confíe en el chat ordinario para enviar documentos de identidad, contraseñas, códigos de verificación u otra información altamente confidencial.
+
+Respeta los límites de otras personas. No los acoses repetidamente ni eludas el bloqueo para contactarlos. El estado de envío, entrega, lectura y recuperación depende de las respuestas reales del servicio; Las redes y dispositivos pueden causar retrasos. Los indicadores de estado no prueban que un destinatario haya entendido, aceptado o asumido un compromiso.
+
+4. Contenido y conducta
+
+Debe tener derecho a publicar o enviar los textos, imágenes, vídeos, obras y enlaces en cuestión y es legalmente responsable de su conducta. Respetar los derechos de propiedad intelectual, imagen, reputación y privacidad y obtener la autorización necesaria al citar trabajos, publicar fotografías de otros o compartir capturas de pantalla del chat. La disponibilidad pública previa no autoriza la redistribución ilimitada.
+
+No publique ni distribuya información criminal o ilegal, incite al terrorismo, la violencia o el odio, proporcione contenido pornográfico o de explotación sexual infantil, amenace, intimide, aceche, acose, discrimine o exponga información privada, distribuya fraude, phishing, malware o spam, infrinja derechos legales, se haga pasar por funcionarios u otras personas para engañar, ni utilice funciones sociales y de eventos para transacciones ilegales o para inducir la divulgación de información confidencial.
+
+No ataque el servicio, no robe credenciales, eluda permisos para acceder al contenido de otros, no manipule maliciosamente interacciones en masa ni interrumpa las operaciones normales. Estos términos no prohíben categóricamente solicitudes de derechos legítimos, críticas razonables, comentarios de seguridad de buena fe u otras actividades legales. Los ejemplos, los materiales de informes y los principios de moderación se pueden leer sin conexión en Configuración → Normas de la comunidad. Las pautas no amplían la autorización ni renuncian a las responsabilidades legales.
+
+5. Informes, moderación y recursos
+
+Informe a través de las herramientas relevantes de publicación, comentario, perfil de usuario y mensaje de chat. Bloquear cuentas de perfiles de usuario. Vea el progreso y los comentarios proporcionados por el servidor en Configuración → Información personal y permisos → Historial de informes. El bloqueo no elimina el contenido que la otra persona ya recibió y no puede garantizar la prevención del contacto a través de todos los canales externos.
+
+Proporcione el asunto, ID del contenido o enlace, circunstancias y evidencia necesaria. Las quejas sobre propiedad intelectual pueden enviarse por correo electrónico con prueba de derechos, la ubicación de la presunta infracción e información de contacto. Si cree que una decisión es incorrecta, apele al mismo correo electrónico con datos adicionales. Configuración → Contacto y quejas ayuda a preparar una solicitud y abrir un correo electrónico. No envía automáticamente un informe ni completa el envío. Proporcionar sólo los materiales necesarios. No presente informes maliciosos, fabrique pruebas ni exponga información privada no relacionada.
+
+El proveedor debe basar sus decisiones en hechos, leyes y normas públicas, aplicando medidas proporcionadas como limitar la visibilidad, eliminar contenidos, suspender funciones o cuentas. Cuando corresponda, se deben proporcionar los motivos y los canales de apelación. Los riesgos urgentes y las circunstancias en las que la notificación está legalmente prohibida se tratan conforme a la ley. Los recuentos de informes no deben reemplazar la evaluación de los hechos. Un informe no establece que una queja sea válida y las visualizaciones del estado no garantizan la eliminación de todas las copias distribuidas.
+
+Los informes envían pistas sobre violaciones. El bloqueo limita las interacciones relevantes. Para impugnar un resultado, proporcione su identificación y los motivos de la revisión. Consulte la Política de Privacidad para conocer las disposiciones de aceptación y respuesta.
+
+6. Derechos de contenido y permisos necesarios
+
+Usted conserva sus derechos legales sobre su contenido. Para proporcionar funciones que usted elija activamente, otorga al proveedor una licencia no exclusiva, solo cuando sea necesario, para almacenar, copiar, convertir formatos, transmitir, mostrar y realizar revisiones de seguridad. Esto está sujeto a su configuración de visibilidad, propósitos de servicio y la ley. Los proveedores confiados deben procesar la información solo cuando sea necesario.
+
+Esta licencia no transfiere la propiedad ni crea una autorización permanente, irrevocable o ilimitada. No permite automáticamente que mensajes privados, trabajos o información personal se utilicen para publicidad no relacionada, venta o capacitación de modelos de inteligencia artificial de propósito general. Los usos que vayan más allá del propósito original de la característica requieren la autorización separada necesaria. Después de la eliminación o el cierre de la cuenta, los registros se pueden conservar solo durante el alcance y el tiempo necesarios para el procesamiento necesario, la resolución de disputas o las obligaciones legales. Consulte la Política de privacidad.
+
+Los derechos sobre software, íconos, marcas y otros materiales pertenecen a sus respectivos dueños. Los materiales de código abierto y de terceros se utilizan bajo sus licencias reales. Estos términos no reemplazan las licencias de repositorio requeridas ni restringen el uso legítimo y otros derechos.
+
+7. Eventos, servicios externos y tarifas
+
+Las descripciones de eventos, el contenido de la comunidad y los enlaces a obras pueden provenir de usuarios o de terceros. Verifique los organizadores, la hora, la ubicación, la elegibilidad y las disposiciones de seguridad, y tenga cuidado al pagar a extraños o compartir información de identidad. La publicación de un usuario normal no convierte a NonTo en organizador, garante o contraparte. No renuncia a los deberes legales del proveedor de gestionar y responder a los riesgos conocidos.
+
+Los sitios web externos, otras aplicaciones y destinos para compartir pueden aplicar sus propias reglas. Lea su información antes de enviar datos. El cliente nativo actual no integra compras dentro de la aplicación, suscripciones ni SDK de pago. Esto no garantiza que los eventos de terceros sean siempre gratuitos. Las futuras funciones de pago deben explicar claramente los precios, el contenido, las renovaciones y los reembolsos y obtener la confirmación pertinente. Estos términos no autorizan cargos automáticos. El uso de la red puede generar cargos por datos del operador.
+
+8. Cierre de sesión, retiro y eliminación de cuenta
+
+Al cerrar sesión finaliza la sesión actual del dispositivo. No es una eliminación de cuenta y no borra automáticamente borradores, contenido del servidor o sesiones en otros dispositivos. Retirar el consentimiento de la política en Configuración → Información personal y permisos. El cliente vuelve a la información fuera de línea sin eliminar automáticamente la cuenta del servidor.
+
+En Configuración → Eliminar cuenta, lea la información, ingrese el texto de confirmación y confirme nuevamente para aplicar. El éxito cierra tu sesión y borra los borradores locales, la bandeja de salida y los cachés de la cuenta. Si falla, vuelva a intentarlo según las instrucciones o comuníquese con el soporte. La eliminación de la cuenta no se puede deshacer. Primero conserve el material que tiene derecho legal a conservar, sin infringir los derechos de otros.
+
+Los registros, medios, copias de seguridad e información relacionados con el servidor retenidos según la ley se manejan según la Política de Privacidad. Consulte su alcance y plazos específicos para el contenido de la cuenta, objetos multimedia, copias de seguridad y registros legales. Las copias guardadas de forma independiente por los destinatarios no se eliminan automáticamente al eliminar la cuenta.
+
+9. Cambios de servicio, seguridad y responsabilidad
+
+Las fallas de red, el estado del dispositivo, las restricciones del sistema, el mantenimiento y los incidentes de seguridad pueden afectar la carga, las notificaciones y la entrega de mensajes. El proveedor debe tomar medidas razonables de protección y reparación, dar aviso previo o oportuno sobre cambios importantes, interrupciones o terminaciones cuando sea necesario, y manejar los datos conforme a la ley. Haga una copia de seguridad de la información importante de forma adecuada. No utilice NonTo para comunicaciones de emergencia o como único respaldo.
+
+Usted y el proveedor son cada uno responsables de su respectiva culpa y otras obligaciones impuestas por la ley, según lo determinen los hechos y la ley. Las pruebas, el servicio gratuito, el consentimiento del usuario o la participación de terceros no pueden eximir de obligaciones irrenunciables. Los usuarios no están obligados a indemnizar al proveedor ilimitadamente por su propia culpa. No se excluyen los derechos del consumidor y de información personal.
+
+10. Actualizaciones y disputas
+
+Lea estos términos la primera vez que los use, en la página de inicio de sesión o en Configuración → Términos de servicio. Navegue utilizando los contenidos o guárdelos compartiendo el sistema. Los cambios significativos en los derechos y obligaciones deben comunicarse claramente y obtenerse el consentimiento renovado cuando sea legalmente necesario. El cliente registra la versión y la hora acordadas y presenta la información nuevamente después de las actualizaciones del documento o de la configuración operativa. El silencio o el uso continuado no reemplazan el consentimiento requerido.
+
+Para disputas sobre servicios, quejas, apelaciones o términos, primero envíe un correo electrónico a {{contactEmail}} con su cuenta, el evento y la resolución que busca. Consulte la Política de privacidad para conocer los arreglos de verificación, respuesta y revisión. Si no se llega a acuerdo, buscar resolución a través de los órganos competentes conforme a la ley. Ningún lugar elegido unilateralmente, arbitraje obligatorio, privación de acceso a los tribunales o cláusula de “interpretación final” restringe los recursos legales.
+
+Si una disposición es inválida o inaplicable según la ley, las disposiciones válidas restantes se manejarán en consecuencia sin ampliar los derechos del proveedor. La ley obligatoria tiene prioridad.

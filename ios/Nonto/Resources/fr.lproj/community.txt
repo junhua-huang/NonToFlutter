@@ -1,0 +1,53 @@
+Règles de la communauté NonTo
+Version : {{policyVersion}}
+Mise à jour : 22 octobre 2026
+
+1. Portée et contact
+
+Ces directives s'appliquent aux avatars NonTo, aux noms d'affichage, aux biographies, aux publications, aux commentaires, aux images, aux vidéos, aux messages privés, aux messages de la communauté et aux informations sur les événements. Opérateur : {{operatorName}}. Courriel de rapports, plaintes et appels : {{contactEmail}}.
+
+Avec les conditions d'utilisation et la politique de confidentialité, ces lignes directrices expliquent les règles d'utilisation. Un seul accord n’étend pas l’utilisation des données et ne dispense pas le fournisseur des obligations légales. Le signalement fournit des pistes sur d'éventuelles violations ; cela ne veut pas dire qu'une décision a été prise. Consultez la politique de confidentialité pour connaître les modalités d’acceptation et de réponse.
+
+2. Confidentialité et limites personnelles
+
+Ne publiez pas les adresses, les documents d’identité, les coordonnées, les photos privées ou les captures d’écran de chat d’autres personnes sans l’autorisation nécessaire. L’information publique ne justifie pas le doxxing, le harcèlement criminel, les menaces, l’extorsion ou l’exposition malveillante.
+
+Ne pas harceler, harceler sexuellement, insulter, intimider ou inciter à la haine de manière répétée contre des personnes ou des groupes. Lorsque quelqu'un refuse de communiquer, vous supprime de votre statut d'ami ou vous bloque, ne contournez pas ce choix via de nouveaux comptes, communautés ou autres canaux. Les critiques raisonnables et les désaccords ordinaires ne devraient pas automatiquement être traités comme des violations.
+
+3. Contenus et comportements interdits
+
+Ne publiez pas et ne distribuez pas d'informations interdites par les lois et réglementations applicables, y compris les contenus impliquant des menaces à la sécurité nationale, le terrorisme, la pornographie, l'exploitation sexuelle des enfants, la fraude, les jeux de hasard, les transactions illégales ou l'incitation à des crimes violents. Ne fournissez pas de liens de phishing, de logiciels malveillants, d'instructions de vol de compte ou de matériel permettant de voler des mots de passe ou des codes de vérification.
+
+Ne vous faites pas passer pour d'autres personnes, des organismes officiels ou du personnel de soutien à des fins de tromperie. N'envoyez pas de spam, ne gonflez pas frauduleusement les métriques, ne manipulez pas les interactions, n'attaquez pas les services et ne contournez pas les autorisations d'accès. Ne fabriquez pas de faits pour nuire à votre réputation et n'utilisez pas de rapports malveillants ou de fausses preuves pour exclure d'autres utilisateurs.
+
+Ne téléchargez pas d’œuvres que vous n’avez pas le droit de distribuer. Vérifiez les droits et l’autorisation avant de citer, de republier ou de publier des images ou du matériel événementiel d’autrui. L'attribution ne remplace pas automatiquement l'autorisation. Ces règles s'appliquent également aux images, aux vidéos et au texte.
+
+4. Signalements, blocages et réclamations
+
+Signalez les problèmes via les outils de publication, de commentaire, de profil utilisateur ou de message de discussion pertinents. Bloquez les comptes des profils utilisateur et gérez-les dans Paramètres → Liste bloquée. Le blocage, la suppression ou le rappel ne peuvent pas supprimer les copies enregistrées précédemment par l'autre personne ni empêcher tout contact en dehors du service.
+
+Incluez le sujet, l'identifiant du contenu ou le lien, l'heure, les raisons et les preuves nécessaires. Les rapports du chat peuvent concerner l’expéditeur. Conservez les identifiants de message pertinents et les extraits nécessaires dans votre description. Ne transférez pas des conversations entières sans rapport ni n’exposez les informations privées d’autrui afin de les signaler.
+
+Pour les plaintes pour contrefaçon, envoyez par courrier électronique les coordonnées du titulaire des droits ou de l’agent, les preuves de droits nécessaires, le lieu de la violation présumée et votre demande spécifique. Préparez-le dans Paramètres → Contact et réclamations, vérifiez le destinataire et envoyez-le vous-même. Les brouillons locaux ne sont pas automatiquement téléchargés. Ne soumettez pas de mots de passe, de codes de vérification ou de documents d’identité complets sans rapport.
+
+5. Principes et enregistrements de modération
+
+Les décisions doivent être fondées sur des faits, des lois et des règles publiques, en tenant compte de la nature et de l'impact du contenu, des comportements répétés et des risques. Les mesures telles que la limitation de la visibilité, la suppression, les restrictions de fonctionnalités ou la suspension du compte doivent être proportionnées. Le décompte des rapports à lui seul n’établit pas une violation. Les dossiers liés aux enquêtes ou aux obligations légales peuvent être conservés si nécessaire, avec un accès et une utilisation limités.
+
+Les risques urgents doivent être traités rapidement. À moins que la notification ne soit légalement interdite, les utilisateurs concernés doivent recevoir les raisons et les voies de recours, le cas échéant. Affichez l'état et les commentaires fournis par le serveur dans Paramètres → Informations personnelles et autorisations → Historique des rapports. En attente ne signifie pas que l’enquête est terminée. Resolved ne garantit pas que les copies en dehors du service ont été supprimées.
+
+6. Appels et révision
+
+Si vous pensez qu'un contenu, un compte ou un résultat de rapport a été traité de manière incorrecte, envoyez un e-mail à {{contactEmail}} avec l'identifiant du compte, du contenu ou du rapport concerné, le résultat original, les raisons de l'examen et des preuves supplémentaires. Choisissez Faire appel d'une décision dans Contact et réclamations pour préparer le texte. Fournissez uniquement les documents pertinents à examiner. Les contrôles d'identité nécessaires devraient être proportionnés à la demande.
+
+Les appels doivent être examinés à la lumière des faits. Les appels raisonnables et l’exercice des droits à l’information personnelle ne doivent pas conduire à des représailles ou à des mesures élargies. Consultez la politique de confidentialité pour connaître l’acceptation, la vérification, la réponse et le traitement des objections. Conservez les e-mails originaux et les pièces d'identité pertinentes lorsque vous faites appel par e-mail pour faciliter la communication.
+
+7. Mineurs et sécurité hors ligne
+
+N'utilisez pas les fonctionnalités sociales, les messages privés, les œuvres ou les informations sur les événements pour inciter les mineurs à divulguer des informations privées, à effectuer des paiements ou à participer à des activités inappropriées. Signalez les problèmes de sécurité ou de confidentialité impliquant des mineurs via les outils de signalement ou l’e-mail de contact. Soumettez uniquement les informations nécessaires pour localiser le problème. Consultez la politique de confidentialité pour connaître les règles de protection de l'âge et du tuteur. Ces lignes directrices ne remplacent pas les garanties requises.
+
+Avant d'assister à des événements hors ligne, vérifiez l'organisateur, l'emplacement et les dispositions en matière de sécurité. Soyez prudent lorsque vous payez des étrangers ou fournissez des documents d'identité. Les événements publiés par les utilisateurs ne signifient pas que NonTo garantit leur authenticité ou renonce aux obligations légales de gestion du fournisseur. En cas de danger personnel ou d'autres urgences, contactez directement les autorités locales compétentes. Les rapports intégrés à l'application ne remplacent pas l'assistance d'urgence.
+
+8. Accès et mises à jour
+
+Lisez ces directives hors ligne dans les informations de première utilisation, les pages Paramètres et stratégie, et enregistrez-les via le partage du système. Les changements importants aux règles doivent être clairement communiqués. Lorsque la loi exige un consentement renouvelé, offrir le libre choix ; le silence ou l’utilisation continue ne doivent pas le remplacer. La lecture hors ligne reste disponible si vous n'êtes pas d'accord. Lisez également la politique de confidentialité et les conditions d'utilisation pour connaître les règles de traitement des données et de suppression de compte.

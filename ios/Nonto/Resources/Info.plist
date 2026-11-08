@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>zh-Hans</string>
 	<key>CFBundleLocalizations</key>
-	<array><string>zh-Hans</string><string>zh-Hant</string><string>en</string></array>
+	<array><string>zh-Hans</string><string>zh-Hant</string><string>en</string><string>fr</string><string>ru</string><string>es</string><string>ja</string></array>
 	<key>CFBundleDisplayName</key>
 	<string>南图</string>
 	<key>CFBundleExecutable</key>

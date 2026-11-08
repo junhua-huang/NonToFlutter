@@ -21,6 +21,30 @@
             "state": "translated",
             "value": "NonTo"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo"
+          }
         }
       }
     },
@@ -44,6 +68,30 @@
             "state": "translated",
             "value": "NonTo uses the camera only when you choose to take a photo. You can preview and confirm the photo before sending."
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo utilise l'appareil photo uniquement lorsque vous choisissez de prendre une photo. Vous pouvez prévisualiser et confirmer la photo avant de l'envoyer."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo использует камеру только тогда, когда вы решите сделать снимок. Вы можете просмотреть и подтвердить фотографию перед отправкой."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo usa la cámara solo cuando eliges tomar una foto. Puede obtener una vista previa y confirmar la foto antes de enviarla."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo は、写真を撮ることを選択した場合にのみカメラを使用します。送信前に写真をプレビューして確認することができます。"
+          }
         }
       }
     },
@@ -66,6 +114,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "NonTo adds only the selected image to your photo library when you choose Save Image."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo ajoute uniquement l'image sélectionnée à votre photothèque lorsque vous choisissez Enregistrer l'image."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo добавляет только выбранное изображение в вашу библиотеку фотографий, когда вы выбираете «Сохранить изображение»."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo agrega solo la imagen seleccionada a su biblioteca de fotos cuando elige Guardar imagen."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NonTo は、[画像を保存] を選択すると、選択した画像のみをフォト ライブラリに追加します。"
           }
         }
       }

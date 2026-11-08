@@ -46,7 +46,7 @@ def configs(name, settings):
                        'DEBUG_INFORMATION_FORMAT': 'dwarf' if mode == 'Debug' else 'dwarf-with-dsym'})
         if mode == 'Debug':
             values.update({'SWIFT_ACTIVE_COMPILATION_CONDITIONS': 'DEBUG', 'ENABLE_TESTABILITY': 'YES', 'GCC_PREPROCESSOR_DEFINITIONS': 'DEBUG=1 $(inherited)'})
-        fields = ' '.join(f'{key} = {quote(value)};' for key, value in sorted(values.items()))
+        fields = ' '.join(f'{quote(key) if "[" in key else key} = {quote(value)};' for key, value in sorted(values.items()))
         ids.append(add(f'config:{name}:{mode}', f'{{isa = XCBuildConfiguration; buildSettings = {{{fields}}}; name = {mode}; }}'))
     return add('configlist:' + name, f'{{isa = XCConfigurationList; buildConfigurations = {array(ids)}; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; }}')
 
@@ -63,7 +63,7 @@ for document in ['privacy', 'terms', 'community']:
     translated_source.parent.mkdir(parents=True, exist_ok=True)
     translated_source.write_bytes(canonical.read_bytes())
     children = []
-    for language in ['zh-Hans', 'zh-Hant', 'en']:
+    for language in ['zh-Hans', 'zh-Hant', 'en', 'fr', 'ru', 'es', 'ja']:
         path = 'Nonto/Resources/' + (language + '.lproj/') + name
         children.append(add('ref:legal:' + document + ':' + language,
                             '{isa = PBXFileReference; lastKnownFileType = text; name = ' + quote(language) + '; path = ' + quote(path) + '; sourceTree = "<group>"; }'))
@@ -72,7 +72,7 @@ for document in ['privacy', 'terms', 'community']:
 source_refs = [ref(p, 'sourcecode.swift') for p in sources]
 test_refs = [ref(p, 'sourcecode.swift') for p in tests]
 resource_refs = [add('ref:noto-bundle', '{isa = PBXFileReference; lastKnownFileType = folder; path = NotoEmoji; sourceTree = DERIVED_FILE_DIR; }') if p.endswith('/NotoEmoji') else ref(p, 'folder.assetcatalog' if p.endswith('.xcassets') else ('text.json.xcstrings' if p.endswith('.xcstrings') else ('text.plist.xml' if p.endswith('.xcprivacy') else 'text'))) for p in resources]
-lottie_package = add('package:lottie', '{isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/airbnb/lottie-spm.git"; requirement = {kind = exactVersion; version = 4.6.1; }; }')
+lottie_package = add('package:lottie', '{isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/airbnb/lottie-ios.git"; requirement = {kind = exactVersion; version = 4.6.1; }; }')
 lottie_product = add('package-product:lottie', f'{{isa = XCSwiftPackageProductDependency; package = {lottie_package}; productName = Lottie; }}')
 lottie_framework = add('build:lottie', f'{{isa = PBXBuildFile; productRef = {lottie_product}; }}')
 lottie_test_framework = add('build:tests:lottie', f'{{isa = PBXBuildFile; productRef = {lottie_product}; }}')
@@ -98,7 +98,7 @@ emoji_unpack_script = 'set -e\n/bin/cat ' + ' '.join('"$SRCROOT/' + p + '"' for 
 emoji_unpack = add('phase:app:noto-resources', '{isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = ' + array([quote('$(SRCROOT)/' + p) for p in emoji_inputs]) + '; outputFileListPaths = ("$(SRCROOT)/Nonto.xcodeproj/NotoEmojiOutputs.xcfilelist",); outputPaths = ("$(DERIVED_FILE_DIR)/NotoEmoji.zip", "$(DERIVED_FILE_DIR)/NotoEmoji",); name = "Prepare offline Noto emoji"; runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = ' + quote(emoji_unpack_script) + '; }')
 app_phases = [archive_check, emoji_unpack, phase('app:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(sources, source_refs)]), phase('app:frameworks', 'PBXFrameworksBuildPhase', [lottie_framework]), phase('app:resources', 'PBXResourcesBuildPhase', [build(p, r) for p, r in zip(resources, resource_refs)] + [build('legal:' + name, variant) for name, variant in legal_resources])]
 test_phases = [phase('tests:sources', 'PBXSourcesBuildPhase', [build(p, r) for p, r in zip(tests, test_refs)]), phase('tests:frameworks', 'PBXFrameworksBuildPhase', [lottie_test_framework]), phase('tests:resources', 'PBXResourcesBuildPhase', [])]
-common = {'IPHONEOS_DEPLOYMENT_TARGET': '26.0', 'SDKROOT': 'iphoneos', 'SWIFT_VERSION': '5.0', 'CLANG_ENABLE_MODULES': 'YES', 'TARGETED_DEVICE_FAMILY': '1,2', 'CODE_SIGN_STYLE': 'Automatic', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO'}
+common = {'IPHONEOS_DEPLOYMENT_TARGET': '26.0', 'SDKROOT': 'iphoneos', 'SWIFT_VERSION': '5.0', 'CLANG_ENABLE_MODULES': 'YES', 'TARGETED_DEVICE_FAMILY': '1,2', 'CODE_SIGN_STYLE': 'Automatic', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO', 'ONLY_ACTIVE_ARCH[sdk=iphonesimulator*]': 'YES'}
 app_config = configs('app', common | {'NONTO_DISTRIBUTION_CHANNEL': 'app-store', 'CODE_SIGN_ENTITLEMENTS': 'Nonto/Resources/Nonto.entitlements', 'PRODUCT_NAME': 'Nonto', 'PRODUCT_BUNDLE_IDENTIFIER': 'online.nonto.native', 'INFOPLIST_FILE': 'Nonto/Resources/Info.plist', 'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME': 'AccentColor', 'MARKETING_VERSION': '1.0.0', 'CURRENT_PROJECT_VERSION': '1', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'ENABLE_USER_SCRIPT_SANDBOXING': 'YES'})
 test_config = configs('tests', common | {'PRODUCT_NAME': 'NontoTests', 'PRODUCT_BUNDLE_IDENTIFIER': 'online.nonto.native.tests', 'GENERATE_INFOPLIST_FILE': 'YES', 'TEST_HOST': '$(BUILT_PRODUCTS_DIR)/Nonto.app/Nonto', 'BUNDLE_LOADER': '$(TEST_HOST)', 'TEST_TARGET_NAME': 'Nonto', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks @loader_path/Frameworks'})
 app_id = ident('target:app')
@@ -108,7 +108,7 @@ dependency = add('dependency:app', f'{{isa = PBXTargetDependency; target = {app_
 add('target:app', f'{{isa = PBXNativeTarget; buildConfigurationList = {app_config}; buildPhases = {array(app_phases)}; buildRules = (); dependencies = (); packageProductDependencies = ({lottie_product},); name = Nonto; productName = Nonto; productReference = {app_product}; productType = "com.apple.product-type.application"; }}')
 test_id = add('target:tests', f'{{isa = PBXNativeTarget; buildConfigurationList = {test_config}; buildPhases = {array(test_phases)}; buildRules = (); dependencies = ({dependency},); packageProductDependencies = ({lottie_product},); name = NontoTests; productName = NontoTests; productReference = {test_product}; productType = "com.apple.product-type.bundle.unit-test"; }}')
 project_config = configs('project', {'CLANG_ENABLE_OBJC_ARC': 'YES', 'CLANG_WARN_DOCUMENTATION_COMMENTS': 'YES', 'GCC_C_LANGUAGE_STANDARD': 'gnu17', 'SWIFT_STRICT_CONCURRENCY': 'targeted'})
-add('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {{{app_id} = {{CreatedOnToolsVersion = 16.0; SystemCapabilities = {{com.apple.Push = {{enabled = 1; }}; }}; }}; {test_id} = {{CreatedOnToolsVersion = 16.0; TestTargetID = {app_id}; }}; }}; }}; buildConfigurationList = {project_config}; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", "zh-Hant", en, Base); mainGroup = {main_group}; packageReferences = ({lottie_package},); productRefGroup = {ident("group:Products")}; projectDirPath = ""; projectRoot = ""; targets = ({app_id}, {test_id},); }}')
+add('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = {{{app_id} = {{CreatedOnToolsVersion = 16.0; SystemCapabilities = {{com.apple.Push = {{enabled = 1; }}; }}; }}; {test_id} = {{CreatedOnToolsVersion = 16.0; TestTargetID = {app_id}; }}; }}; }}; buildConfigurationList = {project_config}; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", "zh-Hant", en, fr, ru, es, ja, Base); mainGroup = {main_group}; packageReferences = ({lottie_package},); productRefGroup = {ident("group:Products")}; projectDirPath = ""; projectRoot = ""; targets = ({app_id}, {test_id},); }}')
 PROJECT.mkdir(exist_ok=True)
 (PROJECT / 'project.pbxproj').write_text('// !$*UTF8*$!\n{\narchiveVersion = 1;\nclasses = {};\nobjectVersion = 56;\nobjects = {\n' + '\n'.join(f'{key} = {value};' for key, value in sorted(objects.items())) + f'\n}};\nrootObject = {project_id};\n}}\n')
 scheme_dir = PROJECT / 'xcshareddata/xcschemes'

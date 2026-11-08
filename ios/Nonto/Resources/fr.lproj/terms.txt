@@ -1,0 +1,83 @@
+Conditions d’utilisation de NonTo
+Version : {{policyVersion}}
+Mise à jour : 22 octobre 2026
+
+1. Portée et choix
+
+Ces conditions s'appliquent aux fonctionnalités d'informations sur les comptes, les publications, les amis, les messages privés, la communauté et les événements dans les clients iOS et iPadOS natifs NonTo. Fournisseur de services : {{operatorName}}. E-mail de contact, réclamations, appels et droits en matière de données : {{contactEmail}}.
+
+Lisez ces conditions et la politique de confidentialité avant d'utiliser les services de compte et décidez librement d'accepter ou non. Si vous n'êtes pas d'accord pour l'instant, vous pouvez lire les informations hors ligne. L'accord n'autorise pas chaque autorisation système ou service futur. La politique de confidentialité explique le traitement des informations personnelles sans modifier vos droits statutaires.
+
+2. Comptes et éligibilité
+
+Inscrivez-vous en utilisant un e-mail que vous êtes autorisé à utiliser. Fournissez des informations véridiques, exactes et licites si nécessaire et corrigez-les rapidement. Protégez les mots de passe, les codes de vérification, les appareils et les sessions de connexion. Ne vous faites pas passer pour autrui, ne vous inscrivez pas de manière malveillante, ne vendez pas ou ne louez pas de comptes, et ne les utilisez pas à des fins frauduleuses. Si vous découvrez un vol de compte ou une activité inhabituelle, modifiez votre mot de passe rapidement et contactez l'e-mail ci-dessus. Le prestataire reste responsable des obligations de sécurité du compte requises par la loi.
+
+La vérification du rôle ou du créateur indique uniquement le résultat de l'examen de la candidature concernée. Elle ne garantit pas les travaux, la réputation commerciale ou la sécurité des transactions. La vérification par e-mail n'est pas une vérification légale du nom réel. Les services nécessitant une vérification du nom réel doivent expliquer leur portée, leur méthode et les informations nécessaires et se conformer à la loi. Les présentes conditions n'autorisent pas la collecte générale de pièces d'identité.
+
+Portée et dispositions actuelles pour la vérification du nom réel : 
+{{realNameVerificationSummary}}
+
+Les mineurs doivent se renseigner sur le service et ses risques auprès d'un tuteur et éviter de divulguer les écoles, les adresses et les numéros de téléphone. Âge actuel d'admissibilité et dispositions en matière de protection : 
+{{minorProtectionSummary}}
+
+Les cases à cocher d'accord ordinaires, la vérification par courrier électronique ou les déclarations d'âge ne peuvent pas remplacer la vérification nécessaire de l'identité et du tuteur. Les services impliquant des mineurs ou des informations d'identité doivent suivre la portée et les garanties décrites dans la politique de confidentialité.
+
+3. Publication, chats et interactions
+
+Vérifiez le contenu et son audience avant de le publier. Le contenu public peut être enregistré ou transféré. Le contenu réservé aux amis et les messages privés peuvent également être capturés ou redistribués par les destinataires. La modification de la visibilité, la suppression ou le rappel ne peuvent garantir la suppression des copies indépendantes de la volonté du service. Ne comptez pas sur le chat ordinaire pour envoyer des documents d'identité, des mots de passe, des codes de vérification ou d'autres informations hautement sensibles.
+
+Respectez les limites des autres. Ne les harcelez pas à plusieurs reprises et ne contournez pas le blocage pour les contacter. L'état d'envoi, de livraison, de lecture et de rappel dépend des réponses réelles du service ; les réseaux et les appareils peuvent entraîner des retards. Les indicateurs de statut ne prouvent pas qu'un destinataire a compris, accepté ou pris un engagement.
+
+4. Contenu et conduite
+
+Vous devez avoir le droit de publier ou d'envoyer les textes, images, vidéos, œuvres et liens concernés et êtes légalement responsable de votre comportement. Respectez les droits de propriété intellectuelle, d’image, de réputation et de confidentialité et obtenez les autorisations nécessaires lorsque vous citez des œuvres, publiez des photos d’autrui ou partagez des captures d’écran de chat. La disponibilité publique préalable n’autorise pas une redistribution sans restriction.
+
+Ne pas publier ou distribuer d'informations criminelles ou illégales, inciter au terrorisme, à la violence ou à la haine, fournir du contenu pornographique ou d'exploitation sexuelle d'enfants, menacer, intimider, traquer, harceler, discriminer ou exposer des informations privées, distribuer des fraudes, du phishing, des logiciels malveillants ou du spam, enfreindre des droits légaux, usurper l'identité de fonctionnaires ou d'autres personnes à des fins de tromperie, ou utiliser des fonctionnalités sociales et événementielles pour des transactions illégales ou pour inciter à la divulgation d'informations sensibles.
+
+N’attaquez pas le service, ne volez pas les informations d’identification, ne contournez pas les autorisations pour accéder au contenu des autres, ne manipulez pas de manière malveillante les interactions en masse ou ne perturbez pas les opérations normales. Ces conditions n'interdisent pas catégoriquement les demandes de droits légitimes, les critiques raisonnables, les commentaires de sécurité de bonne foi ou toute autre activité licite. Des exemples, des documents de rapport et des principes de modération peuvent être lus hors ligne dans Paramètres → Lignes directrices de la communauté. Les lignes directrices n’étendent pas l’autorisation et ne renoncent pas aux responsabilités statutaires.
+
+5. Rapports, modération et recours
+
+Faites votre rapport via les outils de publication, de commentaire, de profil utilisateur et de message de chat pertinents. Bloquez les comptes des profils utilisateur. Consultez la progression et les commentaires fournis par le serveur dans Paramètres → Informations personnelles et autorisations → Historique des rapports. Le blocage ne supprime pas le contenu déjà reçu par l'autre personne et ne peut garantir la prévention des contacts via tous les canaux externes.
+
+Fournissez le sujet, l'identifiant du contenu ou le lien, les circonstances et les preuves nécessaires. Les plaintes relatives à la propriété intellectuelle peuvent être envoyées par courrier électronique avec une preuve des droits, le lieu de la violation présumée et les coordonnées. Si vous pensez qu'une décision est erronée, faites appel au même e-mail avec des faits supplémentaires. Paramètres → Contact et réclamations permet de préparer une demande et d'ouvrir un e-mail. Il ne soumet pas automatiquement un rapport ni ne complète l'envoi. Fournissez uniquement le matériel nécessaire. Ne déposez pas de rapports malveillants, ne fabriquez pas de preuves et n’exposez pas d’informations privées sans rapport.
+
+Le fournisseur doit fonder ses décisions sur des faits, le droit et les règles publiques, en appliquant des mesures proportionnées telles que limiter la visibilité, supprimer du contenu, suspendre des fonctionnalités ou des comptes. Les motifs et les voies de recours doivent être fournis le cas échéant. Les risques urgents et les circonstances dans lesquelles la notification est légalement interdite sont traités conformément à la loi. Le décompte des rapports ne doit pas remplacer l’évaluation factuelle. Un rapport n'établit pas qu'une plainte est valide et les affichages de statut ne garantissent pas la suppression de toutes les copies distribuées.
+
+Les rapports soumettent des pistes sur les violations. Le blocage limite les interactions pertinentes. Pour contester un résultat, fournissez son identifiant et les raisons de l'examen. Consultez la politique de confidentialité pour connaître les modalités d’acceptation et de réponse.
+
+6. Droits sur le contenu et autorisation nécessaire
+
+Vous conservez vos droits légaux sur votre contenu. Pour fournir les fonctionnalités que vous choisissez activement, vous accordez au fournisseur une licence non exclusive, uniquement dans la mesure nécessaire, pour stocker, copier, convertir des formats, transmettre, afficher et effectuer un examen de sécurité. Ceci est soumis à vos paramètres de visibilité, aux objectifs du service et à la loi. Les fournisseurs mandatés ne doivent traiter les informations que si cela est nécessaire.
+
+Cette licence ne transfère pas la propriété et ne crée pas d'autorisation permanente, irrévocable ou illimitée. Il n’autorise pas automatiquement l’utilisation de messages privés, d’œuvres ou d’informations personnelles à des fins de publicité, de vente ou de formation de modèles d’intelligence artificielle à usage général. Les utilisations au-delà de l'objectif de la fonctionnalité d'origine nécessitent l'autorisation distincte nécessaire. Après la suppression ou la clôture du compte, les enregistrements ne peuvent être conservés que pour la durée et la durée nécessaires au traitement nécessaire, à la résolution des litiges ou aux obligations légales. Voir la Politique de confidentialité.
+
+Les droits sur les logiciels, icônes, marques et autres éléments appartiennent à leurs propriétaires respectifs. Les matériaux open source et tiers sont utilisés sous leurs licences réelles. Ces conditions ne remplacent pas les licences de référentiel requises et ne restreignent pas une utilisation loyale légale et d'autres droits.
+
+7. Événements, prestations externes et tarifs
+
+Les descriptions d'événements, le contenu de la communauté et les liens vers des œuvres peuvent provenir d'utilisateurs ou de tiers. Vérifiez les organisateurs, l'heure, le lieu, l'éligibilité et les dispositions de sécurité, et soyez prudent lorsque vous payez des étrangers ou partagez des informations d'identité. La publication d’un utilisateur ordinaire ne fait pas de NonTo l’organisateur, le garant ou la contrepartie. Elle ne dispense pas le prestataire des obligations légales de gérer et de répondre aux risques connus.
+
+Les sites Web externes, d'autres applications et destinations de partage peuvent appliquer leurs propres règles. Lisez leurs informations avant de soumettre des données. Le client natif actuel n’intègre pas d’achats intégrés, d’abonnements ou de SDK de paiement. Cela ne garantit pas que les événements tiers seront toujours gratuits. Les futures fonctionnalités payantes doivent expliquer clairement les prix, le contenu, les renouvellements et les remboursements et obtenir la confirmation correspondante. Ces conditions n'autorisent pas les frais automatiques. L'utilisation du réseau peut entraîner des frais de données de l'opérateur.
+
+8. Déconnexion, retrait et suppression de compte
+
+La déconnexion met fin à la session actuelle de l'appareil. Il ne s'agit pas d'une suppression de compte et n'efface pas automatiquement les brouillons, le contenu du serveur ou les sessions sur d'autres appareils. Retirez le consentement à la politique dans Paramètres → Informations personnelles et autorisations. Le client revient aux informations hors ligne sans supprimer automatiquement le compte du serveur.
+
+Dans Paramètres → Supprimer le compte, lisez les informations, saisissez le texte de confirmation et confirmez à nouveau pour postuler. Success vous déconnecte et efface les brouillons locaux, la boîte d'envoi et les caches du compte. En cas d'échec, réessayez comme indiqué ou contactez l'assistance. La suppression du compte ne peut pas être annulée. Conservez d’abord le matériel que vous êtes légalement autorisé à conserver, sans porter atteinte aux droits d’autrui.
+
+Les enregistrements, supports, sauvegardes et informations liés au serveur conservés en vertu de la loi sont traités dans le cadre de la politique de confidentialité. Reportez-vous à sa portée spécifique et à ses délais pour le contenu du compte, les objets multimédias, les sauvegardes et les enregistrements statutaires. Les copies enregistrées indépendamment par les destinataires ne sont pas automatiquement supprimées lors de la suppression du compte.
+
+9. Modifications du service, sécurité et responsabilité
+
+Les pannes de réseau, l'état de l'appareil, les restrictions du système, les incidents de maintenance et de sécurité peuvent affecter le chargement, les notifications et la livraison des messages. Le fournisseur doit prendre des mesures de protection et de réparation raisonnables, donner un préavis ou un préavis en cas de modifications majeures, d'interruption ou de résiliation si nécessaire, et traiter les données conformément à la loi. Sauvegardez les informations importantes de manière appropriée. N'utilisez pas NonTo pour une communication d'urgence ou comme seule sauvegarde.
+
+Vous et le fournisseur êtes chacun responsables de votre faute respective et des autres obligations imposées par la loi, telles que déterminées par les faits et la loi. Les tests, les services gratuits, le consentement de l'utilisateur ou la participation de tiers ne peuvent pas renoncer à des obligations irrévocables. Les utilisateurs ne sont pas tenus d'indemniser le fournisseur sans limite pour sa propre faute. Les droits des consommateurs et des informations personnelles ne sont pas exclus.
+
+10. Mises à jour et litiges
+
+Lisez ces conditions lors de la première utilisation, sur la page de connexion ou dans Paramètres → Conditions de service. Naviguez en utilisant le contenu ou enregistrez-le avec le partage du système. Les changements importants apportés aux droits et obligations doivent être clairement communiqués et un consentement renouvelé doit être obtenu lorsque la loi l'exige. Le client enregistre la version et l'heure convenues et présente à nouveau les informations après la mise à jour du document ou de la configuration d'exploitation. Le silence ou l'utilisation continue ne remplace pas le consentement requis.
+
+Pour les litiges de service, de réclamation, d'appel ou de conditions, envoyez d'abord un e-mail à {{contactEmail}} avec votre compte, l'événement et la résolution que vous recherchez. Consultez la politique de confidentialité pour connaître les modalités de vérification, de réponse et d'examen. Si aucun accord n’est trouvé, recherchez une résolution auprès des organismes compétents en vertu de la loi. Aucun lieu choisi unilatéralement, aucun arbitrage obligatoire, aucune privation d’accès au tribunal ou aucune clause « d’interprétation finale » ne restreint les recours légaux.
+
+Si une disposition est invalide ou inapplicable en vertu de la loi, les dispositions restantes en vigueur sont traitées en conséquence sans étendre les droits du fournisseur. La loi impérative prime.

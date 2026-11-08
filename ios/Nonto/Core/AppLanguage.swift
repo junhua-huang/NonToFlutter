@@ -6,10 +6,28 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     case simplifiedChinese = "zh-Hans"
     case traditionalChinese = "zh-Hant"
     case english = "en"
+    case french = "fr"
+    case russian = "ru"
+    case spanish = "es"
+    case japanese = "ja"
 
     static let storageKey = "nonto.native.language"
-    static let supported = ["zh-Hans", "zh-Hant", "en"]
+    static let supported = allCases.filter { $0 != .system }.map(\.rawValue)
     var id: String { rawValue }
+
+    /// Autonyms stay recognizable even when the current language is unfamiliar.
+    var nativeName: String {
+        switch self {
+        case .system: return AppLocalization.string("跟随系统")
+        case .simplifiedChinese: return "简体中文"
+        case .traditionalChinese: return "繁體中文"
+        case .english: return "English"
+        case .french: return "Français"
+        case .russian: return "Русский"
+        case .spanish: return "Español"
+        case .japanese: return "日本語"
+        }
+    }
 
     func resolvedLanguage(preferences: [String] = Locale.preferredLanguages) -> String {
         guard self == .system else { return rawValue }

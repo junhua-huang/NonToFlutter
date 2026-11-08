@@ -20,10 +20,9 @@ struct SettingsView: View {
             }
             Section("语言") {
                 Picker("App 语言", selection: $appLanguage) {
-                    Text("跟随系统").tag(AppLanguage.system)
-                    Text(verbatim: "简体中文").tag(AppLanguage.simplifiedChinese)
-                    Text(verbatim: "繁體中文").tag(AppLanguage.traditionalChinese)
-                    Text(verbatim: "English").tag(AppLanguage.english)
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(verbatim: language.nativeName).tag(language)
+                    }
                 }.pickerStyle(.menu).accessibilityIdentifier("settings.language")
             }
             Section("账号") {
