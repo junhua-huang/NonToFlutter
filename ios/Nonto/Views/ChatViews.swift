@@ -61,7 +61,7 @@ struct MessagesView: View {
                     if conversation.id > 0, conversation.unread > 0, !markingRead.contains(conversation.id) {
                         Button { Task { await markRead(conversation) } } label: {
                             Label("标为已读", systemImage: "envelope.open")
-                        }.tint(accent.color)
+                        }.buttonStyle(.automatic).tint(accent.color)
                     }
                     let details = conversation.isCommunity
                         ? AppRoute.community(conversation.communityID ?? 0) : .profile(conversation.other.id)
@@ -69,7 +69,7 @@ struct MessagesView: View {
                         Button { navigate(details) } label: {
                             if conversation.isCommunity { Label("查看社群", systemImage: "person.3") }
                             else { Label("查看资料", systemImage: "person.crop.circle") }
-                        }.tint(.gray)
+                        }.buttonStyle(.automatic).tint(.gray)
                     }
                 }
             }
