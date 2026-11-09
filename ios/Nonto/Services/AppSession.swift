@@ -401,6 +401,15 @@ final class PagedResource<T: Record>: ObservableObject {
 }
 
 extension PagedResource where T == Conversation {
+    func loadMissingPins(_ ids: [Int]) async {
+        let pinned = Set(ids)
+        while hasMore, error == nil, !Task.isCancelled, !pinned.isSubset(of: Set(items.map(\.id))) {
+            let previousPage = page
+            await load()
+            guard page > previousPage else { return }
+        }
+    }
+
     func markRead(_ conversation: Conversation) async throws {
         guard conversation.id > 0, conversation.unread > 0, api.generation == accountEpoch else { return }
         _ = try await api.request("/chat/conversations/\(conversation.id)/mark-read", method: "POST")

@@ -67,6 +67,8 @@ struct ResourceFooter<T: Record>: View {
     var emptyDescription: LocalizedStringKey = "稍后再来看看，或下拉刷新。"
     var emptyIcon = "tray"
     var compactEmpty = false
+    var visibleItemsEmpty: Bool? = nil
+    private var isEmpty: Bool { visibleItemsEmpty ?? resource.items.isEmpty }
     var body: some View {
         let _ = appLocale
         Group {
@@ -75,15 +77,15 @@ struct ResourceFooter<T: Record>: View {
                     if resource.showingCache { Label("当前显示本机缓存", systemImage: "internaldrive").font(.caption).foregroundStyle(.secondary) }
                     ErrorBanner(text: error) { Task { await resource.retry() } }
                 }
-            } else if resource.loading || (resource.page == 0 && resource.items.isEmpty) {
-                ProgressView(resource.items.isEmpty ? AppLocalization.string("正在加载…") : AppLocalization.string("正在更新…")).frame(maxWidth: .infinity).padding()
+            } else if resource.loading || (resource.page == 0 && isEmpty) {
+                ProgressView(isEmpty ? AppLocalization.string("正在加载…") : AppLocalization.string("正在更新…")).frame(maxWidth: .infinity).padding()
             } else if resource.hasMore {
                 Button("加载更多") { Task { await resource.load() } }.frame(maxWidth: .infinity).padding()
                     .task(id: resource.page) {
                         guard resource.page > 0, !Task.isCancelled else { return }
                         await resource.load()
                     }
-            } else if resource.items.isEmpty {
+            } else if isEmpty {
                 if compactEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(emptyTitle).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)

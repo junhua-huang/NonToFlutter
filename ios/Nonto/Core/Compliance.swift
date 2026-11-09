@@ -162,6 +162,7 @@ enum AccountLocalData {
                 defaults.removeObject(forKey: key)
             }
         }
+        defaults.removeObject(forKey: ConversationListPreferences.storageKey(userID: userID))
         URLCache.shared.removeAllCachedResponses()
         try LocalCache.clear(userID: userID)
     }
