@@ -400,6 +400,25 @@ final class PagedResource<T: Record>: ObservableObject {
     }
 }
 
+extension PagedResource where T == Conversation {
+    func markRead(_ conversation: Conversation) async throws {
+        guard conversation.id > 0, conversation.unread > 0, api.generation == accountEpoch else { return }
+        _ = try await api.request("/chat/conversations/\(conversation.id)/mark-read", method: "POST")
+
+        // Let any overlapping fetch publish first so an unread count belonging
+        // to a newer last message cannot be zeroed by this older action.
+        while let task = activeTask {
+            let ticket = requestID
+            await task.value
+            if requestID == ticket { break }
+        }
+        try Task.checkCancellation()
+        guard let current = items.first(where: { $0.id == conversation.id }),
+              current.last.id == conversation.last.id, current.unread > 0 else { return }
+        apply(id: conversation.id, patch: .object(["unread_count": .id(0)]))
+    }
+}
+
 extension PagedResource where T == Post {
     /// Keep the backing rows and their cache in sync even when no card is visible.
     func observePostChanges(in session: AppSession) {

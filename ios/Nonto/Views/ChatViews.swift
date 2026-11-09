@@ -18,6 +18,9 @@ struct MessagesView: View {
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.navigate) private var navigate
+    @State private var markingRead = Set<Int>()
+    @State private var readError: String?
     private let socket: RealtimeClient
     private let selectedRouteKey: String?
     private let splitSelectionVisible: Bool?
@@ -31,6 +34,7 @@ struct MessagesView: View {
     var body: some View {
         let _ = appLocale
         List {
+            if let readError { ErrorBanner(text: readError).listRowSeparator(.hidden) }
             ForEach(resource.items) { conversation in
                 RouteButton(.chat(conversation)) {
                     HStack(spacing: 12) {
@@ -53,14 +57,43 @@ struct MessagesView: View {
                 .listRowBackground(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? accent.color.opacity(0.10) : Color.timelineBackground)
                 .accessibilityAddTraits(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
                 .listRowSeparator(.hidden)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if conversation.id > 0, conversation.unread > 0, !markingRead.contains(conversation.id) {
+                        Button { Task { await markRead(conversation) } } label: {
+                            Label("标为已读", systemImage: "envelope.open")
+                        }.tint(accent.color)
+                    }
+                    let details = conversation.isCommunity
+                        ? AppRoute.community(conversation.communityID ?? 0) : .profile(conversation.other.id)
+                    if details.isValid {
+                        Button { navigate(details) } label: {
+                            if conversation.isCommunity { Label("查看社群", systemImage: "person.3") }
+                            else { Label("查看资料", systemImage: "person.crop.circle") }
+                        }.tint(.gray)
+                    }
+                }
             }
             ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
         }.timelineList().navigationTitle(AppLocalization.string("私信")).navigationBarTitleDisplayMode(.inline)
             .toolbar { RouteButton(.friends) { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
             .task { await resource.loadIfNeeded() }
-            .refreshable { await resource.load(reset: true); await session.refreshCounts() }
+            .refreshable { readError = nil; await resource.load(reset: true); await session.refreshCounts() }
             .onReceive(socket.events.filter { ChatRealtimeEvent($0).affectsConversationList }
                 .debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
+    }
+    private func markRead(_ conversation: Conversation) async {
+        guard markingRead.insert(conversation.id).inserted else { return }
+        defer { markingRead.remove(conversation.id) }
+        let epoch = session.api.generation
+        readError = nil
+        do {
+            try await resource.markRead(conversation)
+            await session.refreshCounts()
+        } catch {
+            if session.api.generation == epoch, !Task.isCancelled, (error as? URLError)?.code != .cancelled {
+                readError = error.localizedDescription
+            }
+        }
     }
     private func preview(_ message: ChatMessage) -> String {
         if message.isSticker { return ChatSticker.displayContent }
@@ -116,7 +149,7 @@ struct ChatRoomContent: View {
     @State private var pendingAttachmentAction: ChatAttachmentRequest?
     @State private var attachmentRequest: ChatAttachmentRequest?
     @State private var inputDismissal = 0
-    @State private var farFromLatest = false
+    @State private var showsLatestShortcut = false
     @State private var showingCamera = false
     @State private var capturedPhoto: Data?
     @State private var captureFailed = false
@@ -167,7 +200,6 @@ struct ChatRoomContent: View {
                                        galleryImages: entry.pending == nil ? timeline.gallery : [],
                                        galleryIndex: timeline.galleryIndexes[entry.row.id], onMediaPresentation: mediaPresentationChanged,
                                        pending: entry.pending, sending: store.sendingID == entry.pending?.id,
-                                       blocked: store.pending.first?.failure != nil && store.pending.first?.id != entry.pending?.id,
                                        retry: { if let item = entry.pending { store.retry(item.id) } },
                                        remove: { if let item = entry.pending { store.remove(item.id) } },
                                        checkDelivery: { Task { await store.load() } },
@@ -206,8 +238,11 @@ struct ChatRoomContent: View {
                                     bottomInset: geometry.contentInsets.bottom, visibleWidth: geometry.containerSize.width)
             } action: { previous, value in
                 onViewportMetrics?(value)
-                if let y = viewport.record(value) { position.scrollTo(y: y) }
-                else if abs(previous.visibleWidth - value.visibleWidth) > 1,
+                if let y = viewport.record(value) {
+                    position.scrollTo(y: y)
+                    return
+                }
+                if abs(previous.visibleWidth - value.visibleWidth) > 1,
                         store.nearBottom, !viewport.userScrolling,
                         !viewport.preservingHistory, !viewport.presentingMedia {
                     // Keep the concrete final row anchored while lazy cells reflow.
@@ -218,12 +253,12 @@ struct ChatRoomContent: View {
                         !viewport.preservingHistory, !viewport.presentingMedia {
                     followLatest(in: value)
                 }
-                if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
-                    if value.nearBottom { store.reachedBottom(true) }
-                    else if viewport.userScrolling && viewport.userMoved && value.hasSameLayout(as: previous) {
-                        store.reachedBottom(false)
+                if canUpdateReadingPosition {
+                    if viewport.userScrolling, viewport.userMoved, value.hasSameViewport(as: previous) {
+                        updateReadingPosition(value)
+                    } else if value.nearBottom, store.nearBottom || value.hasSameLayout(as: previous) {
+                        updateReadingPosition(value)
                     }
-                    if farFromLatest != value.farFromBottom { farFromLatest = value.farFromBottom }
                     if value.shouldLoadHistory(userScrolling: viewport.userScrolling), store.more {
                         Task { await loadOlder() }
                     }
@@ -231,20 +266,18 @@ struct ChatRoomContent: View {
             }
             .onScrollPhaseChange { _, phase in
                 let didScroll = viewport.userScrolling && viewport.userMoved
-                viewport.userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+                viewport.userScrolling = phase == .interacting || phase == .decelerating
                 if phase == .interacting { dismissInput() }
                 // Programmatic scrolling and keyboard layout also end in idle.
                 // Only a real timeline pan can switch off following the latest row.
-                if phase == .idle, didScroll, let metrics = viewport.metrics,
-                   !store.loadingOlder, !viewport.preservingHistory, !viewport.presentingMedia {
-                    store.reachedBottom(metrics.nearBottom)
-                    if farFromLatest != metrics.farFromBottom { farFromLatest = metrics.farFromBottom }
+                if phase == .idle, didScroll, let metrics = viewport.metrics, canUpdateReadingPosition {
+                    updateReadingPosition(metrics)
                 }
             }
             .onChange(of: store.scrollRequest) { _, _ in
                 viewport.clearPreservation()
                 quoteReturnID = nil; highlightedMessage = nil
-                farFromLatest = false
+                showsLatestShortcut = false
                 followLatest()
             }
             .onChange(of: timeline.entries.last?.id) { _, _ in
@@ -255,12 +288,12 @@ struct ChatRoomContent: View {
                     if let returnID = quoteReturnID, !attachmentMenuVisible {
                         Button {
                             quoteReturnID = nil; highlightedMessage = nil
-                            withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: returnID, anchor: .center) }
+                            scrollToQuotedRow(returnID)
                         } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
                             .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
                     }
-                    if !store.nearBottom && (farFromLatest || store.unread > 0)
-                        && !store.messages.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
+                    if !store.nearBottom && (showsLatestShortcut || store.unread > 0)
+                        && !timeline.entries.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
                         Button { store.jumpToLatest() } label: {
                             Label(store.unread > 0 ? AppLocalization.string("\(store.unread) 条新消息") : AppLocalization.string("回到最新"), systemImage: "arrow.down")
                         }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
@@ -435,6 +468,14 @@ struct ChatRoomContent: View {
             else { position.scrollTo(id: "chat-bottom", anchor: .bottom) }
         }
     }
+    private var canUpdateReadingPosition: Bool {
+        !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia
+    }
+    private func updateReadingPosition(_ metrics: ChatViewportMetrics) {
+        store.reachedBottom(metrics.nearBottom)
+        let show = metrics.showsLatestShortcut(wasVisible: showsLatestShortcut)
+        if showsLatestShortcut != show { showsLatestShortcut = show }
+    }
     private func loadOlder() async {
         guard !store.loadingOlder, !viewport.preservingHistory, store.more, visible else { return }
         let first = store.messages.first?.id
@@ -453,11 +494,21 @@ struct ChatRoomContent: View {
         }
         viewport.clearPreservation(); store.reachedBottom(false)
         quoteReturnID = entryID; highlightedMessage = id
-        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: target.id, anchor: .center) }
+        scrollToQuotedRow(target.id)
         highlightTask?.cancel()
         highlightTask = Task {
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
             highlightedMessage = nil
+        }
+    }
+    private func scrollToQuotedRow(_ id: String) {
+        let request = store.scrollRequest
+        withAnimation(.easeOut(duration: 0.2), completionCriteria: .removed) {
+            position.scrollTo(id: id, anchor: .center)
+        } completion: {
+            if store.scrollRequest == request, !viewport.userScrolling, canUpdateReadingPosition, let metrics = viewport.metrics {
+                updateReadingPosition(metrics)
+            }
         }
     }
     private func mediaPresentationChanged(_ presented: Bool) {
@@ -469,6 +520,10 @@ struct ChatRoomContent: View {
         } else if let y = viewport.endMedia() {
             var transaction = Transaction(); transaction.disablesAnimations = true
             withTransaction(transaction) { position.scrollTo(y: y) }
+            if var metrics = viewport.metrics {
+                metrics.offset = y
+                updateReadingPosition(metrics)
+            }
         }
     }
 
@@ -720,13 +775,9 @@ struct ChatComposerInput: View {
                 .frame(minHeight: inputControlHeight)
                 .disabled(stickerSender.busy).accessibilityLabel("消息内容")
             Button(action: send) {
-                Group {
-                    if stickerSender.busy { ProgressView().tint(accent.symbolColor) }
-                    else {
-                        Image(systemName: "arrow.up.circle.fill").font(.system(size: min(inputControlHeight * 0.62, 40)))
-                            .foregroundStyle(canSend ? accent.symbolColor : Color.secondary)
-                    }
-                }.frame(width: inputControlHeight - 8, height: inputControlHeight - 8)
+                Image(systemName: "arrow.up.circle.fill").font(.system(size: min(inputControlHeight * 0.62, 40)))
+                    .foregroundStyle(canSend ? accent.symbolColor : Color.secondary)
+                    .frame(width: inputControlHeight - 8, height: inputControlHeight - 8)
             }.disabled(!canSend)
                 .padding(.bottom, 4)
                 .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")

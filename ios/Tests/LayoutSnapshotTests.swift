@@ -519,8 +519,8 @@ final class LayoutSnapshotTests: XCTestCase {
             ScrollView {
                 VStack(spacing: 16) {
                     ChatMessageRow(row: row, community: true, showsReceipt: false, onQuote: { _ in }, onRecall: { _ in })
-                    ChatPendingRow(item: PendingMessage(content: "待发送视频", kind: "video", media: video.media), sending: true, blocked: false, retry: {}, remove: {})
-                    ChatPendingRow(item: PendingMessage(content: "这是一条发送失败的文字消息", failure: "暂时无法发送，请重试"), sending: false, blocked: false, retry: {}, remove: {})
+                    ChatPendingRow(item: PendingMessage(content: "待发送视频", kind: "video", media: video.media), sending: true, retry: {}, remove: {})
+                    ChatPendingRow(item: PendingMessage(content: "这是一条发送失败的文字消息", failure: "暂时无法发送，请重试"), sending: false, retry: {}, remove: {})
                 }.padding(.vertical)
             }.navigationTitle("媒体与发送状态")
         }, session: session, name: "chat-bare-video-and-retry", width: 390, dark: true, expectsScrollChrome: false)
@@ -539,7 +539,7 @@ final class LayoutSnapshotTests: XCTestCase {
         try await capture(AppNavigationStack {
             ScrollView {
                 ChatPendingRow(item: PendingMessage(content: "弱网时发送的消息", failure: "未收到发送确认，请先检查最新消息", deliveryUncertain: true),
-                               sending: false, blocked: false, retry: {}, remove: {})
+                               sending: false, retry: {}, remove: {})
             }.navigationTitle("发送状态")
         }, session: session, name: "chat-uncertain-delivery-large-text", width: 320, largeText: true, expectsScrollChrome: false)
     }
@@ -570,7 +570,7 @@ final class LayoutSnapshotTests: XCTestCase {
                           name: "chat-quote-context-dark", width: 390, dark: true, expectsScrollChrome: false, ready: { contextLoaded })
         let item = PendingMessage(content: "网络恢复后继续发送这条消息", failure: "网络暂不可用", retryWhenOnline: true)
         try await capture(AppNavigationStack {
-            ScrollView { ChatPendingRow(item: item, sending: false, blocked: false, retry: {}, remove: {}) }
+            ScrollView { ChatPendingRow(item: item, sending: false, retry: {}, remove: {}) }
                 .navigationTitle("发送状态")
                 .overlay(alignment: .top) {
                     ChatSyncNotice(error: "正在等待网络恢复", retry: {}, dismiss: {}).padding(.horizontal)

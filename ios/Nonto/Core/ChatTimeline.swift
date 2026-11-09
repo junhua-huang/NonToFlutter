@@ -84,11 +84,16 @@ struct ChatViewportMetrics: Equatable {
     private var usableHeight: CGFloat { max(0, visibleHeight - topInset - bottomInset) }
     var distanceFromBottom: CGFloat { max(0, contentHeight - bottom) }
     var nearBottom: Bool { distanceFromBottom < 80 }
-    var farFromBottom: Bool { distanceFromBottom > max(180, usableHeight * 0.5) }
-    func hasSameLayout(as other: Self) -> Bool {
-        abs(contentHeight - other.contentHeight) < 1 && abs(visibleHeight - other.visibleHeight) < 1
+    func showsLatestShortcut(wasVisible: Bool) -> Bool {
+        !nearBottom && (wasVisible || distanceFromBottom > max(180, usableHeight * 0.5))
+    }
+    func hasSameViewport(as other: Self) -> Bool {
+        abs(visibleHeight - other.visibleHeight) < 1
             && abs(topInset - other.topInset) < 1 && abs(bottomInset - other.bottomInset) < 1
             && abs(visibleWidth - other.visibleWidth) < 1
+    }
+    func hasSameLayout(as other: Self) -> Bool {
+        hasSameViewport(as: other) && abs(contentHeight - other.contentHeight) < 1
     }
     func shouldLoadHistory(userScrolling: Bool) -> Bool {
         userScrolling && offset + topInset < 100 && contentHeight > usableHeight + 120
@@ -115,7 +120,8 @@ struct ChatViewportMetrics: Equatable {
     func record(_ value: ChatViewportMetrics) -> CGFloat? {
         let previous = metrics
         metrics = value
-        if userScrolling, let previous, value.hasSameLayout(as: previous), abs(value.offset - previous.offset) > 1 {
+        // Lazy rows can refine the content height during an otherwise normal pan.
+        if userScrolling, let previous, value.hasSameViewport(as: previous), abs(value.offset - previous.offset) > 1 {
             userMoved = true
         }
         guard !presentingMedia, var anchor = history else { return nil }
