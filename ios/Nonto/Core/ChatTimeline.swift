@@ -111,9 +111,9 @@ struct ChatViewportMetrics: Equatable {
     var visibleWidth: CGFloat = 0
     // Match the native scroll viewport: keyboard/composer insets are covered
     // space, even when the scroll view's full container bounds stay unchanged.
-    private var bottom: CGFloat { offset + visibleHeight - bottomInset }
     private var usableHeight: CGFloat { max(0, visibleHeight - topInset - bottomInset) }
-    var distanceFromBottom: CGFloat { max(0, contentHeight - bottom) }
+    // Rubber-banding can move the raw offset even when all messages fit on screen.
+    var distanceFromBottom: CGFloat { clamped(.greatestFiniteMagnitude) - clamped(offset) }
     var nearBottom: Bool { distanceFromBottom < 80 }
     func showsLatestShortcut(wasVisible: Bool) -> Bool {
         !nearBottom && (wasVisible || distanceFromBottom > max(180, usableHeight * 0.5))

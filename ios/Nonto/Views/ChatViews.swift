@@ -219,6 +219,7 @@ struct ChatRoomContent: View {
     @State private var attachmentRequest: ChatAttachmentRequest?
     @State private var inputDismissal = 0
     @State private var showsLatestShortcut = false
+    @State private var latestEdgeVisible = false
     @State private var showingCamera = false
     @State private var capturedPhoto: Data?
     @State private var captureFailed = false
@@ -279,6 +280,13 @@ struct ChatRoomContent: View {
                             .modifier(ChatMessageFrameObservation(id: entry.id, report: onMessageFrame)).id(entry.id)
                     }
                     Color.clear.frame(height: 1).id("chat-bottom")
+                        .onScrollVisibilityChange(threshold: 0.5) { visible in
+                            latestEdgeVisible = visible
+                            if visible {
+                                showsLatestShortcut = false
+                                if canUpdateReadingPosition { store.reachedBottom(true) }
+                            }
+                        }
                 }.scrollTargetLayout().padding(.vertical, 8)
             }
             .overlay {
@@ -361,7 +369,7 @@ struct ChatRoomContent: View {
                         } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
                             .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
                     }
-                    if !store.nearBottom && (showsLatestShortcut || store.unread > 0)
+                    if !latestEdgeVisible && !store.nearBottom && (showsLatestShortcut || store.unread > 0)
                         && !timeline.entries.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
                         Button { store.jumpToLatest() } label: {
                             Label(store.unread > 0 ? AppLocalization.string("\(store.unread) 条新消息") : AppLocalization.string("回到最新"), systemImage: "arrow.down")
@@ -541,8 +549,8 @@ struct ChatRoomContent: View {
         !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia
     }
     private func updateReadingPosition(_ metrics: ChatViewportMetrics) {
-        store.reachedBottom(metrics.nearBottom)
-        let show = metrics.showsLatestShortcut(wasVisible: showsLatestShortcut)
+        store.reachedBottom(latestEdgeVisible || metrics.nearBottom)
+        let show = !latestEdgeVisible && metrics.showsLatestShortcut(wasVisible: showsLatestShortcut)
         if showsLatestShortcut != show { showsLatestShortcut = show }
     }
     private func loadOlder() async {
