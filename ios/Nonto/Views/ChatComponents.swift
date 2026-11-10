@@ -375,7 +375,6 @@ struct ChatMessageRow: View {
     var onMediaPresentation: (Bool) -> Void = { _ in }
     var pending: PendingMessage? = nil
     var sending = false
-    var blocked = false
     var retry: () -> Void = { }
     var remove: () -> Void = { }
     var checkDelivery: () -> Void = { }
@@ -435,14 +434,15 @@ struct ChatMessageRow: View {
                         // Keep the same status slot when this bubble is acknowledged
                         // or another outgoing bubble becomes the latest receipt.
                         Group {
-                            if let pending {
-                                ChatPendingStatus(item: pending, sending: sending, blocked: blocked,
+                            if let pending, let failure = pending.failure {
+                                ChatPendingStatus(item: pending, failure: failure,
                                                   retry: retry, remove: remove, checkDelivery: checkDelivery)
                             } else {
+                                let receiptVisible = pending == nil && showsReceipt && !message.recalled
                                 Text(message.raw["is_read"].bool ? AppLocalization.string("已读") : AppLocalization.string("已发送"))
                                     .foregroundStyle(.secondary)
-                                    .opacity(showsReceipt && !message.recalled ? 1 : 0)
-                                    .accessibilityHidden(!showsReceipt || message.recalled)
+                                    .opacity(receiptVisible ? 1 : 0)
+                                    .accessibilityHidden(!receiptVisible)
                             }
                         }.font(.caption2).frame(minHeight: 16, alignment: .trailing)
                     }
@@ -673,7 +673,6 @@ struct ChatPendingRow: View {
     @Environment(\.locale) private var appLocale
     let item: PendingMessage
     let sending: Bool
-    let blocked: Bool
     let retry: () -> Void
     let remove: () -> Void
     var checkDelivery: () -> Void = { }
@@ -684,7 +683,7 @@ struct ChatPendingRow: View {
         if let entry = ChatPresentation(userID: session.user?.id ?? 0, pending: [item]).entries.first {
             ChatMessageRow(row: entry.row, community: false, showsReceipt: false,
                            onMediaPresentation: onMediaPresentation,
-                           pending: item, sending: sending, blocked: blocked, retry: retry, remove: remove,
+                           pending: item, sending: sending, retry: retry, remove: remove,
                            checkDelivery: checkDelivery, onQuote: { _ in }, onRecall: { _ in })
         }
     }
@@ -693,8 +692,7 @@ struct ChatPendingRow: View {
 struct ChatPendingStatus: View {
     @Environment(\.locale) private var appLocale
     let item: PendingMessage
-    let sending: Bool
-    let blocked: Bool
+    let failure: String
     let retry: () -> Void
     let remove: () -> Void
     var checkDelivery: () -> Void = { }
@@ -712,25 +710,18 @@ struct ChatPendingStatus: View {
     }
     private var deliveryStatus: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            if let failure = item.failure {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { failureLabel; retryButton; removeButton }.fixedSize()
-                    VStack(alignment: .trailing, spacing: 4) {
-                        failureLabel
-                        HStack(spacing: 12) { retryButton; removeButton }
-                    }
-                }.buttonStyle(.plain)
-                if item.deliveryUncertain == true {
-                    Button("检查最新消息", action: checkDelivery).frame(minHeight: 44).buttonStyle(.plain)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { failureLabel; retryButton; removeButton }.fixedSize()
+                VStack(alignment: .trailing, spacing: 4) {
+                    failureLabel
+                    HStack(spacing: 12) { retryButton; removeButton }
                 }
-                if item.retryWhenOnline == true { Text("连接恢复后自动重试").foregroundStyle(.secondary) }
-                Text(failure).foregroundStyle(.secondary).lineLimit(3)
-            } else {
-                Label(sending ? AppLocalization.string("正在发送…") : (blocked ? AppLocalization.string("等待上一条消息重试") : AppLocalization.string("等待发送")),
-                      systemImage: sending ? "arrow.up.circle" : "clock")
-                    .foregroundStyle(.secondary)
-                    .contextMenu { if !sending { Button("取消发送", role: .destructive, action: remove) } }
+            }.buttonStyle(.plain)
+            if item.deliveryUncertain == true {
+                Button("检查最新消息", action: checkDelivery).frame(minHeight: 44).buttonStyle(.plain)
             }
+            if item.retryWhenOnline == true { Text("连接恢复后自动重试").foregroundStyle(.secondary) }
+            Text(failure).foregroundStyle(.secondary).lineLimit(3)
         }
     }
     private var failureLabel: some View {

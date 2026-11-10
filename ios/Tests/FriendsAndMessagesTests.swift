@@ -56,6 +56,85 @@ import Observation
         await resource.load(reset: true); await resource.load(reset: true)
         XCTAssertNotNil(resource.error); XCTAssertEqual(resource.items.first?.id, 501)
     }
+    func testMarkingAConversationReadUpdatesOnlyThatRowAfterConfirmation() async throws {
+        let direct = Conversation(.object(["id": .id(54), "unread_count": .id(2)]))
+        let group = Conversation(.object(["id": .id(55), "type": .text("community"),
+                                          "community_id": .id(33), "unread_count": .id(3)]))
+        var shouldFail = true
+        let api = try makeAPI { request in
+            XCTAssertEqual(request.url?.path, "/api/chat/conversations/55/mark-read")
+            XCTAssertEqual(request.httpMethod, "POST")
+            return shouldFail ? (503, .null) : (200, .null)
+        }
+        let resource = PagedResource<Conversation>(api: api, path: "/chat/sessions", keys: ["sessions"],
+                                                   userID: account, cacheEnabled: false)
+        resource.items = [direct, group]
+        do { try await resource.markRead(group); XCTFail("A failed request must be surfaced") }
+        catch { XCTAssertEqual((error as? APIError)?.status, 503) }
+        XCTAssertEqual(resource.items.map(\.unread), [2, 3])
+        shouldFail = false
+        try await resource.markRead(group)
+        XCTAssertEqual(resource.items.map(\.id), [54, 55])
+        XCTAssertEqual(resource.items.map(\.unread), [2, 0])
+    }
+    func testMarkingAnOlderPreviewReadDoesNotClearANewerUnreadMessage() async throws {
+        let unread = Conversation(.object(["id": .id(55), "unread_count": .id(1),
+                                          "last_message": .object(["id": .id(101)])]))
+        let latest = unread.raw.merging(.object(["unread_count": .id(2), "last_message": .object(["id": .id(102)])]))
+        let api = try makeAPI { request in
+            if request.httpMethod == "POST" { return (200, .null) }
+            return (200, .object(["sessions": .array([latest])]))
+        }
+        let resource = PagedResource<Conversation>(api: api, path: "/chat/sessions", keys: ["sessions"],
+                                                   userID: account, cacheEnabled: false)
+        await resource.load(reset: true)
+        try await resource.markRead(unread)
+        XCTAssertEqual(resource.items.first?.last.id, 102)
+        XCTAssertEqual(resource.items.first?.unread, 2)
+    }
+    func testConversationPinsPreserveServerOrderForUnpinnedRows() throws {
+        let conversations = (1...4).map { Conversation(.object(["id": .id($0)])) }
+        var preferences = ConversationListPreferences()
+        preferences.togglePin(3)
+        preferences.togglePin(4)
+        let data = try JSONEncoder().encode(preferences)
+        preferences = try JSONDecoder().decode(ConversationListPreferences.self, from: data)
+        XCTAssertEqual(preferences.rows(conversations).map(\.id), [4, 3, 1, 2])
+        preferences.togglePin(3)
+        XCTAssertEqual(preferences.rows(conversations).map(\.id), [4, 1, 2, 3])
+    }
+    func testRemovingAPinnedConversationSurvivesReloadAndAllowsNewMessages() throws {
+        let room = Conversation(.object(["id": .id(55), "last_message": .object(["id": .id(101)])]))
+        let updated = Conversation(room.raw.merging(.object(["last_message": .object(["id": .id(102)])])))
+        var preferences = ConversationListPreferences()
+        preferences.togglePin(room.id)
+        preferences.remove(room)
+        let data = try JSONEncoder().encode(preferences)
+        let restored = try JSONDecoder().decode(ConversationListPreferences.self, from: data)
+        XCTAssertTrue(restored.pinnedIDs.isEmpty)
+        XCTAssertTrue(restored.rows([room]).isEmpty)
+        XCTAssertEqual(restored.rows([updated]), [updated])
+        XCTAssertTrue(restored.rows([room]).isEmpty, "An older response cannot undo the deletion cutoff")
+        XCTAssertEqual(ConversationListPreferences().rows([room]), [room])
+    }
+    func testPinnedConversationCanBeRecoveredBeyondTheFirstPage() async throws {
+        var pages: [Int] = []
+        let api = try makeAPI { request in
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems
+            let page = Int(query?.first(where: { $0.name == "page" })?.value ?? "") ?? 0
+            pages.append(page)
+            return (200, .object(["sessions": .array([.object(["id": .id(page)])]), "has_more": .bool(page < 4)]))
+        }
+        let resource = PagedResource<Conversation>(api: api, path: "/chat/sessions", keys: ["sessions"],
+                                                   userID: account, pageSize: 1, cacheEnabled: false)
+        var preferences = ConversationListPreferences()
+        preferences.togglePin(3)
+        await resource.load(reset: true)
+        await resource.loadMissingPins(preferences.pinnedIDs)
+        XCTAssertEqual(pages, [1, 2, 3])
+        XCTAssertEqual(preferences.rows(resource.items).map(\.id), [3, 1, 2])
+        XCTAssertTrue(resource.hasMore)
+    }
     func testCompactConversationListDoesNotKeepSplitSelectionTint() async throws {
         let room = Conversation(.object(["id": .id(55), "other_user": applicant,
             "last_message": .object(["message_type": .text("post"), "content": .text("")])]))

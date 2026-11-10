@@ -18,49 +18,151 @@ struct MessagesView: View {
     @StateObject private var resource: PagedResource<Conversation>
     @EnvironmentObject private var session: AppSession
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.navigate) private var navigate
+    @State private var markingRead = Set<Int>()
+    @State private var readError: String?
+    @State private var pendingRemoval: Conversation?
+    @AppStorage private var conversationPreferences: Data
     private let socket: RealtimeClient
     private let selectedRouteKey: String?
     private let splitSelectionVisible: Bool?
+    private let onRemove: (Conversation) -> Void
+    private var preferences: ConversationListPreferences {
+        (try? JSONDecoder().decode(ConversationListPreferences.self, from: conversationPreferences)) ?? ConversationListPreferences()
+    }
     private var showsSelection: Bool { splitSelectionVisible ?? (horizontalSizeClass == .regular) }
-    init(session: AppSession, selectedRouteKey: String? = nil, splitSelectionVisible: Bool? = nil) {
+    init(session: AppSession, selectedRouteKey: String? = nil, splitSelectionVisible: Bool? = nil,
+         onRemove: @escaping (Conversation) -> Void = { _ in }) {
         self.selectedRouteKey = selectedRouteKey
         self.splitSelectionVisible = splitSelectionVisible
+        self.onRemove = onRemove
         socket = session.socket
-        _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: session.user?.id ?? 0, pageSize: 30))
+        let userID = session.user?.id ?? 0
+        _conversationPreferences = AppStorage(wrappedValue: Data(), ConversationListPreferences.storageKey(userID: userID), store: session.contentDefaults)
+        _resource = StateObject(wrappedValue: PagedResource(api: session.api, path: "/chat/sessions", keys: ["sessions", "conversations", "items"], userID: userID, pageSize: 30))
     }
     var body: some View {
         let _ = appLocale
+        let settings = preferences
+        let conversations = settings.rows(resource.items)
         List {
-            ForEach(resource.items) { conversation in
-                RouteButton(.chat(conversation)) {
-                    HStack(spacing: 12) {
-                        AvatarView(url: conversation.avatar, name: conversation.name, size: 50)
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack { Text(conversation.name).font(.headline); Spacer(); if let d = conversation.last.date { Text(d, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).font(.caption2).foregroundStyle(.secondary) } }
-                            Text(conversation.last.recalled ? AppLocalization.string("消息已撤回") : preview(conversation.last))
-                                .font(.subheadline.weight(conversation.unread > 0 ? .medium : .regular))
-                                .foregroundStyle(conversation.unread > 0 ? Color.primary : Color.secondary).lineLimit(2)
-                        }
-                        if conversation.unread > 0 {
-                            Text(conversation.unread > 99 ? "99+" : "\(conversation.unread)").font(.caption2.bold())
-                                .padding(.horizontal, 7).padding(.vertical, 4).background(accent.color.opacity(0.15), in: Capsule())
-                                .foregroundStyle(.primary).accessibilityLabel("\(conversation.unread) 条未读消息")
-                        }
-                    }.padding(.vertical, 10)
-                }
-                // A retained split-view selection is not a selected row when
-                // the phone has popped back to its single-column list.
-                .listRowBackground(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? accent.color.opacity(0.10) : Color.timelineBackground)
-                .accessibilityAddTraits(showsSelection && selectedRouteKey == AppRoute.chat(conversation).key ? .isSelected : [])
-                .listRowSeparator(.hidden)
+            if let readError { ErrorBanner(text: readError).listRowSeparator(.hidden) }
+            ForEach(conversations) { conversation in
+                conversationRow(conversation, pinned: settings.pinnedIDs.contains(conversation.id))
             }
-            ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。", emptyIcon: "bubble.left.and.bubble.right")
+            ResourceFooter(resource: resource, emptyTitle: "还没有会话", emptyDescription: "从右上角进入好友列表，或在社群中加入群聊。",
+                           emptyIcon: "bubble.left.and.bubble.right", visibleItemsEmpty: conversations.isEmpty)
         }.timelineList().navigationTitle(AppLocalization.string("私信")).navigationBarTitleDisplayMode(.inline)
             .toolbar { RouteButton(.friends) { Image(systemName: "person.2") }.accessibilityLabel("好友和申请") }
-            .task { await resource.loadIfNeeded() }
-            .refreshable { await resource.load(reset: true); await session.refreshCounts() }
+            .task { await loadConversations(initial: true) }
+            .refreshable { readError = nil; await loadConversations(); await session.refreshCounts() }
             .onReceive(socket.events.filter { ChatRealtimeEvent($0).affectsConversationList }
-                .debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await resource.load(reset: true) } }
+                .debounce(for: .milliseconds(450), scheduler: RunLoop.main)) { _ in Task { await loadConversations() } }
+            .alert("删除会话", isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),
+                   presenting: pendingRemoval) { conversation in
+                Button("删除", role: .destructive) { Task { await markRead(conversation, thenRemove: true) } }
+                Button("取消", role: .cancel) { }
+            } message: { _ in
+                Text("此会话将从本机列表移除，当前未读消息会标为已读。有新消息时，会话会重新出现。")
+            }
+    }
+    private func conversationRow(_ conversation: Conversation, pinned: Bool) -> some View {
+        let selected = showsSelection && selectedRouteKey == AppRoute.chat(conversation).key
+        let canChange = conversation.id > 0 && !markingRead.contains(conversation.id)
+        return RouteButton(.chat(conversation)) {
+            HStack(spacing: 12) {
+                AvatarView(url: conversation.avatar, name: conversation.name, size: 50)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 5) {
+                        if pinned {
+                            Image(systemName: "pin.fill").font(.caption2).foregroundStyle(accent.symbolColor)
+                                .accessibilityLabel("已置顶")
+                        }
+                        Text(conversation.name).font(.headline)
+                        Spacer()
+                        if let date = conversation.last.date {
+                            Text(date, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(conversation.last.recalled ? AppLocalization.string("消息已撤回") : preview(conversation.last))
+                        .font(.subheadline.weight(conversation.unread > 0 ? .medium : .regular))
+                        .foregroundStyle(conversation.unread > 0 ? Color.primary : Color.secondary).lineLimit(2)
+                }
+                if conversation.unread > 0 {
+                    Text(conversation.unread > 99 ? "99+" : "\(conversation.unread)").font(.caption2.bold())
+                        .padding(.horizontal, 7).padding(.vertical, 4).background(accent.color.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.primary).accessibilityLabel("\(conversation.unread) 条未读消息")
+                }
+            }.padding(.vertical, 10)
+        }
+        // A retained split-view selection is not a selected row when
+        // the phone has popped back to its single-column list.
+        .listRowBackground(selected ? accent.color.opacity(0.10) : Color.timelineBackground)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .listRowSeparator(.hidden)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if conversation.id > 0 {
+                swipeButton(pinned ? "取消置顶" : "置顶会话", symbol: pinned ? "pin.slash" : "pin.fill", tint: accent.color) {
+                    updatePreferences { $0.togglePin(conversation.id) }
+                }
+            }
+            if canChange, conversation.unread > 0 {
+                swipeButton("标为已读", symbol: "envelope.open", tint: accent.color) {
+                    Task { await markRead(conversation) }
+                }
+            }
+            let details = conversation.isCommunity
+                ? AppRoute.community(conversation.communityID ?? 0) : .profile(conversation.other.id)
+            if details.isValid {
+                swipeButton(conversation.isCommunity ? "查看社群" : "查看资料",
+                            symbol: conversation.isCommunity ? "person.3" : "person.crop.circle", tint: .gray) {
+                    navigate(details)
+                }
+            }
+            if canChange {
+                swipeButton("删除会话", symbol: "trash", tint: .red) { pendingRemoval = conversation }
+            }
+        }
+    }
+    private func swipeButton(_ title: LocalizedStringKey, symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(title, systemImage: symbol, action: action)
+            .labelStyle(.iconOnly).buttonStyle(.automatic).tint(tint)
+    }
+    private func loadConversations(initial: Bool = false) async {
+        if initial { await resource.loadIfNeeded() }
+        else { await resource.load(reset: true) }
+        await resource.loadMissingPins(preferences.pinnedIDs)
+    }
+    private func updatePreferences(_ change: (inout ConversationListPreferences) -> Void) {
+        guard resource.userID > 0, session.user?.id == resource.userID else { return }
+        var updated = preferences
+        change(&updated)
+        if let data = try? JSONEncoder().encode(updated) { conversationPreferences = data }
+    }
+    private func markRead(_ conversation: Conversation, thenRemove: Bool = false) async {
+        guard session.user?.id == resource.userID else { return }
+        guard markingRead.insert(conversation.id).inserted else { return }
+        defer { markingRead.remove(conversation.id) }
+        let epoch = session.api.generation
+        readError = nil
+        do {
+            let current = resource.items.first { $0.id == conversation.id } ?? conversation
+            let readTarget = thenRemove ? current : conversation
+            let shouldRead = readTarget.unread > 0 && (!thenRemove || current.last.id == conversation.last.id)
+            if shouldRead { try await resource.markRead(readTarget) }
+            guard session.api.generation == epoch, !Task.isCancelled else { return }
+            if thenRemove {
+                updatePreferences { $0.remove(conversation) }
+                let latest = resource.items.first { $0.id == conversation.id } ?? conversation
+                if !preferences.shows(latest) { onRemove(conversation) }
+            }
+            if shouldRead { await session.refreshCounts() }
+        } catch {
+            if session.api.generation == epoch, !Task.isCancelled, (error as? URLError)?.code != .cancelled {
+                readError = error.localizedDescription
+            }
+        }
     }
     private func preview(_ message: ChatMessage) -> String {
         if message.isSticker { return ChatSticker.displayContent }
@@ -116,7 +218,7 @@ struct ChatRoomContent: View {
     @State private var pendingAttachmentAction: ChatAttachmentRequest?
     @State private var attachmentRequest: ChatAttachmentRequest?
     @State private var inputDismissal = 0
-    @State private var farFromLatest = false
+    @State private var showsLatestShortcut = false
     @State private var showingCamera = false
     @State private var capturedPhoto: Data?
     @State private var captureFailed = false
@@ -167,7 +269,6 @@ struct ChatRoomContent: View {
                                        galleryImages: entry.pending == nil ? timeline.gallery : [],
                                        galleryIndex: timeline.galleryIndexes[entry.row.id], onMediaPresentation: mediaPresentationChanged,
                                        pending: entry.pending, sending: store.sendingID == entry.pending?.id,
-                                       blocked: store.pending.first?.failure != nil && store.pending.first?.id != entry.pending?.id,
                                        retry: { if let item = entry.pending { store.retry(item.id) } },
                                        remove: { if let item = entry.pending { store.remove(item.id) } },
                                        checkDelivery: { Task { await store.load() } },
@@ -206,8 +307,11 @@ struct ChatRoomContent: View {
                                     bottomInset: geometry.contentInsets.bottom, visibleWidth: geometry.containerSize.width)
             } action: { previous, value in
                 onViewportMetrics?(value)
-                if let y = viewport.record(value) { position.scrollTo(y: y) }
-                else if abs(previous.visibleWidth - value.visibleWidth) > 1,
+                if let y = viewport.record(value) {
+                    position.scrollTo(y: y)
+                    return
+                }
+                if abs(previous.visibleWidth - value.visibleWidth) > 1,
                         store.nearBottom, !viewport.userScrolling,
                         !viewport.preservingHistory, !viewport.presentingMedia {
                     // Keep the concrete final row anchored while lazy cells reflow.
@@ -218,12 +322,12 @@ struct ChatRoomContent: View {
                         !viewport.preservingHistory, !viewport.presentingMedia {
                     followLatest(in: value)
                 }
-                if !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia {
-                    if value.nearBottom { store.reachedBottom(true) }
-                    else if viewport.userScrolling && viewport.userMoved && value.hasSameLayout(as: previous) {
-                        store.reachedBottom(false)
+                if canUpdateReadingPosition {
+                    if viewport.userScrolling, viewport.userMoved, value.hasSameViewport(as: previous) {
+                        updateReadingPosition(value)
+                    } else if value.nearBottom, store.nearBottom || value.hasSameLayout(as: previous) {
+                        updateReadingPosition(value)
                     }
-                    if farFromLatest != value.farFromBottom { farFromLatest = value.farFromBottom }
                     if value.shouldLoadHistory(userScrolling: viewport.userScrolling), store.more {
                         Task { await loadOlder() }
                     }
@@ -231,20 +335,18 @@ struct ChatRoomContent: View {
             }
             .onScrollPhaseChange { _, phase in
                 let didScroll = viewport.userScrolling && viewport.userMoved
-                viewport.userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+                viewport.userScrolling = phase == .interacting || phase == .decelerating
                 if phase == .interacting { dismissInput() }
                 // Programmatic scrolling and keyboard layout also end in idle.
                 // Only a real timeline pan can switch off following the latest row.
-                if phase == .idle, didScroll, let metrics = viewport.metrics,
-                   !store.loadingOlder, !viewport.preservingHistory, !viewport.presentingMedia {
-                    store.reachedBottom(metrics.nearBottom)
-                    if farFromLatest != metrics.farFromBottom { farFromLatest = metrics.farFromBottom }
+                if phase == .idle, didScroll, let metrics = viewport.metrics, canUpdateReadingPosition {
+                    updateReadingPosition(metrics)
                 }
             }
             .onChange(of: store.scrollRequest) { _, _ in
                 viewport.clearPreservation()
                 quoteReturnID = nil; highlightedMessage = nil
-                farFromLatest = false
+                showsLatestShortcut = false
                 followLatest()
             }
             .onChange(of: timeline.entries.last?.id) { _, _ in
@@ -255,12 +357,12 @@ struct ChatRoomContent: View {
                     if let returnID = quoteReturnID, !attachmentMenuVisible {
                         Button {
                             quoteReturnID = nil; highlightedMessage = nil
-                            withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: returnID, anchor: .center) }
+                            scrollToQuotedRow(returnID)
                         } label: { Label("回到引用处", systemImage: "arrow.uturn.down") }
                             .buttonStyle(.glass).accessibilityHint("返回刚才阅读的消息")
                     }
-                    if !store.nearBottom && (farFromLatest || store.unread > 0)
-                        && !store.messages.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
+                    if !store.nearBottom && (showsLatestShortcut || store.unread > 0)
+                        && !timeline.entries.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
                         Button { store.jumpToLatest() } label: {
                             Label(store.unread > 0 ? AppLocalization.string("\(store.unread) 条新消息") : AppLocalization.string("回到最新"), systemImage: "arrow.down")
                         }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
@@ -435,6 +537,14 @@ struct ChatRoomContent: View {
             else { position.scrollTo(id: "chat-bottom", anchor: .bottom) }
         }
     }
+    private var canUpdateReadingPosition: Bool {
+        !store.loadingOlder && !viewport.preservingHistory && !viewport.presentingMedia
+    }
+    private func updateReadingPosition(_ metrics: ChatViewportMetrics) {
+        store.reachedBottom(metrics.nearBottom)
+        let show = metrics.showsLatestShortcut(wasVisible: showsLatestShortcut)
+        if showsLatestShortcut != show { showsLatestShortcut = show }
+    }
     private func loadOlder() async {
         guard !store.loadingOlder, !viewport.preservingHistory, store.more, visible else { return }
         let first = store.messages.first?.id
@@ -453,11 +563,21 @@ struct ChatRoomContent: View {
         }
         viewport.clearPreservation(); store.reachedBottom(false)
         quoteReturnID = entryID; highlightedMessage = id
-        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: target.id, anchor: .center) }
+        scrollToQuotedRow(target.id)
         highlightTask?.cancel()
         highlightTask = Task {
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
             highlightedMessage = nil
+        }
+    }
+    private func scrollToQuotedRow(_ id: String) {
+        let request = store.scrollRequest
+        withAnimation(.easeOut(duration: 0.2), completionCriteria: .removed) {
+            position.scrollTo(id: id, anchor: .center)
+        } completion: {
+            if store.scrollRequest == request, !viewport.userScrolling, canUpdateReadingPosition, let metrics = viewport.metrics {
+                updateReadingPosition(metrics)
+            }
         }
     }
     private func mediaPresentationChanged(_ presented: Bool) {
@@ -469,6 +589,10 @@ struct ChatRoomContent: View {
         } else if let y = viewport.endMedia() {
             var transaction = Transaction(); transaction.disablesAnimations = true
             withTransaction(transaction) { position.scrollTo(y: y) }
+            if var metrics = viewport.metrics {
+                metrics.offset = y
+                updateReadingPosition(metrics)
+            }
         }
     }
 
@@ -720,13 +844,9 @@ struct ChatComposerInput: View {
                 .frame(minHeight: inputControlHeight)
                 .disabled(stickerSender.busy).accessibilityLabel("消息内容")
             Button(action: send) {
-                Group {
-                    if stickerSender.busy { ProgressView().tint(accent.symbolColor) }
-                    else {
-                        Image(systemName: "arrow.up.circle.fill").font(.system(size: min(inputControlHeight * 0.62, 40)))
-                            .foregroundStyle(canSend ? accent.symbolColor : Color.secondary)
-                    }
-                }.frame(width: inputControlHeight - 8, height: inputControlHeight - 8)
+                Image(systemName: "arrow.up.circle.fill").font(.system(size: min(inputControlHeight * 0.62, 40)))
+                    .foregroundStyle(canSend ? accent.symbolColor : Color.secondary)
+                    .frame(width: inputControlHeight - 8, height: inputControlHeight - 8)
             }.disabled(!canSend)
                 .padding(.bottom, 4)
                 .keyboardShortcut(.return, modifiers: .command).accessibilityLabel("发送消息").accessibilityIdentifier("chat.composer.send")

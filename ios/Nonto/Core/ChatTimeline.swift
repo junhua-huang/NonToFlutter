@@ -34,6 +34,37 @@ struct ChatRealtimeEvent {
     }
 }
 
+/// Device-local conversation organization stores IDs only. Previews always come from the authorized session list.
+struct ConversationListPreferences: Codable {
+    private(set) var pinnedIDs: [Int] = []
+    private var removedThrough: [Int: Int] = [:]
+
+    static func storageKey(userID: Int) -> String { "nonto.native.conversation-list.\(userID)" }
+
+    mutating func togglePin(_ id: Int) {
+        if let index = pinnedIDs.firstIndex(of: id) { pinnedIDs.remove(at: index) }
+        else { pinnedIDs.insert(id, at: 0) }
+    }
+
+    mutating func remove(_ conversation: Conversation) {
+        pinnedIDs.removeAll { $0 == conversation.id }
+        removedThrough[conversation.id] = max(removedThrough[conversation.id] ?? 0, conversation.last.id)
+    }
+
+    func shows(_ conversation: Conversation) -> Bool {
+        guard let cutoff = removedThrough[conversation.id] else { return true }
+        return conversation.last.id > cutoff
+    }
+
+    func rows(_ conversations: [Conversation]) -> [Conversation] {
+        let visible = conversations.filter(shows)
+        guard !pinnedIDs.isEmpty else { return visible }
+        let byID = Dictionary(visible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let pinned = Set(pinnedIDs)
+        return pinnedIDs.compactMap { byID[$0] } + visible.filter { !pinned.contains($0.id) }
+    }
+}
+
 /// Keeps conversational runs compact while retaining date and time context.
 enum ChatTimeline {
     struct Row: Identifiable, Equatable {
@@ -84,11 +115,16 @@ struct ChatViewportMetrics: Equatable {
     private var usableHeight: CGFloat { max(0, visibleHeight - topInset - bottomInset) }
     var distanceFromBottom: CGFloat { max(0, contentHeight - bottom) }
     var nearBottom: Bool { distanceFromBottom < 80 }
-    var farFromBottom: Bool { distanceFromBottom > max(180, usableHeight * 0.5) }
-    func hasSameLayout(as other: Self) -> Bool {
-        abs(contentHeight - other.contentHeight) < 1 && abs(visibleHeight - other.visibleHeight) < 1
+    func showsLatestShortcut(wasVisible: Bool) -> Bool {
+        !nearBottom && (wasVisible || distanceFromBottom > max(180, usableHeight * 0.5))
+    }
+    func hasSameViewport(as other: Self) -> Bool {
+        abs(visibleHeight - other.visibleHeight) < 1
             && abs(topInset - other.topInset) < 1 && abs(bottomInset - other.bottomInset) < 1
             && abs(visibleWidth - other.visibleWidth) < 1
+    }
+    func hasSameLayout(as other: Self) -> Bool {
+        hasSameViewport(as: other) && abs(contentHeight - other.contentHeight) < 1
     }
     func shouldLoadHistory(userScrolling: Bool) -> Bool {
         userScrolling && offset + topInset < 100 && contentHeight > usableHeight + 120
@@ -115,7 +151,8 @@ struct ChatViewportMetrics: Equatable {
     func record(_ value: ChatViewportMetrics) -> CGFloat? {
         let previous = metrics
         metrics = value
-        if userScrolling, let previous, value.hasSameLayout(as: previous), abs(value.offset - previous.offset) > 1 {
+        // Lazy rows can refine the content height during an otherwise normal pan.
+        if userScrolling, let previous, value.hasSameViewport(as: previous), abs(value.offset - previous.offset) > 1 {
             userMoved = true
         }
         guard !presentingMedia, var anchor = history else { return nil }

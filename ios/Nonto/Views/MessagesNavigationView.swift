@@ -41,7 +41,7 @@ struct MessagesNavigationView: View {
                 // A narrow sidebar can itself report compact even while the
                 // surrounding split view is wide. Use the container's size.
                 MessagesView(session: session, selectedRouteKey: selection?.key,
-                             splitSelectionVisible: horizontalSizeClass == .regular)
+                             splitSelectionVisible: horizontalSizeClass == .regular, onRemove: removeSelection)
                     .accessibilityIdentifier("conversation-list")
             }
             .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
@@ -77,6 +77,17 @@ struct MessagesNavigationView: View {
             detailNavigation.path.removeAll()
         }
         preferredColumn.wrappedValue = .detail
+    }
+
+    private func removeSelection(_ conversation: Conversation) {
+        let route = AppRoute.chat(conversation)
+        if selection == route {
+            selection = nil
+            detailNavigation.path.removeAll()
+            preferredColumn.wrappedValue = .sidebar
+        } else if let index = detailNavigation.path.firstIndex(of: route) {
+            detailNavigation.path.removeSubrange(index...)
+        }
     }
 }
 

@@ -280,6 +280,25 @@ final class ChatExperienceTests: XCTestCase {
         XCTAssertFalse(memory.preservingHistory)
         XCTAssertNil(memory.record(ChatViewportMetrics(offset: 1120, contentHeight: 2100, visibleHeight: 600, topInset: 0, bottomInset: 0)))
     }
+    func testLatestShortcutStaysHiddenForSmallScrollsAndDismissesNearTheBottom() {
+        func metrics(distance: CGFloat) -> ChatViewportMetrics {
+            ChatViewportMetrics(offset: 800 - distance, contentHeight: 1400, visibleHeight: 600,
+                                topInset: 0, bottomInset: 0)
+        }
+        XCTAssertFalse(metrics(distance: 150).showsLatestShortcut(wasVisible: false))
+        XCTAssertTrue(metrics(distance: 320).showsLatestShortcut(wasVisible: false))
+        XCTAssertTrue(metrics(distance: 290).showsLatestShortcut(wasVisible: true))
+        XCTAssertFalse(metrics(distance: 20).showsLatestShortcut(wasVisible: true))
+    }
+    func testUserMovementIgnoresKeyboardResizeButAllowsLazyContentHeightChanges() {
+        let memory = ChatViewportMemory()
+        _ = memory.record(ChatViewportMetrics(offset: 800, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 0))
+        memory.userScrolling = true
+        _ = memory.record(ChatViewportMetrics(offset: 1100, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 300))
+        XCTAssertFalse(memory.userMoved)
+        _ = memory.record(ChatViewportMetrics(offset: 750, contentHeight: 1430, visibleHeight: 600, topInset: 0, bottomInset: 300))
+        XCTAssertTrue(memory.userMoved)
+    }
     func testReadingCanContinueWhileHistoryIsLoading() {
         let memory = ChatViewportMemory()
         _ = memory.record(ChatViewportMetrics(offset: 200, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 0))
