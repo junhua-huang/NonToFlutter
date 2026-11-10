@@ -13,7 +13,7 @@
   "supportUrl": "https://nonto.online/",
   "betaFeedbackEmail": "nonto@foxmail.com",
   "betaBuildVersion": "140.2",
-  "betaWhatsNew": "• 聊天消息发送后立即显示，失败时可重试。\n• 优化「回到最新」的显示时机，翻看历史时会提示新消息条数。\n• 会话左滑只显示图标，支持置顶、取消置顶、标为已读、查看资料或社群，以及删除会话。置顶和删除按账号保存在本机。",
+  "betaWhatsNew": "• 新增 Français、Русский、Español 和日本語，支持中文（简繁体）、英文、法文、俄文、西班牙文和日文。\n• 设置 → 语言沿用主题的原生菜单，可跟随系统或即时切换语言。\n• 补齐界面、权限提示、错误信息和离线政策翻译，表情名称支持对应语言搜索。\n• 完善数量文案，切换语言时保留当前页面和未发送内容，支持 iPhone 和 iPad。\n\n反馈邮箱：nonto@foxmail.com。",
   "screenshots": [
     {
       "file": ".github/appstore/screenshots/01-share.png",
