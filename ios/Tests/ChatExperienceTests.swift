@@ -290,6 +290,14 @@ final class ChatExperienceTests: XCTestCase {
         XCTAssertTrue(metrics(distance: 290).showsLatestShortcut(wasVisible: true))
         XCTAssertFalse(metrics(distance: 20).showsLatestShortcut(wasVisible: true))
     }
+    func testBouncingAnUnderfilledConversationDoesNotLeaveTheLatestMessage() {
+        let metrics = ChatViewportMetrics(offset: -470, contentHeight: 124, visibleHeight: 700,
+                                          topInset: 80, bottomInset: 56)
+        XCTAssertEqual(metrics.distanceFromBottom, 0)
+        XCTAssertTrue(metrics.nearBottom)
+        XCTAssertFalse(metrics.showsLatestShortcut(wasVisible: false))
+        XCTAssertFalse(metrics.showsLatestShortcut(wasVisible: true))
+    }
     func testUserMovementIgnoresKeyboardResizeButAllowsLazyContentHeightChanges() {
         let memory = ChatViewportMemory()
         _ = memory.record(ChatViewportMetrics(offset: 800, contentHeight: 1400, visibleHeight: 600, topInset: 0, bottomInset: 0))
