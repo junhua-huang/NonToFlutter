@@ -61,10 +61,16 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/Localization-zh-Hans.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -only-testing:NontoTests/LocalizationTests -parallel-testing-enabled NO test | tee build-localization-zh-Hans.log
+      # Other window/snapshot suites exercise the simulator input service. Run the
+      # two actual keyboard presentations in their own app process first.
+      - name: Verify the real chat keyboard in a fresh test host
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/ChatKeyboard.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -only-testing:NontoTests/LayoutSnapshotTests/testChatKeepsVisibleBubblesAcrossKeyboardTypingAndRepeatedAcknowledgements -parallel-testing-enabled NO test-without-building | tee build-chat-keyboard.log
       - name: Run complete native regression
         run: |
           set -o pipefail
-          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/NontoTests.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -parallel-testing-enabled NO test-without-building | tee build-native.log
+          xcodebuild -project ios/Nonto.xcodeproj -scheme Nonto -configuration "$NATIVE_CONFIGURATION" -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" -derivedDataPath build/Native -resultBundlePath build/NontoTests.xcresult CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -testLanguage zh-Hans -testRegion CN -skip-testing:NontoTests/LayoutSnapshotTests/testChatKeepsVisibleBubblesAcrossKeyboardTypingAndRepeatedAcknowledgements -parallel-testing-enabled NO test-without-building | tee build-native.log
       - name: Verify optimized Release startup, interactions and chat
         if: env.NATIVE_CONFIGURATION != 'Release'
         run: |

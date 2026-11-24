@@ -294,9 +294,22 @@ struct ChatRoomContent: View {
             }
             .background(Color.timelineBackground)
             .overlay(alignment: .top) {
-                if let error = store.error, !store.messages.isEmpty || !store.pending.isEmpty {
-                    ChatSyncNotice(error: error, retry: { Task { await store.load() } }, dismiss: { store.error = nil })
-                        .padding(.horizontal).padding(.top, 8)
+                VStack(spacing: 4) {
+                    if let error = store.error, !store.messages.isEmpty || !store.pending.isEmpty {
+                        ChatSyncNotice(error: error, retry: { Task { await store.load() } }, dismiss: { store.error = nil })
+                            .padding(.horizontal).padding(.top, 8)
+                    }
+                    if let blocked = store.blockedSend {
+                        Button {
+                            dismissInput()
+                            viewport.clearPreservation()
+                            store.reachedBottom(false)
+                            scrollToQuotedRow(blocked.id)
+                        } label: {
+                            Label("还有 \(blocked.waiting) 条等待发送", systemImage: "exclamationmark.circle")
+                                .font(.footnote).padding(.horizontal, 10).frame(minHeight: 44)
+                        }.buttonStyle(.glass).accessibilityHint("查看未发送的消息")
+                    }
                 }
             }
             .scrollDismissesKeyboard(.immediately)
@@ -401,23 +414,11 @@ struct ChatRoomContent: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if let blocked = store.blockedSend {
-                    Button {
-                        dismissInput()
-                        viewport.clearPreservation()
-                        store.reachedBottom(false)
-                        scrollToQuotedRow(blocked.id)
-                    } label: {
-                        Label("还有 \(blocked.waiting) 条等待发送", systemImage: "exclamationmark.circle")
-                            .font(.footnote).frame(minHeight: 44)
-                    }.accessibilityHint("查看未发送的消息")
-                }
-                ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
+            ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
                               quote: Binding(get: { store.draftQuote }, set: { store.draftQuote = $0 }), picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused,
                               attachmentRequest: attachmentRequest, inputDismissal: inputDismissal,
                               attachmentMenu: Binding(get: { attachmentMenuVisible }, set: setAttachmentMenu))
-            }.frame(maxWidth: 820).frame(maxWidth: .infinity)
+                .frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
         .onAppear { onInputActions?(ChatInputActions(focus: { composerFocused = true }, dismiss: dismissInput)) }
