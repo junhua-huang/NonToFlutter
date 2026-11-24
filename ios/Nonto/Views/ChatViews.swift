@@ -201,7 +201,7 @@ struct ChatRoomContent: View {
     @State private var availableHeight: CGFloat = 700
     private let composerEpoch: UUID
     private let socket: RealtimeClient
-    @State private var quote: ChatMessage?
+    @State private var unreadDivider: String?
     @State private var picks: [PhotosPickerItem] = []
     @State private var preparingMedia = false
     @State private var attachment: ChatAttachments?
@@ -264,7 +264,12 @@ struct ChatRoomContent: View {
                         }.font(.subheadline).disabled(store.loadingOlder).padding(.vertical, 12)
                     }
                     ForEach(timeline.entries) { entry in
-                        ChatMessageRow(row: entry.row, community: communityID != nil,
+                        VStack(spacing: 4) {
+                            if unreadDivider == entry.id {
+                                Text("以下为新消息").font(.caption).foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+                            }
+                            ChatMessageRow(row: entry.row, community: communityID != nil,
                                        showsReceipt: entry.row.id == timeline.lastOutgoingID,
                                        galleryImages: entry.pending == nil ? timeline.gallery : [],
                                        galleryIndex: timeline.galleryIndexes[entry.row.id], onMediaPresentation: mediaPresentationChanged,
@@ -274,8 +279,9 @@ struct ChatRoomContent: View {
                                        checkDelivery: { Task { await store.load() } },
                                        highlighted: highlightedMessage == entry.row.id,
                                        onJumpToQuote: { jumpToQuote($0, from: entry.id) },
-                                       onQuote: { quote = $0; composerFocused = true },
+                                       onQuote: { store.draftQuote = $0; composerFocused = true },
                                        onRecall: { recall = $0; confirmRecall = true })
+                        }
                             .modifier(ChatMessageFrameObservation(id: entry.id, report: onMessageFrame)).id(entry.id)
                     }
                     Color.clear.frame(height: 1).id("chat-bottom")
@@ -354,7 +360,7 @@ struct ChatRoomContent: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 VStack(alignment: .trailing, spacing: 8) {
-                    if let returnID = quoteReturnID, !attachmentMenuVisible {
+                    if let returnID = quoteReturnID, !attachmentMenuVisible, !viewport.presentingMedia {
                         Button {
                             quoteReturnID = nil; highlightedMessage = nil
                             scrollToQuotedRow(returnID)
@@ -363,9 +369,15 @@ struct ChatRoomContent: View {
                     }
                     if !store.nearBottom && (showsLatestShortcut || store.unread > 0)
                         && !timeline.entries.isEmpty && !attachmentMenuVisible && !viewport.presentingMedia {
-                        Button { store.jumpToLatest() } label: {
+                        Button {
+                            if let target = store.takeFirstUnreadEntry() {
+                                unreadDivider = target
+                                viewport.clearPreservation()
+                                position.scrollTo(id: target, anchor: .top)
+                            } else { store.jumpToLatest() }
+                        } label: {
                             Label(store.unread > 0 ? AppLocalization.string("\(store.unread) 条新消息") : AppLocalization.string("回到最新"), systemImage: "arrow.down")
-                        }.buttonStyle(.glassProminent).accessibilityHint("跳到最新消息")
+                        }.buttonStyle(.glassProminent).accessibilityHint(store.unread > 0 ? AppLocalization.string("跳到第一条新消息") : AppLocalization.string("跳到最新消息"))
                     }
                 }.padding()
             }
@@ -389,11 +401,23 @@ struct ChatRoomContent: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
-                              quote: $quote, picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused,
+            VStack(spacing: 0) {
+                if let blocked = store.blockedSend {
+                    Button {
+                        dismissInput()
+                        viewport.clearPreservation()
+                        store.reachedBottom(false)
+                        scrollToQuotedRow(blocked.id)
+                    } label: {
+                        Label("还有 \(blocked.waiting) 条等待发送", systemImage: "exclamationmark.circle")
+                            .font(.footnote).frame(minHeight: 44)
+                    }.accessibilityHint("查看未发送的消息")
+                }
+                ChatComposerInput(store: store, stickerSender: stickerSender, accountEpoch: composerEpoch, availableHeight: availableHeight,
+                              quote: Binding(get: { store.draftQuote }, set: { store.draftQuote = $0 }), picks: $picks, preparingMedia: preparingMedia, focus: $composerFocused,
                               attachmentRequest: attachmentRequest, inputDismissal: inputDismissal,
                               attachmentMenu: Binding(get: { attachmentMenuVisible }, set: setAttachmentMenu))
-                .frame(maxWidth: 820).frame(maxWidth: .infinity)
+            }.frame(maxWidth: 820).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { availableHeight = $0 }
         .onAppear { onInputActions?(ChatInputActions(focus: { composerFocused = true }, dismiss: dismissInput)) }
@@ -412,8 +436,9 @@ struct ChatRoomContent: View {
             else { setAttachmentMenu(false); store.suspend() }
         }
         .sheet(item: $attachment) { media in
-            ChatAttachmentSheet(media: media.items, api: session.api, store: store, quoteID: quote?.id) {
-                quote = nil
+            ChatAttachmentSheet(media: media.items, picks: media.picks, api: session.api, store: store,
+                                quoteID: media.quoteID, initialCaption: media.caption) {
+                store.finishAttachmentDraft(original: media.caption, quoteID: media.quoteID)
             }
         }
         .sheet(item: $quoteContext, onDismiss: { mediaPresentationChanged(false) }) { target in
@@ -430,27 +455,11 @@ struct ChatRoomContent: View {
                 Task { if visible && phase == .active { await store.load() } }
             }
         }
-        .task(id: picks) {
-            let selection = picks
-            guard !selection.isEmpty else { return }
-            preparingMedia = true; defer { preparingMedia = false; self.picks = [] }
-            let epoch = session.api.generation
-            do {
-                var prepared: [SelectedMedia] = []
-                for pick in selection {
-                    let media = try await MediaLoader.load(pick)
-                    try Task.checkCancellation()
-                    guard prepared.reduce(0, { $0 + $1.data.count }) + media.data.count <= 80 * 1024 * 1024 else {
-                        throw APIError(status: 0, message: AppLocalization.string("一次选择的附件总大小不能超过 80 MB，请减少视频数量"))
-                    }
-                    prepared.append(media)
-                }
-                guard epoch == session.api.generation, visible else { return }
-                composerFocused = false
-                attachment = ChatAttachments(items: prepared)
-            } catch {
-                if !(error is CancellationError), (error as? URLError)?.code != .cancelled, epoch == session.api.generation { store.error = error.localizedDescription }
-            }
+        .onChange(of: picks) { _, selected in
+            guard !selected.isEmpty, visible, composerEpoch == session.api.generation else { return }
+            picks = []
+            composerFocused = false
+            attachment = ChatAttachments(items: [], picks: selected, caption: store.draft, quoteID: store.draftQuote?.id)
         }
         .confirmationDialog("撤回这条消息？", isPresented: $confirmRecall) {
             Button("撤回", role: .destructive) { if let recall { Task { await store.recall(recall) } } }
@@ -522,7 +531,7 @@ struct ChatRoomContent: View {
                 let photo = try await Task.detached(priority: .userInitiated) { try SelectedMedia.image(data) }.value
                 try Task.checkCancellation()
                 guard composerEpoch == session.api.generation, session.api.token != nil else { return }
-                attachment = ChatAttachments(items: [photo])
+                attachment = ChatAttachments(items: [photo], picks: [], caption: store.draft, quoteID: store.draftQuote?.id)
             } catch {
                 if !Task.isCancelled, composerEpoch == session.api.generation { cameraError = error.localizedDescription }
             }
@@ -801,7 +810,14 @@ struct ChatComposerInput: View {
             if let quote {
                 HStack(spacing: 8) {
                     Image(systemName: "quote.bubble").foregroundStyle(accent.textColor)
-                    Text(ChatQuoteSummary.text(quote).isEmpty ? AppLocalization.string("引用消息") : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption)
+                    if quote.recalled { Text("原消息已不可用").font(.caption) }
+                    else if store.unverifiedQuoteID == quote.id {
+                        if store.quoteCheckError != nil {
+                            Button("重试") { Task { await store.validateDraftQuote() } }
+                                .disabled(store.checkingQuote)
+                            Text("原消息暂时无法确认").font(.caption)
+                        } else { ProgressView().controlSize(.small) }
+                    } else { Text(ChatQuoteSummary.text(quote).isEmpty ? AppLocalization.string("引用消息") : ChatQuoteSummary.text(quote)).lineLimit(2).font(.caption) }
                     Spacer()
                     Button { self.quote = nil } label: { Image(systemName: "xmark.circle.fill") }
                         .accessibilityLabel("取消引用").frame(minWidth: 44, minHeight: 44).disabled(stickerSender.busy)
@@ -835,7 +851,7 @@ struct ChatComposerInput: View {
     private var compactDrawerHeight: CGFloat { min(320, max(110, availableHeight - composerHeight - 30)) }
     private var compactDrawerDetent: PresentationDetent { .height(compactDrawerHeight) }
     private var canSend: Bool {
-        !stickerSender.busy && (stagedSticker != nil || !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        !stickerSender.busy && store.maySendQuote(quote?.id) && (stagedSticker != nil || !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
     private var composerRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -920,7 +936,8 @@ struct ChatComposerInput: View {
         }
     }
     private func finishSend(text: String, quoteID: Int?) {
-        if store.draft == text { store.draft = ""; selection = nil; caret = nil; store.saveDraft() }
+        if store.draft == text { store.draft = ""; selection = nil; caret = nil }
         if quote?.id == quoteID { quote = nil }
+        store.saveDraft()
     }
 }
