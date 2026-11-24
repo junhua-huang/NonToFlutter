@@ -739,19 +739,45 @@ struct ChatPendingStatus: View {
 struct ChatAttachments: Identifiable {
     let id = UUID()
     let items: [SelectedMedia]
+    let picks: [PhotosPickerItem]
+    let caption: String
+    let quoteID: Int?
+}
+
+struct ChatMediaImport {
+    private(set) var ready: [Int: SelectedMedia] = [:]
+    var failures: [Int: String] = [:]
+    var ordered: [SelectedMedia] { ready.keys.sorted().compactMap { ready[$0] } }
+
+    mutating func accept(_ item: SelectedMedia, at slot: Int, limit: Int = 80 * 1024 * 1024) throws {
+        let used = ready.values.reduce(0) { $0 + $1.data.count }
+        guard used + item.data.count <= limit else {
+            throw APIError(status: 0, message: AppLocalization.string("一次选择的附件总大小不能超过 80 MB，请减少视频数量"))
+        }
+        ready[slot] = item
+        failures[slot] = nil
+    }
+
+    mutating func remove(_ id: UUID) {
+        if let slot = ready.first(where: { $0.value.id == id })?.key { ready[slot] = nil }
+    }
 }
 
 /// Keep the complete selection local until Send; reuse successful uploads on retry.
 struct ChatAttachmentSheet: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.appAccent) private var accent
-    let media: [SelectedMedia]
+    private let initialMedia: [SelectedMedia]
+    private let picks: [PhotosPickerItem]
+    @State private var imported = ChatMediaImport()
+    @State private var importSlots: [Int]
+    private var media: [SelectedMedia] { initialMedia + imported.ordered }
     let api: APIClient
     let store: ChatStore
     let quoteID: Int?
     let onSent: () -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var caption = ""
+    @State private var caption: String
     @State private var submitting = false
     @State private var cancelled = false
     @State private var error: String?
@@ -763,6 +789,47 @@ struct ChatAttachmentSheet: View {
     @State private var selected = 0
     @State private var completed = 0
     @State private var uploadProgress: Double = 0
+    init(media: [SelectedMedia], picks: [PhotosPickerItem] = [], api: APIClient, store: ChatStore,
+         quoteID: Int?, initialCaption: String = "", onSent: @escaping () -> Void) {
+        initialMedia = media
+        self.picks = picks
+        self.api = api
+        self.store = store
+        self.quoteID = quoteID
+        self.onSent = onSent
+        _caption = State(initialValue: initialCaption)
+        _importSlots = State(initialValue: Array(picks.indices))
+    }
+
+    private func prepareSelection() async {
+        let epoch = api.generation
+        for slot in importSlots {
+            guard !Task.isCancelled, !cancelled, api.generation == epoch else { return }
+            do {
+                let item = try await MediaLoader.load(picks[slot])
+                try Task.checkCancellation()
+                guard !cancelled, api.generation == epoch else { return }
+                try imported.accept(item, at: slot)
+            } catch {
+                guard !Task.isCancelled, !cancelled, api.generation == epoch else { return }
+                imported.failures[slot] = error.localizedDescription
+            }
+        }
+        if !importSlots.isEmpty { importSlots = [] }
+    }
+    @ViewBuilder private var importStatus: some View {
+        if !importSlots.isEmpty { ProgressView("正在准备预览…") }
+        ForEach(imported.failures.keys.sorted(), id: \.self) { slot in
+            VStack(alignment: .leading, spacing: 4) {
+                Text("附件 \(slot + 1)").font(.subheadline.bold())
+                Text(AppLocalization.relocalizedUI(imported.failures[slot] ?? "")).font(.caption)
+                HStack {
+                    Button("重试") { importSlots = [slot] }
+                    Button("移除", role: .destructive) { imported.failures[slot] = nil }
+                }.disabled(!importSlots.isEmpty || submitting)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
     private var selection: [SelectedMedia] { media.filter { !excluded.contains($0.id) } }
     private var selectedMedia: SelectedMedia? { selection.indices.contains(selected) ? selection[selected] : nil }
     var body: some View {
@@ -770,6 +837,7 @@ struct ChatAttachmentSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    importStatus
                     if selection.indices.contains(selected) {
                         let item = selection[selected]
                         if item.isVideo {
@@ -794,6 +862,7 @@ struct ChatAttachmentSheet: View {
                                     Button("移除", role: .destructive) {
                                         let currentID = selection.indices.contains(selected) ? selection[selected].id : nil
                                         excluded.insert(item.id)
+                                        imported.remove(item.id)
                                         selected = selection.firstIndex { $0.id == currentID } ?? GalleryPosition.clamped(selected, count: selection.count)
                                     }.font(.caption).frame(minWidth: 66, minHeight: 44).disabled(submitting)
                                 }
@@ -802,6 +871,7 @@ struct ChatAttachmentSheet: View {
                     }
                     TextField("添加说明（可选）", text: $caption, axis: .vertical).lineLimit(1...5)
                         .padding().background(.quaternary, in: RoundedRectangle(cornerRadius: 16)).disabled(submitting)
+                    if !store.maySendQuote(quoteID) { Text("请返回聊天检查引用").font(.caption) }
                     ErrorBanner(text: error)
                     if submitting {
                         ProgressView(value: uploadProgress) {
@@ -814,7 +884,7 @@ struct ChatAttachmentSheet: View {
                     Button { submitting = true } label: {
                         Label(error == nil ? AppLocalization.string("发送 \(selection.count) 个附件") : AppLocalization.string("重试发送"), systemImage: "arrow.up")
                             .frame(maxWidth: .infinity).padding(.vertical, 6)
-                    }.buttonStyle(.glassProminent).disabled(submitting || selection.isEmpty)
+                    }.buttonStyle(.glassProminent).disabled(submitting || !importSlots.isEmpty || selection.isEmpty || !store.maySendQuote(quoteID))
                 }.padding()
             }.navigationTitle(AppLocalization.string("发送照片与视频")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -822,8 +892,9 @@ struct ChatAttachmentSheet: View {
                         Button("取消") { cancelled = true; submitting = false; dismiss() }
                     }
                 }.interactiveDismissDisabled(submitting)
-                .task {
-                    for item in media {
+                .task(id: importSlots) { await prepareSelection() }
+                .task(id: media.map(\.id)) {
+                    for item in media where images[item.id] == nil && videoURLs[item.id] == nil {
                         guard !Task.isCancelled else { return }
                         if item.isVideo {
                             let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-preview-" + item.name)

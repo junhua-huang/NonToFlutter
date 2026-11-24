@@ -27,7 +27,31 @@ final class ChatStore {
     var error: String?
     var draft = ""
     private(set) var scrollRequest = 0
-    private(set) var unread = 0
+    private var unreadIDs: Set<Int> = []
+    var unread: Int { unreadIDs.count }
+    func takeFirstUnreadEntry() -> String? {
+        guard let entry = timeline.entries.first(where: { unreadIDs.contains($0.row.id) }) else { return nil }
+        unreadIDs.removeAll()
+        return entry.id
+    }
+    var blockedSend: (id: String, waiting: Int)? {
+        guard pending.count > 1, let first = pending.first, first.failure != nil else { return nil }
+        return ("local:" + first.id, pending.count - 1)
+    }
+    var draftQuote: ChatMessage? {
+        didSet {
+            if draftQuote?.id != oldValue?.id { unverifiedQuoteID = nil; quoteCheckError = nil }
+            scheduleDraftSave()
+        }
+    }
+    private(set) var unverifiedQuoteID: Int?
+    private(set) var quoteCheckError: String?
+    private(set) var checkingQuote = false
+    func maySendQuote(_ id: Int?) -> Bool {
+        guard let id else { return true }
+        return unverifiedQuoteID != id && !recalledIDs.contains(id)
+            && !(draftQuote?.id == id && draftQuote?.recalled == true)
+    }
     private(set) var nearBottom = true
     private let api: APIClient
     private let socket: RealtimeClient?
@@ -80,11 +104,20 @@ final class ChatStore {
                 }
                 persistPending()
             }
-            draft = defaults.string(forKey: draftKey) ?? ""
+            if let data = defaults.data(forKey: draftKey), let saved = try? JSON.decode(data) {
+                draft = saved["text"].string
+                if saved["quote"]["id"].int > 0 {
+                    draftQuote = ChatMessage(saved["quote"])
+                    if draftQuote?.recalled != true { unverifiedQuoteID = draftQuote?.id }
+                }
+            } else {
+                draft = defaults.string(forKey: draftKey) ?? ""
+            }
             jumpToLatest()
         }
         joinRoom()
         await load()
+        await validateDraftQuote()
         flush()
     }
     func suspend() {
@@ -114,12 +147,46 @@ final class ChatStore {
     }
     func saveDraft() {
         draftTask?.cancel(); draftTask = nil
-        guard valid else { return }; defaults.set(draft, forKey: draftKey)
+        guard valid else { return }
+        guard let quote = draftQuote else {
+            defaults.set(draft, forKey: draftKey)
+            return
+        }
+        let preview: JSON = .object(["id": .id(quote.id), "is_recalled": .bool(quote.recalled),
+            "content": .text(quote.recalled ? "" : String(ChatQuoteSummary.text(quote).prefix(160)))])
+        if let data = try? JSON.object(["text": .text(draft), "quote": preview]).encoded() {
+            defaults.set(data, forKey: draftKey)
+        }
     }
-    func jumpToLatest() { nearBottom = true; unread = 0; scrollRequest += 1 }
+    func validateDraftQuote() async {
+        guard let id = unverifiedQuoteID, active, !checkingQuote else { return }
+        checkingQuote = true; quoteCheckError = nil
+        defer { checkingQuote = false }
+        do {
+            let context = try await quoteContext(id)
+            guard unverifiedQuoteID == id, let target = context.first(where: { $0.id == id }) else { return }
+            draftQuote = target; unverifiedQuoteID = nil
+        } catch {
+            guard unverifiedQuoteID == id, active, valid, !Task.isCancelled else { return }
+            if let apiError = error as? APIError, [403, 404].contains(apiError.status) {
+                invalidateDraftQuote(id)
+            } else { quoteCheckError = error.localizedDescription }
+        }
+    }
+    private func invalidateDraftQuote(_ id: Int) {
+        guard draftQuote?.id == id else { return }
+        draftQuote = ChatMessage(.object(["id": .id(id), "is_recalled": .bool(true)]))
+        unverifiedQuoteID = nil; quoteCheckError = nil
+    }
+    func finishAttachmentDraft(original: String, quoteID: Int?) {
+        if draft == original { draft = "" }
+        if draftQuote?.id == quoteID { draftQuote = nil }
+        saveDraft()
+    }
+    func jumpToLatest() { nearBottom = true; unreadIDs.removeAll(); scrollRequest += 1 }
     func reachedBottom(_ value: Bool) {
         if nearBottom != value { nearBottom = value }
-        if value && unread > 0 { unread = 0 }
+        if value && !unreadIDs.isEmpty { unreadIDs.removeAll() }
         if value { markReadIfNeeded() }
     }
     func load(older: Bool = false) async {
@@ -155,6 +222,9 @@ final class ChatStore {
             try Task.checkCancellation()
             guard active, valid, loadID == ticket else { return }
             let rows = try PagedResource<ChatMessage>.rows(json, keys: ["messages", "items"]).map(ChatMessage.init)
+            if let id = unverifiedQuoteID, let target = rows.first(where: { $0.id == id }) {
+                draftQuote = target; unverifiedQuoteID = nil; quoteCheckError = nil
+            }
             let knownMessages = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             let known = Set(knownMessages.keys), last = messages.last?.id
             let added = rows.filter { $0.id > 0 && !known.contains($0.id) }
@@ -179,7 +249,7 @@ final class ChatStore {
             resumeSafelyUnsentMessages()
             flush()
             if !older && messages.last?.id != last && !nearBottom && !known.isEmpty {
-                unread += added.filter { $0.senderID != accountID }.count
+                unreadIDs.formUnion(added.filter { $0.senderID != accountID }.map(\.id))
             }
             if !older { markReadIfNeeded() }
             error = nil
@@ -233,7 +303,7 @@ final class ChatStore {
             if message.senderID == accountID, pending.contains(where: { confirmations.contains($0.id) }) {
                 pending.removeAll { confirmations.contains($0.id) }; persistPending(); flush()
             }
-            if added && !nearBottom && message.senderID != accountID { unread += 1 }
+            if added && !nearBottom && message.senderID != accountID { unreadIDs.insert(message.id) }
             markReadIfNeeded()
             return false
         case "message_recalled":
@@ -278,6 +348,7 @@ final class ChatStore {
         return appendToOutbox(items)
     }
     private func appendToOutbox(_ items: [PendingMessage]) -> Bool {
+        guard items.allSatisfy({ maySendQuote($0.quoteID) }) else { return false }
         let previous = pending
         pending.append(contentsOf: items)
         guard persistPending() else { pending = previous; updatePresentation(); return false }
@@ -347,6 +418,10 @@ final class ChatStore {
     }
     @discardableResult private func setMessages(_ incoming: [ChatMessage]) -> Bool {
         let value = ChatMessageReferences.redactingRecalls(incoming, known: recalledIDs)
+        if let quote = draftQuote, !quote.recalled,
+           recalledIDs.contains(quote.id) || value.contains(where: { $0.id == quote.id && $0.recalled }) {
+            invalidateDraftQuote(quote.id)
+        }
         for message in value where message.senderID == accountID {
             if let requestID = message.clientRequestID, let item = pending.first(where: { $0.id == requestID }) {
                 localIdentities[message.id] = ChatMessageIdentity(requestID: item.id, createdAt: item.createdAt)

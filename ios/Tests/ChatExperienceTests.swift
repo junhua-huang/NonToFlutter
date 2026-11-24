@@ -46,6 +46,54 @@ final class ChatExperienceTests: XCTestCase {
         }
         return try JSON.decode(data)
     }
+    func testDraftRestoresQuotedMessageAndRejectsRecalledTarget() async throws {
+        let target = message(80)
+        let original = try room { _ in (200, .object(["messages": .array([target])])) }
+        await original.activate()
+        original.draft = "可以"; original.draftQuote = ChatMessage(target)
+        original.suspend()
+        let restored = try room { request in
+            if request.url!.path.hasSuffix("/around") {
+                return (200, .object(["messages": .array([target.merging(.object(["is_recalled": .bool(true)]))])]))
+            }
+            return (200, .object(["messages": .array([])]))
+        }
+        await restored.activate()
+        XCTAssertEqual(restored.draft, "可以")
+        XCTAssertEqual(restored.draftQuote?.id, 80)
+        XCTAssertEqual(restored.draftQuote?.recalled, true)
+        XCTAssertFalse(restored.enqueue(content: restored.draft, quoteID: 80))
+        restored.draftQuote = nil
+        XCTAssertTrue(restored.maySendQuote(nil))
+        restored.suspend()
+    }
+
+    func testMediaImportKeepsOrderAndAllowsRetryAfterRemoval() throws {
+        func image(_ bytes: Int) -> SelectedMedia {
+            SelectedMedia(data: Data(repeating: 0, count: bytes), name: "photo.jpg", mime: "image/jpeg")
+        }
+        var batch = ChatMediaImport()
+        let first = image(3), second = image(4), third = image(2)
+        try batch.accept(first, at: 0, limit: 6)
+        XCTAssertThrowsError(try batch.accept(second, at: 1, limit: 6))
+        batch.failures[1] = "limit"
+        try batch.accept(third, at: 2, limit: 6)
+        XCTAssertEqual(batch.ordered.map(\.id), [first.id, third.id])
+        batch.remove(first.id)
+        try batch.accept(second, at: 1, limit: 6)
+        XCTAssertEqual(batch.ordered.map(\.id), [second.id, third.id])
+        XCTAssertTrue(batch.failures.isEmpty)
+    }
+
+    func testAttachmentCompletionClearsOnlyItsOriginalDraft() throws {
+        let store = try room { _ in (200, .null) }
+        store.draft = "配图"; store.draftQuote = ChatMessage(message(80))
+        store.finishAttachmentDraft(original: "之前的字", quoteID: 81)
+        XCTAssertEqual(store.draft, "配图"); XCTAssertEqual(store.draftQuote?.id, 80)
+        store.finishAttachmentDraft(original: "配图", quoteID: 80)
+        XCTAssertTrue(store.draft.isEmpty); XCTAssertNil(store.draftQuote)
+    }
+
     func testNotoEmojiUsesTextRoutesAndPreservesDraft() async throws {
         for community in [false, true] {
             let conversation = Conversation(.object(["id": .id(55), "type": .text(community ? "community" : "single"),
@@ -522,6 +570,10 @@ final class ChatExperienceTests: XCTestCase {
         }
         XCTAssertEqual(store.messages.map(\.id), Array(100...110))
         XCTAssertEqual(store.unread, 10); XCTAssertEqual(store.scrollRequest, scrollRequest)
+        XCTAssertEqual(store.takeFirstUnreadEntry(), "server:101")
+        XCTAssertEqual(store.unread, 0)
+        XCTAssertFalse(store.nearBottom)
+        XCTAssertNil(store.takeFirstUnreadEntry())
         XCTAssertEqual(fetches, 1); store.suspend()
     }
     func testCommunityRealtimeUsesResolvedConversationIDAndItsNestedMessage() async throws {
@@ -699,11 +751,14 @@ final class ChatExperienceTests: XCTestCase {
         try await waitUntil { !store.sending }
         XCTAssertEqual(attempts.count, 1); XCTAssertEqual(store.pending.first?.retryWhenOnline, true)
         XCTAssertEqual(store.pending.first?.deliveryUncertain, false)
-        let firstID = store.pending.first?.id
+        let firstID = try XCTUnwrap(store.pending.first?.id)
+        XCTAssertEqual(store.blockedSend?.id, "local:" + firstID)
+        XCTAssertEqual(store.blockedSend?.waiting, 1)
         await store.load()
         try await waitUntil { store.pending.isEmpty && !store.sending }
+        XCTAssertNil(store.blockedSend)
         XCTAssertEqual(attempts.map { $0["content"].string }, ["第一条", "第一条", "第二条"])
-        XCTAssertEqual(attempts.prefix(2).map { $0["request_id"].string }, [firstID!, firstID!])
+        XCTAssertEqual(attempts.prefix(2).map { $0["request_id"].string }, [firstID, firstID])
         store.suspend()
     }
     func testTimeoutIsNeverAutomaticallyRetriedAfterSuccessfulSync() async throws {
